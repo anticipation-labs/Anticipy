@@ -1,0 +1,110 @@
+[
+  {
+    "moment": 43,
+    "scene": "You text \"what do I have tomorrow?\"",
+    "signature": {
+      "app_hint": "googlecalendar",
+      "verb": "read",
+      "object": "calendar_event",
+      "inputs": {
+        "time_min": "2026-09-06T00:00:00-07:00",
+        "time_max": "2026-09-06T23:59:59-07:00"
+      },
+      "expected_effect": "the owner is told every event on the calendars he has connected that starts between tomorrow 00:00 and tomorrow 23:59 in his local timezone, and nothing on those calendars is created, changed or marked read",
+      "side_effect": "read",
+      "account_hint": null,
+      "signature_hash": "ea27b5e3eb7a0030aea7b779c8ae777cc3a83f1c"
+    },
+    "why_api_shaped": "Pure retrieval against an app with a first-class list API, and the one moment where the API hand's advantage is not speed but reach: the answer must arrive as a text at 07:00 whether or not the laptop is open, and the browser hand cannot run with Chrome shut. It is also the safest possible first rung — a wrong read costs a wrong sentence, not a wrong action — which is why the week-1 gate is ten reads.",
+    "browser_fallback_when": "The connection is expired or revoked (a 401 is a re-auth nudge and a browser fallback, never a demotion), or the day's real answer lives on a calendar Composio has no connector for — a shared iCloud family calendar, a school portal. Both are silent wrongness rather than an error: an API read that returns three events when the owner has four reads as a complete answer, so the verifier for this signature has to be 'every calendar the owner named', not 'the call returned 200'."
+  },
+  {
+    "moment": 11,
+    "scene": "You're on a 40-minute work call.",
+    "signature": {
+      "app_hint": "googlecalendar",
+      "verb": "update",
+      "object": "calendar_event",
+      "inputs": {
+        "event_id": "b7q1f0c8m2k4",
+        "start_time": "2026-09-07T15:00:00-07:00",
+        "end_time": "2026-09-07T15:40:00-07:00"
+      },
+      "expected_effect": "the one existing invite for that call reads Monday 15:00-15:40 local for the owner and for every attendee already on it, no second invite exists, and the attendee list is unchanged",
+      "side_effect": "write",
+      "account_hint": "work",
+      "signature_hash": "3cb85bb9ce7a3129d0f6980ca3ad0ef3e655ff34"
+    },
+    "why_api_shaped": "Moving an existing event is the API's home ground and the browser's worst case: the browser hand has to find the right event in a week view, open it, edit two time fields and press save, and every one of those steps is a place to hit the wrong Monday. The API takes the event id the read step already returned. It is a write, but a reversible one — the brief offers undo on it, and undo here is one more update call with the old times, which is why this can sit at write rather than irreversible.",
+    "browser_fallback_when": "The owner's work calendar is on an Exchange tenant whose admin has not granted the connector write scope — common, and it presents as a 403 on execute rather than as a missing connection, so the router only learns it by trying. Also when the event id is stale: the meeting was already moved by the organiser, and the API's update would either 404 or, worse, overwrite a change somebody else made. The browser hand at least sees the current state of the page."
+  },
+  {
+    "moment": 15,
+    "scene": "You and a friend spend ten minutes picking a dinner spot — it changes four times before you land on \"fine, Thursday, the Thai place.\"",
+    "signature": {
+      "app_hint": "googlecalendar",
+      "verb": "create",
+      "object": "calendar_event",
+      "inputs": {
+        "title": "Dinner - the Thai place",
+        "start_time": "2026-09-10T19:00:00-07:00",
+        "end_time": "2026-09-10T21:00:00-07:00",
+        "location": "the Thai place",
+        "attendees": [
+          "friend1@example.com",
+          "friend2@example.com",
+          "friend3@example.com"
+        ]
+      },
+      "expected_effect": "exactly one event exists on the owner's personal calendar for Thursday 19:00 at the Thai place with the other three invited, and none of the four discarded versions of the plan exists anywhere",
+      "side_effect": "irreversible",
+      "account_hint": "personal",
+      "signature_hash": "f0efcf039c063a63f3f9d9325f5a2b3649751ceb"
+    },
+    "why_api_shaped": "Creating a dated event with attendees is a single structured call, and the hard part of this moment is upstream of both hands anyway: deciding that ten minutes of changing their minds produced ONE landing, not five cards. Once the plan says Thursday 19:00, the API is the boring half. The interesting part is that the attendees key is what makes this a different capability from a solo event with the same four other fields, and the hash agrees: the key set differs, so it is a different rung.",
+    "browser_fallback_when": "The other three are not addressable — the owner knows them as phone contacts, not email addresses — so an invite cannot be constructed, and the honest step is a solo hold on the owner's own calendar plus a text he sends himself. Also whenever the owner has not opted in to writes on this app: a create that invites three humans is the one place in these five where 'the API hand is faster' is not a reason."
+  },
+  {
+    "moment": 27,
+    "scene": "\"Email the landlord that the heater's still broken.\"",
+    "signature": {
+      "app_hint": "gmail",
+      "verb": "create",
+      "object": "email_draft",
+      "inputs": {
+        "to": "landlord@example.com",
+        "subject": "Heater still not working",
+        "body": "Hi - the heater in the front room still isn't coming on..."
+      },
+      "expected_effect": "one draft exists in the owner's personal mailbox, addressed to the landlord and about the heater, and no message has left the account",
+      "side_effect": "write",
+      "account_hint": "personal",
+      "signature_hash": "3e626fe90636ac521ae69f1987312a085cef4552"
+    },
+    "why_api_shaped": "A draft is the cleanest write in the set: reversible by deleting it, invisible to anyone but the owner, and the exact object the brief asks for - the draft is IN the text she sends him, and it does not leave without his yes. It is also the signature that proves the shape is doing its job, because it is a DIFFERENT capability from the send below rather than a flag on it: different verb, different object, different rung, and a mailbox that will let a connector draft but not send is a real configuration.",
+    "browser_fallback_when": "The owner's mail is somewhere with no connector for drafts specifically (several providers expose send and not draft), or the draft has to carry formatting or a signature block the API's plain body loses. And the moment the step stops being 'draft it' and becomes 'send it', this signature is not the one being routed - see moment 1."
+  },
+  {
+    "moment": 1,
+    "scene": "Doing dishes, tap running, you mutter \"I still owe Dana the insurance form.\"",
+    "signature": {
+      "app_hint": "gmail",
+      "verb": "send",
+      "object": "email",
+      "inputs": {
+        "to": "dana@example.com",
+        "subject": "Insurance form",
+        "body": "Hi Dana - attached, sorry for the delay.",
+        "attachments": [
+          "glovebox-insurance-2026-09-01.jpg"
+        ]
+      },
+      "expected_effect": "Dana has exactly one message from the owner's personal address with the glovebox insurance photo attached, and the sent folder shows one copy and no duplicate",
+      "side_effect": "irreversible",
+      "account_hint": "personal",
+      "signature_hash": "c5aac4ed3c5e37adfde3cd8686f6910b648d8513"
+    },
+    "why_api_shaped": "Sending mail with an attachment is the single worst errand to drive through a browser - compose, address autocomplete picking the wrong Dana, a file picker that the extension cannot reach at all - and the single most ordinary API call there is. It is also the one that must never move on the API hand's convenience alone: it is irreversible, it goes to a human, and the brief holds it behind an explicit yes regardless of which hand ends up carrying it.",
+    "browser_fallback_when": "The attachment is not addressable as bytes or as a Drive id - it is a photo in the owner's camera roll that only the phone has - so the API call cannot be built at all. Also when the account is a work tenant whose DLP rejects attachments from third-party clients: that arrives as a 403 mid-send, and a half-sent message is the failure this signature's verifier exists to catch."
+  }
+]

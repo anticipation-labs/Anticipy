@@ -1,0 +1,360 @@
+{
+  "_what_this_is": "The ten read-only tasks the week-1 gate is measured on. Reads only, on purpose: a wrong read costs a wrong sentence and a wrong write costs the owner something he cannot take back, and week 1 has no verifier good enough to risk the second. tasks/run_ten.ts refuses to execute any task in this file whose side_effect is not \"read\", and refuses again if the matched tool declares a stronger effect than the task did.",
+  "_the_signatures_are_computed": "Every signature_hash below was produced by src/signature.ts makeSignature() from the fields beside it, not typed in. run_ten.ts re-derives all ten at load and exits BROKEN if one disagrees, because a task file whose hashes drift from the hashing function measures capabilities the ledger will never key to — ten green rows about ten rungs nobody can climb.",
+  "_placeholders": "A token like {{PERSON_A}} is a hole the OWNER fills. Nobody on this machine knows who he emails or which Slack channel he reads, and a gate that asked about an invented colleague would grade the API hand wrong for a fact about the fixture. run_ten.ts collects every token in this file, reads tasks/ten_read_tasks.local.json for the answers, and exits UNPROVEN naming the ones still empty — it never guesses one and never runs a task with a token still in it.",
+  "_input_values_are_illustrative": "Only the input KEY NAMES are load-bearing: they are in the signature hash, so they decide which capability a run is evidence about. The VALUES are examples of the right shape and are deliberately excluded from the hash, because \"email Sam\" and \"email Dana\" are one capability. Every dated value below is stale by design; run_ten.ts asks the model to compute the real window from the prompt and the clock at run time, so \"tomorrow\" means tomorrow on the day the gate runs.",
+  "_how_to_grade_is_read": "how_to_grade is handed to a grader model verbatim, and only its verdict of exactly \"yes\" counts as correct — the same four-state floor the MatchJudge uses. checkable_from_the_response is what the grader can settle from the tool's own output. only_the_owner_can_confirm is the half it CANNOT: completeness. An API read that returns three of four events looks identical to a complete answer, so those lines are printed for the owner to countersign and are never scored.",
+  "gate": {
+    "min_correct": 9,
+    "of": 10,
+    "p50_ms_max": 3000,
+    "_note": "Written here as well as in run_ten.ts so that softening the gate costs two edits in two files instead of one. run_ten.ts compares these three numbers against its own constants at startup and exits BROKEN if they disagree."
+  },
+  "tasks": [
+    {
+      "id": "t01-calendar-tomorrow",
+      "prompt": "what do I have tomorrow?",
+      "expected_effect": "every event on the owner's connected calendars that starts between 00:00 and 23:59 tomorrow in his own timezone is listed with its start time and its title, and nothing on those calendars is created, changed, or marked read",
+      "signature": {
+        "app_hint": "googlecalendar",
+        "verb": "read",
+        "object": "calendar_event",
+        "inputs": {
+          "time_min": "2026-09-06T00:00:00-07:00",
+          "time_max": "2026-09-06T23:59:59-07:00"
+        },
+        "expected_effect": "every event on the owner's connected calendars that starts between 00:00 and 23:59 tomorrow in his own timezone is listed with its start time and its title, and nothing on those calendars is created, changed, or marked read",
+        "side_effect": "read",
+        "account_hint": null,
+        "signature_hash": "ea27b5e3eb7a0030aea7b779c8ae777cc3a83f1c"
+      },
+      "how_to_grade": {
+        "right_is": "a list of tomorrow's events, each carrying a start time that really falls inside tomorrow in the OWNER's timezone, with nothing outside that window and nothing invented.",
+        "checkable_from_the_response": [
+          "every returned event has a start timestamp inside the requested window",
+          "the requested window is tomorrow 00:00-23:59 in the owner's own timezone, not today's and not UTC's",
+          "the response carries no created, updated or deleted event id: a read that wrote is not a read"
+        ],
+        "wrong_if": [
+          "the call returned an error, or returned nothing while the window was valid and the owner has a calendar",
+          "any returned event starts outside the window",
+          "the window is off by a day, or by the owner's UTC offset, which is the single most common way this read is silently wrong",
+          "the answer is a raw dump the owner would have to read timestamps out of himself"
+        ],
+        "only_the_owner_can_confirm": [
+          "that nothing is MISSING. An events list that returns three of his four events reads as a complete answer and no field in the response says a calendar was skipped, so a shared family calendar or a school portal the connector cannot see is invisible wrongness, not an error."
+        ]
+      }
+    },
+    {
+      "id": "t02-calendar-next-with-person",
+      "prompt": "when's my next call with {{PERSON_A}}?",
+      "expected_effect": "the earliest event at or after now whose title or attendee list names that person is reported with its date and start time, or the owner is told there is no such event, and nothing on the calendar changes",
+      "signature": {
+        "app_hint": "googlecalendar",
+        "verb": "read",
+        "object": "calendar_event",
+        "inputs": {
+          "query": "{{PERSON_A}}",
+          "time_min": "2026-09-05T09:00:00-07:00"
+        },
+        "expected_effect": "the earliest event at or after now whose title or attendee list names that person is reported with its date and start time, or the owner is told there is no such event, and nothing on the calendar changes",
+        "side_effect": "read",
+        "account_hint": "work",
+        "signature_hash": "6551e9ae36d2b71f820954858d92b6e99d2a5071"
+      },
+      "how_to_grade": {
+        "right_is": "the DATE and START TIME of the soonest future event that person is actually on — or an explicit 'nothing scheduled', which is an answer and not a failure.",
+        "checkable_from_the_response": [
+          "every returned event starts at or after the requested time_min: a past meeting answers a different question",
+          "the person named in the prompt appears in the returned event's attendee list or its title",
+          "the event reported as the answer is the EARLIEST of the ones returned, not the first row of an unsorted page"
+        ],
+        "wrong_if": [
+          "a past event is offered as the next one",
+          "an event is offered on which that person does not appear at all",
+          "an empty result is reported as an error rather than as 'you have nothing with her booked'"
+        ],
+        "only_the_owner_can_confirm": [
+          "that the match is the right human being. The query is a name and the calendar holds addresses; a second Priya, or the right Priya under a personal address the work calendar has never seen, both look identical from here."
+        ]
+      }
+    },
+    {
+      "id": "t03-calendar-free-thursday",
+      "prompt": "am I free Thursday afternoon?",
+      "expected_effect": "the busy intervals on every calendar the owner asked about, between Thursday 12:00 and 18:00 in his own timezone, are returned so a free-or-busy answer can be given, and nothing on those calendars changes",
+      "signature": {
+        "app_hint": "googlecalendar",
+        "verb": "read",
+        "object": "calendar_free_busy",
+        "inputs": {
+          "calendar_ids": [
+            "primary"
+          ],
+          "time_min": "2026-09-10T12:00:00-07:00",
+          "time_max": "2026-09-10T18:00:00-07:00"
+        },
+        "expected_effect": "the busy intervals on every calendar the owner asked about, between Thursday 12:00 and 18:00 in his own timezone, are returned so a free-or-busy answer can be given, and nothing on those calendars changes",
+        "side_effect": "read",
+        "account_hint": "work",
+        "signature_hash": "9b86932a1f2554855a4c387e7bf0a1e766f40020"
+      },
+      "how_to_grade": {
+        "right_is": "a yes/no with the busy blocks behind it, computed over EVERY calendar asked about, for the right six hours in the owner's own timezone.",
+        "checkable_from_the_response": [
+          "the response has an entry for every calendar id that was asked about",
+          "every busy interval returned lies inside the requested window",
+          "no calendar entry carries an error object: free/busy reports per-calendar errors instead of failing the call, and an unreported error is how 'you are free' gets said about a booked afternoon"
+        ],
+        "wrong_if": [
+          "a calendar that was asked about is missing from the response and the answer was given anyway",
+          "a calendar returned an error and the answer was given anyway",
+          "'afternoon' was read as the whole day, or in UTC"
+        ],
+        "only_the_owner_can_confirm": [
+          "that 'free' means free to him. A calendar with no event on it is not the same as an afternoon he is willing to give away, and no API can see the difference."
+        ]
+      }
+    },
+    {
+      "id": "t04-gmail-last-from-person",
+      "prompt": "what's the last thing {{PERSON_B}} sent me?",
+      "expected_effect": "the single most recent message in the owner's mailbox whose sender is that person is identified by its date, its subject and its thread, and no message is sent, deleted, archived, or marked as read",
+      "signature": {
+        "app_hint": "gmail",
+        "verb": "read",
+        "object": "email_message",
+        "inputs": {
+          "from": "{{PERSON_B}}",
+          "max_results": 5
+        },
+        "expected_effect": "the single most recent message in the owner's mailbox whose sender is that person is identified by its date, its subject and its thread, and no message is sent, deleted, archived, or marked as read",
+        "side_effect": "read",
+        "account_hint": null,
+        "signature_hash": "6545f3556cb8077f49cc466dcda8e170908426a4"
+      },
+      "how_to_grade": {
+        "right_is": "the date, the subject and the gist of the NEWEST message from that person — one message, not a page of them.",
+        "checkable_from_the_response": [
+          "the message offered as the answer has that person in its From header",
+          "it is the newest of the messages returned, by internal date",
+          "the UNREAD label is still on any message that had it: reading a message through the API must not clear his unread badge"
+        ],
+        "wrong_if": [
+          "a message from somebody else is offered because the search string matched a subject line or a quoted signature",
+          "the newest message is not the one reported",
+          "the call removed a label, moved a message, or marked anything read"
+        ],
+        "only_the_owner_can_confirm": [
+          "which Alex. A first name is not an address, and the mailbox has more than one person in it."
+        ]
+      }
+    },
+    {
+      "id": "t05-gmail-invoice-arrived",
+      "prompt": "did the invoice from {{SENDER_INVOICE}} land yet?",
+      "expected_effect": "the owner is told whether a message answering that description is in his mailbox, with its date and sender if it is and an explicit no if it is not, and nothing is sent, deleted, archived or marked read",
+      "signature": {
+        "app_hint": "gmail",
+        "verb": "read",
+        "object": "email_message",
+        "inputs": {
+          "query": "invoice from:{{SENDER_INVOICE}} newer_than:30d",
+          "max_results": 10
+        },
+        "expected_effect": "the owner is told whether a message answering that description is in his mailbox, with its date and sender if it is and an explicit no if it is not, and nothing is sent, deleted, archived or marked read",
+        "side_effect": "read",
+        "account_hint": "personal",
+        "signature_hash": "1615d9fc2bbb7dd9ecff720e004c1d88cd166a64"
+      },
+      "how_to_grade": {
+        "right_is": "a yes with the date and sender, or a plain no. The no is a correct answer and must be graded as one.",
+        "checkable_from_the_response": [
+          "the search that was issued is a real Gmail query and constrains both the sender and the subject matter, not one of them",
+          "every returned message actually matches that query",
+          "an empty result set came back as a successful call with zero results"
+        ],
+        "wrong_if": [
+          "an empty mailbox search is reported as a failure — 'it has not arrived' is the answer, not an error",
+          "a message is claimed that the response does not contain",
+          "the search was so broad that any invoice from anyone would have matched"
+        ],
+        "only_the_owner_can_confirm": [
+          "whether the thing that arrived IS the invoice. A remittance advice, a receipt and a bill all say 'invoice' in the subject line."
+        ]
+      }
+    },
+    {
+      "id": "t06-gmail-unread-needing-reply",
+      "prompt": "anything unread from this week I still haven't replied to?",
+      "expected_effect": "the unread threads received in the last seven days on which the owner has not himself sent a message are listed with their sender and subject, and nothing is sent, deleted, archived, or marked read",
+      "signature": {
+        "app_hint": "gmail",
+        "verb": "read",
+        "object": "email_thread",
+        "inputs": {
+          "query": "is:unread newer_than:7d -from:me",
+          "max_results": 25
+        },
+        "expected_effect": "the unread threads received in the last seven days on which the owner has not himself sent a message are listed with their sender and subject, and nothing is sent, deleted, archived, or marked read",
+        "side_effect": "read",
+        "account_hint": "work",
+        "signature_hash": "5b0cf222b5cfa2a238960ca62d067ed2ac7fda2c"
+      },
+      "how_to_grade": {
+        "right_is": "a short list of threads that are genuinely unread, genuinely from the last seven days, and genuinely have no reply from him on them.",
+        "checkable_from_the_response": [
+          "every returned thread carries the UNREAD label",
+          "every returned thread's newest message is within seven days",
+          "the newest message on each returned thread is not from the owner himself",
+          "no thread was marked read, archived, or labelled by the call"
+        ],
+        "wrong_if": [
+          "a thread he already answered is on the list",
+          "a read thread is on the list",
+          "the list is every unread message in the mailbox, which is a different and useless answer"
+        ],
+        "only_the_owner_can_confirm": [
+          "which of them actually NEEDS a reply. That is a judgement about his relationships and this read only supplies the candidates; a gate that graded it would be grading the model's opinion of his friendships."
+        ]
+      }
+    },
+    {
+      "id": "t07-notion-edited-this-week",
+      "prompt": "which Notion pages did I touch this week?",
+      "expected_effect": "the pages in the owner's Notion workspace whose last-edited time falls in the last seven days are listed with their titles and their last-edited times, and no page is created, edited, or archived",
+      "signature": {
+        "app_hint": "notion",
+        "verb": "read",
+        "object": "notion_page",
+        "inputs": {
+          "edited_after": "2026-08-29T00:00:00-07:00",
+          "page_size": 25
+        },
+        "expected_effect": "the pages in the owner's Notion workspace whose last-edited time falls in the last seven days are listed with their titles and their last-edited times, and no page is created, edited, or archived",
+        "side_effect": "read",
+        "account_hint": "work",
+        "signature_hash": "bc352b96a2942ed363920d219ac6bc3a20308e08"
+      },
+      "how_to_grade": {
+        "right_is": "titles and last-edited times for the pages edited in the last seven days, most recent first.",
+        "checkable_from_the_response": [
+          "every returned object is a page, not a database or a block",
+          "every returned page's last_edited_time is inside the window",
+          "the response carries no created or updated page id"
+        ],
+        "wrong_if": [
+          "pages outside the window are returned",
+          "databases are returned as though they were pages",
+          "'edited by anyone' was answered when 'edited by me' was asked — they are different questions and the second one needs the editor's identity"
+        ],
+        "only_the_owner_can_confirm": [
+          "that the list is complete. Notion's API sees only what the integration was explicitly shared into, so a page he edited in a space he never connected is invisible — and the response looks exactly the same as if he had not edited one."
+        ]
+      }
+    },
+    {
+      "id": "t08-notion-find-page",
+      "prompt": "find the Notion page about {{NOTION_TOPIC}}",
+      "expected_effect": "the page or pages in the owner's workspace whose title answers that description are identified with their titles and their URLs, and no page is created, edited, or archived",
+      "signature": {
+        "app_hint": "notion",
+        "verb": "read",
+        "object": "notion_page",
+        "inputs": {
+          "query": "{{NOTION_TOPIC}}",
+          "page_size": 10
+        },
+        "expected_effect": "the page or pages in the owner's workspace whose title answers that description are identified with their titles and their URLs, and no page is created, edited, or archived",
+        "side_effect": "read",
+        "account_hint": "work",
+        "signature_hash": "3187d4f8dd59a6289dee2398d499e3da2575fb5a"
+      },
+      "how_to_grade": {
+        "right_is": "one page, named, with a URL he can tap — or an honest 'there are three that could be it' with all three named.",
+        "checkable_from_the_response": [
+          "every returned result is a page and carries both a title and a url",
+          "the titles returned are plausibly about the thing asked for, rather than every page in the workspace",
+          "the response carries no created or updated page id"
+        ],
+        "wrong_if": [
+          "a single page is asserted as THE answer when the response contains several equally good matches and nothing distinguishes them",
+          "a URL is reported that does not appear in the response",
+          "the search returned nothing and that was reported as an error rather than as 'I cannot find one'"
+        ],
+        "only_the_owner_can_confirm": [
+          "that the page returned is the one he meant. Title similarity is not identity, and last quarter's roadmap outranks this quarter's on a text match about as often as not."
+        ]
+      }
+    },
+    {
+      "id": "t09-slack-missed-in-channel",
+      "prompt": "what did I miss in #{{SLACK_CHANNEL}} since yesterday?",
+      "expected_effect": "the messages posted in that channel since the given timestamp are returned in order with their authors and their text, and nothing is posted, edited, reacted to, or marked read in Slack",
+      "signature": {
+        "app_hint": "slack",
+        "verb": "read",
+        "object": "slack_message",
+        "inputs": {
+          "channel": "{{SLACK_CHANNEL}}",
+          "oldest": "1757030400.000000"
+        },
+        "expected_effect": "the messages posted in that channel since the given timestamp are returned in order with their authors and their text, and nothing is posted, edited, reacted to, or marked read in Slack",
+        "side_effect": "read",
+        "account_hint": "work",
+        "signature_hash": "0084417d02d390a79df5952dc0fdab892f3cf3b6"
+      },
+      "how_to_grade": {
+        "right_is": "who said what in that channel since yesterday, in order, short enough to be read in a text.",
+        "checkable_from_the_response": [
+          "every returned message has a ts at or after the requested oldest",
+          "the channel read is the one named in the prompt",
+          "no message was posted and the channel's read cursor was not moved: a 'read' that clears his unread badge changed the world and is not a read"
+        ],
+        "wrong_if": [
+          "the call marked the channel read",
+          "messages older than the requested timestamp are included",
+          "a different channel with a similar name was read"
+        ],
+        "only_the_owner_can_confirm": [
+          "that the channel history IS what he missed. Thread replies do not appear in channel history unless they were also sent to the channel, so a quiet channel with a busy thread under it reads as 'nothing happened'."
+        ]
+      }
+    },
+    {
+      "id": "t10-slack-find-link",
+      "prompt": "who sent the link to {{SLACK_SEARCH}} in Slack?",
+      "expected_effect": "the message carrying that link is identified with its author, its channel and its timestamp, and nothing is posted, edited, reacted to, or marked read",
+      "signature": {
+        "app_hint": "slack",
+        "verb": "read",
+        "object": "slack_message",
+        "inputs": {
+          "query": "{{SLACK_SEARCH}}",
+          "count": 20
+        },
+        "expected_effect": "the message carrying that link is identified with its author, its channel and its timestamp, and nothing is posted, edited, reacted to, or marked read",
+        "side_effect": "read",
+        "account_hint": "work",
+        "signature_hash": "942f92aa141a01a760cac2a2b8995326df81a3ba"
+      },
+      "how_to_grade": {
+        "right_is": "a person, a channel, and the link itself — the three facts the question is actually asking for.",
+        "checkable_from_the_response": [
+          "the message offered as the answer contains a URL",
+          "the author and the channel reported both appear on that message in the response",
+          "no message was posted and no read cursor was moved"
+        ],
+        "wrong_if": [
+          "an author is named who is not on the message in the response",
+          "a message with no link in it is offered",
+          "the newest match is asserted to be the right one when several messages carry different links"
+        ],
+        "only_the_owner_can_confirm": [
+          "that search could see it at all. Slack search covers the channels the connected token can read; a DM or a private channel outside that returns exactly the same empty result as 'nobody ever sent it'."
+        ]
+      }
+    }
+  ]
+}
