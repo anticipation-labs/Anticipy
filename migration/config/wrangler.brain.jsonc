@@ -214,8 +214,12 @@
   // --------------------------------------------------------------------------
   "vars": {
     // brain/worker.py:43, brain/supervisor.py:29, brain/evidence.py:75,
-    // brain/voice_arm.py:325. The PocketBase-shaped API on the site Worker.
-    "ANTICIPY_PB": "https://www.anticipy.ai",
+    // brain/voice_arm.py:325. The PocketBase-shaped API. MUST be the API Worker
+    // (api.anticipy.ai), NOT www.anticipy.ai — the OpenNext site Worker only
+    // serves Next.js /api/* routes and /internal proxies, so /api/collections/*
+    // 404s there; api.anticipy.ai (the D1-backed anticipy-api Worker) serves the
+    // PocketBase API the brain polls (verified 2026-09-05: www→404, api→403 gated).
+    "ANTICIPY_PB": "https://api.anticipy.ai",
 
     // brain/supervisor.py:32-33. Inside the container these are ordinary
     // ephemeral paths; R2 is the durable copy. BRAIN.md §4.
