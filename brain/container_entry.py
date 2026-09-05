@@ -252,19 +252,44 @@ def main() -> int:
     threading.Thread(target=snapshot_loop, args=(s3,), daemon=True).start()  # 4
 
     global _child
-    _child = start_child()         # 3 — the untouched worker
-    _log(f"child started pid={_child.pid}")
+    # KEEP-ALIVE (2026-09-05): supervise the child in a restart loop rather than
+    # exiting when it dies. On Cloudflare Containers the container process is
+    # PID 1 — if it exits, the whole container STOPS ("inactive"), and the brain
+    # is down for that owner until the DO's next reconcile (up to a minute).
+    # A transient worker exit (a bad deploy of the backend, a network blip, an
+    # unhandled exception in the 2-second poll) should NOT take the container
+    # down: restart the child in place, keeping the snapshot loop and control
+    # server alive. A genuine crash-loop is still surfaced — if the child dies
+    # too many times too fast, give up so a permanently-broken build fails
+    # visibly instead of masquerading as "healthy".
+    restarts: list[float] = []          # monotonic timestamps of recent starts
+    RAPID_WINDOW = 120.0                 # seconds
+    RAPID_MAX = 5                        # >5 restarts in 2 min = crash loop
+    while not _stop.is_set():
+        _child = start_child()          # 3 — the untouched worker
+        now = time.monotonic()
+        restarts.append(now)
+        restarts[:] = [t for t in restarts if now - t <= RAPID_WINDOW]
+        _log(f"child started pid={_child.pid} (starts in last {int(RAPID_WINDOW)}s: {len(restarts)})")
 
-    # Mirror the child's exit: if brain.worker dies, this process exits with the
-    # same code, and the DO's alarm loop notices the container is gone.
-    code = _child.wait()
-    _stop.set()
-    _log(f"child exited code={code}; taking a final snapshot before exit")
-    try:
-        snapshot_once(s3)
-    except Exception as err:  # noqa: BLE001
-        _log(f"final snapshot after child exit failed: {err!r}")
-    return code if isinstance(code, int) else 0
+        code = _child.wait()
+        if _stop.is_set():
+            break                        # SIGTERM path handles its own snapshot
+        _log(f"child exited code={code}; snapshotting, then restarting")
+        try:
+            snapshot_once(s3)            # preserve memory before the restart
+        except Exception as err:  # noqa: BLE001
+            _log(f"snapshot after child exit failed (continuing): {err!r}")
+
+        if len(restarts) > RAPID_MAX:
+            _log(f"child crash-looped ({len(restarts)} starts in {int(RAPID_WINDOW)}s) — "
+                 f"giving up so the failure is visible, not hidden behind a restart")
+            return code if isinstance(code, int) and code != 0 else 1
+        # brief backoff so a fast-failing child does not spin the CPU
+        _stop.wait(min(5.0, 1.0 * len(restarts)))
+
+    _log("stop requested; child supervision loop exiting")
+    return 0
 
 
 if __name__ == "__main__":

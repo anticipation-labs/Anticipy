@@ -163,10 +163,23 @@ export class BrainSupervisor extends DurableObject<BrainEnv> {
   async tick(): Promise<{ served: number; unserved: string[] }> {
     const cap = parseInt(String(this.env.ANTICIPY_MAX_OWNER_WORKERS ?? "100"), 10) || 100;
 
-    // discover: EVERY owner, ordered by id (stable, like supervisor.py's page
-    // walk over /worker/owners which projects exactly {id, legacy_uuid}).
+    // discover: real owners only, ordered by id (stable, like supervisor.py's
+    // page walk over /worker/owners which projects exactly {id, legacy_uuid}).
+    //
+    // FIX 2026-09-05: D1 holds ~33 owner rows but only a handful are real —
+    // the rest are probe/test signups (…@example.invalid, …@anticipy-test.invalid,
+    // …@*.local) and blank-email rows the old create path let through. Spawning a
+    // brain container per junk row wasted the whole fleet and printed "over
+    // capacity" against phantoms. Exclude them at the source. This mirrors the
+    // runbook's "delete the junk owners" step, but as a non-destructive filter:
+    // the rows stay in D1 (nothing is deleted), they just get no worker.
     const rows = await this.env.DB.prepare(
-      "SELECT id, legacy_uuid FROM owners ORDER BY id",
+      `SELECT id, legacy_uuid FROM owners
+         WHERE email IS NOT NULL AND email != ''
+           AND email NOT LIKE '%.invalid'
+           AND email NOT LIKE '%.local'
+           AND email NOT LIKE '%@example.%'
+         ORDER BY id`,
     ).all<Owner>();
     const owners = (rows.results ?? []).filter((o) => SAFE_ID.test(String(o.id || "")));
 
