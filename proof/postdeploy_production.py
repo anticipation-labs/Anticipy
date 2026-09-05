@@ -67,7 +67,9 @@ def main() -> None:
         raise RuntimeError("browser setup: branded download action missing")
 
     privacy = require(requests.get(f"{BASE}/privacy.html", timeout=20), 200, "privacy policy")
-    for phrase in ("OpenRouter", "Twilio", "Apple speech recognition", "delete"):
+    # Sendblue carries the texts from 2026-09-05; the policy must say so. Twilio
+    # stays named until it is retired, and its absence later is not a failure.
+    for phrase in ("OpenRouter", "Sendblue", "Apple speech recognition", "delete"):
         if phrase not in privacy.text:
             raise RuntimeError(f"privacy policy: missing disclosure {phrase!r}")
 

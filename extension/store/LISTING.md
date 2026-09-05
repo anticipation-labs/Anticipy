@@ -17,7 +17,7 @@ The codebase now includes the public policy at `backend/pb_public/privacy.html`.
 The release gate is a live HTTP 200 at
 `https://backend-production-61e0a.up.railway.app/privacy.html` after the backend
 deployment. Its disclosures are checked against the iPhone, extension, backend,
-OpenRouter, Twilio, Apple speech-recognition, and deletion paths below.
+OpenRouter, Sendblue (Twilio until its retirement), Apple speech-recognition, and deletion paths below.
 
 ---
 
@@ -348,7 +348,7 @@ It has to say, at minimum:
 5. **The iPhone side too,** if this is the product's only policy: the app
    transcribes speech and uploads the text of every finalized line
    (`app/ios/Anticipy/AnticipyApp.swift`, the `heard(_:)` push), and outbound
-   texts go through Twilio (`backend/pb_hooks/sms.pb.js`).
+   texts go through Sendblue (`brain/sendblue_arm.py`, `migration/workers/src/routes/sendblue.ts`); Twilio (`backend/pb_hooks/sms.pb.js`) until it is retired.
 
 ## Assets still needed
 
