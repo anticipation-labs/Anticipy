@@ -130,7 +130,19 @@ start_backend() {
         cp -R "$REPO/backend/pb_hooks" "$RIG/pb_hooks"
         echo "hooks synced from the tree ($(ls "$RIG/pb_hooks" | wc -l | tr -d ' ') files)"
     fi
+    # 1700000053_off_volume_backups.js REFUSES TO BOOT without the four S3
+    # variables — rightly, in production, where a missing one means the
+    # nightly backup silently never happens. On a laptop there is no S3 and
+    # no volume to protect, so a fresh rig died at boot on 2026-09-05 with
+    # "off-volume backup configuration missing", and nothing here noticed.
+    # Placeholders pointing at a loopback port nothing listens on: the
+    # migration applies, the 09:00 backup cron fails harmlessly, and the
+    # settings never leave this machine. Never put real credentials here.
     env -u ANTICIPY_SERVICE_TOKEN -u GEMINI_API_KEY \
+        ANTICIPY_BACKUP_S3_BUCKET="${ANTICIPY_BACKUP_S3_BUCKET:-local-rig-no-bucket}" \
+        ANTICIPY_BACKUP_S3_ENDPOINT="${ANTICIPY_BACKUP_S3_ENDPOINT:-http://127.0.0.1:9}" \
+        ANTICIPY_BACKUP_S3_ACCESS_KEY="${ANTICIPY_BACKUP_S3_ACCESS_KEY:-local-rig}" \
+        ANTICIPY_BACKUP_S3_SECRET="${ANTICIPY_BACKUP_S3_SECRET:-local-rig}" \
         OPENROUTER_API_KEY="$(env_value OPENROUTER_API_KEY)" \
         ANTICIPY_BROWSER_MODEL="$(env_value ANTICIPY_BROWSER_MODEL)" \
         ANTICIPY_VISION_MODEL="$(env_value ANTICIPY_VISION_MODEL)" \
