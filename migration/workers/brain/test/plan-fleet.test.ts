@@ -1,7 +1,7 @@
 // Who gets a brain: the allowlist serves outside the cap and the cap still only
 // turns owners away. Run: node --experimental-strip-types migration/workers/brain/test/plan-fleet.test.ts
 import assert from "node:assert/strict";
-import { planFleet } from "../src/plan.ts";
+import { planFleet, parseCap } from "../src/plan.ts";
 
 const o = (id: string) => ({ id, legacy_uuid: "" });
 const real = [o("43dl3t9oz7q34qc"), o("4i2vafx1g01nlia"), o("7wiaachujzqe5e9"), o("sxkotd1h02qb6gw")];
@@ -32,4 +32,11 @@ check("the cap never evicts: raising it only adds", () => {
   const b = planFleet(real, [], 3).serve.map((x) => x.id);
   assert.deepEqual(b.slice(0, a.length), a);
 });
+check("cap 0 is zero, not 100 — the deploy that served four real owners by mistake", () => {
+  assert.equal(parseCap("0"), 0); assert.equal(parseCap(0), 0);
+});
+check("absent, empty, junk or negative fall back to 100", () => {
+  assert.equal(parseCap(undefined), 100); assert.equal(parseCap(""), 100); assert.equal(parseCap("lots"), 100); assert.equal(parseCap("-3"), 100);
+});
+check("a real number is itself", () => assert.equal(parseCap("2"), 2));
 console.log(`plan-fleet: ${n} checks passed`);

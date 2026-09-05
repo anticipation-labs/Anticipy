@@ -19,7 +19,7 @@
  * pulled into the main Worker's deps — this is a SEPARATE deploy
  * (config/wrangler.brain.jsonc), so the API Worker's bundle stays lean.
  */
-import { planFleet } from "./plan";
+import { planFleet, parseCap } from "./plan";
 import { Container, getContainer } from "@cloudflare/containers";
 import { DurableObject } from "cloudflare:workers";
 
@@ -169,7 +169,12 @@ export class BrainSupervisor extends DurableObject<BrainEnv> {
    *   - over-capacity PRINTS EVERY PASS, so going over the cap is visible.
    */
   async tick(): Promise<{ served: number; unserved: string[] }> {
-    const cap = parseInt(String(this.env.ANTICIPY_MAX_OWNER_WORKERS ?? "100"), 10) || 100;
+    // ZERO MEANS ZERO. `parseInt(...) || 100` read a cap of 0 as "unset" and
+    // served every real owner — measured 2026-09-05 16:58Z: a deploy meant to
+    // leave Railway as the only brain for real owners put four of them on
+    // Cloudflare too, each texting through the same Twilio credentials as
+    // its Railway twin. Only an absent or unparseable value falls back.
+    const cap = parseCap(this.env.ANTICIPY_MAX_OWNER_WORKERS);
 
     // discover: real owners only, ordered by id (stable, like supervisor.py's
     // page walk over /worker/owners which projects exactly {id, legacy_uuid}).

@@ -27,3 +27,12 @@ export function planFleet(discovered: FleetOwner[], always: FleetOwner[], cap: n
   }
   return { serve, unserved };
 }
+
+/** The owner cap from its env string: 0 is a real answer (serve only the
+ *  allowlist); absent, empty, negative or unparseable falls back to 100. */
+export function parseCap(raw: unknown, fallback = 100): number {
+  const text = String(raw ?? "").trim();
+  if (!text) return fallback;
+  const n = Number.parseInt(text, 10);
+  return Number.isFinite(n) && n >= 0 ? n : fallback;
+}
