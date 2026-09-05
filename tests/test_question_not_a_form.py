@@ -170,9 +170,12 @@ def _anticipy(monkeypatch, missing):
     monkeypatch.setattr(pb, "post", fake.post)
     monkeypatch.setattr(pb, "patch", fake.patch)
     a = Anticipy(memory=DeadMemory(), owner_id="form")
+    # owes="owner" stated since 2026-09-05 (Omi port 10a): the ambient
+    # held-card path these legs pin is the path of a plan that is HIS.
     monkeypatch.setattr(a, "_decide", lambda *args, **kw: Decision(
         decision="act", goal=GOAL, reason="a real plan",
-        addressee="person", needs_confirmation=True, missing=list(missing)))
+        addressee="person", owes="owner", needs_confirmation=True,
+        missing=list(missing)))
     monkeypatch.setattr(core, "check_sufficiency", lambda llm, goal: [])
     monkeypatch.setattr(core, "fill_gaps_from_memory",
                         lambda llm, mem, goal, missing_: ({}, list(missing_)))

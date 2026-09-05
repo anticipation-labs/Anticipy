@@ -57,7 +57,17 @@ def test_ordinary_ignore_without_a_goal_does_not_spend_the_strong_model():
     assert strong.calls == []
 
 
-def test_unanswered_strong_model_leaves_the_cheap_candidate_for_existing_floors():
+def test_unanswered_strong_model_demotes_the_cheap_candidate():
+    """REVERSED 2026-09-05, Omi port 10a. Until then this test was named
+    `test_unanswered_strong_model_leaves_the_cheap_candidate_for_existing_floors`
+    and asserted `result.decision == "act"`: a strong look that raised
+    left the cheap "act" standing. That is a floor lifting itself — the
+    operator configured the frontier re-judgement as the authorization an
+    action needs, and an unanswered question authorizes nothing. Now a
+    NON-explicit cheap act with no strong verdict is plain ignore, and the
+    reason names the strong look. The explicit exemption and the
+    strong-unset case are pinned in
+    tests/test_no_verdict_is_below_the_floor.py."""
     cheap_payload = {
         "decision": "act", "goal": "Research the invoice",
         "reason": "requested", "owes": "owner", "touches": "read",
@@ -73,6 +83,8 @@ def test_unanswered_strong_model_leaves_the_cheap_candidate_for_existing_floors(
     brain = Brain(cheap)
     brain.strong = strong
     result = brain.triage("research the invoice")
-    assert result.decision == "act"
-    assert result.goal == "Research the invoice"
+    assert result.decision == "ignore"
+    assert result.goal is None
+    assert "strong second opinion" in result.reason
+    assert result.reason.startswith("no verdict")
     assert len(strong.calls) == 1

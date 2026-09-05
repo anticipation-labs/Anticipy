@@ -107,8 +107,11 @@ def _anticipy(monkeypatch, decision):
 
 
 def _act(goal=GOAL):
+    # owes="owner" stated since 2026-09-05 (Omi port 10a): these legs pin
+    # the ambient held-card path of a plan that is HIS, and an absent owes
+    # on an overheard line now withholds her hands (tests/test_owes.py).
     return Decision(decision="act", goal=goal, reason="he committed to it",
-                    addressee="person")
+                    addressee="person", owes="owner")
 
 
 # ------------------------------------------------------------ the failure
@@ -202,7 +205,7 @@ def test_the_plain_act_lane_also_cancels_a_silent_card(monkeypatch):
     (addressee="self") lands in the plain act branch, and a silenced held card
     there is the same failure — proved by behaviour, not by grepping."""
     d = Decision(decision="act", goal=GOAL, reason="he committed to it",
-                 addressee="self", needs_confirmation=True)
+                 addressee="self", owes="owner", needs_confirmation=True)
     a, fake, sent = _anticipy(monkeypatch, d)
     # The line must NAME Priya. GOAL does, and when the heard line does not,
     # the invented-name guard turns this act into an ask before the act branch

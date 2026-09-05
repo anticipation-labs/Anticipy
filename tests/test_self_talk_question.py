@@ -125,6 +125,13 @@ def test_a_broken_dedupe_never_silences_a_question():
 # with the addressee FORCED to "self", because five live runs of his actual
 # transcript all came back "person" — the failing path cannot be reached by
 # luck, so it is pinned deliberately.
+#
+# Every Decision below states owes="owner" (added 2026-09-05, Omi port 10a).
+# These legs are about the ADDRESSEE label wobbling on a plan that is HIS;
+# they relied on that verdict without saying so, and since port 10a an
+# absent `owes` on a line not positively aimed at her withholds her hands
+# (tests/test_owes.py). Stating the verdict keeps each leg on the lane it
+# was written against.
 
 from brain import pb  # noqa: E402
 from brain.anticipy_core import Anticipy  # noqa: E402
@@ -182,7 +189,7 @@ def test_a_consequential_self_talk_plan_is_held_and_asked_about_once(monkeypatch
     behind it still never texts (see the goalless tests)."""
     a, sent = _anticipy(monkeypatch, Decision(
         decision="ask", goal="Book dinner at Earls for tomorrow",
-        reason="need the location", addressee="self",
+        reason="need the location", addressee="self", owes="owner",
         missing=["what time at Earls tomorrow, and which location?"]))
     out = a.hear("we should grab Earls tomorrow but")
     assert len(sent) == 1, f"expected one go-ahead text, got: {sent}"
@@ -194,7 +201,8 @@ def test_a_goalless_self_talk_question_is_still_swallowed(monkeypatch):
     goal the dedupe has nothing to key on, so this could repeat forever."""
     a, sent = _anticipy(monkeypatch, Decision(
         decision="ask", goal=None, reason="what night were you thinking?",
-        addressee="self", missing=["what night were you thinking?"]))
+        addressee="self", owes="owner",
+        missing=["what night were you thinking?"]))
     a.hear("mm dinner sometime")
     assert sent == [], f"goalless self-talk texted him: {sent}"
 
@@ -203,17 +211,23 @@ def test_a_blank_goal_counts_as_no_goal(monkeypatch):
     for empty in ("", "   ", "\n"):
         a, sent = _anticipy(monkeypatch, Decision(
             decision="ask", goal=empty, reason="what night?",
-            addressee="self", missing=["what night?"]))
+            addressee="self", owes="owner", missing=["what night?"]))
         a.hear("mm dinner sometime")
         assert sent == [], f"goal={empty!r} texted him"
 
 
 def test_a_question_aimed_at_her_is_always_asked(monkeypatch):
+    """"assistant" is asked through the direct lane. "person" and None —
+    the field absent — are asked through the GOVERNED lane since Omi port
+    10a: one held card and one ambient_act text, never the direct lane's
+    "Quick question". Which lane is pinned in
+    tests/test_no_verdict_is_below_the_floor.py; this leg pins only that
+    none of them is silenced."""
     for addressee in ("assistant", "person", None):
         a, sent = _anticipy(monkeypatch, Decision(
             decision="ask", goal="Book dinner at Earls for tomorrow",
             reason="need the location", addressee=addressee,
-            missing=["which location?"]))
+            owes="owner", missing=["which location?"]))
         a.hear("book us Earls tomorrow")
         assert sent, f"addressee={addressee!r} was silenced"
 
