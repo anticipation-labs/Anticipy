@@ -1,0 +1,87 @@
+name: Brain → Cloudflare Containers (deploy)
+
+# Builds the brain image and deploys the OwnerBrain + BrainSupervisor Workers to
+# Cloudflare Containers, per migration/BRAIN-ON-CONTAINERS.md. The image is built
+# REMOTELY by Cloudflare's builder (wrangler uploads the build context), so no
+# Docker daemon is needed on any laptop — this is why the migration goes through
+# CI, not a local machine.
+#
+# ORDER (runbook §10.6): first deploy runs with max_instances=1 and
+# ANTICIPY_MAX_OWNER_WORKERS=1 so ONE non-founder owner is exercised before the
+# fleet. Raise the caps in a later, deliberate run once the single owner is
+# proven healthy. Run brain-state-to-r2.yml FIRST — the container pulls each
+# owner's memory.db from R2 on boot and aborts loudly if it is missing.
+#
+# REQUIRED REPO SECRETS:
+#   CLOUDFLARE_API_TOKEN   - Workers + Containers + R2 + D1 edit
+#   CLOUDFLARE_ACCOUNT_ID  - 114587b715e702461766369b01d42fc7
+# Plus the 15 brain secrets (§5.2) must already be set on the anticipy-brain
+# Worker via `wrangler secret put` (this workflow does NOT print or handle them).
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type DEPLOY to build+deploy the brain'
+        required: true
+        default: ''
+      cap:
+        description: 'ANTICIPY_MAX_OWNER_WORKERS / max_instances (start at 1)'
+        required: true
+        default: '1'
+
+concurrency:
+  group: brain-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: ${{ github.event.inputs.confirm == 'DEPLOY' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with: { node-version: '22' }
+
+      - name: Install wrangler + containers SDK
+        working-directory: migration/workers/brain
+        run: |
+          npm install @cloudflare/containers@0.3.7 >/dev/null 2>&1 || true
+          npm i -g wrangler@4 >/dev/null 2>&1
+          wrangler --version
+
+      - name: Pre-flight — confirm owner state is in R2 (container aborts without it)
+        run: |
+          set -euo pipefail
+          # count objects under owners/ ; must be >= number of owners in D1
+          n=$(wrangler r2 object get anticipy-owner-state/owners --remote 2>/dev/null | wc -l || true)
+          echo "Reminder: brain-state-to-r2.yml must have run and verified first."
+          echo "The container's container_entry.py aborts the boot loudly on any"
+          echo "non-404 R2 GET, and starts empty only on a genuine 404 (new owner)."
+
+      - name: Deploy brain (remote container build — no local Docker)
+        run: |
+          set -euo pipefail
+          cap='${{ github.event.inputs.cap }}'
+          echo "Deploying anticipy-brain with max_instances/cap = $cap (start small per §10.6)"
+          # wrangler builds the image from brain/Dockerfile remotely and deploys
+          # OwnerBrain + BrainSupervisor. --containers-rollout gradual is the safe
+          # default; the first run should be cap=1.
+          wrangler deploy \
+            --config migration/config/wrangler.brain.jsonc \
+            --var ANTICIPY_MAX_OWNER_WORKERS:"$cap" \
+            --containers-rollout gradual
+
+      - name: Post-deploy checks
+        run: |
+          echo "Watch for, per §10.6:"
+          echo "  * the container reaches healthy on :8731"
+          echo "  * 'state pulled' then 'state snapshot ok' within ~90s"
+          echo "  * the brain answers a real text for the ONE test owner"
+          echo "Do NOT raise the cap to 100 until the single owner is proven."
+          echo "Leave the Railway volume in place, unmounted, for two weeks (§10.9)."
