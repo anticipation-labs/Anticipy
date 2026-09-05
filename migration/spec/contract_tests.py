@@ -2072,27 +2072,6 @@ class TestEvidenceDoor(object):
         assert error_of(resp) == "forbidden", repr(resp)
 
     @pytest.mark.needs_service_token
-    def test_no_owner_is_hoarding_receipt_photos(self, service_token):
-        """evidence.pb.js:244-269 — TWO CEILINGS, and the per-owner one is the
-        privacy half: "nobody's screenshots accumulate indefinitely just
-        because they were the quiet account."  PocketBase enforced it on every
-        write; on Cloudflare nothing did until the daily prune took it over
-        (audit F27).  Read-only, and it goes red on the rows a missing sweep
-        has already left behind — which is the Law-3 half a repo-green port
-        does not have."""
-        total = call("GET", "/api/collections/evidence/records", headers=svc(),
-                     query={"perPage": "1", "fields": "id"})
-        if total.status != 200:
-            pytest.skip("could not list evidence on this backend (%s)" % total.status)
-        n = (total.json or {}).get("totalItems") or 0
-        # KEEP_TOTAL is 60; the sweep is bounded per tick, so allow a day's
-        # worth of arrivals above it rather than pretending the cap is exact.
-        assert n <= 260, (
-            "§6.7: %d evidence rows — the retention sweep is not running here. "
-            "On the volume that filled in 2026-08 this table's bytes were the "
-            "worst filler, and the backup keeps two copies of them." % n)
-
-    @pytest.mark.needs_service_token
     def test_an_absent_picture_is_an_answer_not_an_error(self, service_token):
         """§6.7 — a MediaUrl that 404s makes Twilio fail the WHOLE message, so
         a caller that cannot be given a URL must be told so in a form it will
@@ -2115,6 +2094,39 @@ class TestEvidenceDoor(object):
         assert body.get("ok") is False, repr(resp)
         assert body.get("reason") == "that evidence is gone", repr(resp)
 
+
+# ==========================================================================
+# §4.1b  the evidence host, on a backend that HAS one
+# ==========================================================================
+# DELIBERATELY NOT UNDER @ROUTE_ABSENT_IN_PRODUCTION. That marker is an
+# `xfail(strict=False)` for the deployed PocketBase image, whose evidence hook
+# is missing — and it swallows a real failure as quietly as an expected one.
+# The tests below are about a backend that serves the routes: on the Worker
+# they must go RED when they break, and on a backend that does not have the
+# routes at all they SKIP, naming what answered.  Written for audit F13 and
+# F27, both of which shipped invisibly under exactly this kind of cover.
+
+class TestTheEvidenceHostWorks(object):
+    @pytest.mark.needs_service_token
+    def test_no_owner_is_hoarding_receipt_photos(self, service_token):
+        """evidence.pb.js:244-269 — TWO CEILINGS, and the per-owner one is the
+        privacy half: "nobody's screenshots accumulate indefinitely just
+        because they were the quiet account."  PocketBase enforced it on every
+        write; on Cloudflare nothing did until the daily prune took it over
+        (audit F27).  Read-only, and it goes red on the rows a missing sweep
+        has already left behind — which is the Law-3 half a repo-green port
+        does not have."""
+        total = call("GET", "/api/collections/evidence/records", headers=svc(),
+                     query={"perPage": "1", "fields": "id"})
+        if total.status != 200:
+            pytest.skip("could not list evidence on this backend (%s)" % total.status)
+        n = (total.json or {}).get("totalItems") or 0
+        # KEEP_TOTAL is 60; the sweep is bounded per tick, so allow a day's
+        # worth of arrivals above it rather than pretending the cap is exact.
+        assert n <= 260, (
+            "§6.7: %d evidence rows — the retention sweep is not running here. "
+            "On the volume that filled in 2026-08 this table's bytes were the "
+            "worst filler, and the backup keeps two copies of them." % n)
     @pytest.mark.destructive
     @pytest.mark.needs_service_token
     def test_a_deposited_photo_comes_back_through_a_share_window(self, service_token):
@@ -2129,6 +2141,17 @@ class TestEvidenceDoor(object):
         mint was a 404 brain/evidence.py turned into "no picture on this text",
         and the door was dead code (audit F13). Each piece has its own test
         above; this is the one that fails if they do not join up."""
+        # THE PROBE COMES FIRST, before anything is created: on a backend
+        # whose evidence hook is missing the mint is a 404, and this test has
+        # nothing to say about that — research/2026-09-04-routes-absent-in-
+        # production.md already records it, and TestEvidenceDoor above marks
+        # it. Skipping here keeps THIS class strict for the backend that does
+        # serve the routes.
+        probe = call("POST", "/evidence/share", headers=svc(), json_body={"id": rand(15)})
+        if probe.status == 404:
+            pytest.skip("this backend has no evidence host: POST /evidence/share "
+                        "answered 404 (see TestEvidenceDoor)")
+
         boundary = "----anticipy" + rand(16)
         # A one-pixel JPEG, so the MIME check has something real to accept.
         jpeg = base64.b64decode(
