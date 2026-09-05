@@ -82,6 +82,11 @@ function scripted(actions, { judgeReply = "EMAIL" } = {}) {
       content = judgeReply;
     } else if (/did this person agree to let/.test(joined)) {
       content = "NO";
+    } else if (/ONE question about the page's PURPOSE/.test(joined)) {
+      // The wall judge (Audit #70, merged after this suite was written): the
+      // code field carries the sensitive mark, so it is asked once; a code
+      // prompt is not a wall, and it must never eat a scripted step.
+      content = "NONE";
     } else {
       stepPrompts.push(all[all.length - 1]);
       content = JSON.stringify(a.shift() || { action: "wait" });

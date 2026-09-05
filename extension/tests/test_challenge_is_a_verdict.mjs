@@ -187,6 +187,12 @@ async function drive({ goal, scope = goal, readOnly = false, startUrl = BOOKING,
     if (joined.includes("CLAIMED RESULT")) {
       return chat(JSON.stringify({ verified: true, reason: "the page shows it", evidence: [] }));
     }
+    if (/ONE question about the page's PURPOSE/.test(joined)) {
+      // The wall judge (Audit #70, merged after this suite was written): a
+      // page that has not moved for two steps asks it once. A challenge page
+      // is not a sign-in wall, and it must never eat a scripted step.
+      return chat("NONE");
+    }
     stepPrompts.push(joined);
     const decision = queue ? (queue.shift() || { action: "wait" }) : steps(joined);
     return chat(JSON.stringify(decision));
