@@ -66,8 +66,8 @@ pass from a day of real wearing. Findings become fixes or precise bug rows."*
 | the watchdog | **DONE** — `2c4e9ec8` + `074281d8`. Rotation leg was dead code after the first utterance of any task |
 | resume after calls/Siri | **DONE** — `a21bda71`. `resumeListeningIfWanted` was a total no-op |
 | background audio survival | **PARTIAL** — the assertion is ~30s, not a phone call. Long calls still suspend; the resume policy is what covers those |
-| battery sanity | **NOT STARTED** — nothing measures it anywhere |
-| the feed showing which ear | **NOT STARTED** — `capture_day.py` reports `sources` server-side; the in-app feed does not show it |
+| battery sanity | **MEASURED, no verdict** — `fa4eb84f` (2026-08-24) built the instrument: `BatteryReadingPolicy` (the -1 sentinel refused, the churn rule), `.batteryRead` in the journal on the 4 s tick when it changes, `ListenTally` folding points and the window they were spent over, "Battery used while listening: 4% over 2 hr 10 min" on the Listening screen. 2026-09-05: a reading is also written with every start and stop line so the window is opened and closed at the span's edges (a five-minute session used to fold to "Nothing to compare yet"), and `batteryPointsPerHour` is shown beside the window. No threshold anywhere, on purpose: not one day of drain has been recorded yet |
+| the feed showing which ear | **DONE** — the feed had it since `54157bba` (badge per line in `TranscriptRow`, per card in `ConversationCard`, `HeardGroup.ear` refuses a mixed conversation; see `research/2026-08-24-battery-and-ear.md` §2). 2026-09-05: the Listening screen adds the day's total by ear (`ListenTally.linesDeliveredByEar`), and a line sent from the queue now carries its ear into the journal so an outage day counts honestly |
 
 Not asked for but built first, because none of the above could be judged
 otherwise: the Stage 0 instrument (journal that survives a crash, tally,

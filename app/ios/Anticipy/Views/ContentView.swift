@@ -2427,6 +2427,20 @@ struct ConfirmJobCard: View {
         job.status == "needs_user" || job.workflow_state == "draft"
     }
     private var uncertain: Bool { job.effect_uncertain == true }
+    /// What the extension found when it looked at the surviving page after a
+    /// crash, read off `params._reconciliation`. Audit #90 (E): the caption
+    /// and the button below are decided by this row, never by the tap alone.
+    private var reconciliation: RetryReconciliationPolicy.Reading {
+        RetryReconciliationPolicy.read(
+            (try? JSONSerialization.jsonObject(with: Data(job.params.utf8)))
+                as? [String: Any] ?? [:])
+    }
+    /// The floor, as the card sees it: an uncertain row may be retried only
+    /// on a positive not_applied. `approvalFields` refuses the same thing on
+    /// the write, so a bypassed button still sends nothing.
+    private var retryable: Bool {
+        !uncertain || RetryReconciliationPolicy.mayRetry(reconciliation)
+    }
     private var sending: Bool { session.inFlight.contains(job.id) }
     private var failed: Bool { session.failedWrites.contains(job.id) }
     private var unverified: Bool { session.unverifiedWrites.contains(job.id) }
@@ -2466,7 +2480,11 @@ struct ConfirmJobCard: View {
                 Text(r).font(.footnote).foregroundStyle(Theme.text2)
             }
             if uncertain {
-                Text("First check the site or app where this was happening. Only continue if the action did not happen.")
+                // What the page showed, or why nothing could be said — six
+                // sentences for six states, from the row rather than a
+                // standing instruction to go and check. The old constant here
+                // told him to check and then let the tap assert that he had.
+                Text(RetryReconciliationPolicy.explanation(reconciliation))
                     .font(.caption)
                     .foregroundStyle(Theme.text2)
                     .fixedSize(horizontal: false, vertical: true)
@@ -2550,8 +2568,9 @@ struct ConfirmJobCard: View {
                     .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.glass)
-                .disabled(sending || (stuck && !uncertain && !unverified
-                           && answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty))
+                .disabled(sending || !retryable
+                          || (stuck && !uncertain && !unverified
+                              && answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty))
                 Button {
                     Task { await session.decline(job) }
                 } label: {

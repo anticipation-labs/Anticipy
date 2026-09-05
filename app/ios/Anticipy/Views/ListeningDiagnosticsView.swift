@@ -63,6 +63,12 @@ struct ListeningDiagnosticsView: View {
                 // say what the phone was doing while it spent this; a person
                 // reads the two together and judges.
                 row("Battery used while listening", batteryWording)
+                if let rate = tally.batteryPointsPerHour {
+                    // The row above, divided — and only ever beside it, so the
+                    // window the rate rests on stays in view. Still no verdict:
+                    // a number to put against tomorrow's, not a grade.
+                    row("Battery an hour, while listening", batteryRateWording(rate))
+                }
                 if tally.batteryOnPowerSeconds > 0 {
                     // Said out loud rather than silently excluded. A day spent
                     // plugged in otherwise reports a triumphantly small drain
@@ -78,6 +84,18 @@ struct ListeningDiagnosticsView: View {
                     // A day that heard everything and delivered nothing looks
                     // exactly like a microphone that heard nothing at all.
                     row("Lines that did not reach the server", "\(tally.postsFailed)")
+                }
+            }
+
+            if !tally.linesDeliveredByEar.isEmpty {
+                // WHICH EAR, as a day's total. The feed already badges every
+                // line and every card with the ear that caught it; this is the
+                // same fact folded, on the screen a day of wearing is judged
+                // from. Delivered lines only, and the heading says so.
+                Section("Lines delivered, by ear") {
+                    ForEach(tally.linesDeliveredByEar.sorted(by: { $0.key < $1.key }), id: \.key) {
+                        row(earWording($0.key), "\($0.value)")
+                    }
                 }
             }
 
@@ -166,6 +184,14 @@ struct ListeningDiagnosticsView: View {
         return "\(tally.batterySpentPoints)% over \(duration(tally.batteryMeasuredSeconds))"
     }
 
+    /// The rate with its window in the same breath. One decimal, because a
+    /// point an hour and a point every forty minutes are different phones and
+    /// an integer would call them the same; "about", because a reading is a
+    /// whole point and the division is not more precise than that.
+    private func batteryRateWording(_ rate: Double) -> String {
+        return "about \(String(format: "%.1f", rate))% an hour, over \(duration(tally.batteryMeasuredSeconds))"
+    }
+
     private func row(_ name: String, _ value: String) -> some View {
         HStack {
             Text(name).font(.callout).foregroundStyle(Theme.text)
@@ -202,6 +228,21 @@ struct ListeningDiagnosticsView: View {
         case "authorizationLost": return "Permission was taken away"
         case "unrecoveredFailure": return "It failed and could not recover"
         default: return "Stopped: \(cause)"
+        }
+    }
+
+    /// The ear, in words. Keyed on `ListenEvent.Origin`'s spellings — the
+    /// same three the wire carries and `CaptureSourcePolicy` badges — with
+    /// the fourth being the honest name for a line whose ear was never
+    /// written down. Nothing here decides what a line meant; it says where
+    /// it came from.
+    private func earWording(_ origin: String) -> String {
+        switch origin {
+        case "phone_mic": return "Heard by the phone"
+        case "pendant": return "Heard by the pendant"
+        case "typed": return "Typed"
+        case "unrecognised": return "Ear not recorded"
+        default: return "Heard by: \(origin)"
         }
     }
 

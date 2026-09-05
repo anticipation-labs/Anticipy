@@ -42,7 +42,7 @@ struct ListenJournalTests {
         // where a failed session has to be read from.
         let order = ListenJournal(limit: 10)
         order.record(.sessionStarted, at: t0)
-        order.record(.posted(ok: true, detail: .sentFromQueue), at: t0.addingTimeInterval(1))
+        order.record(.posted(ok: true, detail: .sentFromQueue(from: .pendant)), at: t0.addingTimeInterval(1))
         order.record(.sessionStopped(cause: .owner), at: t0.addingTimeInterval(2))
         check("entries come back oldest first",
               order.entries.count == 3
@@ -323,6 +323,14 @@ struct ListenJournalTests {
         check("a line stamped before the milliseconds existed still parses",
               ListenJournal.parse("2026-08-24T09:00:00Z  sessionStopped  listening ended, cause: interruption")?.1
                   == .sessionStopped(cause: .interruption))
+        // A queued send written by a build before the ear rode through the
+        // queue: read back as delivered from an ear nobody recorded, never
+        // dropped and never guessed at.
+        check("a queued send written before the ear was recorded still parses, as ear-not-recorded",
+              ListenJournal.parse("2026-09-01T09:00:00.000Z  posted  accepted, queued line sent")?.1
+                  == .posted(ok: true, detail: .sentFromQueue(from: .unrecognised)))
+        check("a queued send naming an ear this build never wrote is refused, not guessed",
+              ListenJournal.parse("2026-09-05T09:00:00.000Z  posted  accepted, queued line sent, from: watch_mic") == nil)
 
         // ------------------------------------------------------------------ result
         print("")
@@ -409,7 +417,12 @@ extension ListenEvent {
             return [.posted(ok: true, detail: .sentLive(from: .phoneMic)),
                     .posted(ok: true, detail: .sentLive(from: .typed)),
                     .posted(ok: true, detail: .sentLive(from: .unrecognised)),
-                    .posted(ok: true, detail: .sentFromQueue),
+                    // Both ears through the queue, and the name a legacy line
+                    // reads back as — the round trip has to hold for the
+                    // shape `parse` gives an old "queued line sent" too.
+                    .posted(ok: true, detail: .sentFromQueue(from: .pendant)),
+                    .posted(ok: true, detail: .sentFromQueue(from: .phoneMic)),
+                    .posted(ok: true, detail: .sentFromQueue(from: .unrecognised)),
                     .posted(ok: false, detail: .shelved(again: false,
                                                         failure: .http(status: 403))),
                     .posted(ok: false, detail: .shelved(again: true,

@@ -96,6 +96,21 @@ check("going on or off power is written even at the same percentage",
 check("and coming off power is too",
       BatteryReadingPolicy.shouldRecord(unplugged47, lastRecorded: plugged47))
 
+// THE BOUNDARY. A reading stamped with a session's start opens the window the
+// fold measures over and one stamped with its stop closes it, so both are
+// written whether or not anything changed — otherwise the stretch after the
+// last CHANGE is never measured, and a five-minute test folds to "Nothing to
+// compare yet". Rare by construction (one per start, one per stop), so the
+// churn rule has nothing to protect there.
+check("an unchanged reading is still written at a boundary",
+      BatteryReadingPolicy.shouldRecord(unplugged47, lastRecorded: unplugged47, atBoundary: true))
+check("a boundary with nothing recorded before it is written",
+      BatteryReadingPolicy.shouldRecord(unplugged47, lastRecorded: nil, atBoundary: true))
+// And the default is the churn rule, so the 4-second tick that omits the
+// argument keeps refusing repeats.
+check("off the boundary the churn rule still holds",
+      !BatteryReadingPolicy.shouldRecord(unplugged47, lastRecorded: unplugged47, atBoundary: false))
+
 if failures > 0 {
     print("BatteryReadingPolicyTests: \(failures) failed")
     exit(1)

@@ -76,6 +76,30 @@ if ! printf '%s\n' "$said" | grep 'batterySpentPoints' \
     echo "with the phone off a charger."
     exit 2
 fi
+# THE RATE, BESIDE THE WINDOW. `batteryPointsPerHour` is the two numbers
+# divided, and the screen may show it only with the window it rests on in the
+# same sentence — a rate alone invites a five-minute sample to be read as a
+# day's. Same rule as the two legs above: the RETURN line is what is judged.
+rate=$(awk '/private func batteryRateWording/,/^    }$/' "$view" | sed '/^[[:space:]]*\/\//d')
+if [ -z "$rate" ]; then
+    echo "This gate can no longer find the screen's battery-rate wording."
+    echo "If it was renamed, rename it here too; an empty block would satisfy"
+    echo "every rule below by containing nothing."
+    exit 2
+fi
+if ! printf '%s\n' "$rate" | grep -E '^[[:space:]]*return' | grep -q 'batteryMeasuredSeconds'; then
+    echo "The battery rate is shown without the window it was measured over."
+    echo "\"2% an hour\" from five minutes and from ten hours read identically,"
+    echo "and only one of them is worth putting against tomorrow's."
+    exit 2
+fi
+if ! grep -vE '^[[:space:]]*//' "$view" | tr '\n' ' ' \
+    | grep -q 'tally\.batteryPointsPerHour'; then
+    echo "The Listening screen no longer shows drain per hour of listening."
+    exit 2
+fi
+wording=$(printf '%s\n%s\n' "$wording" "$rate")
+
 # NO VERDICT ABOUT THE BATTERY, asserted on the words a person would read.
 #
 # There is not one recorded drain figure in this repo to draw a comparison
@@ -99,6 +123,17 @@ if printf '%s\n' "$wording" \
     exit 2
 fi
 echo "the battery is reported with its window, and not graded"
+
+# WHICH EAR REACHES A PERSON. The fold keys the day's delivered lines by the
+# ear that heard them; a screen that does not draw the dictionary leaves the
+# card's "the feed showing which ear" answered only line by line, and the
+# number that says "the pendant heard 40, the phone 300" dies in a struct.
+if ! grep -vE '^[[:space:]]*//' "$view" | tr '\n' ' ' \
+    | grep -q 'tally\.linesDeliveredByEar'; then
+    echo "The Listening screen no longer shows the day's lines by ear."
+    exit 2
+fi
+echo "the day's lines are shown by the ear that heard them"
 
 swiftc -O \
     "$app/Audio/ListenJournal.swift" \

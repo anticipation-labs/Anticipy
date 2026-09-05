@@ -1013,7 +1013,13 @@ final class AnticipySession: ObservableObject {
                 if !id.isEmpty { lastTranscriptEventID = id }
                 // An unreadable id is a broken link, not a guessable one.
                 previousInThisFlush = id
-                ListenJournal.shared.record(.posted(ok: true, detail: .sentFromQueue))
+                // WHICH EAR, carried through the queue: the buffered line kept
+                // its source on disk for the wire, and the journal now keeps
+                // it too, so the day's per-ear count survives an outage. A
+                // queue entry written before the source was stored has none,
+                // and `Origin(wireName: "")` is `.unrecognised` — reported as
+                // an ear nobody recorded, never guessed at.
+                ListenJournal.shared.record(.posted(ok: true, detail: .sentFromQueue(from: .init(wireName: line.source ?? ""))))
                 // CONFIRMED, so now it may leave the disk — and not one
                 // instant earlier.
                 dropDeliveredLine(line)
@@ -2454,9 +2460,32 @@ final class AnticipySession: ObservableObject {
 
         let now = ISO8601DateFormatter.anticipyUTC.string(from: Date())
         let answer = ownerAnswer?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        let ownerWords = job.effect_uncertain == true
-            ? "I checked the site; the action did not happen. Try again."
-            : (job.status == "needs_user" ? answer : "Tapped “Approve”.")
+        // THE PHONE CITES THE ROW, NEVER A CONSTANT. Audit #90, correction (E).
+        //
+        // What was here until 2026-09-05: `ownerWords` was the sentence
+        // "I checked the site; the action did not happen. Try again." for
+        // every uncertain row, and the `reconciliation` written below carried
+        // conclusion "not_applied" and evidence "owner explicitly checked the
+        // destination before retry" — whether or not anyone had checked
+        // anything. That is exactly what the DB guard's retry leg reads
+        // (backend/pb_hooks/workflow_guard.pb.js, the effect_uncertain block),
+        // so a crash plus a tap re-sent the submission. The extension now
+        // looks (extension/reconcile.js) and writes `params._reconciliation`
+        // in four states; this reads it, and `RetryReconciliationPolicy` is
+        // the floor: a retry needs a positive not_applied, or it does not
+        // leave the phone.
+        let reconciliation = RetryReconciliationPolicy.read(params)
+        let ownerWords: String
+        if job.effect_uncertain == true {
+            guard RetryReconciliationPolicy.mayRetry(reconciliation) else {
+                throw WorkflowWriteError.unsafeRetry
+            }
+            // The gesture, named as a gesture — the same shape "Tapped
+            // “Approve”." takes below. Not a sentence he never said.
+            ownerWords = "Tapped “I checked, try again”."
+        } else {
+            ownerWords = job.status == "needs_user" ? answer : "Tapped “Approve”."
+        }
         if job.status == "needs_user" && job.effect_uncertain != true && ownerWords.isEmpty {
             throw WorkflowWriteError.malformed
         }
@@ -2569,15 +2598,27 @@ final class AnticipySession: ObservableObject {
             guard let effectKey = job.effect_key, !effectKey.isEmpty else {
                 throw WorkflowWriteError.malformed
             }
-            let reconciliation: [String: Any] = [
+            // Every field the guard reads is read off the ROW: the conclusion
+            // is the extension's verdict spelled as it spelled it, the
+            // evidence is its list plus the one line that is genuinely his —
+            // the tap — and `checked_at` says when the page was read. The
+            // `mayRetry` guard above already refused anything but a positive
+            // not_applied; this cannot be reached with any other verdict, and
+            // the second `guard` keeps that true if the two ever drift.
+            guard case .checked(let row) = reconciliation,
+                  let evidence = RetryReconciliationPolicy.retryEvidence(
+                      reconciliation, tappedAt: now)
+            else { throw WorkflowWriteError.unsafeRetry }
+            let cited: [String: Any] = [
                 "effect_key": effectKey,
-                "conclusion": "not_applied",
+                "conclusion": row.verdict.rawValue,
                 "verified": true,
                 "owner_words": ownerWords,
-                "evidence": ["owner explicitly checked the destination before retry"],
+                "evidence": evidence,
+                "checked_at": row.at,
                 "recorded_at": now,
             ]
-            fields["reconciliation"] = try jsonString(reconciliation)
+            fields["reconciliation"] = try jsonString(cited)
         } else {
             fields["reconciliation"] = ""
         }
@@ -2761,6 +2802,17 @@ final class AnticipySession: ObservableObject {
             Task { await refresh() }
             return true
         } catch {
+            // Refused ON THE PHONE, before any request left it — a retry the
+            // reconciliation floor would not let through, or a row the app
+            // could not assemble a patch for. Nothing reached the server, so
+            // there is nothing to reconcile against and no "Check outcome" to
+            // offer; treating it as a lost response below would send the card
+            // to look for a write that was never made.
+            if error is WorkflowWriteError {
+                failedWrites.insert(id)
+                Haptics.warning()
+                return false
+            }
             if let refusal = error as? AnticipyBackend.BackendError,
                ActionWritePolicy.isVerifiedRefusal(status: refusal.status) {
                 failedWrites.insert(id)

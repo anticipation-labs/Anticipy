@@ -387,6 +387,10 @@ final class PhoneListener: NSObject, ObservableObject {
         isListening = true
         lastBatteryReading = nil
         ListenJournal.shared.record(.sessionStarted)
+        // The reading that OPENS the measured window, stamped with the start
+        // it belongs to. The fold sorts a reading stamped with a start right
+        // after it for exactly this line.
+        recordBatteryReading(boundary: true)
         lastBufferAt = Date()
         lastResultAt = Date()
         configureAndStartEngine()
@@ -518,6 +522,7 @@ final class PhoneListener: NSObject, ObservableObject {
             // journal that spends all 400 of its lines saying the same thing
             // has evicted the session it was meant to explain.
             if !suspended {
+                recordBatteryReading(boundary: true)
                 ListenJournal.shared.record(.sessionStopped(cause: .interruption))
             }
             suspended = true
@@ -570,6 +575,7 @@ final class PhoneListener: NSObject, ObservableObject {
         }
         guard installed else {
             if !suspended {
+                recordBatteryReading(boundary: true)
                 ListenJournal.shared.record(.sessionStopped(cause: .unrecoveredFailure))
             }
             suspended = true
@@ -584,7 +590,9 @@ final class PhoneListener: NSObject, ObservableObject {
         let up = engine.isRunning
         if up, suspended {
             ListenJournal.shared.record(.sessionStarted)
+            recordBatteryReading(boundary: true)
         } else if !up, !suspended {
+            recordBatteryReading(boundary: true)
             ListenJournal.shared.record(.sessionStopped(cause: .unrecoveredFailure))
         }
         suspended = !up
@@ -639,6 +647,9 @@ final class PhoneListener: NSObject, ObservableObject {
             guard let self, self.isListening else { return }
             let raw = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt
             if raw.flatMap(AVAudioSession.InterruptionType.init) == .began {
+                // Closes the measured window before the stop line that ends
+                // the span; a reading stamped with a stop sorts before it.
+                recordBatteryReading(boundary: true)
                 ListenJournal.shared.record(.sessionStopped(cause: .interruption))
                 // The background assertion is taken by this line, not beside
                 // it: `suspended`'s observer owns it, so the running time is
@@ -836,6 +847,34 @@ final class PhoneListener: NSObject, ObservableObject {
     /// dead, audio not flowing, recognizer gone DEAF — comes back within
     /// seconds. Listening ends when the user ends it, never when a component
     /// quietly dies.
+    /// One battery reading, through the policy, into the journal.
+    ///
+    /// `boundary` is true at the edges of a listening span — the start line
+    /// and every stop line — where the reading is written whether or not the
+    /// level changed, because it is what opens and closes the window
+    /// the fold measures drain over. False on the 4-second tick, where
+    /// `BatteryReadingPolicy.shouldRecord`'s churn rule decides. One reader
+    /// for both, so the sentinel handling and the on-power reading cannot
+    /// drift between the tick and the boundaries.
+    private func recordBatteryReading(boundary: Bool) {
+        let device = UIDevice.current
+        let power = device.batteryState
+        guard let reading = BatteryReadingPolicy.reading(
+                level: device.batteryLevel,
+                stateIsKnown: power != .unknown,
+                // `.full` is a phone at 100% on a cable: not charging, and
+                // spending nothing. What the fold needs is whether the
+                // interval starting here can be read as drain at all.
+                onPower: power == .charging || power == .full),
+              BatteryReadingPolicy.shouldRecord(reading,
+                                                lastRecorded: lastBatteryReading,
+                                                atBoundary: boundary)
+        else { return }
+        lastBatteryReading = reading
+        ListenJournal.shared.record(
+            .batteryRead(percent: reading.percent, onPower: reading.onPower))
+    }
+
     private func startWatchdog() {
         watchdog?.invalidate()
         let timer = Timer(timeInterval: 4, repeats: true) { [weak self] _ in
@@ -857,25 +896,12 @@ final class PhoneListener: NSObject, ObservableObject {
             //
             // Here rather than in the tap closure, for the reason the drop
             // counter is drained here — that closure is on the audio thread and
-            // the journal touches a file. And guarded by `shouldRecord`, which
-            // is what keeps a 4-second tick from writing fifteen lines a minute
-            // through a phone call and evicting the interruption that explains
-            // the day. `run_journal_tests.sh` fails if that guard goes.
-            let device = UIDevice.current
-            let power = device.batteryState
-            if let reading = BatteryReadingPolicy.reading(
-                    level: device.batteryLevel,
-                    stateIsKnown: power != .unknown,
-                    // `.full` is a phone at 100% on a cable: not charging, and
-                    // spending nothing. What the fold needs is whether the
-                    // interval starting here can be read as drain at all.
-                    onPower: power == .charging || power == .full),
-               BatteryReadingPolicy.shouldRecord(reading,
-                                                 lastRecorded: self.lastBatteryReading) {
-                self.lastBatteryReading = reading
-                ListenJournal.shared.record(
-                    .batteryRead(percent: reading.percent, onPower: reading.onPower))
-            }
+            // the journal touches a file. `boundary: false`, so the churn rule
+            // in `shouldRecord` applies: that is what keeps a 4-second tick
+            // from writing fifteen lines a minute through a phone call and
+            // evicting the interruption that explains the day.
+            // `run_journal_tests.sh` fails if this tick ever passes `true`.
+            self.recordBatteryReading(boundary: false)
             // WHAT to do is decided in ListenWatchdogPolicy, which reads
             // clocks and nothing else, so every ordering below can be shown to
             // fail with swiftc alone. This body only carries the decision out.
@@ -1396,6 +1422,7 @@ final class PhoneListener: NSObject, ObservableObject {
         // stop() unconditionally, and a journal full of stops that ended
         // nothing is a journal that hides the one that ended something.
         if isListening {
+            recordBatteryReading(boundary: true)
             ListenJournal.shared.record(.sessionStopped(cause: .owner))
         }
         isListening = false

@@ -93,8 +93,9 @@ struct ListenTally: Equatable {
     var notes: [String] = []
 
     /// WHAT LISTENING COST, and the window that cost was spent over. Both
-    /// halves, always: "4%" with no window is not a measurement, and a rate is
-    /// a division this screen has no business doing on the reader's behalf.
+    /// halves, always: "4%" with no window is not a measurement. The rate
+    /// (`batteryPointsPerHour`) is derived from these two and shown beside
+    /// them, never instead of them.
     ///
     /// Points the battery FELL while a session was open and the phone was off
     /// power. Signed deltas are summed, so a level that ticks up mid-stretch
@@ -121,10 +122,43 @@ struct ListenTally: Equatable {
     /// monitoring was never switched on.
     var batteryReadings = 0
 
+    /// DRAIN PER HOUR OF LISTENING: the two numbers above, divided. Derived
+    /// rather than stored, so it cannot drift from them, and shown on the
+    /// screen only beside them — a rate with its window out of sight invites
+    /// the reader to trust a five-minute sample as if it were a day's.
+    ///
+    /// Nil when nothing was measured, and that is the whole of the design:
+    /// a rate over no window is not zero, it is nothing, and "0% an hour" on
+    /// a simulator or a journal from a build before readings existed is the
+    /// reassuring lie this instrument refuses everywhere else. A measured
+    /// stretch that cost nothing DOES read as zero — that is a finding.
+    ///
+    /// No threshold, no verdict. There is still not one recorded day of
+    /// drain in this repo to draw a line from; the number exists so that
+    /// tomorrow's can be put against today's.
+    var batteryPointsPerHour: Double? {
+        guard batteryMeasuredSeconds > 0 else { return nil }
+        return Double(batterySpentPoints) * 3_600 / Double(batteryMeasuredSeconds)
+    }
+
     var postsAccepted = 0
     /// A day that heard everything and delivered nothing looks exactly like a
     /// microphone that heard nothing at all, from outside.
     var postsFailed = 0
+    /// WHICH EAR HEARD THE LINES THAT REACHED THE SERVER, keyed by
+    /// `ListenEvent.Origin.rawValue` — the same closed spellings the feed's
+    /// badge reads off the wire. The feed shows the ear per line and per
+    /// card; this is the day's total, on the screen a day of wearing is
+    /// judged from, so "the pendant heard 40 lines and the phone 300" is a
+    /// number rather than a scroll.
+    ///
+    /// Delivered lines, deliberately, and said so on the screen: a line
+    /// shelved and never sent carries no ear in the journal, and one dropped
+    /// from a full queue is counted by `linesDropped` instead. Lines a build
+    /// before 2026-09-05 sent from its queue fold under `unrecognised`,
+    /// because that build did not write the ear down — reported as such,
+    /// never guessed at.
+    var linesDeliveredByEar: [String: Int] = [:]
 
     /// AIRTIME THE PENDANT'S RADIO LOST, summed over the day, in milliseconds.
     ///
@@ -314,8 +348,15 @@ struct ListenTally: Equatable {
             case .buffersDropped(let count):
                 tally.notes.append("dropped \(count) buffers while swapping")
 
-            case .posted(let ok, _):
+            case .posted(let ok, let detail):
                 if ok { tally.postsAccepted += 1 } else { tally.postsFailed += 1 }
+                // A closed enum on both arms; a shelved line names no ear.
+                switch detail {
+                case .sentLive(let from), .sentFromQueue(let from):
+                    if ok { tally.linesDeliveredByEar[from.rawValue, default: 0] += 1 }
+                case .shelved:
+                    break
+                }
 
             // DELIBERATELY DOES NOT TOUCH `lastHeardAt`. A gap is the opposite
             // of hearing: it is the record of a stretch in which nothing was
