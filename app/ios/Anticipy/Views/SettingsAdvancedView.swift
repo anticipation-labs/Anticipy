@@ -9,7 +9,7 @@ struct SettingsAdvancedView: View {
     @AppStorage(ListenEnginePolicy.legacyFlagKey) private var compatibilityRecognizer = false
     @AppStorage(AppPreferences.developerModeKey) private var developerMode = false
     #if DEBUG
-    @AppStorage("backendURL") private var backendURL = "https://backend-production-61e0a.up.railway.app"
+    @AppStorage("backendURL") private var backendURL = "https://api.anticipy.ai"
     #endif
     @State private var showListeningActivity = false
     @State private var showDeveloperDiagnostics = false
