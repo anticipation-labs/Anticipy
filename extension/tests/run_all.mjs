@@ -43,6 +43,7 @@ const suites = [
   "test_live_progress.mjs",
   "test_side_trip.mjs",
   "test_supervised_read.mjs",
+  "test_narration_is_not_a_word_match.mjs",
   "test_background_recovery.mjs",
   "test_offline_completion_honesty.mjs",
   "test_guard_superuser_dashboard.mjs",
