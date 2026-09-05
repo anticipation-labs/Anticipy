@@ -24,7 +24,7 @@
  * here that retrying cannot undo, because the code is already on somebody's
  * screen. So a lookup failure REFUSES the registration.
  */
-import { llmProxy, type LlmEnv } from "../llm.ts";
+import { llmProxy, enabledModels, providerKeys, type LlmEnv } from "../llm.ts";
 
 const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), {
@@ -113,11 +113,23 @@ export async function agentRegister(req: Request, env: AgentEnv): Promise<Respon
   // agent_id → 200 without an id again — one junk agents row per poll,
   // 62 rows in 165 s, and a browser that can never pair. The smoke leg 3
   // ("a fresh install can register") is the pin; repo-green never saw it.
+  // `browser` and `last_seen` are the hook's too (agent_auth.pb.js:59-60), and
+  // the extension sends the browser string in this very body
+  // (extension/background.js:160-171). Until 2026-09-05 the Worker dropped
+  // both, so a row was born NULL on Cloudflare and non-null on PocketBase.
+  // Measured blast radius on a real 0.14.0 install: none observable -- the
+  // register happens inside heartbeat(), which PATCHes both fields one round
+  // trip later, and the phone reads them only after pairing and treats a nil
+  // last_seen as offline and a nil browser as not-stale, both fail-safe. So
+  // this is parity, not a rescue: a row that is correct the moment it exists
+  // rather than correct one round trip later, and one fewer difference
+  // between the two backends for the next person diffing them.
   const id = pbId();
   await env.DB.prepare(
-    `INSERT INTO agents (id, agent_id, agent_token, pair_code, paired, created, updated)
-     VALUES (?,?,?,?,?,?,?)`)
-    .bind(id, agentId, token, code, 0, pbNow(), pbNow()).run();
+    `INSERT INTO agents (id, agent_id, agent_token, pair_code, paired, browser, last_seen, created, updated)
+     VALUES (?,?,?,?,?,?,?,?,?)`)
+    .bind(id, agentId, token, code, 0, String(b.browser ?? "").slice(0, 500),
+          new Date().toISOString(), pbNow(), pbNow()).run();
 
   // The only time the credential is ever shown.
   return json(200, { id, agent_id: agentId, agent_token: token, pair_code: code });
@@ -139,12 +151,84 @@ export async function agentKey(req: Request, env: AgentEnv): Promise<Response> {
       error: "paired agent has no canonical owner; pair it again from the signed-in app",
     });
   }
-  const model = env.ANTICIPY_BROWSER_MODEL || "";
-  if (!model) return json(503, { error: "backend has no model configured" });
+  // WHAT WAS HERE UNTIL 2026-09-05: `const model = env.ANTICIPY_BROWSER_MODEL
+  // || ""; if (!model) return 503` and a body of exactly
+  // {llm_proxy, model, owner_ref}. Two things were wrong with it and both were
+  // measured live on api.anticipy.ai (audit F01):
+  //
+  //   1. NO `vision_model`. The extension stores `visionModel: vision_model
+  //      || ""` (background.js:293-305) and falls back to its own hardcoded
+  //      default, anthropic/claude-sonnet-4.6 (agent_loop.js:6066), for every
+  //      screenshot step. That model is not in this Worker's allowlist, so
+  //      /agent/llm answered 403 "model is not enabled for browser agents",
+  //      the extension read the 403 as a rejected key, wiped it and handed
+  //      back needs_user. Any dialog, date picker, seat map or one stuck step
+  //      fires `needsEyes` -- so a restaurant reservation died at the first
+  //      calendar.
+  //   2. NO `owner`. With no profile the step prompt tells the model his
+  //      "name, email and phone are NOT on file. If a form needs them, stop
+  //      with needs_user" (agent_loop.js:383) -- so every booking and signup
+  //      form stopped, whatever Settings actually held.
+  //
+  // The 503 is now the hook's condition rather than a proxy for it
+  // (agent_key.pb.js:25-27, CONTRACT.md §6.3): what makes a model callable is
+  // a PROVIDER KEY, and the model NAMES have defaults. Keying the refusal on
+  // the name meant a deploy with keys and no model var refused here while
+  // /agent/llm happily accepted the same defaulted name.
+  const keys = providerKeys(env);
+  if (!keys.gemini && !keys.openrouter) {
+    return json(503, { error: "backend has no model configured" });
+  }
+  // BOTH NAMES COME FROM enabledModels(), which is the same function
+  // src/llm.ts:524 uses to decide what /agent/llm will accept. Handing out a
+  // name from one source and checking it against another is how (1) happened;
+  // sharing the function makes the pair true by construction, not by
+  // agreement.
+  const models = enabledModels(env);
 
-  // llm_proxy, never a vendor credential. Changing the model for every paired
-  // agent is one env change and no extension update.
-  return json(200, { llm_proxy: true, model, owner_ref: ownerRef });
+  // WHO THE OWNER IS, so a booking or signup form can actually be completed.
+  // PII ON THE WIRE, deliberately and no wider than the hook's six fields:
+  // name, email, phone, birthday and free-text facts go to a paired browser
+  // extension because every such form asks the same four things and stopping
+  // at them is not a per-site problem to solve one site at a time.
+  //
+  // A FAILED LOOKUP IS `null`, NOT A REFUSAL -- the ceiling polarity, and the
+  // hook's. The profile is an ENABLER: absent, the extension is told the
+  // details are not on file and stops at the form, which is the safe side. So
+  // an unreadable profile must not take the browser's model config down with
+  // it; it costs a form, not the whole run.
+  let owner: Record<string, string> | null = null;
+  try {
+    const p = await env.DB.prepare(
+      `SELECT "first_name","last_name","email","phone","birthday","facts"
+         FROM "owner_profile" WHERE "owner_ref" = ?1
+        ORDER BY "updated" DESC, "created" DESC, "id" DESC LIMIT 1`,
+    ).bind(ownerRef).first<Record<string, unknown>>();
+    if (p) {
+      owner = {
+        first_name: String(p.first_name ?? ""),
+        last_name: String(p.last_name ?? ""),
+        email: String(p.email ?? ""),
+        phone: String(p.phone ?? ""),
+        birthday: String(p.birthday ?? ""),
+        facts: String(p.facts ?? ""),
+      };
+    }
+  } catch (err) {
+    console.log("agent key: owner profile unreadable:", String(err).slice(0, 160));
+    owner = null;
+  }
+
+  // llm_proxy, never a vendor credential. Changing either model for every
+  // paired agent is one env change and no extension update.
+  return json(200, {
+    llm_proxy: true,
+    owner_ref: ownerRef,
+    owner,
+    model: models.browser,
+    // Used only when the text map is not enough and a screenshot is sent.
+    vision_model: models.vision,
+  });
 }
 
 /**
