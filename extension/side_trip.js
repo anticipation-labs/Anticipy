@@ -130,41 +130,97 @@ export function extractCode(text, opts = {}) {
   };
 }
 
-/**
- * Does this page actually say a code was sent, and where to?
- *
- * Used to decide whether to OFFER the trip at all. Being wrong in the
- * permissive direction here is cheap (we ask a question the owner declines);
- * being wrong in the restrictive direction is what killed the demo.
- */
-export function detectsCodeWasSent(pageText) {
-  const t = String(pageText || "");
-  if (!t.trim()) return null;
-  // Real pages overwhelmingly say "Code sent to o***r@gmail.com" or "A
-  // verification code was sent to your email" — and NEITHER matched, because the
-  // pattern only knew first-person constructions ("we sent", "check your
-  // email"). So the most common wording on the exact page this feature exists for
-  // detected nothing and offered nothing. Broadened to include the passive and
-  // the bare "sent to".
-  //
-  // Deliberately still requires evidence of SENDING, not merely of a code being
-  // expected: a bare "enter the code" is also true of an authenticator app, and
-  // offering to read somebody's inbox for a code that never went there is a
-  // question that makes the product look like it is guessing.
-  const sent = /\b(we[''\s]?(?:ve|just)?\s?(?:sent|emailed|texted)|has been sent|have been sent|was sent|were sent|been sent to|sent to|check your (?:e-?mail|inbox|phone|messages)|sent (?:you )?a (?:code|link|verification)|code (?:was |has been )?sent|(?:e-?mail|text|sms) (?:with|containing) a? ?(?:code|link))\b/i;
-  if (!sent.test(t)) return null;
+// WHAT WAS HERE UNTIL 2026-09-05, Audit #78, and why it is gone.
+//
+//     export function detectsCodeWasSent(pageText)
+//       const sent = /\b(we[''\s]?(?:ve|just)?\s?(?:sent|emailed|texted)|has been sent|
+//                     have been sent|was sent|were sent|been sent to|sent to|
+//                     check your (?:e-?mail|inbox|phone|messages)|sent (?:you )?a
+//                     (?:code|link|verification)|code (?:was |has been )?sent|
+//                     (?:e-?mail|text|sms) (?:with|containing) a? ?(?:code|link))\b/i;
+//       if (!sent.test(t)) return null;
+//       const phone = /\b(?:phone|text|sms|message)\b/i.test(t);
+//       const email = /\b(?:e-?mail|inbox)\b/i.test(t) || !!addr || !!masked;
+//       return { where: email ? "email" : (phone ? "phone" : "unknown"), address };
+//
+// A phrasing regex over the rendered page decided whether the page was SAYING
+// a code had been dispatched, and two word lists decided which channel it went
+// to. That verdict is what decided whether the run offered to open the owner's
+// inbox at all, and where the trip pointed. Whether a page is telling somebody
+// "we emailed you a code" is what the page MEANS. HARNESS-LAWS.md law 1, and
+// none of its exemptions cover it: not a sense, not the seatbelt (which reads
+// what a plan TOUCHES, not how a page was worded), not a gate.
+//
+// MEASURED, from the function's own history and the audit:
+//   * "Code sent to o***r@gmail.com" and "A verification code was sent to your
+//     email" — the two commonest wordings on the exact page this feature exists
+//     for — matched nothing until 2026-08-21, and the run stalled at the wall
+//     the demo died on. The 2026-08-21 broadening fixed those two phrasings and
+//     no others: "A one-time passcode is on its way. Look for a message from
+//     us." matched none of the alternations, and neither did any page not
+//     written in English. A miss here is `tripOnOffer` returning null, and the
+//     loop burning its remaining steps to a stall.
+//   * The channel read preferred "email" whenever "e-mail" or "inbox" appeared
+//     ANYWHERE on the page, and "unknown" took the email path too — so "We
+//     texted a code to your phone. Didn't get it? Check the email on file"
+//     produced an offer to go and read the owner's mailbox, with a live ref,
+//     for a code that never went there.
+//
+// What replaced it: `whereCodeWent` below — one question asked of a model on
+// its own, with the whole page in front of it, answered in four states. The
+// address extraction that used to sit under the regex stays, because a token
+// shaped like an address is shape, not meaning; it only NAMES the address in
+// the offer and picks the webmail row, and never decides whether or where a
+// code went. `tripOnOffer` now takes the verdict and is synchronous over it.
 
-  // Where did it go? An address in the text is the best evidence; failing
-  // that, the words "email" or "phone" near the sentence.
+// An address as it appears on the page, full or masked. Shape parsing, carried
+// beside the verdict: it names the address in the offer and lets `tripOnOffer`
+// prefer the address the SITE says it used, and it decides nothing else.
+function addressOnPage(text) {
+  const t = String(text || "");
   const addr = t.match(/\b([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})\b/);
   const masked = t.match(/\b([a-z]\*+[a-z0-9]*@[A-Za-z0-9.-]+\.[A-Za-z]{2,})\b/i);
-  const phone = /\b(?:phone|text|sms|message)\b/i.test(t);
-  const email = /\b(?:e-?mail|inbox)\b/i.test(t) || !!addr || !!masked;
+  return (addr && addr[1]) || (masked && masked[1]) || null;
+}
 
-  return {
-    where: email ? "email" : (phone ? "phone" : "unknown"),
-    address: (addr && addr[1]) || (masked && masked[1]) || null,
-  };
+/**
+ * Where did the code go? Await it; it asks a model.
+ *
+ * The ONE question this file used to answer with a phrasing regex: does the
+ * page say a one-time code has just been sent to this person away from the
+ * page, and if so where? `judge(pageText)` is injected — this module stays
+ * free of Chrome and of network calls — and returns the model's reply as a
+ * string. The caller is `agent_loop.js`, which builds the judge on
+ * `codeSentJudge` and asks only at the code wall, once per page state.
+ *
+ * Returns { state, address } where `state` is one of:
+ *   email       — YES, and it went to their email (EMAIL)
+ *   phone       — YES, and it went to their phone (PHONE)
+ *   none        — NO: the page does not say a code was sent (NONE)
+ *   unclear     — the model could not tell (UNSURE)
+ *   unanswered  — nobody answered: no judge, a throw, an empty page, an empty
+ *                 reply, prose, or anything that is not exactly one token
+ *
+ * "none" and "unanswered" are different answers and lead to different
+ * sentences downstream. The reply is compared as a token we specified, after
+ * a trim and nothing else — "EMAIL." with a period is unanswered, which for a
+ * floor is the safe direction.
+ */
+export async function whereCodeWent({ pageText, judge } = {}) {
+  const text = String(pageText || "");
+  const address = addressOnPage(text);
+  if (!text.trim()) return { state: "unanswered", address };
+  if (typeof judge !== "function") return { state: "unanswered", address };
+  let verdict;
+  try {
+    verdict = await judge(text);
+  } catch (_) {
+    return { state: "unanswered", address };
+  }
+  const token = String(verdict == null ? "" : verdict).trim();
+  const state = { EMAIL: "email", PHONE: "phone", NONE: "none", UNSURE: "unclear" }[token]
+    || "unanswered";
+  return { state, address };
 }
 
 // ---------------------------------------------------------------------------
@@ -617,15 +673,33 @@ export function inboxFor(email) {
  * Keeps the decision in ONE place: is a code being waited on, do we know
  * where it went, and can we get there. The loop asks this and either offers
  * or asks plainly — it never has to work any of it out itself.
+ *
+ * `verdict` is what `whereCodeWent` returned. This is a FLOOR: the verdict is
+ * what licenses OFFERING to read his mail and minting a live ref, so without
+ * one there is no offer and no ref. But the demo died of the STALL, not of a
+ * declined offer, so "unclear" and "unanswered" still hand back — with a
+ * url:null sentence that asks where to look or for the code, which no consent
+ * path ever reads. Only "none" returns null: the page does not say a code was
+ * sent (an authenticator app, a code not yet requested), and the step model
+ * may press "send code" or hand back on its own.
  */
-export function tripOnOffer(pageText, ownerProfile, service) {
-  const sent = detectsCodeWasSent(pageText);
-  if (!sent) return null;
-  if (sent.where === "phone") {
+export function tripOnOffer(verdict, ownerProfile, service) {
+  const state = verdict && typeof verdict === "object" ? String(verdict.state || "") : "";
+  const who = service ? service + "'s" : "The";
+  if (state === "none") return null;
+  if (state === "phone") {
     // His phone is not ours to read, and it is already the channel we text
     // him on. Ask; never pretend we can go and look.
-    return { offer: `${service ? service + "'s" : "The"} code went to your phone. `
+    return { offer: `${who} code went to your phone. `
       + `Send it to me and I'll finish this off — the page is exactly where I left it.`,
+      url: null, purpose: null };
+  }
+  if (state !== "email") {
+    // unclear, unanswered, or a state this file does not know: no offer, no
+    // ref, and a plain ask. Failing closed costs one message.
+    return { offer: `${who} code is needed and I can't tell from the page where it `
+      + `went — tell me where to look, or paste it, and I'll finish this off; the `
+      + `page is exactly where I left it.`,
       url: null, purpose: null };
   }
   // Prefer the address the SITE says it used; fall back to the one he gave us.
@@ -634,20 +708,20 @@ export function tripOnOffer(pageText, ownerProfile, service) {
   // which looks unmasked, resolves to a real provider, and would send the
   // trip somewhere chosen by a fragment. Only an address with a local part
   // that survives intact counts; otherwise fall back to the one HE gave us.
-  const raw = String(sent.address || "");
+  const raw = String(verdict.address || "");
   const local = raw.split("@")[0] || "";
   const looksReal = raw.includes("@") && !/[*•]/.test(raw)
     && local.length >= 2 && !/^[a-z]$/i.test(local);
   const addr = looksReal ? raw : ((ownerProfile && ownerProfile.email) || "");
   const url = inboxFor(addr);
   if (!url) {
-    return { offer: `${service ? service + "'s" : "The"} code just went to `
-      + `${sent.address || "your email"}. I can go and read it if you tell me where `
+    return { offer: `${who} code just went to `
+      + `${verdict.address || "your email"}. I can go and read it if you tell me where `
       + `that inbox is — or paste the code and I'll carry on from where I am.`,
       url: null, purpose: null };
   }
   return {
-    offer: offerToFetch(sent, { service }),
+    offer: offerToFetch({ where: "email", address: verdict.address || null }, { service }),
     url,
     purpose: `${service || "the"} verification code`,
   };

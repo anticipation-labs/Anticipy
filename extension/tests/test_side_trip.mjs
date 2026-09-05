@@ -9,7 +9,7 @@
 // lock after three. So these tests are built from what real verification
 // emails actually look like, including the decoys that sit next to the code.
 import {
-  extractCode, detectsCodeWasSent, tripRefusedReason, runSideTrip, offerToFetch,
+  extractCode, whereCodeWent, tripRefusedReason, runSideTrip, offerToFetch,
 } from "../side_trip.js";
 
 let failures = 0;
@@ -88,25 +88,68 @@ eq("empty text is safe", extractCode("") ?? null, null);
 eq("null text is safe", extractCode(null) ?? null, null);
 
 // ---------------------------------------------------------------------------
-// Noticing that a code was sent at all
+// Noticing that a code was sent at all — a MODEL's reading, in four states.
+//
+// Until 2026-09-05 (Audit #78) a phrasing regex decided this and two word
+// lists decided the channel. Whether a page is saying "we emailed you a code"
+// is what the page means, so `whereCodeWent` hands the whole page to an
+// injected judge and maps its token. These pin the map; the loop-level
+// behaviour is test_code_sent_is_not_a_word_match.mjs.
 // ---------------------------------------------------------------------------
 const SENT_PAGE = `Check your email
 We sent a verification code to o***r@gmail.com
 Enter code:  [        ]  [Verify]`;
-const det = detectsCodeWasSent(SENT_PAGE);
-check("the page that killed the demo is recognised", det && det.where === "email", JSON.stringify(det));
-check("the masked address is carried into the question", det && /@gmail\.com$/.test(det.address || ""), det?.address);
+const judgeSaying = (reply) => {
+  const calls = [];
+  return { calls, judge: async (text) => { calls.push(text); return reply; } };
+};
+{
+  const { judge, calls } = judgeSaying("EMAIL");
+  const det = await whereCodeWent({ pageText: SENT_PAGE, judge });
+  check("the page that killed the demo, read as EMAIL, is an email verdict",
+    det.state === "email", JSON.stringify(det));
+  check("the masked address is carried beside the verdict, as shape",
+    /@gmail\.com$/.test(det.address || ""), det.address);
+  check("the judge was handed the WHOLE page, once — no wording sift in front of it",
+    calls.length === 1 && calls[0] === SENT_PAGE, JSON.stringify(calls));
 
-check("an ordinary form is not mistaken for a code prompt",
-  detectsCodeWasSent("First name  Last name  Email  Resume  Submit application") === null);
-
-const PHONE_PAGE = `We just texted a code to your phone ending 4471. Enter it below.`;
-eq("a texted code is identified as the phone", detectsCodeWasSent(PHONE_PAGE)?.where, "phone");
-
-// The sentence he asked for by name.
-const offer = offerToFetch(det, { service: "Greenhouse" });
-check("the offer names the service, the destination, and promises the page is kept",
-  /Greenhouse/.test(offer) && /gmail\.com/.test(offer) && /exactly as it is/.test(offer), offer);
+  // The sentence he asked for by name.
+  const offer = offerToFetch({ where: "email", address: det.address }, { service: "Greenhouse" });
+  check("the offer names the service, the destination, and promises the page is kept",
+    /Greenhouse/.test(offer) && /gmail\.com/.test(offer) && /exactly as it is/.test(offer), offer);
+}
+for (const [reply, want] of [
+  ["EMAIL", "email"], ["PHONE", "phone"], ["NONE", "none"], ["UNSURE", "unclear"],
+  // A token we specified, not prose we interpret. Trim and exact compare only.
+  ["  PHONE\n", "phone"],
+  ["", "unanswered"], ["EMAIL.", "unanswered"], ["email", "unanswered"],
+  ["I think email", "unanswered"], ["YES", "unanswered"], ["EMAIL PHONE", "unanswered"],
+  [null, "unanswered"], [undefined, "unanswered"],
+]) {
+  const { judge } = judgeSaying(reply);
+  const det = await whereCodeWent({ pageText: SENT_PAGE, judge });
+  eq(`the judge's ${JSON.stringify(reply)} is the verdict ${JSON.stringify(want)}`, det.state, want);
+}
+{
+  const det = await whereCodeWent({ pageText: SENT_PAGE, judge: async () => { throw new Error("502"); } });
+  eq("a judge that throws is unanswered — not none, not email", det.state, "unanswered");
+  eq("no judge at all is unanswered", (await whereCodeWent({ pageText: SENT_PAGE })).state, "unanswered");
+  const { judge, calls } = judgeSaying("EMAIL");
+  const empty = await whereCodeWent({ pageText: "   \n ", judge });
+  check("an empty page is unanswered, and nothing is asked",
+    empty.state === "unanswered" && calls.length === 0, JSON.stringify(empty));
+  // The regex read all of a page; the judge must too. page_map caps visible
+  // text at 6000 characters, and the only sentence that matters can sit at
+  // the very end, behind a cookie banner and a nav.
+  const filler = Array.from({ length: 125 }, (_, i) => `Menu item ${i} · About · Careers · Cookie settings`).join("\n");
+  const tail = "A one-time passcode is on its way. Look for a message from us at o***r@gmail.com.";
+  const long = `${filler}\n${tail}`;
+  const { judge: recorder, calls: seen } = judgeSaying("EMAIL");
+  const far = await whereCodeWent({ pageText: long, judge: recorder });
+  check("a 5500-character page reaches the judge whole, sentence at the end included",
+    long.length > 5000 && seen.length === 1 && seen[0].endsWith(tail) && far.state === "email",
+    `${long.length} chars, judge saw ${seen[0] ? seen[0].length : 0}`);
+}
 
 // ---------------------------------------------------------------------------
 // Refusals: a trip must be sent, and may not go anywhere near money
@@ -218,9 +261,6 @@ function fakeDeps({ pages, notes }) {
     !out.ok && /not authorised/.test(out.reason) && notes.length === 0, JSON.stringify(out));
 }
 
-if (failures) { console.error(`test_side_trip: ${failures} failed`); process.exit(1); }
-console.log("test_side_trip: all passed");
-
 // ---------------------------------------------------------------------------
 // The inbox is UNTRUSTED CONTENT. Anyone can send him an email.
 //
@@ -295,26 +335,46 @@ check("a company domain is honestly unknown", inboxFor("omar@anticipy.ai") === n
 check("junk input is unknown", inboxFor("not-an-email") === null && inboxFor("") === null
   && inboxFor(null) === null);
 
-const CODE_PAGE = "Check your email\nWe sent a verification code to o***r@gmail.com\nEnter code:";
+// `tripOnOffer` is synchronous over the verdict `whereCodeWent` returned.
+const CODE_SENT = { state: "email", address: "o***r@gmail.com" };
 {
-  const t = tripOnOffer(CODE_PAGE, { email: "omarkebrahim@gmail.com" }, "Greenhouse");
+  const t = tripOnOffer(CODE_SENT, { email: "omarkebrahim@gmail.com" }, "Greenhouse");
   check("a known inbox produces a real trip", !!t && /mail\.google\.com/.test(t.url || ""), JSON.stringify(t));
   check("the offer promises the page is kept", /exactly as it is/.test(t.offer), t.offer);
   check("the trip states its purpose", /verification code/.test(t.purpose || ""), t.purpose);
 }
 {
-  const t = tripOnOffer(CODE_PAGE, { email: "omar@anticipy.ai" }, "Greenhouse");
+  const t = tripOnOffer(CODE_SENT, { email: "omar@anticipy.ai" }, "Greenhouse");
   check("an unknown inbox asks instead of guessing", !!t && t.url === null, JSON.stringify(t));
   check("and it offers him the faster way out",
     /paste the code/.test(t.offer), t.offer);
 }
 {
-  const t = tripOnOffer("We just texted a code to your phone ending 4471.", { email: "x@gmail.com" }, null);
+  const t = tripOnOffer({ state: "phone", address: null }, { email: "x@gmail.com" }, null);
   check("a texted code never pretends we can read his phone",
     !!t && t.url === null && /Send it to me/.test(t.offer), JSON.stringify(t));
 }
-check("an ordinary page offers nothing at all",
-  tripOnOffer("First name Last name Resume Submit", { email: "x@gmail.com" }, "X") === null);
+check("an ordinary page — the judge said NONE — offers nothing at all",
+  tripOnOffer({ state: "none", address: null }, { email: "x@gmail.com" }, "X") === null);
+// THE FLOOR. No verdict is no offer and no trip — but not the stall either:
+// a plain ask, with nothing on it a consent path could read.
+for (const [name, verdict] of [
+  ["the judge could not tell", { state: "unclear", address: "o***r@gmail.com" }],
+  ["nobody answered", { state: "unanswered", address: null }],
+  ["a state this file does not know", { state: "maybe", address: null }],
+  ["no verdict object at all", null],
+]) {
+  const t = tripOnOffer(verdict, { email: "omarkebrahim@gmail.com" }, "Greenhouse");
+  check(`${name}: no trip, no offer to read his mail, a plain ask`,
+    !!t && t.url === null && t.purpose === null
+      && !/read it\?/.test(t.offer) && /paste it/.test(t.offer) && /where to look/.test(t.offer),
+    JSON.stringify(t));
+}
 check("the errand never influences the destination — only his address does",
-  tripOnOffer(CODE_PAGE, { email: "omarkebrahim@gmail.com" }, "Earls").url
-  === tripOnOffer(CODE_PAGE, { email: "omarkebrahim@gmail.com" }, "Greenhouse").url);
+  tripOnOffer(CODE_SENT, { email: "omarkebrahim@gmail.com" }, "Earls").url
+  === tripOnOffer(CODE_SENT, { email: "omarkebrahim@gmail.com" }, "Greenhouse").url);
+
+// The exit lives at the END. It used to sit above the injection and inbox
+// sections, so a failure in either printed FAIL and the suite still exited 0.
+if (failures) { console.error(`test_side_trip: ${failures} failed`); process.exit(1); }
+console.log("test_side_trip: all passed");

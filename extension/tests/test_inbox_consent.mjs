@@ -384,7 +384,7 @@ for (const said of [
   check("the offer carries the mark", OFFER.includes(INBOX_OFFER_MARK), OFFER);
   check("the offer carries the ref, which is what proves it is ours",
     offerCarriesRef(OFFER, REF), OFFER);
-  const t = tripOnOffer("We sent a verification code to o***r@gmail.com",
+  const t = tripOnOffer({ state: "email", address: "o***r@gmail.com" },
                         { email: "omar@gmail.com" }, "Greenhouse");
   check("the real trip offer carries the mark too", t.offer.includes(INBOX_OFFER_MARK), t.offer);
   const src = readFileSync(new URL("../side_trip.js", import.meta.url), "utf8");
