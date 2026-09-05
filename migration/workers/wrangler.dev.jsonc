@@ -140,8 +140,13 @@
   //                            migration/runbooks/reencrypt_vault.md — this
   //                            one is generated during cutover and the old
   //                            ANTICIPY_VAULT_KEY is deliberately NOT carried.
-  //   GOOGLE_API_KEY           /agent/llm, direct Gemini.
-  //   OPENROUTER_API_KEY       /agent/llm, fallback.
+  //   GEMINI_API_KEY           /agent/llm, direct Gemini (GOOGLE_API_KEY is
+  //                            read as an alias — see wrangler.jsonc).
+  //   OPENROUTER_API_KEY       /agent/llm, every non-Google model, and Google
+  //                            models while no Gemini key is bound.
+  //   ANTICIPY_BROWSER_MODEL / ANTICIPY_VISION_MODEL are plain vars, not
+  //   secrets; LLM_PROVIDER_BASE is test-only — both documented in
+  //   wrangler.jsonc.
   //   TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN / TWILIO_PHONE_NUMBER
   //                            the sweep's SMS and /sms/inbound's HMAC.
   //

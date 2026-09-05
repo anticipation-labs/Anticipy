@@ -1476,17 +1476,41 @@ goes to OpenRouter. **Do not choose a provider merely because its key exists** �
 that previously made a DeepSeek request run on Gemini while the client and the
 audit row still said DeepSeek.
 
-`max_tokens` is clamped to `[64, 4096]`, default 512 (`:239-241`); `temperature`
+`max_tokens` is clamped to `[512, 4096]`, default 512 (`:231-241`); `temperature`
 is forced to 0 for non-Gemini-3. Gemini 3 gets `thinkingLevel: "low"` and keeps
-its default temperature; Gemini 2.x gets `thinkingBudget: 0`.
+its default temperature; Gemini 2.x gets `thinkingBudget: 0`. **The floor was
+64 until 2026-09-05**: the browser model is a thinking model whose reasoning
+counts against `max_tokens`, and at 64 its one-token verdicts came back cut off
+mid-word on 15 of 22 measured pages
+(research/evals/login-wall-2026-09-05/FINDINGS.md). The extension floors at the
+same number (`MODEL_REPLY_FLOOR`, extension/agent_loop.js); the proxy is the
+second lock on the same door. Both provider calls are bounded at 95 s
+(`timeout: 95`, `:337`/`:389`; the Worker: `AbortSignal.timeout`), and a
+timeout is rule 16.
 
 **Success shapes differ by provider.** Google:
 ```json
 {"choices":[{"message":{"content":"<joined parts>"}}], "model":"<bare model>", "provider":"google"}
 ```
+The Worker port (`migration/workers/src/llm.ts`) answers a **superset** on this
+path: `choices[0].finish_reason` (`STOP`→`stop`, `MAX_TOKENS`→`length`) and
+`usage` `{prompt_tokens, completion_tokens, total_tokens}` when Google reports
+them. Additive only — the extension reads `choices[0].message.content` and
+nothing else.
 OpenRouter: the provider's own JSON, returned verbatim with the provider's own
 status code (`:408`) — **including non-2xx**, which is why rule 14 has no
 OpenRouter twin.
+
+**The Worker's meter** increments in ONE atomic `UPDATE` (a stored hour that is
+not this hour restarts at 1), where the hook read-modify-wrote and could lose a
+step when one browser's calls overlapped; the 429 decision reads the row the
+credential lookup fetched, as the hook does. **The Worker's proof** is
+`migration/workers/scripts/llm_contract_local.sh`: `TestAgentLlmProxy` against a
+real workerd and a fake provider reached through `LLM_PROVIDER_BASE` (honoured
+for a loopback host only) — the floor on the wire, the `json_object`
+passthrough, the byte-identical 429 text, the audit rows in D1, and that no key
+reaches any response. The real providers and the edge's idle timeout are NOT
+covered by it; `src/llm.ts`'s header lists both as unverified.
 
 **The audit ledger.** A row in `agent_llm_audit` is written only when a
 `task_tag` is found (`:118-120`): either `[AUDIT:<tag>]` inside the serialized

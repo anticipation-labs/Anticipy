@@ -186,10 +186,30 @@
   //                            migration/runbooks/reencrypt_vault.md — this
   //                            one is generated during cutover and the old
   //                            ANTICIPY_VAULT_KEY is deliberately NOT carried.
-  //   GOOGLE_API_KEY           /agent/llm, direct Gemini.
-  //   OPENROUTER_API_KEY       /agent/llm, fallback.
+  //   GEMINI_API_KEY           /agent/llm, direct Gemini — the hook's name
+  //                            (agent_key.pb.js:202) and the one SECRETS.md:298
+  //                            puts on this Worker. GOOGLE_API_KEY is read as
+  //                            an alias (SECRETS.md:94 rotates it under that
+  //                            name). `wrangler secret list` on 2026-09-05
+  //                            showed NEITHER bound: Google models then go
+  //                            through OpenRouter, as the hook does.
+  //   OPENROUTER_API_KEY       /agent/llm, every non-Google model, and Google
+  //                            models while no Gemini key is bound.
   //   TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN / TWILIO_PHONE_NUMBER
   //                            the sweep's SMS and /sms/inbound's HMAC.
+  //
+  // /agent/llm ALSO READS TWO PLAIN VARS, not secrets, and neither is set here
+  // yet: ANTICIPY_BROWSER_MODEL and ANTICIPY_VISION_MODEL — the only two models
+  // a paired browser may spend through. Unset, src/llm.ts falls back to the
+  // hook's defaults (anthropic/claude-sonnet-4.6, google/gemini-2.5-flash);
+  // production PocketBase runs google/gemini-3.1-pro-preview
+  // (research/evals/login-wall-2026-09-05/FINDINGS.md:26). Carry the Railway
+  // values into `vars` at cutover; /agent/key (routes/agent.ts) has no default
+  // and answers 503 until ANTICIPY_BROWSER_MODEL is set.
+  //
+  // LLM_PROVIDER_BASE is a TEST-ONLY var (scripts/llm_contract_local.sh) that
+  // points /agent/llm at a loopback fake provider; src/llm.ts ignores any
+  // non-loopback value. It must never appear in `vars` here.
   //
   // `vars` below holds only things that are NOT secret.
   // --------------------------------------------------------------------------

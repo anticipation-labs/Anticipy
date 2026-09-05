@@ -647,6 +647,19 @@ Without `AbortSignal.timeout()` a hung provider holds the invocation open
 indefinitely, where PocketBase's option bounded it. That is a regression
 introduced by *omission*, which is the easiest kind to ship.
 
+**Ported 2026-09-05.** `src/llm.ts` is the whole route now — the refusal
+ladder, the meter (one atomic `UPDATE`), the ledger, both providers, the 95 s
+`AbortSignal.timeout`. Its header carries what is still UNVERIFIED: the edge's
+idle timeout (the spike above has not been run) and the real providers. The
+proof that does exist is `scripts/llm_contract_local.sh`: a real workerd, a
+fake provider (`scripts/fake_llm_provider.py`) reached through
+`LLM_PROVIDER_BASE` — honoured for a loopback host only, so a mis-set var can
+never send a vendor key elsewhere — and `contract_tests.py::TestAgentLlmProxy`
+asserting the 512 floor on the wire, the `json_object` passthrough, the
+byte-identical 429 text, the audit rows in D1, and that no key reaches a
+response. `test/llm-proxy.test.ts` pins the pure half to the hook and reads
+the floor and the 429 text out of the extension's own source.
+
 The other timeouts in the tree, for completeness: `captcha_solve.pb.js` 30 s,
 `password_reset.pb.js` 15 s, `internal_hq.pb.js` 60 s and 15 s. All far inside
 any limit; all need the same explicit `AbortSignal`.
@@ -733,6 +746,16 @@ references them — which R2 would not. Total ~1.3 MB.
 
 Staged by `npm run stage:assets` (copies `backend/pb_public/` into
 `migration/workers/public/`) rather than committing a second copy of the zips.
+(The extension zips are 338,456 B each at 0.13.0 as of 2026-09-05; the table
+above is the 2026-09-03 measurement.)
+
+**A staged copy can go stale with no diff to show it**, and did: on 2026-09-05
+the deployed Worker served an extension zip at 0.12.0 while
+`backend/pb_public/` held 0.13.0. `scripts/check_staged_assets.py`
+(`npm run check:assets`) compares every zip under the two directories by
+sha256 and exits 1 on any missing, differing or extra zip, naming the manifest
+version of each; run it before every deploy, and overnight/stranger_gate.py is
+the place to wire it.
 
 The three identical extension zips are a deploy-channel decision, not a
 storage one. Leave them until someone decides otherwise.
