@@ -148,3 +148,32 @@ deleted.
 it does not prove: a real errand on a real site through the Worker (the
 battery ran on the local rig), and the 0.13.0 that users download still
 DEFAULTS to Railway — 0.14.0 moves the default to api.anticipy.ai.
+
+## Proof 3 — the pendant chain on PRODUCTION, `proof/e2e_cloudflare.py`
+
+Four runs against api.anticipy.ai with the disposable owner
+(`qeuy6sv1raof9rw`, served by the brain via `ANTICIPY_SERVE_OWNERS`), a
+paired Chrome for Testing on extension 0.14.0, the Railway host blackholed
+inside it. Each run posts three lines shaped exactly as the phone posts them
+(an ambient fact, an errand naming the browser, a direct question) and reads
+D1 for what followed.
+
+| run | what it found |
+|---|---|
+| 1 (14:02Z) | the brain heard and minted (a research card from the fact, a browser job from the errand — claimed by the arm in 4 s, done with a receipt) **but no decision stamp landed**: the Worker's column map was ahead of the live table, the UPDATE threw a 1101, the brain's fail-safe keyed on a 400 never fired, and `release_stranded_claims` re-heard the errand every ten minutes — six duplicate browser jobs in an hour. Fixed on both sides (`40960570`, `6411e4d1`) |
+| 2 (15:45Z) | the stamp lands (`act`, `act`, `ask` within 30 s); no browser job because the errand read like the last one and the brain dedupes by MEANING; the script had graded the hands on the research card |
+| — (15:52Z) | a hand-made line posted WITHOUT a `decision` key was **never heard**: the live D1 table lacks `schema.sql`'s `NOT NULL DEFAULT ''`, the Worker inserted only sent keys, and the phone never sends `decision`/`goal`. Deaf ears for every real phone, with every gate green. Fixed in the Worker's write path (`45422c81`) after a first cut filled columns the table lacks and broke every create for ~2.5 min (rolled back to `f2a4b269`, then redone against `pragma_table_info`) |
+| 4 (16:10Z) | **every hop that can be proven from here is proven** (exit 0) |
+
+    ears -> API      PROVEN    events 7nsa3vpb5ipirwt, 9dudbpj359mkqev, okx3sebdl6bl5cc
+    API -> brain     PROVEN    decisions act, act, answer; heard_ms/heard_calls COLUMN ABSENT on D1 (the ALTER waits for the owner)
+    brain -> hands   PROVEN    jobs row nrdwe5a7zryc09f · lane '' · read_only · minted 16:10:54, running by 16:11:01
+    hands            PROVEN    nrdwe5a7zryc09f done, receipt present
+    brain -> mouth   NOT HERE  +16045550142 is a fictional 555 number; Twilio refuses it and no said row is written
+    hands -> mouth   NOT HERE  same
+    memory           NOT HERE  the next morning's recall is the test
+
+The direct question decided `answer` — the brain answering him from what
+it had just heard — which is the memory hop working inside one run in all
+but name; the text itself cannot leave for a 555 number. The design's own
+answer for the three NOT HERE rows is the owner's real phone.

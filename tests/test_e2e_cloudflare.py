@@ -180,9 +180,15 @@ def test_the_three_lines_are_the_design_moments():
     assert keys == ["a", "b", "c"]
     a, b, c = (t for _, _, t in e2e.LINES)
     assert "dentist" in a and "Thursdays at 3" in a and "Broadway" in a
-    # (b) names the browser so job_lane keeps it on the browser lane, and a
-    # site a job on https://example.com/ can satisfy
-    assert "browser" in b and "example.com" in b
+    # (b) names the browser so job_lane keeps it on the browser lane. It is a
+    # TEMPLATE: the target rotates across four IANA reserved sites by run and
+    # the run stamp rides in the words, because the brain dedupes by meaning
+    # and eight example.com errands in a day made the ninth "already done".
+    assert "browser" in b and "{site}" in b and "{run}" in b
+    rendered = b.format(run="1234", site=e2e.ERRAND_SITES[0])
+    assert "example.com" in rendered and "check 1234" in rendered
+    assert set(e2e.ERRAND_SITES) == {"example.com", "example.org", "example.net", "iana.org"}
+    assert e2e.ERRAND_SITE in e2e.ERRAND_SITES
     # (c) is addressed to her and punctuated as the phone punctuates
     assert b.startswith("Anticipy") and c.startswith("Anticipy") and c.endswith("?")
 

@@ -78,6 +78,8 @@ object is not the source of truth for scheduling; D1 is.
 | **hands proven on Cloudflare** | `extension_smoke.mjs` unmodified, 10/10 against api.anticipy.ai with a disposable owner; two proxy audit rows on OpenRouter, claim in 4 s, done with a verified receipt |
 | the instruments | fifteen defaults moved to api.anticipy.ai; `_env.py` sends a gate User-Agent because the firewall blocks `Python-urllib` (`9e53051c`); is_it_live and stranger 1/9 green against Cloudflare |
 | **extension 0.14.0** | `5f4ccec6`: DEFAULT_BASE → api.anticipy.ai, four pins bumped, zip rebuilt; Worker `3b62abf2` serves it byte-identical; the served zip's own config.js reads `DEFAULT_BASE = "https://api.anticipy.ai"`; stranger legs 1 and 2 PASS |
+| **deaf ears on Cloudflare, root cause** | the live D1 `events` table lacks `NOT NULL DEFAULT ''`; the phone never sends `decision`; the Worker inserted only sent keys → NULL, invisible to the brain's `decision=""` poll. Fixed in the write path (`45422c81`); one bad cut broke creates for ~2.5 min and was rolled back (`f2a4b269`) |
+| **the pendant chain on production** | `proof/e2e_cloudflare.py` run 4: ears → API → brain → hands → done, every provable hop PROVEN, exit 0 (hands-live-run.md, Proof 3) |
 | the ears on Cloudflare, measured | `are_the_ears_live.py` against api.anticipy.ai now RUNS (it needed `fields=`) and says **DEAF**: newest speech 2026-09-01 05:02Z (iphone-b113), newest server row 2026-09-02 04:58Z. Not a defect of the ears — no phone posts to Cloudflare until the api-pointed build is on one |
 
 **Which owner the one brain serves — read from D1, masked.** The supervisor
@@ -118,7 +120,7 @@ Earlier open question, kept for the record: `wrangler containers instances` list
 4. ~~**Brain deploy**~~ DONE (run 33966119164, cap 1) — but see the served-owner finding: the cap serves the wrong Omar; the live legs wait for speech. Was: merge 06 and 10b, `gh workflow run brain-deploy.yml --ref cloudflare-backend`,
    then the live legs adapted to `wrangler tail`: gateway tally, decision
    bounds, unattributed lane, reserved budget.
-5. **End-to-end, on Cloudflare, one test owner** (design below).
+5. ~~**End-to-end, on Cloudflare, one test owner**~~ DONE — run 4 exit 0; the two mouth hops and memory wait for a real phone (design below).
 6. **TestFlight** — `gh workflow run ios-testflight.yml --ref cloudflare-backend`
    once 1–5 hold; the workflow bumps the build itself. Ready-to-ship verdict
    is given only after step 5's chain is green.
