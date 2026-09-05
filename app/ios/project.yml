@@ -568,7 +568,13 @@ settings:
     # (audit F21, 2026-09-05). No 124 exists on App Store Connect; this is
     # the first build off cloudflare-backend, and it uploads as 125 because
     # the workflow now keeps the source number unless Apple holds it (F22).
-    CURRENT_PROJECT_VERSION: "126"
+    # 126: expectedExtensionVersion 0.14.0 -> 0.15.0, so the stale-extension
+    #      banner stops telling a stranger to Reload for a version nobody
+    #      serves (stranger_gate leg 1).
+    # 127: StaleExtensionTests.swift mirrored the pin as 0.14.0 while the app
+    #      said 0.15.0 — a mirror testing a comparison the app never makes.
+    #      App behaviour is identical to 126.
+    CURRENT_PROJECT_VERSION: "127"
     DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: NO
@@ -620,7 +626,7 @@ targets:
         # literal from a Mac one, and two products answering "which build
         # are you holding" with different numbers is the exact disease this
         # gate exists to prevent.
-        CURRENT_PROJECT_VERSION: "126"
+        CURRENT_PROJECT_VERSION: "127"
         DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_ENTITLEMENTS: ../macos/AnticipyMac/AnticipyMac.entitlements
