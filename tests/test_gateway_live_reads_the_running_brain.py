@@ -95,6 +95,16 @@ def test_a_freshly_refreshed_row_is_the_thing_to_grade():
 
 # ------------------------------------------------- the machine it reaches for
 
+@pytest.fixture(autouse=True)
+def pinned_backend(monkeypatch):
+    """The gate resolves its backend from the environment, and the suite is
+    full of tests that point ANTICIPY_PB somewhere else. Pin it, or these
+    assertions pass alone and fail in a full run — which is how a gate test
+    becomes noise nobody trusts."""
+    monkeypatch.setenv("ANTICIPY_PB", "https://api.anticipy.ai")
+    monkeypatch.delenv("ANTICIPY_BACKEND_URL", raising=False)
+
+
 def test_the_default_run_never_shells_railway(monkeypatch, capsys):
     """The finding itself. Production is Cloudflare; the Railway worker is a
     different machine and grading it was the defect."""
