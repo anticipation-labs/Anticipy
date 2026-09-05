@@ -5,6 +5,9 @@
 (() => {
   window.__anticipyMap = {};
   let counter = 0;
+  // node -> index for everything the main map numbered this pass, so the
+  // suggestions pass can REUSE an index instead of numbering a node twice.
+  let mapped = new WeakMap();
 
   const SENSITIVE_AUTOCOMPLETE = [
     "current-password", "new-password", "one-time-code",
@@ -264,6 +267,7 @@
   window.__anticipyMapPage = () => {
     window.__anticipyMap = {};
     counter = 0;
+    mapped = new WeakMap();
     const lines = [];
     const fields = [];
     const sel = "a[href], button, input, select, textarea, [role=button], [role=link], " +
@@ -291,27 +295,58 @@
       if (!visible(el)) continue;
       const idx = counter++;
       window.__anticipyMap[idx] = el;
+      mapped.set(el, idx);
       const r = el.getBoundingClientRect();
       let extra = "";
       if (!isSensitive(el) && ["INPUT", "SELECT", "TEXTAREA"].includes(el.tagName)) {
         const type = String(el.type || el.tagName).toLowerCase();
         let value = el.value;
+        let firstOption = false, optionValue = "";
         if (type === "checkbox" || type === "radio") value = !!el.checked;
         else if (el.tagName === "SELECT") {
           const option = el.options[el.selectedIndex];
           value = option ? String(option.textContent || option.value).trim() : String(el.value || "");
-          // A select still sitting on its placeholder has NO value. Reporting
-          // "Select an occasion" as the chosen value made the pre-submit
-          // auditor flag an untouched optional dropdown as an unapproved
-          // entry 7 times in one live run, until the table hold expired.
-          const placeholder = el.selectedIndex <= 0
-            && (String(option?.value ?? "") === ""
-                || /^(select|choose|pick|--|please\b|optional\b|none\b)/i
-                  .test(String(option?.textContent || "").trim())
-                || /\(optional\)/i.test(String(option?.textContent || "")));
-          if (placeholder) value = "";
+          // WHAT WAS HERE UNTIL 2026-09-05 (audit #73), and why it is gone.
+          //
+          //     const placeholder = el.selectedIndex <= 0
+          //       && (String(option?.value ?? "") === ""
+          //           || /^(select|choose|pick|--|please\b|optional\b|none\b)/i
+          //             .test(String(option?.textContent || "").trim())
+          //           || /\(optional\)/i.test(String(option?.textContent || "")));
+          //     if (placeholder) value = "";
+          //
+          // Two regex arms over the option's visible WORDS decided that a
+          // <select> on its first entry MEANT "nothing chosen", and blanked
+          // the value the pre-submit seatbelt reads. Written 2026-08-15 after
+          // "Select an occasion" was flagged as an unapproved entry 7 times
+          // in one live run until the table hold expired — a real failure,
+          // fixed by wording. The mirror failures it created: a first option
+          // that IS the answer and starts with a listed word — "None" under
+          // dietary requirements, "Pickup" under delivery, "Please call me"
+          // under contact preference — read as "" too, so the fact floor
+          // blocked a correct form ("these approved facts are not set") and
+          // the scope seatbelt never audited a site default sitting on such
+          // an option at all (a "" value is exempt). HARNESS-LAWS.md law 1.
+          //
+          // What stays is what the FORM WOULD SUBMIT — structure, per the
+          // HTML form-data-set algorithm: no option selected, an empty value
+          // attribute, or a disabled option submits nothing. A select still on
+          // its first entry whose option WOULD be submitted is reported
+          // truthfully, marked firstOption + optionValue, and whether that
+          // entry is a placeholder or a value is one question to a model at
+          // the pre-submit gates (agent_loop.js settleFirstOptions), a FLOOR:
+          // only a positive verdict blanks.
+          const onFirstEntry = el.selectedIndex <= 0;
+          const submitsNothing = el.selectedIndex < 0
+            || String(option?.value ?? "") === ""
+            || !!option?.disabled;
+          if (submitsNothing) value = "";
+          if (onFirstEntry && !submitsNothing) {
+            firstOption = true;
+            optionValue = String(option.value).slice(0, 100);
+          }
         }
-        fields.push({
+        const record = {
           index: idx,
           name: String(el.name || el.id || "").slice(0, 100),
           label: label(el).slice(0, 160),
@@ -321,7 +356,9 @@
           required: !!el.required,
           readOnly: !!el.readOnly,
           value: typeof value === "boolean" ? value : String(value || "").slice(0, 1000),
-        });
+        };
+        if (firstOption) { record.firstOption = true; record.optionValue = optionValue; }
+        fields.push(record);
       }
       // Sensitivity FIRST: label() redacts these, and dumping their options
       // or current value here would leak exactly what it protects — a saved
@@ -455,30 +492,188 @@
     return true;
   };
 
+  // WHAT WAS HERE UNTIL 2026-09-05 (audit #72), and why it is gone.
+  //
+  //     // Trip-type / passenger dropdowns also use role=option; they pollute
+  //     // the airport suggestion list and mislead the picker.
+  //     if (/^(round.?trip|one.?way|multi.?city|\d+\s*(adult|child|traveler|passenger))/i.test(t)) {
+  //       counter--; delete window.__anticipyMap[idx]; continue;
+  //     }
+  //
+  // An anchored regex over an option's OWN WORDS decided whether it was an
+  // airport suggestion the model may pick or a trip-type/passenger option to
+  // hide — and deleted the index before any model saw it. For the nodes only
+  // this pass reaches ([role=listbox] li, .pac-item) the control vanished
+  // from the model's view entirely; a role=option node kept its main-map
+  // index and was hidden only from the SUGGESTIONS block.
+  //
+  // HARNESS-LAWS.md law 1: meaning settled by wording, in the owner's
+  // logged-in browser, on every map after a type. Measured (audit scenario
+  // #72, "Change my Toronto flight to multi-city"): Multi-city was unreachable
+  // for the whole run and the agent re-typed into the same box until budget.
+  // The \d+\s*passenger arm also deleted genuine address suggestions — "2
+  // Passenger Terminal Rd" — from .pac-item lists, the exact autocomplete
+  // case this function exists to serve. Shipped 2026-07-30 with no expiry
+  // marker (Law 2), no gate leg, and no test able to see it (chrome_mock
+  // stubbed the function to "").
+  //
+  // What replaces it reads STRUCTURE and SENSES and never a word: which
+  // container each option lives in; what that container is ATTACHED to (the
+  // focused box's aria-controls / aria-owns / aria-activedescendant, its
+  // combobox wrapper, or a list anchored directly under it); and whether a
+  // person can see and click it (visible, not aria-hidden, uncovered at its
+  // centre — with UNKNOWN keeping, never deleting). Nothing is deleted: every
+  // uncovered option keeps an index — the main map's own where it has one —
+  // and the lists go to agent_loop.js as data. The step model, which has the
+  // whole page, chooses. Only when structure leaves two or more lists
+  // unattached does agent_loop ask ONE question of a model on its own
+  // (suggestionListVerdict), a CEILING that can re-head a list and can never
+  // drop one.
+
+  // Ancestors through shadow boundaries: at a ShadowRoot, step to its host.
+  function composedAncestors(node) {
+    const out = [];
+    let cur = node ? node.parentNode : null;
+    for (let depth = 0; cur && depth < 64; depth++) {
+      if (cur.nodeType === 11 && cur.host) cur = cur.host;
+      out.push(cur);
+      cur = cur.parentNode;
+    }
+    return out;
+  }
+
+  // Would a click at this node's centre reach it? The topmost element there
+  // may be the node, something inside it, or one of its (composed) ancestors
+  // — all uncovered. Only a stranger to that chain (a dialog backdrop, an
+  // overlay) covers it. null — the point is off-screen, or nothing is laid
+  // out there — is UNKNOWN, and unknown KEEPS: a sense never deletes on a
+  // guess (the polarity defect the #72 review caught in the first design).
+  function uncoveredAt(n, cx, cy) {
+    let hit = null;
+    try { hit = document.elementFromPoint(cx, cy); } catch (_) { return true; }
+    if (!hit) return true;
+    if (hit === n || n.contains(hit) || hit.contains(n)) return true;
+    return composedAncestors(n).includes(hit) || composedAncestors(hit).includes(n);
+  }
+
+  // The list an option belongs to. The semantic containers first, so a
+  // listbox split into <ul> groups is still one list.
+  function optionContainer(n) {
+    return n.closest("[role=listbox],.pac-container")
+      || n.closest("[role=menu],[role=group],ul,ol")
+      || n.parentElement || n;
+  }
+
+  function idTokens(el, attr) {
+    return String((el && el.getAttribute && el.getAttribute(attr)) || "").split(/\s+/).filter(Boolean);
+  }
+
+  // The control that declares this element as its popup, if any.
+  function declaredOwner(id) {
+    try {
+      return document.querySelector(
+        `[aria-controls~="${CSS.escape(id)}"],[aria-owns~="${CSS.escape(id)}"]`);
+    } catch (_) { return null; }
+  }
+
+  // What a list calls itself: its own aria-label / aria-labelledby, or the
+  // label of the control that declares it. Never the options' words.
+  function containerName(container) {
+    let el = container;
+    for (let depth = 0; el && el !== document.body && depth < 4; depth++, el = el.parentElement) {
+      const own = String(el.getAttribute("aria-label") || "").trim();
+      if (own) return own.slice(0, 80);
+      const by = idTokens(el, "aria-labelledby").map((id) => document.getElementById(id))
+        .filter(Boolean)
+        .map((ref) => String(ref.innerText || ref.textContent || "").replace(/\s+/g, " ").trim())
+        .filter(Boolean).join(" ");
+      if (by) return by.slice(0, 80);
+      if (el.id) {
+        const owner = declaredOwner(el.id);
+        const named = owner ? label(owner) : "";
+        if (named) return named.slice(0, 80);
+      }
+    }
+    return "";
+  }
+
+  // Is this list the popup of the box that has focus? The same class of
+  // check isSearchControl makes from declared type/role/form: ARIA first,
+  // then the combobox wrapper, then — weakest — a list anchored directly
+  // under the box and overlapping it horizontally.
+  function attachedTo(container, box) {
+    if (!box || !container) return false;
+    const declared = new Set([...idTokens(box, "aria-controls"), ...idTokens(box, "aria-owns")]);
+    if (declared.size) {
+      let el = container;
+      for (let depth = 0; el && depth < 8; depth++, el = el.parentElement) {
+        if (el.id && declared.has(el.id)) return true;
+      }
+    }
+    const activeId = String(box.getAttribute("aria-activedescendant") || "").trim();
+    if (activeId) {
+      const active = document.getElementById(activeId);
+      if (active && container.contains(active)) return true;
+    }
+    const wrapper = box.closest("[role=combobox]");
+    if (wrapper && wrapper.contains(container)) return true;
+    const b = box.getBoundingClientRect();
+    const c = container.getBoundingClientRect();
+    return c.top >= b.bottom - 8 && c.top <= b.bottom + 64
+      && c.right > b.left && c.left < b.right;
+  }
+
   // After typing into an autocomplete field, the suggestion dropdown is a
-  // freshly-rendered listbox. Surface its options so the agent can pick one
-  // instead of re-typing into the same box forever.
+  // freshly-rendered listbox. Surface every visible option list — the one
+  // attached to the focused box first — so the agent can pick instead of
+  // re-typing into the same box forever. Returns { lists } for agent_loop.js
+  // to head and render; no heading, no verdict and no deletion happens here.
   window.__anticipySuggestions = () => {
-    const opts = [];
+    const box = activeEditable();
     const nodes = document.querySelectorAll(
       "[role=option], [role=listbox] li, .pac-item, ul[role=listbox] [role=option], li[role=option]");
+    const groups = new Map();
     for (const n of nodes) {
+      if (!visible(n)) continue;
+      if (n.closest('[aria-hidden="true"]')) continue;
       const r = n.getBoundingClientRect();
-      if (r.width < 2 || r.height < 2) continue;
-      const st = getComputedStyle(n);
-      if (st.visibility === "hidden" || st.display === "none") continue;
-      const idx = counter++;
-      window.__anticipyMap[idx] = n;
-      const t = (n.innerText || n.textContent || "").trim().replace(/\s+/g, " ").slice(0, 80);
-      // Trip-type / passenger dropdowns also use role=option; they pollute
-      // the airport suggestion list and mislead the picker.
-      if (/^(round.?trip|one.?way|multi.?city|\d+\s*(adult|child|traveler|passenger))/i.test(t)) { counter--; delete window.__anticipyMap[idx]; continue; }
-      const picked = n.getAttribute("aria-selected") === "true" || n.getAttribute("aria-checked") === "true" ||
-        !!n.querySelector('[aria-checked="true"], [aria-selected="true"], input:checked');
-      opts.push(`[${idx}] <option> ${t}${picked ? " (ALREADY SELECTED — do NOT click again)" : ""} @(${Math.round(r.x + r.width / 2)},${Math.round(r.y + r.height / 2)})`);
-      if (opts.length > 12) break;
+      const cx = Math.round(r.x + r.width / 2), cy = Math.round(r.y + r.height / 2);
+      if (!uncoveredAt(n, cx, cy)) continue;
+      const container = optionContainer(n);
+      if (!groups.has(container)) groups.set(container, []);
+      groups.get(container).push({ n, cx, cy });
     }
-    return opts.join("\n");
+    const lists = [];
+    for (const [container, members] of groups) {
+      lists.push({ name: containerName(container), attached: attachedTo(container, box), members });
+    }
+    // Attached first, otherwise document order; letters follow that order.
+    lists.sort((a, b) => (b.attached ? 1 : 0) - (a.attached ? 1 : 0));
+    // Budget, not meaning: 12 for an attached list, 6 for any other, 24 in
+    // all, 14 lists (the letters a verdict may name). Whatever the budget
+    // leaves out is COUNTED in `total`, so the model knows it was not shown.
+    let budget = 24;
+    const out = [];
+    for (const list of lists.slice(0, 14)) {
+      const cap = Math.max(0, Math.min(list.attached ? 12 : 6, budget));
+      const options = [];
+      for (const { n, cx, cy } of list.members.slice(0, cap)) {
+        let idx = mapped.get(n);
+        if (idx === undefined) {
+          idx = counter++;
+          window.__anticipyMap[idx] = n;
+          mapped.set(n, idx);
+        }
+        const text = (n.innerText || n.textContent || "").trim().replace(/\s+/g, " ").slice(0, 80);
+        const picked = n.getAttribute("aria-selected") === "true" || n.getAttribute("aria-checked") === "true"
+          || !!n.querySelector('[aria-checked="true"], [aria-selected="true"], input:checked');
+        options.push({ idx, text, picked, cx, cy });
+      }
+      budget -= options.length;
+      out.push({ letter: String.fromCharCode(65 + out.length), name: list.name,
+                 attached: list.attached, options, total: list.members.length });
+    }
+    return { lists: out };
   };
 
   window.__anticipyCenter = (idx) => {
