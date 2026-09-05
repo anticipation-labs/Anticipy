@@ -20,6 +20,7 @@ row counts, and require the honest verdict.
 """
 import os
 import sys
+from datetime import datetime, timezone
 
 import pytest
 
@@ -117,13 +118,29 @@ def test_the_screen_says_what_it_threw_away(live_day, capsys):
 def test_a_probe_cannot_reset_the_silence_clock(live_day, capsys):
     """`newest speech` drives the two-cycle rule. Reading the probe's
     timestamp there made a four-day silence look 0.6 hours old, which is how
-    the gate stayed quiet with no phone on the backend at all."""
+    the gate stayed quiet with no phone on the backend at all.
+
+    The age is DERIVED from the fixture's own timestamp, never written as a
+    literal. It was `"108" in out or "109" in out` for one afternoon and went
+    red the same day, because the fixture pins the speech and the gate measures
+    against the real clock: every hour that passes moves the answer. A test
+    whose expectation expires teaches whoever hits it to widen the numbers
+    until it stops complaining, and by then it is asserting nothing.
+    """
+    expected = (datetime.now(timezone.utc)
+                - datetime(2026, 9, 1, 5, 2, 45, tzinfo=timezone.utc))
+    hours = int(expected.total_seconds() // 3600)
+
     M.main()
 
     out = capsys.readouterr().out
     assert "iphone-b113" in out, "the newest REAL device must be the one named"
     assert "e2e-phone-2026-09-05" not in out
-    assert "108" in out or "109" in out, "the silence is four days, not an hour"
+    # The gate rounds; accept the hour it lands in or either neighbour, and
+    # nothing else. Reading the probe instead would print well under an hour.
+    assert any(str(h) in out for h in (hours - 1, hours, hours + 1)), (
+        f"the silence is {hours}h since 2026-09-01, not an hour: {out}")
+    assert "0.6" not in out, "that is the probe's age, which is the whole bug"
 
 
 def test_a_real_phone_still_proves_the_ears(monkeypatch, capsys):
