@@ -219,6 +219,13 @@
     // fellowship.pb.js is the APEX. Leaving this unset sent every referral to
     // a different host than production does -- verified by diffing the two
     // Location headers. Not a secret, so it lives here where it is visible.
-    "ANTICIPY_SITE_URL": "https://www.anticipy.ai"
+    "ANTICIPY_SITE_URL": "https://www.anticipy.ai",
+    // The two models a paired browser may spend through (/agent/key hands the
+    // first to the extension; /agent/llm allows exactly these). Carried from
+    // the Railway values on 2026-09-05 at the hands' cutover; the browser model
+    // is the one the 22-page wall golden set and the 512-token floor were
+    // measured on. Not secrets.
+    "ANTICIPY_BROWSER_MODEL": "google/gemini-3.1-pro-preview",
+    "ANTICIPY_VISION_MODEL": "google/gemini-3.1-pro-preview"
   }
 }
