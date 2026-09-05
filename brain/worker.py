@@ -74,6 +74,10 @@ CONSOLIDATE_RETRY_SECONDS = 30 * 60   # a failing model retries gently, not per 
 # with me" to somebody who onboarded on Tuesday; past this, the hold is
 # stamped and logged instead of sent.
 WELCOME_HOLD_MAX_SECONDS = 24 * 3600
+# How young the PHONE SAVE must be for a hello to be a hello rather than
+# an interruption. Measured from owner_profile.updated, not .created —
+# see maybe_welcome_new_owner (audit F17).
+WELCOME_FRESH_SECONDS = 3600
 
 
 def _in_quiet_hours(now: float) -> bool:
@@ -425,6 +429,29 @@ def owner_wants_evidence_photos(owner_ref: str = "") -> bool:
         return False
 
 
+def _has_spoken_to_owner(owner_ref: str = "") -> bool | None:
+    """Has this owner EVER heard from her? True, False, or None when the
+    backend could not be read — three states, because "no" and "nobody
+    answered" are different facts and the welcome stamp is irreversible.
+
+    Counts rows; never asks for `text`, so it cannot see a word anybody said.
+    One read, and only on the branch that is about to write a durable stamp
+    for an owner who has none — a welcomed number returns before this.
+    """
+    try:
+        r = pb.get(
+            f"{PB}/api/collections/events/records",
+            params={"perPage": 1, "fields": "id",
+                    "filter": _scoped_filter('kind="anticipy_says"', owner_ref)},
+            timeout=10,
+        )
+        if not getattr(r, "ok", False):
+            return None
+        return int((r.json() or {}).get("totalItems", 0)) > 0
+    except Exception:
+        return None
+
+
 def maybe_welcome_new_owner(anticipy, state: dict, now: float | None = None) -> bool:
     """Day zero's first proactive touch: the moment a BRAND-NEW owner saves
     their number, she says hello — once, ever, per number.
@@ -449,9 +476,22 @@ def maybe_welcome_new_owner(anticipy, state: dict, now: float | None = None) -> 
     try:
         profile = _latest_profile(getattr(anticipy, "owner_ref", ""))
         items = [profile] if profile else []
-        created = (profile.get("created") or "") if profile else ""
-        ts = datetime.fromisoformat(created.replace("Z", "+00:00")).timestamp() \
-            if created else 0
+        # WHEN THE NUMBER ARRIVED, not when they signed up (audit F17).
+        #
+        # `created` is the age of the PROFILE ROW, and the row is created
+        # seconds after signup by reportTimeZone() on the first signed-in
+        # launch (AnticipyApp.swift:1353 -> :1309) — before the phone step
+        # exists. Measured on live D1: every real profile row is created
+        # 0.5-5 s after its owner row. So `created` answered "how long ago did
+        # they sign up", and the number could be saved an hour later, or in
+        # Settings a week later, and never earn a hello. `updated` moves when
+        # saveOwnerPhone writes the number, which is the moment this function
+        # is actually about. `created` remains the fallback for a row that
+        # somehow carries no updated stamp.
+        stamp = ((profile.get("updated") or profile.get("created") or "")
+                 if profile else "")
+        ts = datetime.fromisoformat(stamp.replace("Z", "+00:00")).timestamp() \
+            if stamp else 0
     except Exception:
         return False
     # A hello held during last night's quiet hours is still owed. It lives in
@@ -468,13 +508,39 @@ def maybe_welcome_new_owner(anticipy, state: dict, now: float | None = None) -> 
     held_ts = held.get(digits)
     if not isinstance(held_ts, (int, float)):
         held_ts = None
-    fresh = bool(ts) and now - ts <= 3600
+    fresh = bool(ts) and now - ts <= WELCOME_FRESH_SECONDS
     if not fresh and held_ts is None:
-        # An old profile only means the stamp file was lost — mark it so the
-        # check never runs again, but say nothing.
-        state.setdefault("welcomed_phones", []).append(digits)
-        _save_clock_state(state)
-        return False
+        # WHAT WAS HERE UNTIL 2026-09-05, audit F17: an unconditional silent
+        # stamp — "an old profile only means the stamp file was lost".
+        #
+        # It was a guess, and on Cloudflare it is usually the wrong one. A
+        # brain that starts serving an owner more than an hour after their
+        # phone save (an allowlist entry added days later, a cap raised, a
+        # fleet moved between backends) found an old profile, wrote the
+        # durable stamp, and said nothing — for ever, because the stamp is
+        # snapshotted to R2. Measured on live R2 2026-09-05: owner
+        # 4i2vafx1g01nlia and the probe owner both carry a welcomed_phones
+        # stamp with no welcome row anywhere in D1, and only five
+        # decision="welcome" rows exist in all of production.
+        #
+        # So ask the backend the question the guess was standing in for: has
+        # she EVER spoken to this person? A row count, not a reading of
+        # anybody's words.
+        #
+        #   yes   -> the stamp really was lost; restore it, stay silent.
+        #   no    -> she has never said a word to them; a hello is owed.
+        #   can't -> decide NOTHING. No stamp, no send, try again next beat.
+        #            The durable stamp is the irreversible half, and it must
+        #            never be written on an unreadable backend.
+        spoken = _has_spoken_to_owner(getattr(anticipy, "owner_ref", ""))
+        if spoken is None:
+            return False
+        if spoken:
+            state.setdefault("welcomed_phones", []).append(digits)
+            _save_clock_state(state)
+            return False
+        # Never spoken to: fall through to the quiet-hours guard and the
+        # hello itself, exactly as a fresh onboarding does.
     if held_ts is not None and now - held_ts > WELCOME_HOLD_MAX_SECONDS:
         # The morning this was held for has been and gone — the worker was
         # down through it. Introducing herself days late is its own "WHAT?",
