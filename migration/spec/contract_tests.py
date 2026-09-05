@@ -2240,6 +2240,20 @@ class TestAccountDelete(object):
             assert table in deleted, (
                 "§5.3: every table in OWNER_TABLES must be reported. Missing "
                 "%r from %r" % (table, deleted))
+        # THE PURGE ROW, and the column that finds the founder's memory.
+        # The brain's per-owner memory is a SQLite file on a volume this
+        # backend cannot reach, so deletion here is a REQUEST. The founder's
+        # memory lives outside <state root>/<owner_ref>, and
+        # brain/supervisor.py:215 reads `legacy_uuid` to locate it — without
+        # the column the drain checks the tidy directory, finds nothing, and
+        # marks the purge complete over a database still on disk.
+        if LOCAL_WRANGLER_CONFIG:
+            rows = local_d1("SELECT owner_ref, legacy_uuid, memory_purged FROM "
+                            "purges ORDER BY requested_at DESC LIMIT 1")
+            assert rows, "§5.3: the purge request must be recorded before the account goes"
+            assert int(rows[0]["memory_purged"] or 0) == 0, (
+                "§5.3: the drain has not run; the row must say so. %r" % rows[0])
+            assert "legacy_uuid" in rows[0], repr(rows[0])
 
 
 # ==========================================================================
@@ -2315,6 +2329,50 @@ class TestAgentRoutes(object):
         body = resp.json or {}
         assert body.get("llm_proxy") is True, repr(resp)
         assert body.get("owner_ref"), repr(resp)
+
+    @pytest.mark.needs_agent
+    def test_agent_key_carries_the_owner_card_and_the_vision_model(self, agent_headers):
+        """§6.3 — the two keys the extension reads off this response, and the
+        two things whose absence was measured live on 2026-09-05 (audit F01).
+
+        `vision_model` missing: the extension falls back to its own hardcoded
+        anthropic/claude-sonnet-4.6, which this backend's allowlist does not
+        contain, so every screenshot step gets 403 "model is not enabled for
+        browser agents" — which agent_loop.js reads as a rejected key, wipes,
+        and hands back needs_user.  Any dialog or date picker fires needsEyes,
+        so a reservation dies at the first calendar.
+
+        `owner` missing (the KEY, not a populated value — a person with no
+        profile yet is legitimately null): the step prompt tells the model his
+        name, email and phone are NOT on file, so every booking or signup form
+        stops with needs_user whatever Settings holds."""
+        resp = call("GET", "/agent/key", query={"agent_id": AGENT_ID},
+                    headers={"X-Anticipy-Agent-Token": AGENT_TOKEN})
+        if resp.status != 200:
+            pytest.skip("the test agent is not paired here (%s)" % resp.status)
+        body = resp.json or {}
+        assert "owner" in body, (
+            "§6.3: the owner card key must be present; null is a real answer "
+            "and a missing key is not. %r" % resp)
+        owner = body.get("owner")
+        assert owner is None or isinstance(owner, dict), repr(resp)
+        if isinstance(owner, dict):
+            assert set(owner) == {"first_name", "last_name", "email", "phone",
+                                  "birthday", "facts"}, (
+                "§6.3: the card is exactly six fields — widening it is a PII "
+                "decision, not a refactor. %r" % sorted(owner))
+        vision = body.get("vision_model")
+        assert vision, "§6.3: /agent/key must name the vision model. %r" % resp
+        # AND THE MODEL IT NAMES MUST BE ONE THE PROXY ACCEPTS. This is the
+        # pair that was broken: a name handed out here that /agent/llm refuses
+        # is worse than no name, because the extension reads the 403 as a
+        # rejected credential and stops the whole run.
+        probe = call("POST", "/agent/llm", headers=agent_headers,
+                     json_body={"model": vision, "messages": []})
+        assert not (probe.status == 403
+                    and error_of(probe) == "model is not enabled for browser agents"), (
+            "§6.3/§6.4: /agent/key handed out vision_model=%r and /agent/llm "
+            "refuses it. %r" % (vision, probe))
 
     def test_agent_llm_requires_credentials(self):
         """§6.4 rule 1."""
@@ -3061,6 +3119,122 @@ class TestServiceRoutes(object):
         assert resp.status == 400, repr(resp)
         assert (resp.json or {}).get("message") == \
             "The profile update must be an object.", repr(resp)
+
+    # -- past the refusals: the writes a TestFlight signup cannot start without.
+    #
+    # Every test below WRITES, so each is `destructive` and additionally needs
+    # ANTICIPY_ALLOW_DESTRUCTIVE=1.  They exist because the 401/400 legs above
+    # passed for a whole day against a Worker whose three bodies were
+    # `503 {"ok":false,"message":"… not yet ported"}` (audit F02/F03): the gate
+    # in front of a stub answers exactly like the gate in front of a route.
+    # migration/workers/scripts/service_contract_local.sh runs these against a
+    # real workerd and a scratch D1.
+
+    @pytest.mark.destructive
+    @pytest.mark.needs_account
+    def test_profile_upsert_writes_and_echoes_the_canonical_row(self, account):
+        """§6.10 — one authenticated partial write in, one COMPLETE canonical
+        profile out.  AnticipyBackend.swift:410-420 refuses to paint "Saved"
+        unless ok is true, profile.owner_ref is its own accountID, and every
+        field it sent round-trips, so a 200 alone proves nothing."""
+        token, owner_id = account
+        zone = "America/Vancouver"
+        resp = call("POST", "/me/profile/upsert", headers={"Authorization": token},
+                    json_body={"first_name": "Contract", "timezone": zone})
+        assert resp.status == 200, repr(resp)
+        body = resp.json or {}
+        assert body.get("ok") is True, repr(resp)
+        profile = body.get("profile") or {}
+        assert profile.get("id"), repr(resp)
+        assert profile.get("owner_ref") == owner_id, (
+            "§6.10: ownership is derived from the token; the client compares "
+            "this to its own accountID. %r" % resp)
+        assert profile.get("first_name") == "Contract", repr(resp)
+        assert profile.get("timezone") == zone, (
+            "§6.10: without this the brain's fetch_owner_timezone is None and "
+            "quiet hours are judged in the server's zone. %r" % resp)
+        # The COMPLETE row, not just what was sent.
+        for field in ("owner_id", "phone", "name", "last_name", "email",
+                      "birthday", "facts"):
+            assert field in profile, (
+                "§6.10: the canonical row must carry %r; got %r"
+                % (field, sorted(profile)))
+        # And it is really a row, which is the only thing the brain can read.
+        again = call("POST", "/me/profile/upsert", headers={"Authorization": token},
+                     json_body={"last_name": "Suite"})
+        assert again.status == 200, repr(again)
+        assert (again.json or {}).get("profile", {}).get("id") == profile["id"], (
+            "§6.10: one profile row per account — a second row is how a "
+            "person's name appeared to vanish. %r" % again)
+
+    @pytest.mark.destructive
+    @pytest.mark.needs_account
+    def test_profile_upsert_keeps_an_omitted_field_and_clears_an_empty_one(self, account):
+        """§6.10 — presence, not truthiness.  Settings saves identity details
+        and the phone as two independent requests, so an omitted field must
+        survive the other one; `""` is a real value and clears."""
+        token, _ = account
+        number = "+15550100777"
+        assert call("POST", "/me/profile/upsert", headers={"Authorization": token},
+                    json_body={"phone": number}).status == 200
+        kept = call("POST", "/me/profile/upsert", headers={"Authorization": token},
+                    json_body={"first_name": "Contract"})
+        assert (kept.json or {}).get("profile", {}).get("phone") == number, (
+            "§6.10: an omitted field must not be blanked. %r" % kept)
+        cleared = call("POST", "/me/profile/upsert", headers={"Authorization": token},
+                       json_body={"phone": ""})
+        assert (cleared.json or {}).get("profile", {}).get("phone") == "", (
+            "§6.10: an explicit empty string clears. %r" % cleared)
+
+    @pytest.mark.destructive
+    @pytest.mark.needs_account
+    def test_phone_remove_clears_the_seed_and_every_profile(self, account):
+        """§6.9 — the account seed and every profile row, or an old number
+        stays routable after a 200: an inbound text resolves through
+        owner_profile.phone BEFORE owners."""
+        token, owner_id = account
+        assert call("POST", "/me/profile/upsert", headers={"Authorization": token},
+                    json_body={"phone": "+15550100778"}).status == 200
+        resp = call("POST", "/me/phone/remove", headers={"Authorization": token},
+                    json_body={})
+        assert resp.status == 200, repr(resp)
+        body = resp.json or {}
+        # AnticipyBackend.swift:374-386 requires all three.
+        assert body.get("ok") is True, repr(resp)
+        assert body.get("phone") == "", repr(resp)
+        assert isinstance(body.get("clearedProfiles"), int) and body["clearedProfiles"] >= 0, repr(resp)
+        after = call("POST", "/me/profile/upsert", headers={"Authorization": token},
+                     json_body={"first_name": "Contract"})
+        assert (after.json or {}).get("profile", {}).get("phone") == "", (
+            "§6.9: the number must be gone from the profile too. %r" % after)
+        if LOCAL_WRANGLER_CONFIG:
+            rows = local_d1("SELECT phone FROM owners WHERE id = '%s'" % owner_id)
+            assert rows and not (rows[0]["phone"] or ""), (
+                "§6.9: owners.phone is the sign-up seed and still powers "
+                "password recovery; it must be cleared too. %r" % rows)
+
+    @pytest.mark.destructive
+    @pytest.mark.needs_account
+    def test_auth_claim_adopts_this_accounts_own_rows(self, account):
+        """§6.8 — the uuid recorded on THIS account at sign-up is the whole
+        test, and a claim that passes it must actually adopt.  The counts are
+        whatever this instance happens to hold; the shape is the contract."""
+        token, _ = account
+        # auth-refresh, not a records list: it answers {token, record} for the
+        # caller and needs no filter the guard has to recognise.
+        me = call("POST", "/api/collections/owners/auth-refresh",
+                  headers={"Authorization": token})
+        recorded = ((me.json or {}).get("record") or {}).get("legacy_uuid") or ""
+        resp = call("POST", "/auth/claim", headers={"Authorization": token},
+                    json_body={"legacy_uuid": recorded} if recorded else {})
+        assert resp.status == 200, repr(resp)
+        body = resp.json or {}
+        assert body.get("ok") is True, repr(resp)
+        claimed = body.get("claimed") or {}
+        assert set(claimed) == {"jobs", "owner_profile", "segments", "agents", "events"}, (
+            "§6.8: the five tables are the contract; got %r" % sorted(claimed))
+        for table, n in claimed.items():
+            assert isinstance(n, int) and n >= 0, "§6.8: %s counted %r" % (table, n)
 
     def test_transcription_tokens_need_an_account_first(self):
         """§6.13 — 410 GONE, deliberately, not 502 or 503: those mean "try
