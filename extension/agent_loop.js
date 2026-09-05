@@ -2272,50 +2272,50 @@ async function clearUnsupportedOptionalFields(tabId, unsupportedNames, currentSt
 }
 
 
-// Extract a named comparison list only from the first sentence's grammatical
-// subject ("Compare ... for A, B, and C").  This is not a vendor list: it
-// works for products, schools, cities, clinics, or any future task and never
-// invents names absent from the owner's goal.
-function comparisonNames(goal) {
-  // Transport/audit metadata is not part of the owner's grammar.  An audit
-  // prefix once made an otherwise ordinary "Compare ..." task bypass the
-  // named-entity gate because the sentence no longer literally began with
-  // the verb.
-  const cleanGoal = String(goal || "").replace(/^\s*(?:\[[^\]\r\n]{1,160}\]\s*)+/, "");
-  const first = cleanGoal.split(/[.!?](?:\s|$)/)[0] || "";
-  if (!/^\s*compare\b/i.test(first)) return [];
-  const at = first.toLowerCase().lastIndexOf(" for ");
-  if (at < 0) return [];
-  const list = first.slice(at + 5);
-  if (!list.includes(",") || !/\band\b/i.test(list)) return [];
-  return list.split(/\s*,?\s+and\s+|\s*,\s*/i).map((part) => {
-    const proper = part.trim().match(/^([A-Z][\w+.-]*(?:\s+[A-Z][\w+.-]*)*)/);
-    return proper ? proper[1].trim() : "";
-  }).filter(Boolean);
-}
-
-// HOW MANY records the goal asks for, and how many the result delivers, is
-// not read here any more. Until 2026-09-05 this function opened with a regex
-// over the owner's sentence and regexes over the agent's prose and walled the
-// claim off from the auditor when the two numbers disagreed; the record of
-// what it did and what it cost is in verifyDone (audit #74). The two branches
-// that remain — the comparison-name check and the direct-URL count — are the
-// same class (a requirement read off the owner's wording, refused before any
-// model reads the claim), are NOT covered by that record, and must not grow.
-export function completionShapeGap(goal, result) {
-  const normalized = evidenceToken(normalizedResult(result));
-  const missing = comparisonNames(goal).filter((name) =>
-    !normalized.includes(evidenceToken(name)));
-  if (missing.length) return `the comparison result omits: ${missing.join(", ")}`;
-  if (/\b(?:provide|include|report|return|list)\b[^.!?]{0,80}\bdirect\s+(?:source\s+)?urls?\b/i.test(String(goal || ""))) {
-    const required = Math.max(1, comparisonNames(goal).length);
-    const supplied = resultUrls(result).length;
-    if (supplied < required) {
-      return `the goal requests ${required} direct URLs but the result contains ${supplied}`;
-    }
-  }
-  return "";
-}
+// WHAT WAS HERE UNTIL 2026-09-05 (F06), and why it is gone.
+//
+//     function comparisonNames(goal)      -> "Compare … for A, B, and C" parsed
+//                                            off the first sentence, then a
+//                                            capitalised-word regex per part
+//     export function completionShapeGap(goal, result)
+//         missing = comparisonNames(goal).filter((name) =>
+//           !evidenceToken(result).includes(evidenceToken(name)))
+//         -> "the comparison result omits: …"
+//         /\b(provide|include|report|return|list)\b[^.!?]{0,80}\bdirect\s+urls?\b/
+//         -> "the goal requests N direct URLs but the result contains M"
+//
+// The record above completionShapeGap's old body named these two branches as
+// unaudited residue of audit #74 and said they "must not grow". They did not
+// grow; they were simply still deciding. Both read a REQUIREMENT off the
+// owner's wording and refused the claim from `verifyDone` before mapPage and
+// before the auditor sixty lines below ever ran, with a polarity that could
+// only ever say no.
+//
+// MEASURED on the shipped functions, 2026-09-05:
+//   goal   "Compare the monthly cost for Bell Canada, Telus, and Rogers."
+//   claim  every price, correct, naming the carrier as the source does ("Bell:")
+//                       -> "the comparison result omits: Bell Canada"
+//   goal   "Compare the monthly cost for Telus, Rogers, and Bell and include
+//           direct URLs."
+//   claim  three prices with one comparison-page URL
+//                       -> "the goal requests 3 direct URLs but the result contains 1"
+//   goal   "Compare tuition for UBC, SFU, and UVic and provide direct URLs."
+//   claim  three figures from one cited source
+//                       -> "the goal requests 3 direct URLs but the result contains 1"
+// Each of those reasons matched outputOnlyCompletionGap, so the loop invited
+// the model to REWORD a correct answer; every rewording met the same regex; at
+// four rejections it abandoned the source the answer came from and at eight it
+// texted the owner that a finished errand could not be verified. That is the
+// exact chain audit #74's record describes as the measured harm, reached
+// through the branches that record said it did not cover.
+//
+// HARNESS-LAWS.md law 1. Whether "Bell" is the company the owner called "Bell
+// Canada", and whether one page carrying three prices satisfies "direct URLs",
+// are questions about what his words MEAN, and a substring test cannot hold
+// either. The auditor below already owns the coverage question, sees the goal,
+// the claim, the live page and the run's evidence, and must ground its
+// rejection in verbatim quotes. So the two measured shapes ride into its
+// prompt as teaching and nothing runs in front of it. Zero added model calls.
 
 export function outputOnlyCompletionGap(reason) {
   return /\b(?:result|goal)\b[^.]{0,120}\b(?:contains|omits?|missing|fails? to (?:provide|include|list|report)|does not (?:provide|include|list|report))\b/i
@@ -2480,9 +2480,31 @@ function evidenceUrlSeen(url, observed) {
 // This is URL provenance, not a site map: it applies to listings, courses,
 // events, documents, products, or any future research task.
 export function completionEvidenceGap(goal, result, state, journal = []) {
-  const cleanGoal = String(goal || "").replace(/^\s*(?:\[[^\]\r\n]{1,160}\]\s*)+/, "");
-  const openEach = /\bopen\s+each\b|\bopen\s+(?:an?|the)\s+[^.]{0,120}\s+for\s+each\b/i.test(cleanGoal);
-  if (!openEach) return "";
+  // WHAT WAS HERE UNTIL 2026-09-05 (F06):
+  //     const openEach = /\bopen\s+each\b|\bopen\s+(?:an?|the)\s+[^.]{0,120}\s+for\s+each\b/i
+  //       .test(cleanGoal);
+  //     if (!openEach) return "";
+  // Two phrasings of the owner's sentence decided whether this check EXISTED.
+  // Deciding whether a safety gate runs at all by pattern-matching his wording
+  // is the same law-1 violation one level up — audit #69 wrote that down when
+  // it made the calendar guard engage on every dated cell instead of on the
+  // errands whose words happened to contain a month and a number — and it
+  // meant an errand phrased "check each listing" or "look at all three pages"
+  // had no provenance check whatsoever.
+  //
+  // What is left is structure the whole way down and needs no trigger: every
+  // URL the CLAIM ITSELF cites must have been a live page in this run. It says
+  // nothing about how the goal was worded, nothing about how many pages were
+  // wanted (audit #74 — that is the auditor's), and it can only refuse a
+  // citation, never invent one.
+  //
+  // THE COST, said plainly: a result that cites a page the run never opened is
+  // now refused on every errand, not only on "open each" ones. A booking whose
+  // sentence names the site's home page while the run sat on the booking form
+  // is the shape that pays for this. It is recoverable rather than terminal —
+  // the reason carries gap `source_unvisited`, and that recovery opens the
+  // cited URL and re-verifies — and the alternative is a claim citing a page
+  // nobody looked at.
   // HOW MANY pages the goal asks for is not read here any more (audit #74;
   // the record is in verifyDone). Whether two cited pages satisfy "find
   // three" is the auditor's question. What stays is provenance — every URL
@@ -2568,7 +2590,19 @@ function evidenceHasMonetaryValue(body, claimed) {
 // sector/site agnostic: it keys only on the owner's word "official", the
 // result's own field names, and live page snapshots from this run.
 export function officialRecordEvidenceGap(goal, result, state, journal = []) {
-  if (!/\bofficial\b/i.test(String(goal || ""))) return "";
+  // WHAT WAS HERE UNTIL 2026-09-05 (F06):
+  //     if (!/\bofficial\b/i.test(String(goal || ""))) return "";
+  // One word of the owner's sentence decided whether a claimed price was
+  // checked against the page it cites. "Official" is how one person phrases
+  // it; "from the vendor itself", "the airline's own site", "not a comparison
+  // site" are how others do, and none of those switched this on. Whether the
+  // goal DEMANDS a first-party source is a question the auditor already
+  // carries in its prompt and answers with the page in front of it; what is
+  // left here is structural and true of any claim: a record that names a URL
+  // and a price must have had that URL open in this run, and that page must
+  // carry the plan, the number and the currency the record claims. It never
+  // reads the goal at all now, and every check below is already keyed on the
+  // RESULT's own shape (`if (!url || !priceEntry) continue;`).
   const records = resultRecords(structuredResult(result));
   if (!records.length) return "";
   const evidence = [state, ...(Array.isArray(journal) ? journal : [])];
@@ -2711,12 +2745,15 @@ export async function verifyDone(apiKey, model, goal, result, tabId,
   // NOT covered by this record, same class, named so nobody reads them as
   // audited: comparisonNames (a "Compare ... for A, B, and C" regex) and the
   // direct-URL count branch, both still in completionShapeGap; and the
-  // `openEach` regex gating provenance in completionEvidenceGap. They must
-  // not grow.
-  const shapeGap = completionShapeGap(goal, result);
-  if (shapeGap) {
-    return { verified: false, reason: shapeGap, evidence: [] };
-  }
+  // `openEach` regex gating provenance in completionEvidenceGap.
+  //
+  // ALL THREE ARE NOW GONE TOO (F06, 2026-09-05, the same day). The record of
+  // what they decided and what they measured sits where completionShapeGap
+  // used to be; the coverage question is the auditor's, taught with the two
+  // shapes those branches got wrong, and the provenance halves that remain run
+  // on every errand instead of on the ones whose wording switched them on.
+  // There is nothing between a done claim and the auditor now except checks
+  // that read the RESULT's own shape and the pages this run actually opened.
   // WHAT WAS HERE UNTIL 2026-09-05 (audit #65):
   //     if (completionContradiction(claimedResult)) {
   //       return { verified: false, reason: "the claimed result says the action did not complete", evidence: [] };
@@ -2833,7 +2870,7 @@ export async function verifyDone(apiKey, model, goal, result, tabId,
     : (Array.isArray(evidenceJournal) ? evidenceJournal : []);
   const messages = [
     { role: "system", content: `Interpret the owner's grammar literally. "A, B, or C" permits any named alternative unless the goal explicitly says each/all. A range attached to "start" or "begin" does not constrain an end date. Different labels are not contradictions by themselves: reject only when their evidenced meanings or values materially conflict, not because the result normalized the source's label to the field name requested by the goal.` },
-    { role: "system", content: `You audit a browser agent's claim of task completion. Given the goal, exact approved scope and facts, the claimed result, the page immediately before the external effect, and the CURRENT page, decide if the claim is actually supported. THE GOAL IS THE COMPLETE REQUIREMENT: never add a currency, locale, vendor, field, record, or constraint that the goal does not contain. Every approved fact must agree with the evidence; a default, different option, amount, date, person, address, or resolution is a contradiction even when the page says success. Keep field identities exact: taxes are not association fees, a list price is not a monthly payment, and two similarly named plans/records are not interchangeable. When a requested field is qualified by "if displayed", absence of that exact field is not a contradiction and a result may say it was not displayed. For a mutable page such as a cart, form, or editor, the CURRENT page is authoritative over an older snapshot at that same URL because the agent may have repaired the state. For form/submission goals, the current page must also show terminal evidence (confirmation text or a post-submit page). For research goals, the CLAIMED RESULT itself must explicitly answer EVERY requested entity, field and quantity in the goal. If the goal names multiple products/vendors/places or asks for N records/options, count them and verify=false when any named item, requested field, or record is missing; a page for one item cannot prove the omitted items. Count what the result DELIVERS, not how it is laid out: prose, a numbered list and JSON are all acceptable layouts, and a record that is named but carries none of the details the goal asks for (a rent, a price, a URL) is a missing record. A number in the goal that is not a count of records to deliver — tabs to open, rows per page, forms of ID to bring — creates no record requirement. If the goal requires an OFFICIAL source, the evidence must show that the page is operated by the named organization, government, health authority, institution, vendor, organizer, or authorized ticketing service. A third-party finder, review site, generic directory, search engine, or aggregator is NOT official merely because it repeats the facts; ambiguity means verified=false. Treat each earlier evidence entry as belonging only to its own URL; never attach a fact from one entry to a different claimed URL or record. Search-result snippets, partial views, or a page consistent with an INCLUDED claim may support that included claim, but never fill an omission in the result. Also verify=false if ANY statement in the claimed result is contradicted by the authoritative evidence. The goal's TERMINAL state must actually be reached: a result saying an action "would lead to" or "is ready to" reach the goal page is NOT done. Likewise a research result that admits the requested information was NOT found is NOT done. A result whose own words say the action did NOT complete — "has not been submitted", "could not book", "the amounts were not correctly reflected" — is NOT done, and neither is a progress note such as "I will now try the other site". But a completed action with a negated SIDE-remark — "Booked. The confirmation email was not sent" — IS done when the evidence shows the booking; judge the action the goal asked for, not every clause. Reply EXACTLY {"verified":true} or, for false, {"verified":false,"reason":"under 120 words","goal_quote":"exact short quote from GOAL that creates the requirement","claimed_quote":"exact short quote from CLAIMED RESULT being rejected","evidence_quote":"exact short quote from the supplied live evidence","evidence_url":"the supplied URL containing that quote"}. Every false rejection must ground all three quotes verbatim; do not paraphrase or invent evidence.` },
+    { role: "system", content: `You audit a browser agent's claim of task completion. Given the goal, exact approved scope and facts, the claimed result, the page immediately before the external effect, and the CURRENT page, decide if the claim is actually supported. THE GOAL IS THE COMPLETE REQUIREMENT: never add a currency, locale, vendor, field, record, or constraint that the goal does not contain. Every approved fact must agree with the evidence; a default, different option, amount, date, person, address, or resolution is a contradiction even when the page says success. Keep field identities exact: taxes are not association fees, a list price is not a monthly payment, and two similarly named plans/records are not interchangeable. When a requested field is qualified by "if displayed", absence of that exact field is not a contradiction and a result may say it was not displayed. For a mutable page such as a cart, form, or editor, the CURRENT page is authoritative over an older snapshot at that same URL because the agent may have repaired the state. For form/submission goals, the current page must also show terminal evidence (confirmation text or a post-submit page). For research goals, the CLAIMED RESULT itself must explicitly answer EVERY requested entity, field and quantity in the goal. If the goal names multiple products/vendors/places or asks for N records/options, count them and verify=false when any named item, requested field, or record is missing; a page for one item cannot prove the omitted items. Count what the result DELIVERS, not how it is laid out: prose, a numbered list and JSON are all acceptable layouts, and a record that is named but carries none of the details the goal asks for (a rent, a price, a URL) is a missing record. A number in the goal that is not a count of records to deliver — tabs to open, rows per page, forms of ID to bring — creates no record requirement. Judge a named item by WHICH THING IT IS, never by whether the goal's spelling of its name appears in the result: a source's own shorter or longer form of the same company, school, clinic or product — "Bell" for "Bell Canada", "UBC" for "the University of British Columbia" — is that item present, not an item missing, unless the evidence shows they are different things. When the goal asks for direct or source URLs, ask whether each requested figure is traceable to a page the result actually cites; one page that carries several of the named items can satisfy that for all of them, and the NUMBER of URLs is not the requirement — a result with fewer links than named items is incomplete only when some item's figure is left with no cited source at all. If the goal requires an OFFICIAL source, the evidence must show that the page is operated by the named organization, government, health authority, institution, vendor, organizer, or authorized ticketing service. A third-party finder, review site, generic directory, search engine, or aggregator is NOT official merely because it repeats the facts; ambiguity means verified=false. Treat each earlier evidence entry as belonging only to its own URL; never attach a fact from one entry to a different claimed URL or record. Search-result snippets, partial views, or a page consistent with an INCLUDED claim may support that included claim, but never fill an omission in the result. Also verify=false if ANY statement in the claimed result is contradicted by the authoritative evidence. The goal's TERMINAL state must actually be reached: a result saying an action "would lead to" or "is ready to" reach the goal page is NOT done. Likewise a research result that admits the requested information was NOT found is NOT done. A result whose own words say the action did NOT complete — "has not been submitted", "could not book", "the amounts were not correctly reflected" — is NOT done, and neither is a progress note such as "I will now try the other site". But a completed action with a negated SIDE-remark — "Booked. The confirmation email was not sent" — IS done when the evidence shows the booking; judge the action the goal asked for, not every clause. Reply EXACTLY {"verified":true} or, for false, {"verified":false,"reason":"under 120 words","goal_quote":"exact short quote from GOAL that creates the requirement","claimed_quote":"exact short quote from CLAIMED RESULT being rejected","evidence_quote":"exact short quote from the supplied live evidence","evidence_url":"the supplied URL containing that quote"}. Every false rejection must ground all three quotes verbatim; do not paraphrase or invent evidence.` },
     // The auditor is told to demand "correctly-filled fields" as evidence, so
     // it must actually SEE the fields: page text alone (capped at 1500 chars,
     // usually nav and menus) made it reject correct completions, the run
@@ -7047,8 +7084,11 @@ export async function runAgentGoal(goal, opts) {
     // If the verifier says a claimed URL was never opened, the most direct
     // recovery is to open that exact URL. It came from the model's own result
     // and verifier—not a baked-in route, domain, or selector.
-    const namedEntity = comparisonNames(goal).find((name) =>
-      evidenceToken(compact).includes(evidenceToken(name))) || "";
+    // F06: the recovery query used to be narrowed to a name pulled out of the
+    // owner's sentence by `comparisonNames` — the same "Compare … for A, B and
+    // C" parse that was refusing correct claims two hundred lines up. It is
+    // gone with the function; the query falls back to the sanitised goal,
+    // which is what it already did for every errand the parse did not match.
     const pricingGap = /\b(?:price|pricing|cost|currency|billing|cadence|annual|monthly|fee)\b/i
       .test(`${compact} ${goal}`);
     // Rejection prose NEVER becomes a search query. It once did: a stuck run
@@ -7062,9 +7102,7 @@ export async function runAgentGoal(goal, opts) {
           : "official price per user billed monthly annual")
       : "";
     const safeGoal = sanitizedResearchTerms(goal);
-    const query = (namedEntity
-      ? `"${namedEntity}" ${focus || safeGoal}`
-      : `${focus} ${safeGoal}`).trim();
+    const query = `${focus} ${safeGoal}`.trim();
     if (!query) return false;
     const next = directMissing ? cited : searchTarget(query);
     // When evidence aged out of the bounded notebook, revisiting that exact
