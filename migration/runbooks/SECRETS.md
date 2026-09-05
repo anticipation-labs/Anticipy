@@ -149,6 +149,10 @@ These are compiled into the browser bundle. Set them in the **build** step.
 | `TWILIO_API_KEY_SID` | Twilio API key SID | backend | `backend/pb_hooks/password_reset.pb.js:110` | half of a pair | Worker secret | rotate as a pair |
 | `TWILIO_API_KEY_SECRET` | Twilio API key secret | backend | `backend/pb_hooks/password_reset.pb.js:111` | server-only | Worker secret | rotate as a pair |
 | `TWILIO_PHONE_NUMBER` / `TWILIO_FROM` | the sending number; also an inbound allowlist | backend | `backend/pb_hooks/sms.pb.js:145`, `backend/pb_hooks/password_reset.pb.js:100` | not a secret, but **security-relevant** (it is checked, not just used) | `vars` | n/a |
+| `SENDBLUE_API_KEY_ID` | Sendblue (iMessage/RCS/SMS) — the provider replacing Twilio, 2026-09-05 | backend, brain | `migration/workers/src/messaging.ts` (the HQ reminder sweep and the password-reset code), `brain/sendblue_arm.py` | identifier half of a pair | Worker secret on `anticipy-api` **and** `anticipy-brain` | Sendblue → Developer → rotate as a pair |
+| `SENDBLUE_API_SECRET_KEY` | Sendblue API secret | backend, brain | as above | server-only | Worker secret on both | rotate as a pair |
+| `SENDBLUE_FROM_NUMBER` | the Sendblue sending number (E.164) — every outbound text names it | backend, brain | `migration/workers/src/messaging.ts`, `brain/sendblue_arm.py` | not a secret | `vars` | n/a |
+| `ANTICIPY_SMS_PROVIDER` | `sendblue` or `twilio`: the owner's word on which arm sends; unset, the Worker picks Sendblue when its three names are bound, else Twilio | backend, brain | `migration/workers/src/messaging.ts chooseProvider` | not a secret | `vars` | n/a |
 | `CAPSOLVER_API_KEY` | CapSolver | backend, engine | `backend/pb_hooks/captcha_solve.pb.js:33,135`, `engine/app/config.py:85` | server-only, **spends money per call** | Worker secret on `anticipy-api` | CapSolver dash → rotate. Set a balance alert. |
 | `PB_SETTINGS_ENCRYPTION_KEY` | encrypts PocketBase's own `settings` in `data.db` | backend | `backend/start.sh:4,35` | server-only, data-bearing | **Retire.** D1 has no equivalent; the settings blob it protected does not survive the migration. | Delete after cutover. Until then: 32 chars exactly, or the container refuses to boot (`start.sh:4-7`). |
 | `ANTICIPY_BACKUP_S3_ACCESS_KEY` | R2 S3 API (backups) | backend | `backend/pb_migrations/1700000053_off_volume_backups.js:12,30` | server-only | **Retire after cutover.** D1 uses Time Travel + `wrangler d1 export`; no S3 key needed. | Cloudflare dash → R2 → Manage API tokens → revoke |
@@ -295,6 +299,8 @@ wrangler secret put TWILIO_ACCOUNT_SID          --name anticipy-api
 wrangler secret put TWILIO_AUTH_TOKEN           --name anticipy-api
 wrangler secret put TWILIO_API_KEY_SID          --name anticipy-api
 wrangler secret put TWILIO_API_KEY_SECRET       --name anticipy-api
+wrangler secret put SENDBLUE_API_KEY_ID         --name anticipy-api   # outbound: src/messaging.ts
+wrangler secret put SENDBLUE_API_SECRET_KEY     --name anticipy-api   # rotate as a pair
 wrangler secret put GEMINI_API_KEY              --name anticipy-api
 wrangler secret put OPENROUTER_API_KEY          --name anticipy-api
 wrangler secret put CAPSOLVER_API_KEY           --name anticipy-api

@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --experimental-strip-types test/filter-dsl.test.ts && node --experimental-strip-types test/hq-booleans.test.ts && node --experimental-strip-types test/records-parity.test.ts && node --experimental-strip-types test/llm-proxy.test.ts",
+    "test": "node --experimental-strip-types test/filter-dsl.test.ts && node --experimental-strip-types test/hq-booleans.test.ts && node --experimental-strip-types test/records-parity.test.ts && node --experimental-strip-types test/llm-proxy.test.ts && node --experimental-strip-types test/messaging.test.ts",
     "test:llm-wire": "sh scripts/llm_contract_local.sh",
     "check:assets": "python3 scripts/check_staged_assets.py",
     "typecheck": "tsc --noEmit",
