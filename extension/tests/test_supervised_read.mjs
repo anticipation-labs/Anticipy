@@ -14,10 +14,10 @@
 //      `design/LOCAL-FIRST.md:9-11` forbids absolutely;
 //   4. an unbounded pass, which is a scrape wearing a read's name.
 import {
-  FACT_CEILING, MAX_LINE_CHARS, MAX_PASS_CHARS, MAX_READ_IMPORTANCE,
-  MAX_SLICE_CHARS, MAX_STEPS, READ_VOCABULARY, actionRefusedReason, cleanFacts,
-  eventSourceFor, leaseLapsed, lineRefusedReason, runSupervisedRead,
-  vocabularyFor,
+  DISTIL_SYSTEM, FACT_CEILING, JUDGE_SYSTEM, MAX_LINE_CHARS, MAX_PASS_CHARS,
+  MAX_READ_IMPORTANCE, MAX_SLICE_CHARS, MAX_STEPS, READ_VOCABULARY,
+  actionRefusedReason, cleanFacts, eventSourceFor, leaseLapsed,
+  lineRefusedReason, runSupervisedRead, vocabularyFor,
 } from "../supervised_read.js";
 
 let failures = 0;
@@ -103,6 +103,12 @@ eq("a zero is nobody watching", leaseLapsed(0, T), true);
 // A read_line is an EVENT. It leaves the phone and it is stored, so
 // `design/LOCAL-FIRST.md:9-11` decides its contents absolutely: conclusions
 // travel, the stream never does.
+//
+// `lineRefusedReason` is the SEATBELT half of that: it reads what a line
+// CARRIES — nothing, too many bytes, an address, a link — and nothing about
+// what it means. Whether a line is a conclusion or a quotation is the judge's
+// question (`lineVerdict`), and it is pinned behaviourally in
+// test_narration_is_not_a_word_match.mjs. Audit #77.
 // ---------------------------------------------------------------------------
 eq("a short conclusion in her voice is fine",
   lineRefusedReason("You and Marcus have something in flight."), null);
@@ -114,36 +120,50 @@ check("an empty line is refused", lineRefusedReason("") !== null);
 check("whitespace is refused", lineRefusedReason("   \n ") !== null);
 check("null is refused", lineRefusedReason(null) !== null);
 
-// RAW PAGE TEXT. Each of these is a real shape of "the model summarised by
-// quoting", and each one is a subject line or a body escaping onto the wire.
-const RAW_QUOTED = 'Marcus wrote: "Can you get me the proposal by Thursday, I need it for the board"';
-check("a quoted message body is refused", lineRefusedReason(RAW_QUOTED) !== null,
-  lineRefusedReason(RAW_QUOTED));
-check("a subject header is refused",
-  lineRefusedReason("Subject: Q3 proposal — final draft") !== null);
-check("a From header is refused",
-  lineRefusedReason("From: marcus@bellworks.com") !== null);
-check("a Re: line is refused", lineRefusedReason("Re: dinner Thursday") !== null);
+// WHAT THE LINE CARRIES. An address is a routable identifier and a link is
+// routable and often token-bearing; neither is a reading of the sentence.
 check("an email address never travels",
   lineRefusedReason("Marcus at marcus@bellworks.com is waiting on you") !== null);
+check("a bare From header carries an address, and that is why it is refused",
+  lineRefusedReason("From: marcus@bellworks.com") !== null);
 check("a link is page content",
   lineRefusedReason("Your proposal is at https://docs.example.com/x9") !== null);
-check("mail-client furniture is refused",
-  lineRefusedReason("Unsubscribe from these emails at any time") !== null);
-check("a quote marker is refused", lineRefusedReason("> I need it for the board") !== null);
-// LENGTH IS THE MOST RELIABLE SIGNAL that a conclusion is actually an excerpt.
+// THE BYTE BUDGET IS A BOUND ON THE CHANNEL, not a signal about meaning. An
+// excerpt over it is refused; so is a conclusion over it; the reason says
+// "longer than a line can carry" and asserts nothing about excerpts.
 const EXCERPT = "Hi there, following up on the thread from last week about the "
   + "proposal timeline and the revised scope, we should probably get on a call "
   + "before Thursday so the board has something to look at";
-check("an excerpt-length line is refused", lineRefusedReason(EXCERPT) !== null,
+check("a line over the budget is refused", lineRefusedReason(EXCERPT) !== null,
+  lineRefusedReason(EXCERPT));
+check("the budget's reason is about carrying, not about what the bytes are",
+  /longer than a line can carry/.test(lineRefusedReason(EXCERPT) || "")
+    && !/excerpt|sentence|page/.test(lineRefusedReason(EXCERPT) || ""),
   lineRefusedReason(EXCERPT));
 check(`the cap is ${MAX_LINE_CHARS} characters`,
   lineRefusedReason("a".repeat(MAX_LINE_CHARS)) === null
     && lineRefusedReason("a".repeat(MAX_LINE_CHARS + 1)) !== null);
-check("more than one sentence is refused",
-  lineRefusedReason("You have three threads open. Marcus is waiting.") !== null);
 check("a trailing full stop is still one sentence",
   lineRefusedReason("Marcus is waiting on you.") === null);
+
+// THE WORD LISTS ARE GONE. Until 2026-09-05 every one of these was refused by
+// wording — a quote mark, a header word, a furniture word, a second sentence
+// terminator — and every one is a conclusion in her voice. Whether a line
+// quotes the page is now the judge's call, made with the page in view; the
+// seatbelt has no opinion. (WHAT WAS HERE, supervised_read.js, audit #77.)
+for (const conclusion of [
+  "You should unsubscribe from that newsletter, it is all noise",
+  'Marcus said he is "on it" and will send it tonight',
+  "Re: your question, I am done reading",
+  "Dr. Evans is waiting on your scan results",
+  "You owe Marcus a reply, e.g. a yes or a no",
+  "You have three threads open. Marcus is waiting.",
+  "> I need it for the board",
+  "Subject: Q3 proposal — final draft",
+]) {
+  eq(`the seatbelt no longer reads wording: ${JSON.stringify(conclusion)}`,
+    lineRefusedReason(conclusion), null);
+}
 
 // ---------------------------------------------------------------------------
 // Facts: 5-15 for the whole pass, importance never above 4
@@ -173,18 +193,26 @@ check("a trailing full stop is still one sentence",
     typeof clamped[4].importance, "number");
 }
 {
-  // The same hygiene as narration, because a fact is stored FOREVER and a line
-  // is only shown once. This is the stricter of the two paths, not the looser.
+  // The same seatbelt as narration, because a fact is stored FOREVER and a
+  // line is only shown once. `cleanFacts` is synchronous and pure: it drops
+  // what may not be CARRIED (an address here) and merges exact restatements.
+  // The subject line passes it — whether it is page text is the judge's
+  // question, and the pass asks it per fact (test_narration_is_not_a_word_match.mjs).
   const dirty = cleanFacts([
     { fact: 'Subject: "the proposal" — Marcus', importance: 3 },
     { fact: "marcus@bellworks.com is the client", importance: 3 },
     { fact: "Marcus Bell is a client and a proposal is in flight", importance: 4 },
     { fact: "marcus bell IS A CLIENT and a proposal is in flight", importance: 4 },
   ]);
-  eq("quoted and address-bearing facts are dropped, restatements merged",
-    dirty.length, 1);
-  eq("the surviving fact is the distilled one", dirty[0].fact,
-    "Marcus Bell is a client and a proposal is in flight");
+  eq("the address-bearing fact is dropped and the restatement merged; the rest is for the judge",
+    dirty.length, 2);
+  check("the distilled fact survives in its first spelling",
+    dirty.some((f) => f.fact === "Marcus Bell is a client and a proposal is in flight"),
+    JSON.stringify(dirty));
+  // Exact identity modulo case and punctuation — not similarity. Two facts
+  // that differ by a word are two facts; this is not a stopword-overlap key.
+  eq("a fact that differs by one word is a different fact",
+    cleanFacts(["Marcus Bell is a client", "Marcus Bell is a supplier"]).length, 2);
 }
 eq("junk in, nothing out", cleanFacts(null).length, 0);
 eq("a list of empty strings yields nothing", cleanFacts(["", "  ", null]).length, 0);
@@ -221,13 +249,23 @@ const THREAD_PAGE = [
  *
  * `moves` is the script the model "returns", one per step. That is the honest
  * way to test a whitelist: the model is the adversary here, not the page.
+ *
+ * The fake model dispatches on the REAL system prompts, compared whole: the
+ * step prompt gets a move, the distil prompt gets `facts`, and the judge
+ * prompt gets `judge(user)` — by default a live yes, so the tests in this
+ * file exercise the whitelist and the lease with the judge as a control. The
+ * judge's four states are the subject of test_narration_is_not_a_word_match.mjs.
  */
+const SOURCES = Object.keys(READ_VOCABULARY);
+const isDistil = (system) => SOURCES.some((s) => system === DISTIL_SYSTEM(s));
+const isJudge = (system) => SOURCES.some((s) => system === JUDGE_SYSTEM(s));
 function fakeDeps({
   moves = [],
   lease = () => new Date(Date.now() + 30000).toISOString(),
   pages = { "https://mail.google.com/": INBOX_PAGE },
   facts = [{ fact: "Marcus Bell is a client and a proposal is in flight", importance: 4 }],
   throwOnRead = false,
+  judge = () => JSON.stringify({ hers: true }),
 } = {}) {
   const log = {
     opened: [], closed: [], navigated: [], scrolled: [], reads: 0,
@@ -249,7 +287,8 @@ function fakeDeps({
     leaseUntil: async () => { log.leaseChecks++; return lease(log.leaseChecks); },
     askModel: async (system, user) => {
       log.modelCalls.push({ system, user });
-      if (/Write down what you now know/.test(system)) return JSON.stringify({ facts });
+      if (isDistil(system)) return JSON.stringify({ facts });
+      if (isJudge(system)) return judge(user);
       const next = moves[move++] || { action: "done" };
       return JSON.stringify(next);
     },
@@ -518,25 +557,31 @@ function fakeDeps({
 // --- narration hygiene, in the emit path ---------------------------------
 {
   // A MODEL THAT QUOTES. The prompt tells it not to; this is what happens when
-  // it does anyway, which is the only version of this that matters.
+  // it does anyway, which is the only version of this that matters. The line
+  // carries no address and no link, so the seatbelt passes it; the JUDGE —
+  // with the thread in view — reads it as page text, and it does not leave.
   const { deps, log } = fakeDeps({
     moves: [{
       action: "scroll",
       say: 'Marcus wrote: "I need the final draft before the board on Thursday, can you send it"',
     }, { action: "done" }],
+    judge: (user) => JSON.stringify({ hers: !/Marcus wrote/.test(user) }),
   });
   const out = await runSupervisedRead({ source: "mail", startUrl: "https://mail.google.com/", deps });
   const wire = JSON.stringify(log.emitted);
-  check("A READ_LINE CARRYING RAW PAGE TEXT IS REFUSED",
+  check("A READ_LINE THE JUDGE READS AS PAGE TEXT IS REFUSED",
     !/final draft/.test(wire) && !/Marcus wrote/.test(wire), wire);
-  check("and the refusal is recorded rather than silently swallowed",
-    out.refused.some((r) => /line refused/.test(r)), JSON.stringify(out.refused));
+  check("and the refusal is recorded rather than silently swallowed — as a reason, never the line",
+    out.refused.some((r) => /line refused: the judge read it as page text/.test(r))
+      && !/Marcus wrote/.test(out.refused.join("\n")),
+    JSON.stringify(out.refused));
   check("the pass carries on — a bad line is not a bad read",
     out.ok, JSON.stringify(out));
 }
 {
-  // A MODEL THAT RETURNS A SUBJECT LINE AS A FACT. Same wall, and it matters
-  // more here because a fact is stored forever.
+  // A MODEL THAT RETURNS A SUBJECT LINE WITH AN ADDRESS AS A FACT. The
+  // seatbelt drops it for the address before any judge is asked, and it
+  // matters more here because a fact is stored forever.
   const { deps, log } = fakeDeps({
     facts: [
       { fact: 'Subject: "Q3 proposal — final draft" from marcus@bellworks.com', importance: 4 },
@@ -544,9 +589,13 @@ function fakeDeps({
     ],
   });
   const out = await runSupervisedRead({ source: "mail", startUrl: "https://mail.google.com/", deps });
-  eq("the quoted fact is dropped and the distilled one kept", out.facts.length, 1);
+  eq("the address-bearing fact is dropped and the distilled one kept", out.facts.length, 1);
   check("no subject line was ever stored",
     !/Q3 proposal/.test(JSON.stringify(log.emitted)), JSON.stringify(log.emitted));
+  check("and the address was never the line a judge was asked about",
+    log.modelCalls.filter((c) => isJudge(c.system))
+      .every((c) => !/bellworks\.com/.test((c.user.split("--- BEGIN THE LINE SHE WROTE ---")[1] || ""))),
+    "an address reached a judge call as the line under judgment");
 }
 {
   // A model returning nothing usable is an honest blank, never an invented

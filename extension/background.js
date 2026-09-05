@@ -1176,10 +1176,14 @@ async function runSupervisedReadJob(job, params) {
     // breaks something, which is the opposite of the lesson. The row still ends
     // terminally — `done` — so nothing is left hanging either way.
     status = out.ok ? "done" : "failed";
+    // A lease can now lapse between two facts (the module re-reads it before
+    // every judge+emit, audit #77), so what was kept while they watched is
+    // counted rather than reported as nothing.
+    const kept = `${out.facts.length} thing${out.facts.length === 1 ? "" : "s"} I didn't know about you.`;
     result = out.ok
       ? (out.stopped === "lease"
-          ? "You looked away, so I stopped there. Nothing kept."
-          : `${out.facts.length} thing${out.facts.length === 1 ? "" : "s"} I didn't know about you.`)
+          ? (out.facts.length ? `You looked away, so I stopped there. Kept ${kept}` : "You looked away, so I stopped there. Nothing kept.")
+          : kept)
       : (out.reason || "I couldn't read that one.");
     // The trace is what somebody debugs later: how far the pass got, why it
     // ended, and every action the whitelist refused. Never what was on the
