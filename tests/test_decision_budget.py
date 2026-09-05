@@ -549,6 +549,41 @@ def test_the_row_carries_the_measurement_only_when_measured(monkeypatch):
     assert "budget={DECISION_DEADLINE_SECONDS}s/{DECISION_CALL_CEILING}calls" in source
 
 
+def test_a_backend_that_throws_on_the_columns_still_lands_the_decision(monkeypatch):
+    """THE SHAPE MEASURED LIVE ON 2026-09-05. The Worker's column map knew
+    heard_ms/heard_calls; the D1 table did not; the UPDATE threw and the
+    Worker answered a 500 (Cloudflare 1101), not the 400 the leg above
+    pins. The stamp then never retried, every decided line stayed at
+    "processing", and release_stranded_claims re-heard the errand line every
+    ten minutes — six duplicate browser jobs from one line in an hour. So ANY
+    failed measured stamp retries once without the measurement; only a 400
+    switches the measurement off, a 500 may be transient and is offered
+    again on the next line."""
+    bodies: list[dict] = []
+
+    class _Reply:
+        def __init__(self, code):
+            self.status_code = code
+            self.ok = code < 400
+
+    def patch(url, **kw):
+        bodies.append(kw["json"])
+        measured = "heard_ms" in kw["json"] or "heard_calls" in kw["json"]
+        return _Reply(500 if measured else 200)
+
+    monkeypatch.setattr(W, "_HEARD_COLUMNS_ACCEPTED", True)
+    monkeypatch.setattr(W.pb, "patch", patch)
+    assert W.mark_processed("ev1", "act", goal=GOAL, heard_ms=1234, heard_calls=9) is True
+    assert len(bodies) == 2, "one retry, at once, without the measurement"
+    assert "heard_ms" in bodies[0] and bodies[0]["decision"] == "act"
+    assert bodies[1] == {"decision": "act", "goal": GOAL}, bodies[1]
+    # a 500 is not the definitive "no columns": the measurement is offered again
+    assert W._HEARD_COLUMNS_ACCEPTED is True
+    bodies.clear()
+    assert W.mark_processed("ev2", "act", goal=GOAL, heard_ms=2000, heard_calls=5) is True
+    assert len(bodies) == 2 and "heard_ms" in bodies[0] and "heard_ms" not in bodies[1]
+
+
 def test_a_backend_without_the_columns_still_lands_the_decision(monkeypatch):
     """THE LIVE BACKEND IS NOT POCKETBASE. The Cloudflare Worker
     (migration/workers/src/pb/records.ts) answers 400 `unknown_field` on a
@@ -585,8 +620,15 @@ def test_a_backend_without_the_columns_still_lands_the_decision(monkeypatch):
 
 def test_a_transient_failure_of_the_stamp_is_not_read_as_missing_columns(monkeypatch):
     """A 503 is the backend being absent, not the schema lacking a column:
-    nothing is retried (it would land nothing either), the verdict is False
-    exactly as today, and the process keeps offering the measurement."""
+    the verdict is False exactly as today and the process keeps offering the
+    measurement. CORRECTED 2026-09-05: this leg first said "nothing is
+    retried (it would land nothing either)". Live on Cloudflare the measured
+    stamp answered 500 while an unmeasured one answered 200 — the column map
+    was ahead of the table — and "not retried" meant the decision never
+    landed and the line was re-heard every ten minutes with a duplicate job
+    each time. So one retry without the measurement always follows a failed
+    measured stamp; a backend that is truly down fails that too, which is
+    what this leg now pins."""
     bodies: list[dict] = []
 
     class _Down:
@@ -597,7 +639,8 @@ def test_a_transient_failure_of_the_stamp_is_not_read_as_missing_columns(monkeyp
     monkeypatch.setattr(W.pb, "patch",
                         lambda url, **kw: bodies.append(kw["json"]) or _Down())
     assert W.mark_processed("ev", "act", goal=GOAL, heard_ms=1234, heard_calls=9) is False
-    assert len(bodies) == 1
+    assert len(bodies) == 2, "one retry without the measurement, and it fails too: the backend is down"
+    assert "heard_ms" in bodies[0] and "heard_ms" not in bodies[1]
     assert W._HEARD_COLUMNS_ACCEPTED is True
 
 

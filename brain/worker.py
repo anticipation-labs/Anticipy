@@ -3950,12 +3950,30 @@ def mark_processed(event_id: str, decision: str, addressee: str = "",
                 measured["heard_calls"] = heard_calls
         url = f"{PB}/api/collections/events/records/{event_id}"
         r = pb.patch(url, json={**body, **measured}, timeout=10)
-        if measured and not getattr(r, "ok", False) \
-                and getattr(r, "status_code", None) == 400:
-            _HEARD_COLUMNS_ACCEPTED = False
-            print("heard: the backend has no heard_ms/heard_calls columns — "
-                  "landing decisions without the measurement from now on; "
-                  "overnight/is_the_decision_bounded.py will read UNPROVEN")
+        if measured and not getattr(r, "ok", False):
+            # THE DECISION LANDS, WHATEVER THE MEASUREMENT DID. Until
+            # 2026-09-05 this retried only on a 400 — the answer PocketBase
+            # and the Worker give for an unknown field. Live on Cloudflare the
+            # Worker's column map knew heard_ms/heard_calls while D1 did not,
+            # the UPDATE threw, and the answer was a 500 (Cloudflare 1101):
+            # no retry, decision unstamped, the row handed back by
+            # release_stranded_claims every ten minutes, a duplicate job
+            # minted each time — six from one errand line in an hour. An
+            # unstamped decision is the worse failure by a distance, so ANY
+            # failed measured stamp retries once without the measurement.
+            # Only a 400 is the definitive "no such columns" and switches the
+            # measurement off for the process; anything else may be
+            # transient and is offered again next time. HTTP status only —
+            # never the error's words.
+            status = getattr(r, "status_code", None)
+            if status == 400:
+                _HEARD_COLUMNS_ACCEPTED = False
+                print("heard: the backend has no heard_ms/heard_calls columns — "
+                      "landing decisions without the measurement from now on; "
+                      "overnight/is_the_decision_bounded.py will read UNPROVEN")
+            else:
+                print(f"heard: the measured stamp answered HTTP {status}; "
+                      "landing the decision without it this time")
             r = pb.patch(url, json=body, timeout=10)
         return bool(getattr(r, "ok", False))
     except Exception:
