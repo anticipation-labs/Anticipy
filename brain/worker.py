@@ -33,7 +33,8 @@ from .memory import Memory
 from . import sorter
 from .segmenter import SegmentStore, parse_ts, place_turn
 from .conversation import Conversation, MockTransport, TwilioTransport
-from .llm import LLM, TZ as TZ_FALLBACK
+from .llm import (LLM, TZ as TZ_FALLBACK, DECISION_CALL_CEILING,
+                  DECISION_DEADLINE_SECONDS, budget_spent_last)
 from .voice_arm import VoiceArm, has_credentials, rest_credential
 from .workflow import (claim as claim_plan, fail as fail_plan,
                        from_params as workflow_from_params,
@@ -3753,6 +3754,25 @@ def resolve_owner_ref(legacy_owner: str = "") -> str:
         return ""
 
 
+# HOW LONG ONE POLL TURN MAY SPEND HEARING before it goes on to the rest of
+# the turn: handle_inbound — the ONLY path that reads his yes/no to a question
+# she already asked — then the digests, research, stuck-job asks, finished-job
+# and stall reports, and the deafness notice. Every one of those sits behind
+# the transcript loop on this one thread, and until 2026-09-05 (Omi port 06)
+# nothing bounded it: BATCH=20 lines, each free to spend its whole decision
+# budget, was fifty minutes of not looking at his replies. The honest bound
+# is this figure PLUS the line in flight, which is never abandoned: at most
+# 300 s + one decision budget + one attempt of transport dribble.
+TURN_HEARING_SECONDS = 300
+
+
+def turn_has_time(started: float, now: float) -> bool:
+    """May this turn take another line? Both arguments are time.monotonic()
+    instants. Pure, so the loop's decision can be pinned in both directions
+    without a loop."""
+    return now - started < TURN_HEARING_SECONDS
+
+
 def fetch_unprocessed(kind: str = "transcript", owner_ref: str = "") -> list[dict]:
     if not owner_ref:
         # Fail closed. The former unscoped poll could hear every person's
@@ -3874,8 +3894,24 @@ def stamp_for(decision: str, said) -> str:
     return "ask" if text.strip() else "ignore"
 
 
+# WHETHER THE BACKEND STORES THE MEASUREMENT. PocketBase drops an unknown
+# field silently; the Cloudflare Worker (migration/workers/src/pb/records.ts,
+# `unknown_field`) answers 400 — and until migration/d1/schema.sql and
+# pb/schema.ts carry heard_ms/heard_calls, that 400 would have left every
+# decision UNSTAMPED: the row at "processing", handed back by the stranded
+# sweep, heard again every ten minutes, a duplicate job and text each time —
+# the 2026-07-30 failure by a new road. The decision is what must land. So a
+# 400 on a PATCH that carried the measurement is retried at once without it
+# and the process stops offering the measurement: one extra round trip, once
+# per boot, only on a backend without the columns, after which every line is
+# today's single PATCH. Keyed on the HTTP status, never on the error's
+# words; a 5xx or a timeout is not about the keys and is not retried.
+_HEARD_COLUMNS_ACCEPTED = True
+
+
 def mark_processed(event_id: str, decision: str, addressee: str = "",
-                   goal: str = "") -> bool:
+                   goal: str = "", heard_ms: int | None = None,
+                   heard_calls: int | None = None) -> bool:
     """Returns whether the mark actually landed. A silently-failed PATCH left
     the event unmarked and the 2s poll replayed it — minting a duplicate job
     and a duplicate text per cycle.
@@ -3890,15 +3926,37 @@ def mark_processed(event_id: str, decision: str, addressee: str = "",
     "looking into it, quietly": Omar watched her research Paris flights
     behind a "Noted — nothing needed" label and reasonably concluded she
     did nothing and it landed nowhere. Old app builds ignore the field —
-    they keep rendering exactly what they render today."""
+    they keep rendering exactly what they render today.
+
+    heard_ms and heard_calls are how long the decision took and how many
+    model calls it made (Omi port 06). Added to the PATCH only when measured
+    — absent, never 0 — so an unmeasured row (an echo ignored before hear(),
+    a pre-migration row) cannot read like a decision that took no time. A
+    backend without the columns still lands the decision — see
+    _HEARD_COLUMNS_ACCEPTED above — and overnight/is_the_decision_bounded.py
+    then reads UNPROVEN."""
+    global _HEARD_COLUMNS_ACCEPTED
     try:
         body = {"decision": decision}
         if addressee:
             body["addressee"] = addressee
         if goal:
             body["goal"] = goal
-        r = pb.patch(f"{PB}/api/collections/events/records/{event_id}",
-                     json=body, timeout=10)
+        measured = {}
+        if _HEARD_COLUMNS_ACCEPTED:
+            if heard_ms is not None:
+                measured["heard_ms"] = heard_ms
+            if heard_calls is not None:
+                measured["heard_calls"] = heard_calls
+        url = f"{PB}/api/collections/events/records/{event_id}"
+        r = pb.patch(url, json={**body, **measured}, timeout=10)
+        if measured and not getattr(r, "ok", False) \
+                and getattr(r, "status_code", None) == 400:
+            _HEARD_COLUMNS_ACCEPTED = False
+            print("heard: the backend has no heard_ms/heard_calls columns — "
+                  "landing decisions without the measurement from now on; "
+                  "overnight/is_the_decision_bounded.py will read UNPROVEN")
+            r = pb.patch(url, json=body, timeout=10)
         return bool(getattr(r, "ok", False))
     except Exception:
         return False
@@ -4539,6 +4597,10 @@ def main() -> None:
           # overnight/is_the_gateway_live.py leg 1 keys on. `fallback=none`
           # there is a red leg, not a detail.
           f" · {gateway_banner(llm)}"
+          # The bounds beside the fingerprint, so the deploy proof for
+          # overnight/is_the_decision_bounded.py is this one log line.
+          f" · budget={DECISION_DEADLINE_SECONDS}s/{DECISION_CALL_CEILING}calls"
+          f"/turn{TURN_HEARING_SECONDS}s"
           f" · brain={_brain_fingerprint()}")
     if not anticipy.owner_id:
         # Paired extensions only claim their owner's jobs, so unstamped jobs
@@ -4674,7 +4736,17 @@ def main() -> None:
             # BEFORE asking for new work — otherwise a deploy silently eats
             # whatever was mid-understanding at the moment it happened.
             release_stranded_claims(anticipy.owner_ref)
+            turn_started = time.monotonic()
             for ev in fetch_unprocessed(owner_ref=anticipy.owner_ref):
+                # BEFORE claim(), so no claimed row is ever abandoned: what is
+                # left keeps decision="" and fetch_unprocessed returns it next
+                # turn in the same capture_key order. Nothing lost, nothing
+                # heard twice, and his replies are read within the bound.
+                if not turn_has_time(turn_started, time.monotonic()):
+                    print(f"heard: {TURN_HEARING_SECONDS}s of this turn spent "
+                          "hearing — the rest of the batch waits for the next "
+                          "turn so his replies and reports are read first")
+                    break
                 line = ev.get("text", "").strip()
                 # Mark that this person is mid-conversation, so a question
                 # born from one fragment waits for the sentence to finish.
@@ -4719,6 +4791,7 @@ def main() -> None:
                 # slot held by a hear() that escaped would otherwise attach
                 # to the next said row, whatever door it came through.
                 take_held_slot()
+                heard_from = time.monotonic()
                 try:
                     # The phone's local voice verdict rides along when the
                     # app stamped one (owner|other); absent on old builds.
@@ -4766,6 +4839,15 @@ def main() -> None:
                 # cannot have reserved: the signature fails before the body.)
                 slot = take_held_slot()
                 note_heard(True)
+                # How long the decision took and how many calls it made, for
+                # the row. overnight/is_the_decision_bounded.py reads both;
+                # a row with heard_calls above the ceiling is positive proof
+                # the deployed worker is not enforcing it. A line the deadline
+                # caught before triage never reaches here and is stamped with
+                # nothing, correctly: record_failure must not PATCH, because
+                # a PATCH resets the ten-minute stranded clock.
+                heard_ms = int((time.monotonic() - heard_from) * 1000)
+                heard_calls = budget_spent_last()
                 # Store the link. A self-link (points at its own id) is the
                 # "starts something new" answer, and it is written down just
                 # as explicitly as a continuation — the difference between
@@ -4785,7 +4867,8 @@ def main() -> None:
                 mark_processed(ev["id"], decision,
                                addressee=getattr(out["decision"], "addressee",
                                                  "") or "",
-                               goal=getattr(out["decision"], "goal", "") or "")
+                               goal=getattr(out["decision"], "goal", "") or "",
+                               heard_ms=heard_ms, heard_calls=heard_calls)
                 # STEP 1 of the capture architecture: record which
                 # conversation this turn belongs to. NOTHING reads it yet —
                 # triage above is untouched — so this is observation only,

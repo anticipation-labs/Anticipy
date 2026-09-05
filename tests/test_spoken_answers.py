@@ -120,7 +120,9 @@ def test_hear_consults_parked_work_before_triage():
     src = (os.path.join(os.path.dirname(os.path.dirname(
         os.path.abspath(__file__))), "brain", "anticipy_core.py"))
     body = open(src).read()
-    hear = body[body.index("def hear("):]
+    # hear() is the budget wrapper since Omi port 06 (2026-09-05); the hearing
+    # body — where this check must sit, before triage — is _hear().
+    hear = body[body.index("def _hear("):]
     assert "_spoken_answer_to_parked_work" in hear[:9000], (
         "the check must run inside hear, before triage decides")
     # ...and never for dictation or a line he typed at her (the SMS lane
