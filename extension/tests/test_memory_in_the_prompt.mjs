@@ -179,6 +179,36 @@ const check = (name, ok) => {
     new RegExp(`GOAL: ${GOAL}`).test(step));
 }
 
+// ------------------------------------------------ 4. no keyword hoist (audit #75)
+// Every line of this map lexically overlaps the goal, which is exactly the
+// shape that used to produce a "GOAL-MATCHING LIVE ELEMENTS" block ABOVE the
+// map with "inspect these before unrelated controls" — a keyword overlap
+// deciding which controls serve the goal. The planner sees the map, whole and
+// in order, and nothing above it claims to have ranked it.
+{
+  harness.tabs.clear();
+  harness.addTab({ url: "https://cactusclubcafe.com/", active: true });
+  const MAP = [
+    "[1] <link> Happy Hour @(10,10)",
+    "[2] <button> Cancel @(10,40)",
+    "[3] <link> Coal Harbour menu @(10,70)",
+  ].join("\n");
+  harness.mapPage = () => ({ url: "https://cactusclubcafe.com/", title: "Cactus Club", elements: MAP, text: "Welcome.", fields: [] });
+  const seen = recordingFetch([{ action: "done", result: "done" }]);
+  await runAgentGoal("Cancel the Coal Harbour happy hour booking", {
+    apiKey: "test-key", scope: "cancel it", authorized: true, planning: false,
+    maxSteps: 2, startUrl: "https://cactusclubcafe.com/", stillLive: async () => true,
+  });
+  const step = seen.filter((s) => s.kind === "step")[0].user;
+  check("no GOAL-MATCHING block is manufactured from keyword overlap", !/GOAL-MATCHING/.test(step));
+  const firstControl = step.search(/\[\d+\] </);
+  const elementsAt = step.indexOf("ELEMENTS:");
+  check("the first control the planner sees is inside the ELEMENTS block, not hoisted above it",
+    elementsAt >= 0 && firstControl > elementsAt);
+  check("...and the deletion did not eat the map: every line is still there verbatim",
+    step.includes("[1] <link> Happy Hour") && step.includes("[2] <button> Cancel") && step.includes("[3] <link> Coal Harbour menu"));
+}
+
 if (failures) {
   console.error(`test_memory_in_the_prompt: ${failures} failed`);
   process.exit(1);

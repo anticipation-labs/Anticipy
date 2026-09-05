@@ -9,7 +9,6 @@ import {
   externalControlSemantics,
   evidenceStateUrlKey,
   extractVerifierVerdict,
-  goalMatchingElements,
   loopbackTarget,
   internalNetworkTarget,
   taskAllowsInternalNetwork,
@@ -246,16 +245,6 @@ assert.equal(taskAllowsInternalNetwork("book a table for four", "at 7pm", "https
 assert.equal(taskAllowsInternalNetwork("try localhost:3000", "", ""), true); // still composes the loopback allowance
 console.log("PASS 2c: only an owner-named internal address opens the internal network, and only that one class");
 
-const ranked = goalMatchingElements(
-  "Choose a cordless drill kit with battery and charger under CAD 300.",
-  [
-    "[1] <link> Burnaby store location @(20,20)",
-    "[2] <link> Cordless drill/driver kit with battery and charger @(20,40)",
-    "[3] <button> Account settings @(20,60)",
-  ].join("\n"));
-assert.match(ranked, /^\[2\]/);
-assert.doesNotMatch(ranked, /Burnaby store location/);
-console.log("PASS 3: goal-relevant live elements outrank unrelated page chrome generically");
 
 const state = {
   overlay: true,

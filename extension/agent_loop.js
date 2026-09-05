@@ -156,35 +156,23 @@ function researchNotebookBlock(journal) {
   return `\n\nRESEARCH NOTEBOOK — live pages already observed in THIS run. Use it to retain facts across pages, but trust the current page when it contradicts an older snapshot:\n${JSON.stringify(compact).slice(0, 36000)}`;
 }
 
-// Put the most semantically relevant live controls where the planner cannot
-// miss them. This is derived afresh from the owner's words and the current
-// page map: no domains, selectors, products, or workflows are encoded here.
-// The complete page map remains below this shortlist, so this is a ranking
-// hint rather than a hidden action or a hard-coded route.
-const GOAL_TERM_STOP = new Set([
-  "about", "after", "again", "also", "and", "before", "between", "each",
-  "exact", "exactly", "find", "for", "from", "into", "one", "only", "open",
-  "report", "that", "the", "their", "then", "those", "three", "through",
-  "two", "under", "use", "verify", "with", "without",
-]);
-
-export function goalMatchingElements(goal, elements, limit = 16) {
-  const terms = [...new Set(String(goal || "").toLowerCase()
-    .match(/[a-z0-9][a-z0-9+.-]{2,}/g) || [])]
-    .filter((term) => !GOAL_TERM_STOP.has(term) && !/^20\d{2}$/.test(term));
-  if (!terms.length) return "";
-  return String(elements || "").split("\n")
-    .map((line, order) => {
-      const lower = line.toLowerCase();
-      const hits = terms.filter((term) => lower.includes(term));
-      const interactive = /<(?:link|button|textbox|combobox|option|menuitem|tab)>/i.test(line);
-      return { line, order, score: hits.length * 10 + (interactive ? 2 : 0) };
-    })
-    .filter((row) => row.score >= 12)
-    .sort((a, b) => b.score - a.score || a.order - b.order)
-    .slice(0, Math.max(1, Number(limit) || 16))
-    .map((row) => row.line).join("\n");
-}
+// WHAT WAS HERE UNTIL 2026-09-05 (audit #75): GOAL_TERM_STOP and
+// goalMatchingElements — a 30-word stop list, a tokenizer over the owner's
+// goal, `lower.includes(term)` against every element line, and a `score >= 12`
+// cut that hoisted up to 16 "GOAL-MATCHING LIVE ELEMENTS" above the map with
+// the instruction "inspect these before unrelated controls". A keyword overlap
+// was deciding which controls SERVE the goal, and telling the planner so.
+//
+// HARNESS-LAWS.md law 1, and the Law-1-compliant replacement is deletion, not
+// a second model call. The model with full context that law 1 asks for already
+// exists: it is the planner itself, which receives GOAL, HISTORY, the complete
+// ELEMENTS map, CURRENT FORM VALUES, PAGE TEXT and, when needsEyes fires, the
+// screenshot. "Which control serves this step?" is its primary output —
+// {"action":"click","index":N}. A second call would put the same question to
+// the same model over the same context and paste the answer back as prompt
+// text with nothing comparing it, so the canonical shape does not transfer.
+// The role-tag test that gave +2 already exists as `interactive` in needsEyes.
+// Zero model calls added; each step prompt loses up to 16 duplicated lines.
 
 // WHEN IS THE TEXT MAP NOT ENOUGH?
 //
@@ -328,7 +316,6 @@ async function llmStep(apiKey, model, goal, state, history, _retries, image, vis
           ? `\n\nWHAT SHE KNOWS ABOUT THEM (background from past conversations — NOT approved values):\n${memory}`
             + "\nUse this to CHOOSE between options a page offers — which location, which of their usual services, which of two listed times looks like theirs — and to recognise when a page is showing the wrong thing. Do NOT type any of it into a field and do NOT treat it as a detail they gave you for this task: if a form needs a value that only appears here, stop with needs_user and name it, so they can confirm it in their own words."
           : "";
-        const matching = goalMatchingElements(goal, state.elements);
         // HOW THIS IS DONE, read off the open web before anything was touched.
         //
         // Fenced hard, because this is the most hostile input the product
@@ -344,7 +331,6 @@ async function llmStep(apiKey, model, goal, state, history, _retries, image, vis
           : "";
         const body = `${authLine}${who}${factsBlock}${memoryBlock}${howBlock}${planBlock(plan)}${researchNotebookBlock(evidenceJournal)}\n\nGOAL: ${goal}\n\nHISTORY:\n${history.join("\n") || "(first step)"}\n\nURL: ${state.url}\nTITLE: ${state.title}` +
           (state.overlay ? "\nNOTE: a dialog/picker is open — the elements below are ITS contents, which is what the user is looking at." : "") +
-          (matching ? `\nGOAL-MATCHING LIVE ELEMENTS (ranked dynamically; inspect these before unrelated controls):\n${matching}` : "") +
           `\nELEMENTS:\n${state.elements}\n\nCURRENT FORM VALUES:\n${JSON.stringify(state.fields || []).slice(0, 6000)}\n\nPAGE TEXT:\n${state.text}`;
         // With an image the content becomes multipart; text-only stays a
         // plain string so nothing changes for the normal path.
