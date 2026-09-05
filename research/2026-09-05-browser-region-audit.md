@@ -30,10 +30,10 @@ owner's logged-in browser with `<all_urls>` and the debugger, so the bar for
 | 71 | `looksLikeCaptcha` phrase list | VIOLATION | OPEN — design NEEDS-REWORK | provider-markup sift + model |
 | 72 | `page_map.js` control-deletion keywords | VIOLATION | OPEN — design NEEDS-REWORK | read what a list is ATTACHED to |
 | 73 | placeholder-option word list | VIOLATION (L) | OPEN — design NEEDS-REWORK | |
-| 74 | `explicitRequestedCount`/`reportedRecordCount` | VIOLATION | OPEN — design NEEDS-REWORK | |
+| 74 | `explicitRequestedCount`/`reportedRecordCount` | VIOLATION | **FIXED `9d83e056`** | DELETED with `completionCoverageScore`; the auditor is the only judge, taught three sentences; zero extra calls; 5 mutations |
 | 75 | `goalMatchingElements` hoist | VIOLATION (L) | **FIXED `e961e023`** — DELETED | the planner already sees every control |
 | 76 | `taskShape` as the only recall judge | VIOLATION | **FIXED `f8de9303`** | four-state floor, twin of `brain/research.py` |
-| 77 | `supervised_read` narration filter | borderline | OPEN — design NEEDS-REWORK | closest to a data-egress seatbelt |
+| 77 | `supervised_read` narration filter | borderline | **FIXED `a3bc04e9`** | four wording legs deleted; `lineVerdict` one question, four states, FLOOR; byte/address/link budget stays as the carries-only seatbelt; 6 mutations + 1 |
 | 78 | `detectsCodeWasSent` | VIOLATION | OPEN — design NEEDS-REWORK | |
 | 79 | `extractCode` scoring | borderline | OPEN — design NEEDS-REWORK | parsing a machine code out of prose |
 | 90 | intent journal before every click | **BRIEF DEVIATION** | **FIXED `8e6673ed`** (the crash-resume half) | see below |
