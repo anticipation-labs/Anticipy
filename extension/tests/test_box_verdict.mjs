@@ -288,15 +288,28 @@ for (const said of MEASURED) {
   const loop = code.slice(code.indexOf("export async function runAgentGoal("));
   check("both gates judge the boxes before the guard and again after a clearing pass",
     (loop.match(/boxes = await boxVerdicts\(\w+State\.fields, scope \|\| goal, facts, boxJudge, boxCache\)/g) || []).length === 4);
+  // Pinned by PROPERTY, not by the exact argument list. The list has grown
+  // twice now (FORM_AUDIT_TIMEOUT_MS, then `names` when the name check became
+  // a model verdict), and each time an exact pin failed here while the thing
+  // it protects — every scope verdict seeing the box verdicts — was untouched.
+  // A pin that breaks on unrelated edits gets loosened in a hurry by whoever
+  // is mid-merge, which is how a real removal would get through. So: there are
+  // four calls, and every one of them passes `boxes`.
+  const scopeVerdictCalls = loop.match(/unsupportedScopeVerdict\([^)]*\)/g) || [];
+  check("there are four scope verdicts in the loop", scopeVerdictCalls.length === 4,
+    `found ${scopeVerdictCalls.length}`);
   check("every scope verdict in the loop carries the box verdicts",
-    (loop.match(/unsupportedScopeVerdict\(\s*scope \|\| goal, \w+State, ownerProfile, facts, kinds, boxes, temporalJudge, temporalMemo\)/g) || []).length === 4);
+    scopeVerdictCalls.length === 4
+      && scopeVerdictCalls.every((call) => /\bboxes\b/.test(call)),
+    scopeVerdictCalls.filter((call) => !/\bboxes\b/.test(call)).join(" | "));
   check("an unclear box hands back BEFORE the block, the streak and any dead index",
     (loop.match(/if \(boxOutcome\.unclear\.length\) \{\s*return \(handBack = true\) && \{ status: "needs_user",\s*result: unclearBoxQuestion\(/g) || []).length === 2);
   check("every verifyDone call carries the box verdicts in force at the effect",
     (loop.match(/boxes: effectBoxes/g) || []).length === 3 && (loop.match(/effectBoxes = boxes;/g) || []).length === 2);
+  const guardCall = (code.match(/unsupportedScopeVerdict\(scope \|\| goal, effectState[^)]*\)/g) || [])[0] || "";
   check("verifyDone forwards them to the same guard",
     /boxes = null, fieldKinds = null \} = \{\}\) \{/.test(code)
-      && /unsupportedScopeVerdict\(scope \|\| goal, effectState, ownerProfile, facts, fieldKinds, boxes, temporalJudge, temporalMemo\)/.test(code));
+      && /\bboxes\b/.test(guardCall) && /\bfieldKinds\b/.test(guardCall), guardCall);
   check("the clearing pass is fed decided names only, and still never touches a box",
     /clearUnsupportedOptionalFields\(\s*tab\.id, decidedUnsupportedNames\(scopeVerdict\), \w+State\)/.test(loop)
       && /!\["checkbox", "radio"\]\.includes\(String\(field\?\.type \|\| ""\)\.toLowerCase\(\)\)/.test(code));

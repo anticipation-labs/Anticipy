@@ -13,6 +13,9 @@ const suites = [
   "test_background_scheduling.mjs",
   "test_background_tab_fallback.mjs",
   "test_core_resilience.mjs",
+  "test_recovery_reads_a_gap_token.mjs",
+  "test_row_is_a_model_verdict.mjs",
+  "test_financial_errand_is_a_verdict.mjs",
   "test_model_fetch_retries_transients.mjs",
   "test_model_reply_floor.mjs",
   "test_planner.mjs",
@@ -92,6 +95,10 @@ const suites = [
   "test_pair_code_throttle.mjs",
   "test_pair_code_collision.mjs",
   "test_hosted_setup_bridge.mjs",
+  "test_spawned_tab_uses_one_gate.mjs",
+  "test_commit_beats_reversible_prefix.mjs",
+  "test_name_completeness_is_not_a_word_list.mjs",
+  "test_completion_shape_is_a_model_verdict.mjs",
 ];
 // A suite listed TWICE runs twice and inflates the number in the pass line —
 // and that number is exactly what a person reads to decide whether coverage

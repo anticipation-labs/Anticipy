@@ -239,8 +239,13 @@ for (const [said, field] of DRIVEN) {
     guard.indexOf("const temporal = temporalFieldType(field);") < guard.indexOf("hasPhoneControl && submittedPhones.length"));
   check("the temporal branch's only escapes are the literal sift, and then it defers",
     /const temporal = temporalFieldType\(field\);\s*if \(temporal\) \{\s*if \(pairs\.some[^\n]*\n\s*if \(containsTokenSequence\(approvedTokens, valueTokens\)\) return false;\s*return "defer";\s*\}/.test(guard), guard.slice(guard.indexOf("const temporal"), guard.indexOf("const temporal") + 400));
+  // 2026-09-05 (F10): completeNamedValue's seventeen-word `boundaries` list is
+  // gone and the shape now returns three states, so this pin follows the code.
+  // The property is the same one and is not softened: a native clock reading
+  // can never be read as a name that stopped short, and that escape is still
+  // the FIRST thing stopsShortOfName does.
   check("T3 reads the value's shape and never his words",
-    /function stopsShortOfName\(value, taskText\) \{\s*return !completeNamedValue\(value, taskText\) && !nativeTemporalShape\(value\);\s*\}/.test(code));
+    /function stopsShortOfName\(value, taskText, nameWords = null\) \{\s*if \(nativeTemporalShape\(value\)\) return \{ state: "complete", word: "" \};\s*return nameCompleteness\(value, taskText, nameWords\);\s*\}/.test(code));
   const verdict = code.slice(code.indexOf("export async function unsupportedScopeVerdict("), code.indexOf("export function decidedUnsupportedNames("));
   check("the verdict is one specified token, never prose searched for a word",
     /token === "YES"/.test(verdict) && /token === "NO"/.test(verdict) && /token === "UNCLEAR"/.test(verdict) && !/includes\("YES"\)/.test(verdict));
@@ -254,16 +259,16 @@ for (const [said, field] of DRIVEN) {
     /\+ 2 \* LLM_STEP_TIMEOUT_MS\s*\+ 2 \* FORM_AUDIT_TIMEOUT_MS;/.test(code));
   const loop = code.slice(code.indexOf("export async function runAgentGoal("));
   check("both gates take the async verdict before the guard and again after a clearing pass",
-    (loop.match(/scopeVerdict = await unsupportedScopeVerdict\(\s*scope \|\| goal, \w+State, ownerProfile, facts, kinds, boxes, temporalJudge, temporalMemo\)/g) || []).length === 4);
+    (loop.match(/scopeVerdict = await unsupportedScopeVerdict\(\s*scope \|\| goal, \w+State, ownerProfile, facts, kinds, boxes, temporalJudge, temporalMemo, FORM_AUDIT_TIMEOUT_MS, names\)/g) || []).length === 4);
   check("an undecided value hands back BEFORE the block and the streak, and is written to history",
     (loop.match(/if \(scopeVerdict\.undecided\.length\) \{\s*for \(const row of scopeVerdict\.undecided\) history\.push\(`step \$\{step\}: \$\{undecidedTemporalLine\(row\)\}`\);\s*return \(handBack = true\) && \{ status: "needs_user",\s*result: undecidedTemporalQuestion\(/g) || []).length === 2);
   check("the clearing pass is fed decided names only",
     (loop.match(/clearUnsupportedOptionalFields\(\s*tab\.id, decidedUnsupportedNames\(scopeVerdict\), \w+State\)/g) || []).length === 2
       && /async function clearUnsupportedOptionalFields\(tabId, unsupportedNames, currentState\) \{\s*const fields = clearableUnsupportedFields\(unsupportedNames, currentState\?\.fields\);/.test(code));
   check("verifyDone takes the same verdict, and fails closed on undecided",
-    /const scopeVerdict = effectState\s*\? await unsupportedScopeVerdict\(scope \|\| goal, effectState, ownerProfile, facts, fieldKinds, boxes, temporalJudge, temporalMemo\)/.test(code)
+    /const scopeVerdict = effectState\s*\? await unsupportedScopeVerdict\(scope \|\| goal, effectState, ownerProfile, facts, fieldKinds, boxes, temporalJudge, temporalMemo, FORM_AUDIT_TIMEOUT_MS, names\)/.test(code)
       && /could not confirm \$\{row\.name\}=\$\{row\.value\} is what you asked for/.test(code)
-      && (loop.match(/temporalJudge, temporalMemo, boxes: effectBoxes/g) || []).length === 3);
+      && (loop.match(/temporalJudge, temporalMemo, nameJudge: names\.judge, nameMemo: names\.memo, boxes: effectBoxes/g) || []).length === 3);
   check("the memo is minted per run, inside runAgentGoal, never shared across owners",
     /const temporalMemo = new Map\(\);/.test(loop) && !/temporalMemo/.test(code.slice(0, code.indexOf("export async function verifyDone("))));
   check("the record of what was here names the measured phrasings and corrects the calendar record",

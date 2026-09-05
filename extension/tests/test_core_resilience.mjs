@@ -5,18 +5,16 @@ import { fileURLToPath } from "node:url";
 import {
   completionEvidenceGap,
   completionRecoveryReversal,
-  completionShapeGap,
   externalControlSemantics,
   evidenceStateUrlKey,
   extractVerifierVerdict,
   loopbackTarget,
   internalNetworkTarget,
   taskAllowsInternalNetwork,
-  missingCompletionEvidence,
-  nonAuthoritativeCompletionEvidence,
+  COMPLETION_GAPS,
+  completionGap,
   normalizedResult,
   officialRecordEvidenceGap,
-  outputOnlyCompletionGap,
   prioritizeClaimedEvidence,
   protectedInput,
   repeatedResearchHref,
@@ -36,16 +34,40 @@ assert.equal(normalizedResult("  finished  "), "finished");
 // contains 1", and prose passed only when it happened to be numbered. The
 // behavioural pins — the auditor is asked, in both directions, and the run
 // finishes — are test_record_count_is_not_a_regex_match.mjs.
-assert.equal(completionShapeGap("Find three active listings.", JSON.stringify([{ id: 1 }])), "");
-assert.equal(completionShapeGap("Find three active listings.", JSON.stringify([{ id: 1 }, { id: 2 }, { id: 3 }])), "");
-assert.equal(completionShapeGap("Find three active listings.",
-  "1848 E 3rd Ave rents for $2,150, 2211 Grant St for $2,300 and 1020 Victoria Dr for $1,975."), "");
-assert.match(completionShapeGap(
-  "Compare plans for Alpha, Beta, and Gamma. Provide direct URLs.",
-  "Alpha https://alpha.test Beta https://beta.test Gamma"), /3 direct URLs.*2/);
-assert.equal(outputOnlyCompletionGap("the goal requests 3 records but the result contains 1"), true);
-assert.equal(outputOnlyCompletionGap("The claimed result fails to provide the requested direct URLs"), true);
-assert.equal(outputOnlyCompletionGap("the live page does not support the claimed price"), false);
+// F06 (2026-09-05): the last two branches went the same way as the count, and
+// the function with them. `comparisonNames` read "Compare … for A, B and C"
+// off the owner's first sentence and refused a claim that named the carrier as
+// its source does ("Bell" for "Bell Canada"); the direct-URL branch refused
+// three correct prices sourced from one comparison page. Both returned false
+// from verifyDone before mapPage and before the auditor. Nothing may take
+// their place: what stands between a done claim and the auditor now reads the
+// RESULT's own shape and the pages this run opened, never the goal's wording.
+// The behavioural pins are test_completion_shape_is_a_model_verdict.mjs.
+const loopExports = await import("../agent_loop.js");
+const loopFile = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "agent_loop.js"), "utf8");
+assert.ok(!("completionShapeGap" in loopExports),
+  "completionShapeGap is deleted, not re-exported");
+assert.ok(!/function comparisonNames|completionShapeGap\(/.test(
+  loopFile.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "")),
+  "neither the comparison-name parse nor its caller survives in the code");
+// F24 (2026-09-05): which recovery a rejected done claim gets is chosen from a
+// token the verifier returns, not from regexes over its prose. These asserted
+// the three deleted predicates; they now assert the token reader, whose whole
+// job is to refuse anything outside the closed set — the floor that keeps a
+// mis-typed or invented category from pressing Escape on the owner's page.
+assert.equal(completionGap("result_omits"), "result_omits");
+assert.equal(completionGap("still_loading"), "still_loading");
+assert.equal(completionGap("missing_on_page"), "missing_on_page");
+assert.equal(completionGap("source_unvisited"), "source_unvisited");
+assert.equal(completionGap("non_authoritative"), "non_authoritative");
+assert.equal(completionGap("contradiction"), "contradiction");
+assert.equal(completionGap("the goal requests 3 records but the result contains 1"), "");
+assert.equal(completionGap("MISSING_ON_PAGE"), "", "the token is exact, not case-folded");
+assert.equal(completionGap("missing_on_page and still_loading"), "");
+assert.equal(completionGap(undefined), "");
+assert.equal(completionGap(null), "");
+assert.equal(completionGap(""), "");
+assert.equal(COMPLETION_GAPS.size, 6);
 assert.equal(completionRecoveryReversal(
   { action: "scroll", dy: -900 }, "https://vendor.test/pricing", 1, "price missing"), true);
 assert.equal(completionRecoveryReversal(
@@ -56,11 +78,12 @@ assert.equal(completionRecoveryReversal(
   "https://vendor.test/pricing", 2, "price missing"), false);
 assert.equal(completionRecoveryReversal(
   { action: "scroll", dy: -900 }, "https://vendor.test/pricing", 0, "price missing"), false);
-assert.equal(missingCompletionEvidence("the requested price does not appear in the evidence"), true);
-assert.equal(missingCompletionEvidence("all requested values are present"), false);
-assert.equal(nonAuthoritativeCompletionEvidence(
-  "the claim came from a search result snippet rather than the vendor's official page"), true);
-assert.equal(nonAuthoritativeCompletionEvidence("the official vendor page supports the claim"), false);
+// The two prose predicates these lines pinned are gone with F24; the same two
+// findings are `missing_on_page` and `non_authoritative`, and the sentence a
+// verifier happens to write about either decides nothing at all now.
+assert.equal(completionGap("missing_on_page"), "missing_on_page");
+assert.equal(completionGap("the requested price does not appear in the evidence"), "");
+assert.equal(completionGap("the claim came from a search result snippet"), "");
 assert.equal(repeatedResearchHref(
   "https://vendor.test/pricing", new Set(["https://vendor.test/pricing"]), 1,
   "price missing"), true);
@@ -119,9 +142,22 @@ assert.equal(evidenceStateUrlKey("https://www.example.test/search?b=2&utm_source
   "example.test/search?a=1&b=2#selected");
 assert.notEqual(evidenceStateUrlKey("https://example.test/search?trip=outbound"),
   evidenceStateUrlKey("https://example.test/search?trip=return"));
-assert.match(completionShapeGap(
-  "[AUDIT:opaque-metadata] Compare paid plans on the official pages for Alpha, Beta Business, and Gamma Workplace.",
-  { Alpha: { price: 1 } }), /Beta Business, Gamma Workplace/);
+// This used to assert that an [AUDIT:…] transport prefix could not make a
+// "Compare … for A, B and C" goal slip past the named-entity gate. F06 deleted
+// that gate, and the property survives in a stronger form: the two checks that
+// still run in front of the auditor do not read the goal AT ALL, so no prefix,
+// phrasing or metadata on it can change what they say.
+{
+  const opened2 = { url: "https://example.test/plans", title: "plans", text: "", elements: "" };
+  const claim = { Alpha: { price: 1, url: "https://example.test/alpha" } };
+  const plain = completionEvidenceGap(
+    "Compare paid plans for Alpha, Beta Business, and Gamma Workplace.", claim, opened2, []);
+  const prefixed = completionEvidenceGap(
+    "[AUDIT:opaque-metadata] Compare paid plans for Alpha, Beta Business, and Gamma Workplace.",
+    claim, opened2, []);
+  assert.equal(plain, prefixed, "provenance is blind to how the goal is worded or prefixed");
+  assert.match(plain, /example\.test\/alpha/, "and it still refuses a cited page nobody opened");
+}
 const opened = {
   url: "https://example.test/listing/one", title: "one", text: "", elements: "",
 };
@@ -171,9 +207,28 @@ assert.match(officialRecordEvidenceGap(
   { url: "https://example.test/pricing/pro", title: "Business Pro", text: "Business Pro $1416/month/user USD", elements: "" }, []),
   /does not contain claimed displayed_price "141"/,
   "a substring of a larger money token cannot prove a claimed price");
+// F06 (2026-09-05): this used to assert the OPPOSITE — that a goal without the
+// word "official" was not checked at all. One word of the owner's sentence
+// decided whether a claimed price was checked against the page it cites, and
+// "from the vendor itself" or "the airline's own site" switched nothing on.
+// The check no longer reads the goal; it reads the RESULT's own shape, so the
+// same fabricated citation is refused however the errand was phrased. This is
+// a stronger pin than the one it replaces, not a softer one.
+assert.match(officialRecordEvidenceGap(
+  "Compare several plans and summarize them.", officialPricingResult,
+  { url: "https://search.test", text: "$14.16 USD" }, []),
+  /was not observed as a live page: https:\/\/example\.test\/pricing\/pro/,
+  "a record citing a page this run never opened is refused whatever the goal says");
 assert.equal(officialRecordEvidenceGap(
   "Compare several plans and summarize them.", officialPricingResult,
-  { url: "https://search.test", text: "$14.16 USD" }, []), "");
+  { url: "https://example.test/pricing/pro", title: "Business Pro",
+    text: "Business Pro — $14.16 USD per user", elements: "" }, []), "",
+  "...and the same record cited off the page the run DID open still passes");
+assert.equal(officialRecordEvidenceGap(
+  "Compare several plans and summarize them.",
+  "Business Pro is $14.16 USD per user on https://example.test/pricing/pro",
+  { url: "https://search.test", text: "$14.16 USD" }, []), "",
+  "prose is not a record: this check only ever reads a structured url+price pair");
 const evidenceOrder = [
   { url: "https://example.test/listing/one" },
   { url: "https://example.test/search" },
