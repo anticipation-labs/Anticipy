@@ -161,7 +161,8 @@ for (const [said, offset] of RESCHEDULES) {
 {
   const src = readFileSync(new URL("../agent_loop.js", import.meta.url), "utf8");
   const code = src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
-  for (const gone of ["explicitMonthDays", "explicitMonthDayRanges"]) {
+  for (const gone of ["explicitMonthDays", "explicitMonthDayRanges",
+                      "approvedDateValue", "approvedTimeValue"]) {
     check(`law 1: ${gone} stays deleted from the code`, !code.includes(gone));
   }
   const fn = code.slice(code.indexOf("export async function unapprovedCalendarClick"),

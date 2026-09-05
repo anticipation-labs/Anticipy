@@ -288,18 +288,17 @@ for (const said of MEASURED) {
   const loop = code.slice(code.indexOf("export async function runAgentGoal("));
   check("both gates judge the boxes before the guard and again after a clearing pass",
     (loop.match(/boxes = await boxVerdicts\(\w+State\.fields, scope \|\| goal, facts, boxJudge, boxCache\)/g) || []).length === 4);
-  check("every unsupportedScopeFields call in the loop carries the verdicts",
-    (loop.match(/unsupportedScopeFields\(\s*scope \|\| goal, \w+State, ownerProfile, facts, kinds, boxes\)/g) || []).length === 4
-      && (loop.match(/unsupportedScopeFieldsDetailed\(\s*scope \|\| goal, \w+State, ownerProfile, facts, kinds, boxes\)/g) || []).length === 2);
+  check("every scope verdict in the loop carries the box verdicts",
+    (loop.match(/unsupportedScopeVerdict\(\s*scope \|\| goal, \w+State, ownerProfile, facts, kinds, boxes, temporalJudge, temporalMemo\)/g) || []).length === 4);
   check("an unclear box hands back BEFORE the block, the streak and any dead index",
     (loop.match(/if \(boxOutcome\.unclear\.length\) \{\s*return \(handBack = true\) && \{ status: "needs_user",\s*result: unclearBoxQuestion\(/g) || []).length === 2);
   check("every verifyDone call carries the box verdicts in force at the effect",
     (loop.match(/boxes: effectBoxes/g) || []).length === 3 && (loop.match(/effectBoxes = boxes;/g) || []).length === 2);
   check("verifyDone forwards them to the same guard",
     /boxes = null, fieldKinds = null \} = \{\}\) \{/.test(code)
-      && /unsupportedScopeFields\(scope \|\| goal, effectState, ownerProfile, facts, fieldKinds, boxes\)/.test(code));
-  check("the clearing pass forwards them too, and still never touches a box",
-    /async function clearUnsupportedOptionalFields\([^)]*boxes = null, kinds = null\)/.test(code)
+      && /unsupportedScopeVerdict\(scope \|\| goal, effectState, ownerProfile, facts, fieldKinds, boxes, temporalJudge, temporalMemo\)/.test(code));
+  check("the clearing pass is fed decided names only, and still never touches a box",
+    /clearUnsupportedOptionalFields\(\s*tab\.id, decidedUnsupportedNames\(scopeVerdict\), \w+State\)/.test(loop)
       && /!\["checkbox", "radio"\]\.includes\(String\(field\?\.type \|\| ""\)\.toLowerCase\(\)\)/.test(code));
   check("the cache is minted per run, inside runAgentGoal, never shared across owners",
     /const boxCache = new Map\(\);/.test(loop) && !/boxCache/.test(code.slice(0, code.indexOf("export async function runAgentGoal("))));

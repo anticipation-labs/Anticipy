@@ -13,7 +13,7 @@ globalThis.chrome = globalThis.chrome || {
   runtime: {}, debugger: {}, tabGroups: {}, notifications: {}, alarms: {},
 };
 
-const { boxVerdicts, groundedFormCorrections,
+const { boxVerdicts, groundedFormCorrections, unsupportedScopeVerdict,
         normalizedAuthorityText, schemaBoundaryCorrections,
         terminalReceiptEvidence, unsupportedApprovedFacts,
         unsupportedScopeFields } =
@@ -160,13 +160,28 @@ const boxesFor = async (fields, words, verdict) =>
 const tomorrow = new Date();
 tomorrow.setDate(tomorrow.getDate() + 1);
 const localTomorrow = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, "0")}-${String(tomorrow.getDate()).padStart(2, "0")}`;
-check(unsupportedScopeFields("Book tomorrow at 10:30 AM", { fields: [
-  { name: "day", value: localTomorrow },
-  { name: "time", value: "10:30" },
-] }).length === 0, "native date and time values preserve relative approved meaning");
-check(unsupportedScopeFields("Book on September 4 at 2:40 PM", { fields: [
-  { name: "time", value: "14:40" },
-] }).length === 0, "24-hour native time preserves an approved 12-hour time");
+// AUDIT #69: whether a typed native date or time is HIS is a model's verdict
+// now (unsupportedScopeVerdict); the sync guard is a floor that can never
+// wave one through on its own. The stub is the model; these pins keep the
+// caller's comparison — and the floor. test_scope_temporal_value.mjs owns
+// the boundary itself.
+{
+  const said = "Book tomorrow at 10:30 AM";
+  const fields = [{ name: "day", value: localTomorrow }, { name: "time", value: "10:30" }];
+  let asked = 0;
+  const yes = await unsupportedScopeVerdict(said, { fields }, null, "", null, null,
+    async () => { asked++; return "YES"; }, new Map());
+  check(yes.unsupported.length === 0 && yes.undecided.length === 0 && asked === 1,
+    "native date and time values preserve relative approved meaning — the time by the literal sift (10:30 is in his words, no call), the day by one YES verdict");
+  check(JSON.stringify(unsupportedScopeFields(said, { fields })) === JSON.stringify(["day"]),
+    "...and the bare sync guard alone flags the day: a floor never waves a date through on its own");
+}
+{
+  const said = "Book on September 4 at 2:40 PM";
+  const fields = [{ name: "time", value: "14:40" }];
+  const yes = await unsupportedScopeVerdict(said, { fields }, null, "", null, null, async () => "YES", new Map());
+  check(yes.unsupported.length === 0, "24-hour native time preserves an approved 12-hour time (verdict: YES)");
+}
 check(unsupportedScopeFields("Renew the license for one year", { fields: [
   { name: "term", value: "1 year" },
 ] }).length === 0, "number words authorize the same native numeric value");
