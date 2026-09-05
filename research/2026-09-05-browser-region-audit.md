@@ -26,7 +26,7 @@ owner's logged-in browser with `<all_urls>` and the debugger, so the bar for
 | 67 | `phoneField`/`identifierField`/`namedIdentityField`/`compactChoiceField`/`timeWindowField` | VIOLATION | **FIXED `448bc592`** | six classifiers deleted; `fieldKind` = declared ?? verdict ?? UNANSWERED, a FLOOR; 80-check suite, 6 mutations |
 | 68 | `approvedBoolean` negation window | VIOLATION | OPEN — design NEEDS-REWORK | own-question box verdict |
 | 69 | date/time approval regexes | PARTIAL | OPEN — design NEEDS-REWORK | typed native date/time half |
-| 70 | `login_wall.js` scored classifier | VIOLATION | OPEN — design NEEDS-REWORK | one CEILING question |
+| 70 | `login_wall.js` scored classifier | VIOLATION | **FIXED 2026-09-05** | sixteen regexes deleted; one CEILING question; golden set 66/66 live (OpenRouter direct — proxy UNPROVEN) |
 | 71 | `looksLikeCaptcha` phrase list | VIOLATION | OPEN — design NEEDS-REWORK | provider-markup sift + model |
 | 72 | `page_map.js` control-deletion keywords | VIOLATION | OPEN — design NEEDS-REWORK | read what a list is ATTACHED to |
 | 73 | placeholder-option word list | VIOLATION (L) | OPEN — design NEEDS-REWORK | |
@@ -132,6 +132,45 @@ have passed; the pin asserts adjacency and went red. That is the finding worth
 the whole item: a green test that only looked load-bearing, caught by mutation
 before it shipped.
 
+**#70 `login_wall.js`** (2026-09-05, built by a worktree agent from the
+reviewed corrected mechanism). Sixteen vocabulary regexes — sign-in verbs,
+identifier and password words, card and code words, SSO phrases, money-gate
+and subscription phrases, prices, an optional-account list, auth paths and
+titles — plus an inline commit-verb list and two prose-length thresholds were
+summed and the errand parked at WALL = 4, the hedge dropped at SURE = 6.
+Measured on the audit's own example the day it was rewritten: "Members only
+parking permits — $45 per year" in the sidebar of a permit form scored 3 + 1
+= 4 and the errand was abandoned as a paywall one step from done. Now ONE
+question (`WALL_QUESTION`) goes to a model on its own, four states come back,
+and the loop parks only on an explicit WALL — a CEILING, so a timeout, a 500,
+prose or an empty reply all fall through to the step model exactly as a null
+did. WHEN it is asked is structure: page_map's sensitive mark (the DOM's own
+type=password / cc-* / one-time-code attribute) or a page unmoved for two
+steps; once per wall key per run, where the key deliberately ignores field
+values (the attack found the stall fingerprint hashes them, which would have
+re-asked a checkout on every keystroke). Nothing typed, no field value, no
+query string and no owner profile rides into the question; controls are
+reduced to index, role, label and the mark. `canContinueAfterOwner` (zero
+callers) and the duplicate CHALLENGE regex went with it. **Two things the
+mutation and live testing found.** First, the offline suite (204 checks) went
+red under all six mutations — the named one (no-verdict returned as a wall),
+the polarity flip (`!== "clear"`), the question skipped, the cache keyed on
+the stall print, raw element lines sent, the stall trigger removed. Second,
+and the one worth the whole item: the first LIVE run of the golden set
+(`research/evals/login-wall-2026-09-05/`, 22 fixtures × 3) came back 15/22
+WRONG with replies of `PAY`, `SS`, `SSO` and empty — the browser model,
+`google/gemini-3.1-pro-preview`, is a thinking model and spent the 64-token
+floor on reasoning before its one-word answer. Every truncated reply is a
+no-verdict, and a no-verdict never fences: on the model it actually runs on,
+the ceiling would have been a decoration while the offline suite stayed
+green. Cap raised to 512 and pinned in the leg and the suite; re-measured
+66/66. What is still UNPROVEN: the leg reached OpenRouter directly, not
+`/agent/llm` — no paired-agent credential exists on this machine and the
+`agents` table is malformed at HEAD — so the proxy's own path (its
+`thinkingLevel: "low"` Google call) is unmeasured, and the other six
+one-token judges, floored to 64 on the same model, are owed the same
+measurement. See `research/evals/login-wall-2026-09-05/FINDINGS.md`.
+
 ## What is still open, and in what order
 
 The eleven NEEDS-REWORK designs all failed the attack on the same front:
@@ -152,8 +191,7 @@ Ranked by blast radius, which is what should order the work:
    incident that scrapped a real reservation.
 4. **#72 `page_map` control deletion** — deletes real controls before the model
    sees them.
-5. **#70 `login_wall`** — parks the errand and texts the owner.
-6. **#74, #78, #79, #73, #77** — medium/low, in that order.
+5. **#78, #79, #73** — medium/low, in that order.
 
 ## What was NOT verified, said plainly
 

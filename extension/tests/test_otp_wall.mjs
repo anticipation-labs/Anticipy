@@ -126,6 +126,11 @@ const ALWAYS_YES = async () => "YES";
         content = JSON.stringify({ verified: true });
       } else if (/find ONE verification code/.test(joined)) {
         content = "483920";
+      } else if (/ONE question about the page's PURPOSE/.test(joined)) {
+        // The wall judge (Audit #70): a one-time-code field carries the
+        // sensitive mark, so the question is asked once here, and a code
+        // prompt is not a wall.
+        content = "NONE";
       } else {
         content = JSON.stringify(a.shift() || { action: "wait" });
       }
@@ -519,6 +524,10 @@ const ALWAYS_YES = async () => "YES";
       // conclude his mailbox may be opened.
       consentAsked.push(joined);
       content = "YES";
+    } else if (/ONE question about the page's PURPOSE/.test(joined)) {
+      // The wall judge (Audit #70): the code field carries the sensitive
+      // mark, so the question is asked once; a code prompt is not a wall.
+      content = "NONE";
     } else {
       seen.push(all[all.length - 1]);
       content = JSON.stringify(a.shift() || { action: "wait" });

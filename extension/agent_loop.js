@@ -16,7 +16,7 @@ import {
 import {
   askInsteadOfOpening, offerToOpen, placeConsent, privatePlace, refusalToOpen,
 } from "./private_places.js";
-import { detectsLoginWall, handBackSentence } from "./login_wall.js";
+import { handBackSentence, wallKey, wallTrigger, wallVerdict } from "./login_wall.js";
 import {
   checkpointFailed, nextStep, recallConfirmed as recallConfirmedRecipe,
   remember as rememberRecipe,
@@ -4483,6 +4483,42 @@ export function inboxConsentJudge(apiKey, model) {
 }
 
 /**
+ * The model that reads whether a page is a wall — a credentials form, a
+ * sign-in through another account, or a paywall — standing between the errand
+ * and its goal. Audit #70: this was sixteen vocabulary regexes summed against
+ * a threshold in login_wall.js; the question and the four-state answer live
+ * there now, and this is only its transport. The messages are built by
+ * login_wall.js so the golden set can send the same bytes; this function
+ * takes them as (system, user) and returns the model's reply text.
+ *
+ * Non-2xx THROWS rather than returning "": an empty string would read as
+ * "unreadable" downstream, and a proxy that refused is a different fact from
+ * a model that answered badly. Both are no-verdicts; the log says which.
+ *
+ * THE CAP IS 512, NOT 8 LIKE THE OTHER JUDGES, AND THAT IS MEASURED. The
+ * answer is one line; the budget is for a THINKING model's reasoning, which
+ * on the browser model in use (google/gemini-3.1-pro-preview) is spent
+ * before the visible answer and counts against max_tokens. At the 64-token
+ * floor the golden set (overnight/login_wall_gate.py, 2026-09-05) came back
+ * "PAY", "SS", "SSO" and empty on 15 of 22 pages — every one a no-verdict,
+ * and a no-verdict never fences, so the cap alone would have turned this
+ * ceiling into a decoration on exactly the model it runs on.
+ */
+export function wallJudge(apiKey, model) {
+  return async (system, user) => withTimeout((async () => {
+    const r = await modelFetch(apiKey, {
+      model, temperature: 0, max_tokens: 512,
+      messages: [
+        { role: "system", content: system },
+        { role: "user", content: user },
+      ],
+    });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return (await r.json())?.choices?.[0]?.message?.content || "";
+  })(), LLM_STEP_TIMEOUT_MS, "wallVerdict");
+}
+
+/**
  * The model that reads whether he agreed to have a private place opened.
  *
  * The sibling of inboxConsentJudge, for the OTHER door. That one guards the
@@ -5059,6 +5095,12 @@ export async function runAgentGoal(goal, opts) {
   let mapRecoveryUsed = false;
   // When the text map is not getting us anywhere, look at the page.
   let stuckStreak = 0;
+  // The wall question, asked at most once per wall key per run (Audit #70).
+  // Keyed by login_wall.wallKey, NOT by the stall fingerprint: that one hashes
+  // every field's value, and a checkout with a card field would have re-asked
+  // on every typed character. A resume is a fresh closure, so the resumed page
+  // is judged afresh — which is the "did his thumb work" check.
+  const wallAsked = new Map();
   // One research attempt per run. A second dead end after looking it up is
   // a real dead end, and looping on it burns money and patience.
   let researched = false;
@@ -5768,16 +5810,62 @@ export async function runAgentGoal(goal, opts) {
       //
       // AFTER the CAPTCHA gate on purpose: a challenge outranks a wall, and
       // login_wall.js defers to the solver path above rather than competing with
-      // it. Evidence is weighed (login_wall.js scores additively and returns null
-      // below its threshold) because a "Sign in" link in a header is not a wall —
-      // every site on earth has one, and treating that as a wall would park
-      // every successful errand one step from done.
-      const wall = detectsLoginWall(state);
-      if (wall) {
-        return (handBack = true) && {
-          status: "needs_user",
-          result: handBackSentence(wall, ownerProfile),
-          tabId: tab.id };
+      // it.
+      //
+      // Audit #70. Until now login_wall.js decided this with sixteen vocabulary
+      // regexes summed against a threshold (WALL = 4): "members only" plus
+      // "$45 per year" in the sidebar of a permit form was a paywall, and the
+      // errand was parked one step from done with a hedged sentence whose
+      // hedge was itself a regex count. Whether a page's PURPOSE is a wall is
+      // what the page means, so ONE question goes to a model, on its own, in
+      // four states, and this is the caller comparing the verdict.
+      //
+      // WHEN it is asked is structure: page_map marked a visible control
+      // sensitive (the DOM's own type=password / cc-* / one-time-code
+      // attribute), or the page has not moved for two steps. Once per wall key
+      // per run. An ordinary signed-in errand that moves every step pays
+      // nothing.
+      //
+      // POLARITY, so the next agent does not flip it: this is a CEILING — it
+      // FENCES an otherwise-continuing run — so only an explicit WALL parks.
+      // NONE, UNSURE and every way of not answering (no model, a timeout, a
+      // 500, prose, a token with anything trailing it) fall through to the
+      // step model exactly as a null did before. A fence without a verdict is
+      // the recorded expensive failure (the permit form above; rule 2 in
+      // login_wall.js); a missed fence costs the old dull stall sentence,
+      // because everything that continues unverdicted is still held by
+      // seatbelts that do not depend on this file: protectedInput never types
+      // the password, unquotedCode never invents a code, the 18-step stall
+      // above still hands back, and the step model's own needs_user still
+      // reaches the owner through meantForTheOwner (a FLOOR, correctly: there
+      // the model has already stopped, and swallowing a stop is the unsafe
+      // side). The one thing those seatbelts do NOT cover, written down rather
+      // than implied: private_places.js leaves accounts.google.com,
+      // microsoftonline, okta and their kind ungated on the strength of this
+      // ceiling, and "continue" is a reversible control, so a no-verdict here
+      // leaves "Continue with Google" clickable into an ungated OAuth flow.
+      // The mitigation is shared transport — wallJudge and llmStep both ride
+      // modelFetch to /agent/llm, so a judge that is unreachable is a step
+      // model that is unreachable too, and the real no-verdict-while-acting
+      // path is one timeout or one prose reply at temperature 0 under a
+      // 16-token cap. A which-host seatbelt on the OAuth click is a separate
+      // item, not something this comment pretends to cover.
+      if (wallTrigger(state, stepsOnPage)) {
+        const key = wallKey(state, stallPrint);
+        if (!wallAsked.has(key)) {
+          const verdict = await wallVerdict(state, { judge: wallJudge(apiKey, model), goal });
+          wallAsked.set(key, verdict);
+          console.log(`agent: wall? ${verdict.state}${verdict.kind ? ` (${verdict.kind})` : ""} — ${verdict.why}`);
+          if (verdict.state === "wall") {
+            return (handBack = true) && {
+              status: "needs_user",
+              result: handBackSentence(verdict, ownerProfile),
+              tabId: tab.id };
+          }
+          if (verdict.state === "unsure") {
+            history.push(`step ${step}: a separate read could not tell whether ${verdict.site} is gating this behind a sign-in or a subscription`);
+          }
+        }
       }
 
       // Element indexes only mean anything within one page; on navigation the
