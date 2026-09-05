@@ -12,7 +12,7 @@
  * much of PocketBase's records API this product actually uses:
  *
  *   expand=      0 call sites  (verified: grep across clients/, extension/,
- *   fields=      0 call sites   brain/, proof/ — see ARCHITECTURE.md §2.3)
+ *   fields=      USED by overnight/are_the_ears_live.py since 2026-09-05 — projected below)
  *   skipTotal=   0 call sites
  *   back-relations / dotted traversal: 0
  *
@@ -37,7 +37,40 @@ export interface Env {
 const DEFAULT_PER_PAGE = 30;
 const MAX_PER_PAGE = 500;
 
-const UNSUPPORTED = ["expand", "fields", "skipTotal"] as const;
+const UNSUPPORTED = ["expand", "skipTotal"] as const;
+
+// `fields=` IS used now — by the gates, not the phone or the extension:
+// overnight/are_the_ears_live.py counts rows with `fields=id` so that not one
+// line of speech crosses the wire for a count, and reads the newest row with
+// `fields=created,device_id,owner_ref,source` for the same reason. Until
+// 2026-09-05 this file answered those with 400 "No client in this product uses
+// fields", and the ears gate read UNPROVEN against Cloudflare on every run.
+// PocketBase's semantics, kept exactly: a comma list of top-level names;
+// names the record does not have are ignored; `*` is everything. Never a
+// column the caller could not have read anyway — projection runs on the row
+// the rules already released.
+export function projectFields(record: Record<string, unknown>, fieldsParam: string | null): Record<string, unknown> {
+  const raw = String(fieldsParam ?? "").trim();
+  if (!raw || raw === "*") return record;
+  const wanted = raw.split(",").map((f) => f.trim()).filter(Boolean);
+  if (wanted.includes("*")) return record;
+  const out: Record<string, unknown> = {};
+  for (const name of wanted) if (name in record) out[name] = record[name];
+  return out;
+}
+
+// A D1 UNIQUE violation, read from the error's text — the only place SQLite
+// tells you which column collided. PocketBase answers a unique-index collision
+// on create with 400 { data: { <column>: validation_not_unique } }, and
+// brain/worker.py's reserve_uninvited_text (Omi port 10b) reads exactly that:
+// a 400 means "slot n is taken, read it back"; anything else means "do not
+// text". Until 2026-09-05 the INSERT here threw straight through as a 500, so
+// on Cloudflare a collision would have muted the text instead of naming the
+// slot. This reads an SQLite message, not a word of the owner's — structure.
+export function uniqueViolationColumn(message: string): string | null {
+  const m = /UNIQUE constraint failed:\s*([A-Za-z0-9_]+)\.([A-Za-z0-9_]+)/.exec(String(message || ""));
+  return m ? m[2] : null;
+}
 
 export interface RecordsRequest {
   collection: CollectionDef;
@@ -175,8 +208,9 @@ export async function list(env: Env, req: RecordsRequest): Promise<Response> {
   ]);
 
   const totalItems = Number((countRes.results?.[0] as { n?: number })?.n ?? 0);
+  const fields = q.get("fields");
   const items = (pageRes.results ?? []).map((r) =>
-    rowToRecord(def.name, r as Record<string, unknown>, def.boolColumns));
+    projectFields(rowToRecord(def.name, r as Record<string, unknown>, def.boolColumns), fields));
 
   const body: ListResponse = {
     page, perPage, totalItems,
@@ -355,10 +389,20 @@ export async function create(env: Env, req: RecordsRequest): Promise<Response> {
   }
 
   const placeholders = vals.map((_, i) => `?${i + 1}`).join(", ");
-  await env.DB.prepare(
-    `INSERT INTO ${quoteIdent(def.name)} (${cols.map(quoteIdent).join(", ")}) ` +
-    `VALUES (${placeholders})`,
-  ).bind(...vals).run();
+  try {
+    await env.DB.prepare(
+      `INSERT INTO ${quoteIdent(def.name)} (${cols.map(quoteIdent).join(", ")}) ` +
+      `VALUES (${placeholders})`,
+    ).bind(...vals).run();
+  } catch (e) {
+    const column = uniqueViolationColumn((e as Error)?.message ?? String(e));
+    if (!column) throw e;
+    return json(400, {
+      data: { [column]: NOT_UNIQUE },
+      message: "Failed to create record.",
+      status: 400,
+    });
+  }
 
   const row = await fetchOne(env, def, id, null);
   return json(200, rowToRecord(def.name, row ?? {}, def.boolColumns));
