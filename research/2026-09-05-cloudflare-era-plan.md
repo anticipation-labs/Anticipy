@@ -76,6 +76,19 @@ object is not the source of truth for scheduling; D1 is.
 | **brain deployed** | run 33966119164, `confirm=DEPLOY cap=1`, Worker version `b0b2f230`, image `sha256:cf5f8235…` built remotely; application version 1 → 2 by gradual rollout at 12:31Z; the supervisor logs "1 served, 4 unserved (cap 1)" every minute after; the Durable Object reset at 12:29 is the deploy landing |
 | the ears on Cloudflare, measured | `are_the_ears_live.py` against api.anticipy.ai now RUNS (it needed `fields=`) and says **DEAF**: newest speech 2026-09-01 05:02Z (iphone-b113), newest server row 2026-09-02 04:58Z. Not a defect of the ears — no phone posts to Cloudflare until the api-pointed build is on one |
 
+**Which owner the one brain serves — read from D1, masked.** The supervisor
+serves real-email owners in id order up to the cap; with cap 1 that is
+`43dl3t9oz7q34qc`, an `oma***@gmail.com` account created 2026-08-14. The
+account whose phone actually carries speech today (`capture_day.py`'s
+"whose day": `4i2vafx1g01nlia`, also `oma***@gmail.com`, created 2026-09-01)
+is **second by id and therefore unserved**. The owner's own account
+(`sxkotd1h02qb6gw`, `jos***@gmail.com`) is fourth. So even once the
+api-pointed build is on the phone, the Cloudflare brain would be listening
+for the wrong Omar until the cap is raised to at least 2 (and 4 for the
+owner's) — or the supervisor learns an explicit list instead of "first N by
+id". That is a product decision for the owner; the end-to-end run below
+needs it settled first.
+
 Open question on the brain: `wrangler containers instances` lists only two INACTIVE instances (stale ids; `ssh` says not found) while the supervisor reports one owner served every minute and the DO keeps logging. Whether a container is actually running the new image is proven only functionally — by speech for the served owner reaching D1 and a decision coming back with `heard_ms` stamped. That is the end-to-end run's first hop.
 
 ## The sequence from here
