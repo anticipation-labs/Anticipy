@@ -156,10 +156,11 @@ const declared = loop.match(/export function unsupportedScopeFields\(([^)]*)\)/)
   .split(",").map((part) => part.trim().split(/\s*=/)[0]);
 assert.deepStrictEqual(
   declared,
-  ["scope", "currentState", "ownerProfile", "facts", "kinds"],
-  "unsupportedScopeFields takes (scope, currentState, ownerProfile, facts, kinds) — "
-    + "kinds is what a field is FOR, never a source of values; if memory is ever "
-    + "added as a parameter, the prompt text must change with it",
+  ["scope", "currentState", "ownerProfile", "facts", "kinds", "boxes"],
+  "unsupportedScopeFields takes (scope, currentState, ownerProfile, facts, kinds, boxes) — "
+    + "kinds is what a field is FOR and boxes is what a model read each tick-box's "
+    + "state to mean against his words; neither is a source of values; if memory is "
+    + "ever added as a parameter, the prompt text must change with it",
 );
 assert.ok(
   /RECALLED MEMORY IS DELIBERATELY ABSENT FROM approvedText/.test(loop),

@@ -422,7 +422,7 @@ function regexLiterals(text) {
     /export function fieldKind\(field, kinds\) \{\s*return declaredFieldKind\(field\)\s*\?\? kinds\?\.get\?\.\(Number\(field\?\.index\)\)\?\.kind\s*\?\? "UNANSWERED";\s*\}/.test(code));
   check("kinds are threaded through every gate",
     /export function schemaBoundaryCorrections\(fields, authority, allFields, kinds = null\)/.test(code)
-      && /export function unsupportedScopeFields\(scope, currentState, ownerProfile = null, facts = "", kinds = null\)/.test(code)
+      && /export function unsupportedScopeFields\(scope, currentState, ownerProfile = null, facts = "", kinds = null, boxes = null\)/.test(code)
       && /async function auditFormAlignment\(apiKey, model, goal, scope, state, kinds = null\)/.test(code)
       && /async function clearUnsupportedOptionalFields\([^)]*kinds = null\)/.test(code)
       && /fieldKinds = null \} = \{\}\) \{/.test(code));

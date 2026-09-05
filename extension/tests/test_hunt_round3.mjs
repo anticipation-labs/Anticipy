@@ -13,7 +13,7 @@ const src = readFileSync(join(ext, "agent_loop.js"), "utf8");
 const {
   calendarCellDate, isAuthored, loopbackTarget, pageFingerprint,
   samePhoneDigits, schemaBoundaryCorrections, stableControlLabel,
-  stallFingerprint, unapprovedCalendarClick, unsupportedApprovedFacts,
+  boxVerdicts, stallFingerprint, unapprovedCalendarClick, unsupportedApprovedFacts,
   unsupportedScopeFields,
 } = await import(join(ext, "agent_loop.js"));
 
@@ -55,12 +55,15 @@ assert.ok(/fieldRejects\(tab\.id, decision\.index\)/.test(selectBlock),
 console.log("PASS 2: select carries the same stops as typing");
 
 // --- 3. the required agreement checkbox blocked its own booking ------------
-// approvedBoolean returns null for "I agree to the terms" on a task whose
-// words never contain "terms", and the guard read null as a violation. The
-// optional-field clear skips checkboxes, so nothing could ever resolve it:
-// PRE-SUBMIT BLOCK on every attempt, then the cycle guard walked off the
-// page and the table hold expired. The only mechanical way past was to
-// UNTICK the agreement, which is exactly what AUTHORITY forbids.
+// The word window that used to read "I agree to the terms" against a task
+// whose words never contain "terms" returned null, the guard read null as a
+// violation, the optional-field clear skips checkboxes, and PRE-SUBMIT BLOCK
+// fired on every attempt until the table hold expired. The null-flip that
+// fixed it discovered the polarity: a box his words never mention is NOT a
+// violation. Audit #68 (2026-09-05) then removed the window itself: whether
+// his words rule a box in or out is a model's verdict now (boxVerdicts),
+// injected into the guard as a map, and the guard only compares it. With no
+// verdict at all nothing is flagged — that IS the ceiling's rule.
 assert.deepEqual(
   unsupportedScopeFields("Book a table at 7:30 tomorrow for 3", { fields: [
     { name: "terms", label: "I agree to the terms of service",
@@ -68,14 +71,18 @@ assert.deepEqual(
     { name: "offers", label: "Send me offers", type: "checkbox", value: true },
   ] }),
   [],
-  "a ticked box the owner never mentioned is not a scope violation");
-// The signal that survives: a box that reverses something they DID say.
-assert.ok(unsupportedScopeFields("Do not request a refund", { fields: [
-  { name: "refund", label: "Request refund", value: true },
-] }).includes("refund"), "a checked box still cannot reverse an explicit negation");
-assert.ok(unsupportedScopeFields("Submit an urgent request", { fields: [
-  { name: "urgent", label: "Urgent", value: false },
-] }).includes("urgent"), "and an unticked box still cannot ignore an explicit request");
+  "a ticked box the owner never mentioned is not a scope violation, and no verdict is no fence");
+// The signal that survives: a box the model reads as reversing something
+// they DID say. The stub is the model; the guard compares its verdict.
+const contrary = async () => "YES";
+const refundOn = [{ name: "refund", label: "Request refund", value: true }];
+assert.ok(unsupportedScopeFields("Do not request a refund", { fields: refundOn }, null, "", null,
+  await boxVerdicts(refundOn, "Do not request a refund", "", contrary, new Map()))
+  .includes("refund"), "a checked box still cannot reverse an explicit negation");
+const urgentOff = [{ name: "urgent", label: "Urgent", value: false }];
+assert.ok(unsupportedScopeFields("Submit an urgent request", { fields: urgentOff }, null, "", null,
+  await boxVerdicts(urgentOff, "Submit an urgent request", "", contrary, new Map()))
+  .includes("urgent"), "and an unticked box still cannot ignore an explicit request");
 console.log("PASS 3: consent boxes stop blocking, negations still bite");
 
 // --- 4. an input mask made the owner's own phone unapprovable --------------
