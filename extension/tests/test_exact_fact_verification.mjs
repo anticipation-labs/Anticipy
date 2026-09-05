@@ -245,8 +245,12 @@ check(!terminalReceiptEvidence({
 check(!terminalReceiptEvidence({
   text: "Submitted successfully.", title: "Request Portal",
 }), "success prose without a receipt identifier is not terminal evidence");
-check(/if \(externalClick\)[\s\S]*unsupportedApprovedFacts\(facts, controlState, controlState\)[\s\S]*PRE-SUBMIT BLOCK[\s\S]*trustedClick/.test(source),
-  "the exact-fact guard runs before a final click");
+// Audit #73: the guard reads the control state AFTER settleFirstOptions has
+// applied the first-entry menu verdicts to it (`audited`), still before the
+// click. The pin names that derivation so the guard cannot quietly move back
+// onto the raw state, or off the click path.
+check(/if \(externalClick\)[\s\S]*settleFirstOptions\(controlState, placeholderJudge[\s\S]*unsupportedApprovedFacts\(facts, auditedState, auditedState\)[\s\S]*PRE-SUBMIT BLOCK[\s\S]*trustedClick/.test(source),
+  "the exact-fact guard runs before a final click, on the settled control state");
 // The GATE, not the wording. This used to match the literal sentence "owner has
 // not approved its external effect", which made the assertion break the moment
 // that sentence was improved — and a test that fails when a string gets better

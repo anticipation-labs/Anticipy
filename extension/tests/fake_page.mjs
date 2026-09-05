@@ -68,13 +68,21 @@ export class FakeNode {
   get isContentEditable() { return this.attrs.contenteditable === "true"; }
   get form() { return this.parentElement ? this.parentElement.closest("form") : null; }
   get options() { return this.tagName === "SELECT" ? this.children.filter((c) => c.tagName === "OPTION") : []; }
-  get selected() { return this.selectedFlag || this.hasAttribute("selected"); }
+  get explicitlySelected() { return this.selectedFlag || this.hasAttribute("selected"); }
+  // An option's selectedness: explicit, or — with nothing explicit in its
+  // select — the one the browser picks by default (see selectedIndex).
+  get selected() {
+    if (this.explicitlySelected) return true;
+    const sel = this.parentElement;
+    if (!sel || sel.tagName !== "SELECT") return false;
+    return !sel.options.some((o) => o.explicitlySelected) && sel.options[sel.selectedIndex] === this;
+  }
   set selected(v) { this.selectedFlag = !!v; }
   // The browser's rule for a single-select: an explicitly selected option,
   // else the first option that is not disabled, else nothing (-1).
   get selectedIndex() {
     const opts = this.options;
-    const explicit = opts.findIndex((o) => o.selected);
+    const explicit = opts.findIndex((o) => o.explicitlySelected);
     if (explicit >= 0) return explicit;
     return opts.findIndex((o) => !o.disabled);
   }

@@ -301,22 +301,52 @@
       if (!isSensitive(el) && ["INPUT", "SELECT", "TEXTAREA"].includes(el.tagName)) {
         const type = String(el.type || el.tagName).toLowerCase();
         let value = el.value;
+        let firstOption = false, optionValue = "";
         if (type === "checkbox" || type === "radio") value = !!el.checked;
         else if (el.tagName === "SELECT") {
           const option = el.options[el.selectedIndex];
           value = option ? String(option.textContent || option.value).trim() : String(el.value || "");
-          // A select still sitting on its placeholder has NO value. Reporting
-          // "Select an occasion" as the chosen value made the pre-submit
-          // auditor flag an untouched optional dropdown as an unapproved
-          // entry 7 times in one live run, until the table hold expired.
-          const placeholder = el.selectedIndex <= 0
-            && (String(option?.value ?? "") === ""
-                || /^(select|choose|pick|--|please\b|optional\b|none\b)/i
-                  .test(String(option?.textContent || "").trim())
-                || /\(optional\)/i.test(String(option?.textContent || "")));
-          if (placeholder) value = "";
+          // WHAT WAS HERE UNTIL 2026-09-05 (audit #73), and why it is gone.
+          //
+          //     const placeholder = el.selectedIndex <= 0
+          //       && (String(option?.value ?? "") === ""
+          //           || /^(select|choose|pick|--|please\b|optional\b|none\b)/i
+          //             .test(String(option?.textContent || "").trim())
+          //           || /\(optional\)/i.test(String(option?.textContent || "")));
+          //     if (placeholder) value = "";
+          //
+          // Two regex arms over the option's visible WORDS decided that a
+          // <select> on its first entry MEANT "nothing chosen", and blanked
+          // the value the pre-submit seatbelt reads. Written 2026-08-15 after
+          // "Select an occasion" was flagged as an unapproved entry 7 times
+          // in one live run until the table hold expired — a real failure,
+          // fixed by wording. The mirror failures it created: a first option
+          // that IS the answer and starts with a listed word — "None" under
+          // dietary requirements, "Pickup" under delivery, "Please call me"
+          // under contact preference — read as "" too, so the fact floor
+          // blocked a correct form ("these approved facts are not set") and
+          // the scope seatbelt never audited a site default sitting on such
+          // an option at all (a "" value is exempt). HARNESS-LAWS.md law 1.
+          //
+          // What stays is what the FORM WOULD SUBMIT — structure, per the
+          // HTML form-data-set algorithm: no option selected, an empty value
+          // attribute, or a disabled option submits nothing. A select still on
+          // its first entry whose option WOULD be submitted is reported
+          // truthfully, marked firstOption + optionValue, and whether that
+          // entry is a placeholder or a value is one question to a model at
+          // the pre-submit gates (agent_loop.js settleFirstOptions), a FLOOR:
+          // only a positive verdict blanks.
+          const onFirstEntry = el.selectedIndex <= 0;
+          const submitsNothing = el.selectedIndex < 0
+            || String(option?.value ?? "") === ""
+            || !!option?.disabled;
+          if (submitsNothing) value = "";
+          if (onFirstEntry && !submitsNothing) {
+            firstOption = true;
+            optionValue = String(option.value).slice(0, 100);
+          }
         }
-        fields.push({
+        const record = {
           index: idx,
           name: String(el.name || el.id || "").slice(0, 100),
           label: label(el).slice(0, 160),
@@ -326,7 +356,9 @@
           required: !!el.required,
           readOnly: !!el.readOnly,
           value: typeof value === "boolean" ? value : String(value || "").slice(0, 1000),
-        });
+        };
+        if (firstOption) { record.firstOption = true; record.optionValue = optionValue; }
+        fields.push(record);
       }
       // Sensitivity FIRST: label() redacts these, and dumping their options
       // or current value here would leak exactly what it protects — a saved
