@@ -248,6 +248,13 @@ function runBrowserStep(
   startedAt: number,
 ) {
   hands.observer.observeAll(browserStepEvents(runId, stepId, startedAt));
+  // READ THE SUMMARY FIRST. `browserOutcome` is the last reader of a finished
+  // step: it calls `summarizeAndForget`, so the trace is released the moment
+  // the ledger row is built. Reading afterwards returns an empty summary — not
+  // a bug, the lifecycle working. Anything that wants the duration for its own
+  // purposes (the nudge copy quotes it: "that took 3 minutes") takes it here,
+  // before the step is filed.
+  const summary = hands.observer.summarize(runId, stepId);
   const outcome = browserOutcome({
     sig,
     ctx,
@@ -262,7 +269,7 @@ function runBrowserStep(
     verifierResult: "verified",
     at: startedAt,
   });
-  return { outcome, summary: hands.observer.summarize(runId, stepId) };
+  return { outcome, summary };
 }
 
 function ctxAt(at: number, deviceOnline = true): UserCtx {

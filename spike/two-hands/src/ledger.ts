@@ -113,7 +113,8 @@ export interface LadderState {
    *  `shadow_required`. */
   rung: Rung;
   /**
-   * The highest rung this pair ever passed a GATE to reach — the only number
+   * How far this pair could have climbed FROM RUNG 0 on nothing but its own
+   * verified outcomes — one rung per gate it actually passed. The only number
    * that may travel to a stranger through `globalRung`.
    *
    * `rung` is not that number. It is also where an operator override put the
@@ -121,6 +122,12 @@ export interface LadderState {
    * evidence about the tool. Exporting `rung` is how one line typed at 2am to
    * work around the write-ladder gap (RESULTS.md FINDING 1) becomes the
    * starting rung of every other user who connected that app.
+   *
+   * Read "one rung per gate" literally: a pair stood up at rung 3 by hand that
+   * then passes the 3 -> 4 gate has earned ONE rung, not four. `#promote` adds
+   * one; it never lifts this up to `rung`, because doing so would let the given
+   * rung act as a floor under the earned one — which is the same leak wearing a
+   * different hat.
    */
   evidence_rung: Rung;
   /** Zero means nothing has ever moved this pair on its own evidence, which is
@@ -294,6 +301,16 @@ export interface LedgerOutcome extends Outcome {
   failKind?: ExecErrorKind;
   /** Injected clock for tests and for replaying a run. */
   at?: number;
+  /** The step really ran, but its duration was NOT measured — the Observer had
+   *  evicted its trace before anyone read it, so the summary's 0 means "we lost
+   *  the tape", not "it took no time".
+   *
+   *  It matters because rule 5 prefers the faster hand. Feeding a fabricated 0
+   *  into p50/p95 lets the browser hand look instantaneous, on evidence nobody
+   *  gathered, and the ladder would then quietly campaign against the very hand
+   *  that did the work. So an unmeasured run still counts toward n, successes
+   *  and the rungs — it happened — and contributes no latency sample. */
+  unmeasured?: boolean;
 }
 
 const EXEC_ERROR_KINDS: ReadonlySet<string> = new Set<string>([
@@ -739,7 +756,13 @@ export class InMemoryLedger implements Ledger {
    * inherits 2 from A, C inherits from B, and a rung nobody ever earned becomes
    * everybody's default — and it is also where an operator override put one,
    * which is the absence of evidence rather than evidence. `evidence_rung`
-   * rises in exactly one place: `#promote`, at a gate.
+   * rises in exactly one place: `#promote`, at a gate, by exactly one rung.
+   *
+   * "By exactly one" is load-bearing and not a detail of the arithmetic. While
+   * `#promote` banked `max(evidence_rung, rung)` this method was still reading
+   * the right column and still published the wrong number, because the given
+   * rung was a floor under the earned one and one gate lifted the entire stack
+   * beneath it into the export.
    */
   async globalRung(sigHash: string, app: string, excludeUser?: string): Promise<Rung> {
     const rows = await this.#store.ladder_state.all();
@@ -874,11 +897,17 @@ export class InMemoryLedger implements Ledger {
       row.last_fail_reason = o.failReason ?? kind;
     }
 
-    const sampleRow = (await this.#store.latency_samples.get(key)) ?? { key, ms: [] };
-    sampleRow.ms.push(Number.isFinite(o.ms) ? o.ms : 0);
-    await this.#store.latency_samples.put(key, sampleRow);
-    row.p50_ms = percentile(sampleRow.ms, 50);
-    row.p95_ms = percentile(sampleRow.ms, 95);
+    // An unmeasured run contributes no latency sample. See `unmeasured` on
+    // LedgerOutcome: its 0 is a lost measurement, and averaging it in would
+    // make a hand look fast on evidence nobody collected. Everything else about
+    // the run still counts — it happened.
+    if (!o.unmeasured) {
+      const sampleRow = (await this.#store.latency_samples.get(key)) ?? { key, ms: [] };
+      sampleRow.ms.push(Number.isFinite(o.ms) ? o.ms : 0);
+      await this.#store.latency_samples.put(key, sampleRow);
+      row.p50_ms = percentile(sampleRow.ms, 50);
+      row.p95_ms = percentile(sampleRow.ms, 95);
+    }
 
     await this.#store.capability_stats.put(key, row);
   }
@@ -1080,9 +1109,30 @@ export class InMemoryLedger implements Ledger {
   #promote(pair: LadderState, at: number, reason: string): void {
     const from = pair.rung;
     pair.rung = clampRung(from + 1);
-    // The ONLY place this rises. A rung reached by passing a gate is the one
-    // thing a stranger may inherit.
-    pair.evidence_rung = clampRung(Math.max(pair.evidence_rung, pair.rung));
+    // The ONLY place this rises, and it rises by ONE — never up to `pair.rung`.
+    //
+    // THE DEFECT THIS REPLACES: this line read
+    // `max(pair.evidence_rung, pair.rung)`, which made the pair's CURRENT rung
+    // a FLOOR under its earned one — and the current rung is exactly where
+    // `setRung` and `#ensurePair`'s inherited prior put a number. So an
+    // operator standing a write pair up at rung 3 to get past the write-ladder
+    // gap (RESULTS.md FINDING 1) was kept out of `globalRung` only until that
+    // pair passed ONE more gate, at which point the three rungs underneath it —
+    // which nobody had ever paid for — were exported to every stranger who had
+    // connected the app. The inherited case is worse because it compounds: B
+    // inherits 2 from A, passes one gate, exports 3, and C inherits 3 from a
+    // pair that ran ten reads.
+    //
+    // One gate passed is one rung of credit. Anything below it belonged to
+    // somebody else or to nobody, and `setRung`'s "an override may only ever
+    // LOWER what this pair exports" is only true if this line agrees with it.
+    //
+    // On a pair that walked the ladder from 0 this is the SAME number it always
+    // was: evidence_rung tracks `from`, so evidence_rung + 1 is the new rung.
+    // The `min` cap holds the invariant `evidence_rung <= rung` that `#demote`
+    // and `setRung` also maintain, so a pair can never export a rung it is not
+    // standing on.
+    pair.evidence_rung = clampRung(Math.min(pair.evidence_rung + 1, pair.rung));
     pair.own_ladder_events += 1;
     pair.last_change_at = at;
     pair.last_change_reason = `promoted ${from} -> ${pair.rung}: ${reason}`;

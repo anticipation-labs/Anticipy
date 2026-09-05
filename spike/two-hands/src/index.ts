@@ -510,7 +510,27 @@ export interface BrowserOutcomeInput {
  * whole ladder is supposed to settle never has two numbers to settle it with.
  */
 export function browserOutcome(input: BrowserOutcomeInput): LedgerOutcome {
-  const summary = input.observer.summarize(input.runId, input.stepId);
+  // ASK BEFORE FILING A DURATION, AND RELEASE THE STEP ON THE WAY OUT.
+  //
+  // Two things this function is the only place in the system that can do, and
+  // it was doing neither.
+  //
+  // `wasEvicted` first, because an evicted step and a step that never happened
+  // produce the SAME empty summary — duration_ms 0. Filing that as a browser
+  // row tells the ledger the browser hand finished instantly, and rule 5
+  // prefers the faster hand. So eviction would quietly campaign for the API
+  // hand using a number nobody measured. An evicted step files no duration and
+  // says so; `ok` and the verifier result still stand, because the step really
+  // did run — we just cannot say how long it took.
+  //
+  // `summarizeAndForget` second, because this is the one caller that KNOWS a
+  // browser step is over. `summarize` is a plain read, kept plain on purpose so
+  // a retry can read the same step twice; releasing is the caller's job, and if
+  // the caller never does it the trace sits in the service worker for the life
+  // of the session. That is the exact accumulation the Observer's own comment
+  // promises does not happen.
+  const evicted = input.observer.wasEvicted(input.runId, input.stepId);
+  const summary = input.observer.summarizeAndForget(input.runId, input.stepId);
   const outcome: LedgerOutcome = {
     user_id: input.ctx.userId,
     signature_hash: input.sig.signature_hash,
@@ -521,7 +541,9 @@ export function browserOutcome(input: BrowserOutcomeInput): LedgerOutcome {
     // browser row together regardless, so nothing routes on this string.
     tool_slug: "browser",
     ok: input.ok === true,
-    ms: Number.isFinite(summary.duration_ms) ? Math.max(0, summary.duration_ms) : 0,
+    // An evicted step's 0 is "we lost the tape", not "it took no time".
+    ms: evicted ? 0 : (Number.isFinite(summary.duration_ms) ? Math.max(0, summary.duration_ms) : 0),
+    ...(evicted ? { unmeasured: true as const } : {}),
     // The browser hand costs no vendor dollars. It costs the owner's machine
     // and his session, which `cost_usd_total` has no unit for.
     cost: 0,
