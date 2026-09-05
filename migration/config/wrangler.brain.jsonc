@@ -222,7 +222,11 @@
     "ANTICIPY_STATE_ROOT": "/data/owners",
     "ANTICIPY_STATE_VOLUME_ROOT": "/data",
 
-    // R2 key prefix for the per-owner live state. Read by brain/container_entry.py.
+    // R2 bucket + key prefix for the per-owner live state. Read by
+    // brain/container_entry.py (it defaults the bucket to anticipy-owner-state,
+    // but pin it explicitly so the state lane cannot silently target the wrong
+    // bucket).
+    "ANTICIPY_STATE_R2_BUCKET": "anticipy-owner-state",
     "ANTICIPY_STATE_R2_PREFIX": "owners",
 
     // How often the container snapshots memory.db back to R2. This number IS
