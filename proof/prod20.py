@@ -4,7 +4,7 @@ and drives a LOCAL Conversation object for texted replies (queue flips only)."""
 import json, os, sys, time
 import requests
 
-PB = "https://backend-production-61e0a.up.railway.app"
+PB = "https://api.anticipy.ai"
 LOG = "/tmp/prod20.log"
 
 def log(*a):

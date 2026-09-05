@@ -68,7 +68,7 @@ import requests  # noqa: E402
 
 PB = (os.environ.get("ANTICIPY_PB")
       or os.environ.get("ANTICIPY_BACKEND_URL")
-      or "https://backend-production-61e0a.up.railway.app").rstrip("/")
+      or "https://api.anticipy.ai").rstrip("/")
 
 # THE ONLY COLUMNS THIS GATE EVER ASKS FOR. `text` is deliberately absent and
 # must stay absent: it is the mechanical guarantee behind the Law 1 paragraph

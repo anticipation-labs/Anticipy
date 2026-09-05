@@ -101,7 +101,7 @@ _ENV_LOADED = _env.load_and_announce(ROOT)
 VERBOSE = "--verbose" in sys.argv or "-v" in sys.argv
 
 BASE = os.environ.get("ANTICIPY_BACKEND_URL",
-                      "https://backend-production-61e0a.up.railway.app")
+                      "https://api.anticipy.ai")
 
 # The one URL the setup page hands a stranger. Three names are served from the
 # same bytes (`extension/build-zip.sh` copies the zip to all three); this is the

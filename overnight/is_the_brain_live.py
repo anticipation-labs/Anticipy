@@ -71,7 +71,7 @@ from brain.worker import (  # noqa: E402
 
 PB = (os.environ.get("ANTICIPY_PB")
       or os.environ.get("ANTICIPY_BACKEND_URL")
-      or "https://backend-production-61e0a.up.railway.app").rstrip("/")
+      or "https://api.anticipy.ai").rstrip("/")
 
 OK, BAD, INFO = "PASS", "FAIL", "...."
 rows: list[tuple[str, str, str]] = []

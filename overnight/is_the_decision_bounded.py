@@ -72,7 +72,7 @@ from brain.llm import (DECISION_CALL_CEILING,  # noqa: E402
 
 PB = (os.environ.get("ANTICIPY_PB")
       or os.environ.get("ANTICIPY_BACKEND_URL")
-      or "https://backend-production-61e0a.up.railway.app").rstrip("/")
+      or "https://api.anticipy.ai").rstrip("/")
 
 # The deadline, plus the one attempt of dribble the read timeout allows.
 ALLOWED_MS = (DECISION_DEADLINE_SECONDS + _ATTEMPT_TIMEOUT_SECONDS) * 1000

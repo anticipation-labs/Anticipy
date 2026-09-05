@@ -29,7 +29,7 @@ import _env  # noqa: E402
 _env.load_and_announce(str(Path(__file__).resolve().parents[1]))
 BASE = os.getenv(
     "ANTICIPY_PRODUCTION_URL",
-    "https://backend-production-61e0a.up.railway.app",
+    "https://api.anticipy.ai",
 ).rstrip("/")
 ROOT = Path(__file__).resolve().parents[1]
 

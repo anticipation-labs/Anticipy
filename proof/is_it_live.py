@@ -26,7 +26,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
-BACKEND = "https://backend-production-61e0a.up.railway.app"
+BACKEND = "https://api.anticipy.ai"
 REMOTE = "github"
 BRANCH = "pendant-system"
 

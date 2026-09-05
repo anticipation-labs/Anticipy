@@ -672,7 +672,7 @@ def run_cases(cases, output=None, headless=False):
     os.chmod(rig_extension_dir, 0o755)
     rig_tag = uuid.uuid4().hex
     shutil.copytree(EXTENSION, rig_extension_dir, dirs_exist_ok=True)
-    production_base = "https://backend-production-61e0a.up.railway.app"
+    production_base = "https://api.anticipy.ai"
     # A fresh install must register itself, exactly as the shipped extension
     # does. Point only this disposable copy at the disposable backend before
     # launch, so the proof never injects credentials or touches production.

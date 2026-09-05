@@ -73,7 +73,7 @@ except Exception:
 
 PB = (os.environ.get("ANTICIPY_PB")
       or os.environ.get("ANTICIPY_BACKEND_URL")
-      or "https://backend-production-61e0a.up.railway.app").rstrip("/")
+      or "https://api.anticipy.ai").rstrip("/")
 
 # A line of four words or fewer is the shard the Brief counts, and it is the
 # shape "At 5:15" had — two words of somebody else's schedule that minted a

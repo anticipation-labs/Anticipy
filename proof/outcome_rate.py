@@ -117,7 +117,7 @@ from brain.worker import (  # noqa: E402
 
 PB = (os.environ.get("ANTICIPY_PB")
       or os.environ.get("ANTICIPY_BACKEND_URL")
-      or "https://backend-production-61e0a.up.railway.app").rstrip("/")
+      or "https://api.anticipy.ai").rstrip("/")
 
 # How far back the worker looks for something of hers he might be reading
 # back. Read off the function's own signature so it cannot drift: the worker

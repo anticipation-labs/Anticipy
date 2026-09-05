@@ -27,7 +27,7 @@ from _extension_package import (  # noqa: E402
 )
 _ENV_LOADED = _env.load_and_announce(ROOT)
 BASE = os.environ.get("ANTICIPY_BACKEND_URL",
-                      "https://backend-production-61e0a.up.railway.app")
+                      "https://api.anticipy.ai")
 
 OK, BAD = "PASS", "FAIL"
 rows = []

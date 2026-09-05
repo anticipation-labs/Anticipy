@@ -86,7 +86,7 @@ import requests  # noqa: E402
 
 PB = (os.environ.get("ANTICIPY_PB")
       or os.environ.get("ANTICIPY_BACKEND_URL")
-      or "https://backend-production-61e0a.up.railway.app").rstrip("/")
+      or "https://api.anticipy.ai").rstrip("/")
 
 # Seconds between the worker stamping a transcript row and the job it minted
 # from it, or the text it sent about it. One poll cycle is 2s; a hearing pass

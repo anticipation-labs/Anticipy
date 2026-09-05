@@ -59,7 +59,7 @@ if not llm.live:
     sys.exit("no live LLM in env — run via: railway run --service worker")
 
 OWNER = "D2846190-381B-4AF8-8F15-3E5B986B5D5F"
-BASE = "https://backend-production-61e0a.up.railway.app"
+BASE = "https://api.anticipy.ai"
 
 heard = []
 anticipy = types.SimpleNamespace(

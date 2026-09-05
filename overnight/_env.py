@@ -33,7 +33,20 @@ from __future__ import annotations
 
 import os
 import sys
+import urllib.request
 from typing import List
+
+# CLOUDFLARE BLOCKS "Python-urllib". Measured 2026-09-05 against
+# api.anticipy.ai: the identical request answers 403 "error code: 1010" with
+# urllib's default User-Agent and 200 with any other string (curl, httpx,
+# requests and the phone all pass). Every gate that imports this module uses
+# urllib, and every one of them read production as DOWN — is_it_live,
+# stranger legs 1 and 9 — on the day production moved. The opener is installed
+# once, here, so no gate has to remember; the name says who is asking.
+_GATE_AGENT = "anticipy-gate/1.0 (+https://github.com/anticipation-labs/Anticipy overnight/)"
+_opener = urllib.request.build_opener()
+_opener.addheaders = [("User-Agent", _GATE_AGENT)]
+urllib.request.install_opener(_opener)
 
 FILENAME = ".env.local"
 

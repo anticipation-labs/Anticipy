@@ -22,7 +22,7 @@ import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
 
-BASE = os.environ.get("ANTICIPY_PB", "https://backend-production-61e0a.up.railway.app")
+BASE = os.environ.get("ANTICIPY_PB", "https://api.anticipy.ai")
 RESULTS: list[tuple[str, bool, str]] = []
 CREATED: list[tuple[str, str]] = []
 
