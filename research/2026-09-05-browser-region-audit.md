@@ -143,8 +143,18 @@ Ranked by blast radius, which is what should order the work:
 - No live browser run. Every change is repo-green. The extension has a
   `hostile_checkout.html` fixture and a manual proof for never-foreground; a
   real errand on a real site with these changes has not been run.
-- `is_it_live.py` — whether the SERVED extension matches source — was not run
-  today; the extension version was not bumped, so the shipped 0.11.2 is now
-  behind source on six commits. That is the exact "prod served stale code"
-  shape Law 3 names, and it needs a version bump and a deploy, not a commit.
+- **Production serves extension 0.8.4.** `is_it_live.py` was run after the six
+  commits and the number is not "six commits behind" — it is three minor
+  versions behind, and `stranger_gate` leg 1 had been saying so in its own
+  words: *the banner tells the stranger to press Reload to get 0.11.2; the only
+  download in the product serves 0.8.4.* Every browser-region fix in this
+  session, and every one since August, is unreachable by any real user. Worse,
+  the COMMITTED zip said 0.11.2 and did not contain it: five of today's files
+  differed from what was inside, and `staleExtension()` compares numbers, so
+  nothing in the product could see the gap. The artifact was rebuilt from
+  source with `extension/build-zip.sh` (which refuses a version or module-graph
+  mismatch), bumped to 0.12.0 at all four pinned sites, and `stranger_gate`
+  leg 2 went FAIL → PASS: "is extension/ at 0.12.0, 21 files, nothing Chrome
+  reaches is missing". The deploy is a separate, outward-facing act and was
+  not run inside this commit.
 - The eleven open items have reviewed designs, not code.
