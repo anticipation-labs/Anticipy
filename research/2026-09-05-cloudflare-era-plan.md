@@ -74,6 +74,9 @@ object is not the source of truth for scheduling; D1 is.
 | **Worker deployed** | version `02aa186d`, `npm run deploy` (assets staged from `backend/pb_public`): `/agent/llm` → 400 credentials (was 503 "not yet ported"); `/agent/key` → 400 credentials (was 503 no model); served zip **338,456 B = 0.13.0**; `fields=id` → 200 |
 | brain ports merged | 09b `8230819d`, 10a `3c36d2f7`, 10b `41ab8015`, 06 `6b7b9e16` — all four Omi ports the ledger ranked open |
 | **brain deployed** | run 33966119164, `confirm=DEPLOY cap=1`, Worker version `b0b2f230`, image `sha256:cf5f8235…` built remotely; application version 1 → 2 by gradual rollout at 12:31Z; the supervisor logs "1 served, 4 unserved (cap 1)" every minute after; the Durable Object reset at 12:29 is the deploy landing |
+| register returned no `id` | found by the smoke's leg 3 on Cloudflare; a 0.13.0 install minted a junk agents row per poll and never paired; fixed `640e8bc8`, deployed `f3d9da08`, contract pinned |
+| **hands proven on Cloudflare** | `extension_smoke.mjs` unmodified, 10/10 against api.anticipy.ai with a disposable owner; two proxy audit rows on OpenRouter, claim in 4 s, done with a verified receipt |
+| the instruments | fifteen defaults moved to api.anticipy.ai; `_env.py` sends a gate User-Agent because the firewall blocks `Python-urllib` (`9e53051c`); is_it_live and stranger 1/9 green against Cloudflare |
 | the ears on Cloudflare, measured | `are_the_ears_live.py` against api.anticipy.ai now RUNS (it needed `fields=`) and says **DEAF**: newest speech 2026-09-01 05:02Z (iphone-b113), newest server row 2026-09-02 04:58Z. Not a defect of the ears — no phone posts to Cloudflare until the api-pointed build is on one |
 
 **Which owner the one brain serves — read from D1, masked.** The supervisor

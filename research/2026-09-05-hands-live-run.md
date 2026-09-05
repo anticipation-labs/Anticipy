@@ -100,3 +100,51 @@ Worker carries its own TypeScript port of them, and on the Worker
 `POST /agent/llm` still answers 503 "llm proxy not yet ported". So on
 Cloudflare the browser agent cannot make one model call until that port
 lands. `research/2026-09-05-cloudflare-era-plan.md` is the plan from here.
+
+## Proof 2 on PRODUCTION — `extension_smoke.mjs` against api.anticipy.ai
+
+Same day, after the Worker gained the model proxy (`47c6f8d5`, deployed
+`02aa186d`). One disposable owner, `e2e-2026-09-05@anticipy-test.invalid`
+(`qeuy6sv1raof9rw`; the `.invalid` suffix keeps the brain fleet from ever
+spawning a container for it), a Chrome for Testing paired to that owner and
+only that owner, the Railway host blackholed inside it.
+
+**First run: leg 3 FAILED, and it was real.** `POST /agent/register` on the
+Worker returned `agent_id`, `agent_token` and `pair_code` but not the row
+`id` that `agent_auth.pb.js:62` returns and `background.js:181-196` stores
+as `recordId`. A real 0.13.0 install then re-registered on every poll — 409,
+fresh agent_id, 200 without an id — one junk `agents` row per poll, **62 rows
+in 165 s**, a browser that could never pair. The contract test for
+registration had never asserted the id. Fixed in `640e8bc8` (register
+returns `id`; the contract pins it), deployed as `f3d9da08`; the 85 junk
+rows were tidied.
+
+**Second run, the UNMODIFIED smoke, after the fix:**
+
+    1. PASS  the backend answers
+    2. PASS  this rig knows who the owner is
+    3. PASS  a fresh install can register       agents row miamu5arakt40jb, pair code 403124
+    4. PASS  the phone can claim that pair code
+    5. PASS  a paired browser is given a model  gemini-3.1-pro-preview · llm_proxy on
+    6. PASS  a job can be queued the way the brain queues one
+    7. PASS  the queued job survived the write
+    8. PASS  Chrome's own poll filter finds the job
+    9. PASS  a Chrome claims the job            4 s
+   10. PASS  the run reaches an ending          done: Example Domain
+    VERDICT: the whole chain works
+
+The model calls went through `/agent/llm` on the Worker: two `agent_llm_audit`
+rows, provider **openrouter**, model gemini-3.1-pro-preview, status ok, the
+caps the client asked for (4096, 1024) honoured, 127 and 96 output tokens of
+which 117 and 87 were reasoning — the thinking model the 512 floor exists
+for. No Gemini key is bound on the Worker, so Google models ride OpenRouter,
+the transport the 66/66 measurement used.
+
+Rows left on D1 as evidence: the test owner, its profile, two done jobs
+(`aaccf4eyqx3lhwo`, `fnw42cqwht7lo8s`), the audit rows. Every agent row was
+deleted.
+
+**What this proves:** the hands work on the backend that serves users. What
+it does not prove: a real errand on a real site through the Worker (the
+battery ran on the local rig), and the 0.13.0 that users download still
+DEFAULTS to Railway — 0.14.0 moves the default to api.anticipy.ai.
