@@ -10,11 +10,13 @@ swaps the reasoning core; the plumbing is identical.
 """
 from __future__ import annotations
 
+import contextvars
 import json
 import os
 import random
 import re
 import time
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Optional
@@ -165,13 +167,190 @@ def now_line(tz_name: Optional[str] = None) -> str:
 # made the logs harder to read, not the outcome better.
 #
 # This is a TRANSPORT decision, not a meaning one: it keys on an HTTP status
-# and an exception type, never on anything the model said. Bounded at two
-# retries so the worst case adds about two seconds to a call that already
-# carries a 60-second timeout, and jittered so a fleet of workers that all
-# stalled on the same provider blip do not return in lockstep.
+# and an exception type, never on anything the model said. Jittered so a fleet
+# of workers that all stalled on the same provider blip do not return in
+# lockstep.
+#
+# WHAT WAS HERE UNTIL 2026-09-05, Omi port 06: the paragraph above ended
+# "Bounded at two retries so the worst case adds about two seconds to a call
+# that already carries a 60-second timeout", and `_post_json` opened
+# `httpx.Client(timeout=60)` as a literal. Both reasoned per CALL, and a call
+# was never the unit that costs the owner anything. One transcript line walks
+# twelve to sixteen sequential calls — extraction, up to five triage asks,
+# party, world, settled, sufficiency, one memory fill PER GAP (a count the
+# model's own `missing` list decides), calendar, voice — and every
+# single-question caller swallows its own transport error and walks on to the
+# next. So a provider that hung after triage had answered cost 3 x 60 s at
+# EACH remaining question, half an hour for one line, with BATCH=20 such lines
+# ahead of every SMS reply, digest, research job and report for that owner;
+# and a provider answering slowly-but-successfully at 50 s a call never
+# tripped the 60 s figure at all, because it is an inactivity timeout on each
+# of connect/read/write/pool, not a total. Nothing above this function read a
+# start time or counted calls.
+#
+# THE BOUND IS PER DECISION NOW. `decision_budget()` below opens one wall-clock
+# deadline and one call ceiling around one hear() or one clock_tick();
+# `LLM.chat` reserves a slot BEFORE a request leaves; `_post_json` clamps each
+# attempt to what is left and refuses to sleep into a retry that cannot
+# finish. The retry count stays at three — Omi ships retry off, and the 402
+# night in overnight/MORNING.md is why it is on here — but the deadline now
+# bounds the retries instead of the retries defining the bound.
 _RETRY_STATUS = frozenset({429, 500, 502, 503, 504})
 _RETRY_ATTEMPTS = 3          # the first try plus two retries
 _RETRY_BASE_SECONDS = 0.5
+# One attempt's inactivity timeout, on each of connect/read/write/pool. It is
+# NOT a total-response deadline — a provider that answers slowly but keeps
+# answering never trips it — which is why `_attempt_timeout()` clamps it to
+# the decision's remaining time rather than trusting it on its own.
+_ATTEMPT_TIMEOUT_SECONDS = 60
+
+
+# ------------------------------------------------------------- the budget
+#
+# One decision — one heard line, one clock tick — may spend this much wall
+# clock and this many model calls, and not a second or a call more. Both are
+# STRUCTURE in HARNESS-LAWS' sense: a monotonic clock and an integer, read
+# before a request leaves, never a byte of what anyone said or of what the
+# model replied. When a bound fires the meaning questions are not answered by
+# code: each single-question caller falls to the no-verdict state it was
+# already built to return (PARTY_UNANSWERED leaves attribution alone,
+# LICENCE_UNANSWERED refuses because it is a floor, ends_in_the_world and
+# plan_is_settled stay quiet, check_sufficiency waves through while `touches`
+# from the already-answered triage still holds a world goal), and Law 1's
+# floor/ceiling rule already fixed what each caller does with that state.
+# Nothing here adds a collapse; it adds one more route to a recorded one.
+#
+# The figures: 150 s is Omi's hard turn deadline and a quarter of the
+# worker's ten-minute stranded window, so a line held at the deadline can
+# never be reclaimed under itself. 32 calls is PROVISIONAL against a chain
+# measured at 12-16: overnight/is_the_decision_bounded.py prints max and p95
+# of both per day, and the ceiling is to be raised before an ordinary line is
+# ever seen within a quarter of it. They live in code, not env, because a
+# stray env value switching a bound off in silence is the ANTICIPY_SEGMENTS
+# failure brain/worker.py's own comment records.
+DECISION_DEADLINE_SECONDS = 150
+DECISION_CALL_CEILING = 32
+
+# Always read as `_clock()` through the module attribute, never captured as a
+# default argument, so a test can drive time without sleeping through it.
+_clock = time.monotonic
+
+
+class DeadlineExceeded(TimeoutError):
+    """The decision's wall clock ran out.
+
+    A TimeoutError on purpose: brain/worker.py's `unreachable_model` keys on
+    exception TYPE, exactly as `_UNREACHABLE` already does for httpx, and
+    reads this as a machine that could not be reached in time. The line is
+    held unstamped, `release_stranded_claims` hands it back in ten minutes,
+    DEAF_STREAK climbs and he is told at three — nothing learned, nothing
+    acted, nothing lost."""
+
+
+class CallCeilingExceeded(RuntimeError):
+    """The decision spent its call ceiling.
+
+    NOT a TimeoutError, on purpose: the same words through the same code
+    would hit the same count every ten minutes forever, so a line that
+    reaches this before triage has answered gets the tombstone
+    (`record_failure` -> "error"), where it is visible, rather than a hold,
+    where it is not. After triage it never reaches the worker at all — every
+    single-question caller swallows it and returns its inert state."""
+
+
+@dataclass
+class Budget:
+    deadline: float       # a `_clock()` instant
+    calls_left: int
+    spent: int = 0
+
+    def remaining(self) -> float:
+        return self.deadline - _clock()
+
+
+_BUDGET: contextvars.ContextVar = contextvars.ContextVar(
+    "anticipy_budget", default=None)
+# What the most recently CLOSED decision spent, for the worker to stamp on the
+# row beside how long it took. Written in decision_budget()'s `finally`, so it
+# is set whether the decision returned or raised.
+_LAST_SPENT: Optional[int] = None
+
+
+@contextmanager
+def decision_budget():
+    """Bound everything inside to one deadline and one call ceiling.
+
+    Nested, it yields the budget already active and installs nothing, so an
+    inner scope can never widen what the outer one allowed.
+
+    THE `finally` IS THE LOAD-BEARING LINE. An exception leaving hear() is a
+    designed path — a deadline spent before triage answers propagates so the
+    worker holds the line — and without the reset the spent Budget would stay
+    installed in the worker thread, and every later chat in the process (the
+    next line's extraction, research, the digests, the clock, the apology in
+    handle_inbound) would raise instantly: every line held, DEAF_STREAK at
+    three, one text, and she is mute until redeploy."""
+    global _LAST_SPENT
+    active = _BUDGET.get()
+    if active is not None:
+        yield active
+        return
+    budget = Budget(deadline=_clock() + DECISION_DEADLINE_SECONDS,
+                    calls_left=DECISION_CALL_CEILING)
+    token = _BUDGET.set(budget)
+    try:
+        yield budget
+    finally:
+        _BUDGET.reset(token)
+        _LAST_SPENT = budget.spent
+
+
+def _spend() -> None:
+    """Reserve one call against the active budget, BEFORE the request leaves.
+
+    Omi's ordering: reserved first, so a burst cannot outrun the limiter.
+    With no budget active this returns at once and behaviour is exactly what
+    it was — an absent cost bound is not a reason to refuse work, and a
+    process-wide default would silently cap briefings, research and the
+    nightly consolidation with no reset point."""
+    b = _BUDGET.get()
+    if b is None:
+        return
+    if b.remaining() <= 0:
+        raise DeadlineExceeded(
+            f"decision deadline {DECISION_DEADLINE_SECONDS}s spent after "
+            f"{b.spent} calls")
+    if b.calls_left <= 0:
+        raise CallCeilingExceeded(
+            f"decision call ceiling {DECISION_CALL_CEILING} spent")
+    b.calls_left -= 1
+    b.spent += 1
+
+
+def budget_spent_last() -> Optional[int]:
+    """How many calls the most recently closed decision made, or None when no
+    decision has closed in this process yet."""
+    return _LAST_SPENT
+
+
+def _attempt_timeout() -> float:
+    """One attempt's inactivity timeout, clamped to what the decision has left."""
+    b = _BUDGET.get()
+    if b is None:
+        return float(_ATTEMPT_TIMEOUT_SECONDS)
+    return min(float(_ATTEMPT_TIMEOUT_SECONDS), max(0.001, b.remaining()))
+
+
+def _refuse_retry_past_deadline(last: Optional[Exception]) -> None:
+    """Before sleeping into a retry: is there any time for it to finish?
+
+    With no budget active nothing is refused. `last` may be None on the
+    status path, where no exception has been raised yet."""
+    b = _BUDGET.get()
+    if b is not None and b.remaining() <= 0:
+        raise DeadlineExceeded(
+            f"decision deadline {DECISION_DEADLINE_SECONDS}s spent before a "
+            f"retry, after {b.spent} calls") from last
 
 
 def _sleep_before_retry(attempt: int) -> None:
@@ -184,7 +363,7 @@ def _post_json(url: str, headers: dict, payload: dict) -> dict:
     last: Exception | None = None
     for attempt in range(_RETRY_ATTEMPTS):
         try:
-            with httpx.Client(timeout=60) as c:
+            with httpx.Client(timeout=_attempt_timeout()) as c:
                 r = c.post(url, headers=headers, json=payload)
             # A POSITIVE retryable status, or nothing happens. `getattr` rather
             # than attribute access because absence is not a verdict here
@@ -194,6 +373,7 @@ def _post_json(url: str, headers: dict, payload: dict) -> dict:
             # hammering an endpoint it has never successfully read.
             status = getattr(r, "status_code", None)
             if status in _RETRY_STATUS and attempt + 1 < _RETRY_ATTEMPTS:
+                _refuse_retry_past_deadline(last)
                 print(f"llm: provider returned {status}, "
                       f"retry {attempt + 1}/{_RETRY_ATTEMPTS - 1}")
                 _sleep_before_retry(attempt)
@@ -204,6 +384,7 @@ def _post_json(url: str, headers: dict, payload: dict) -> dict:
             last = exc
             if attempt + 1 >= _RETRY_ATTEMPTS:
                 break
+            _refuse_retry_past_deadline(last)
             print(f"llm: {type(exc).__name__}, "
                   f"retry {attempt + 1}/{_RETRY_ATTEMPTS - 1}")
             _sleep_before_retry(attempt)
@@ -435,6 +616,12 @@ class LLM:
         a judgement about whether to act, what is consequential, or what the
         owner will read. Those callers may be served by ANTICIPY_AUX_MODEL when
         one is configured; every other call site is unaffected."""
+        # THE SLOT IS RESERVED BEFORE ANYTHING IS BUILT OR SENT — every
+        # instance in the process (the main one, Brain.strong, the aux route,
+        # memory's) and every mode (gemini, openrouter, heuristic) counts
+        # against the one decision budget, or against nothing when none is
+        # active. See decision_budget() above.
+        _spend()
         # Grounded at the client so EVERY caller — triage, replies, voice,
         # briefings, the clock — knows the current local date and time, and
         # WHERE the owner is. One place to set it means no caller can forget.
@@ -565,7 +752,14 @@ class LLM:
         primary and dead fallback: return the primary's reply with its flag
         intact — an honest flag beats no answer, and every consumer already
         handles the flag. Truncation never starts the cooldown: the primary
-        answered.
+        answered. A SPENT DECISION DEADLINE (DeadlineExceeded, Omi port 06)
+        is not a wire's fault: it is a TimeoutError, so it would read as a
+        machine-absent fault here and put the primary into a minute of
+        cooldown for every OTHER line because ONE decision ran out of time —
+        so it propagates from whichever wire raised it, remembers nothing,
+        tallies nothing and tries nothing else. There is no time left for
+        another wire to answer in, and the worker holds the line exactly as
+        it would for any TimeoutError.
         """
         pname, first_wire = primary
         sname, second_wire = secondary
@@ -578,12 +772,16 @@ class LLM:
             tally["skipped"] += 1
             try:
                 res = second_wire()
+            except DeadlineExceeded:
+                raise           # the decision's clock, not this wire's fault
             except Exception as second:
                 self._primary_down_until = 0.0
                 print(f"llm: gateway {sname} {type(second).__name__} during "
                       f"{pname} cooldown -> probing {pname}")
                 try:
                     res = first_wire()
+                except DeadlineExceeded:
+                    raise
                 except Exception as first:
                     tally["both_dead"] += 1
                     print(f"llm: gateway {pname} {type(first).__name__} too "
@@ -597,6 +795,8 @@ class LLM:
             return res
         try:
             res = first_wire()
+        except DeadlineExceeded:
+            raise               # no cooldown, no fallback, no print: see above
         except Exception as first:
             # Anything falls through. Only a machine-absent failure is
             # REMEMBERED; a ValueError for an empty reply, or our own parse
@@ -607,6 +807,8 @@ class LLM:
             print(f"llm: gateway {pname} {type(first).__name__} -> trying {sname}")
             try:
                 res = second_wire()
+            except DeadlineExceeded:
+                raise           # the primary's cooldown stands: it did fail
             except Exception as second:
                 tally["both_dead"] += 1
                 print(f"llm: gateway {sname} {type(second).__name__} too "

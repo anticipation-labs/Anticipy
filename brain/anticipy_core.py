@@ -31,7 +31,7 @@ from . import research
 
 from .asking import ask_line, question_line
 from .compute import compute_answer
-from .llm import LLM, now_line, owner_tz
+from .llm import LLM, decision_budget, now_line, owner_tz
 from .memory import OVERHEARD, RETIRED_EXCLUDED, RETIRED_QUOTED, Memory
 from .workflow import (ActDeclaration, Consequence, UndoInput, UndoPlan,
                        approve as approve_plan,
@@ -1600,6 +1600,21 @@ class Anticipy:
               + "; the row says nothing rather than claiming it is in hand")
         return False
 
+    # ONE DECISION, ONE BUDGET. Everything a heard line spends — extraction,
+    # the triage asks, the single questions, one memory fill per gap, the
+    # dedupe question, the voice — is bounded here to one wall-clock deadline
+    # and one call ceiling (brain/llm.py, "the budget": what each of those
+    # callers does when a bound fires, and why that is the safe side). The
+    # public signature stays on THIS method, unchanged, so the worker's
+    # `except TypeError` fallback fires on a kwarg mismatch exactly as it did,
+    # and the body below is `_hear`, byte for byte.
+    #
+    # WHAT WAS HERE UNTIL 2026-09-05, Omi port 06: nothing. `hear` was the
+    # 1,300-line body itself, and the only time bound anywhere beneath it was
+    # one attempt's 60 s inactivity timeout in llm._post_json — per call, per
+    # attempt, with every single-question caller swallowing its own transport
+    # error and walking on. A hung provider held this thread for half an hour
+    # per line.
     def hear(self, line: str, context: Optional[list[str]] = None,
              may_say=None, explicit: bool = False, channel: str = "",
              capture_source: str = "",
@@ -1646,6 +1661,23 @@ class Anticipy:
         caller owns the mapping back to ids, because only the caller knows
         them. Omitted — the default, and what every caller did before links
         existed — the question is never asked and no verdict is produced."""
+        with decision_budget():
+            return self._hear(line, context=context, may_say=may_say,
+                              explicit=explicit, channel=channel,
+                              capture_source=capture_source, speaker=speaker,
+                              link_candidates=link_candidates,
+                              source_event_id=source_event_id,
+                              lineage_key=lineage_key, in_meeting=in_meeting)
+
+    def _hear(self, line: str, context: Optional[list[str]] = None,
+              may_say=None, explicit: bool = False, channel: str = "",
+              capture_source: str = "",
+              speaker: Optional[str] = None,
+              link_candidates: Optional[list[str]] = None,
+              source_event_id: str = "", lineage_key: str = "",
+              in_meeting: bool = False) -> dict:
+        """The body of hear(), byte for byte. The budget that bounds it lives
+        on hear(); nothing below knows it is there."""
         # The conversation, kept where the plan-matcher can see it: two goals
         # judged as bare strings ("book reservation at Earl's" vs "draft an
         # invitation for Saturday at 1") read as different errands; the same
@@ -4377,6 +4409,11 @@ class Anticipy:
 
     # ------------------------------------------------------------ the clock
 
+    # The clock is the other door into the question chain — CLOCK_SYSTEM's
+    # own chat plus work_is_licensed — and it runs on the same single thread
+    # as hearing, so it carries the same budget for the same reason (Omi port
+    # 06). Same shape as hear(): public signature and docstring here, the
+    # body in _clock_tick untouched.
     def clock_tick(self, now: Optional[float] = None,
                    already_reached_out: set | None = None,
                    may_say=None) -> Optional[dict]:
@@ -4385,6 +4422,16 @@ class Anticipy:
         whether a great assistant would initiate right now. Guardrails live
         OUTSIDE the model: the caller enforces quiet hours and outreach
         rate limits; this method only reasons and speaks."""
+        with decision_budget():
+            return self._clock_tick(now,
+                                    already_reached_out=already_reached_out,
+                                    may_say=may_say)
+
+    def _clock_tick(self, now: Optional[float] = None,
+                    already_reached_out: set | None = None,
+                    may_say=None) -> Optional[dict]:
+        """The body of clock_tick(), byte for byte; the budget lives on
+        clock_tick()."""
         # NOBODY SPOKE THIS ONE. The clock is not an ear, so a job minted from
         # here must carry no capture_source at all: hear() sets that per line
         # and this is the other door into _queue_job, so whatever the pendant
