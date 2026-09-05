@@ -560,7 +560,15 @@ settings:
     # the queue keeps its ear in the journal. A battery reading is written
     # with every start and stop line so the measured window is closed, and
     # drain per hour rides beside it — no threshold anywhere.
-    CURRENT_PROJECT_VERSION: "124"
+    # 125: expectedExtensionVersion is 0.14.0, so the stale-extension nag
+    # tracks the extension that defaults to api.anticipy.ai (`5f4ccec6`).
+    # 124 was never built by anyone: the pin moved in AnticipyApp.swift four
+    # and a half hours after the number was set, so the tree carried the
+    # build-number leg red and the ledgers described bytes that had no build
+    # (audit F21, 2026-09-05). No 124 exists on App Store Connect; this is
+    # the first build off cloudflare-backend, and it uploads as 125 because
+    # the workflow now keeps the source number unless Apple holds it (F22).
+    CURRENT_PROJECT_VERSION: "125"
     DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: NO
@@ -612,7 +620,7 @@ targets:
         # literal from a Mac one, and two products answering "which build
         # are you holding" with different numbers is the exact disease this
         # gate exists to prevent.
-        CURRENT_PROJECT_VERSION: "124"
+        CURRENT_PROJECT_VERSION: "125"
         DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_ENTITLEMENTS: ../macos/AnticipyMac/AnticipyMac.entitlements
