@@ -43,6 +43,7 @@ import argparse
 import datetime as dt
 import json
 import os
+import pathlib
 import sys
 from collections import Counter
 from typing import NamedTuple
@@ -56,6 +57,19 @@ import requests  # noqa: E402
 # implementing a different one, and the drift was invisible until an auditor
 # fed it a phone with a reset clock. A shared constant cannot drift.
 from brain.worker import CLOCK_SKEW_MAX_S  # noqa: E402
+
+# LOAD .env.local LIKE THE GATES DO, or this reports nothing and says so in a
+# sentence that reads like a quiet day. Every instrument in overnight/ calls
+# this; this one did not, so running it from a checkout answered
+# "could not read the day: 403" — which is the right refusal, but the token was
+# sitting in the file beside it the whole time. An instrument that needs a
+# manual export before it will measure is an instrument nobody runs.
+try:  # pragma: no cover - convenience only, never a behaviour change
+    from overnight import _env as _anticipy_env
+
+    _anticipy_env.load(pathlib.Path(__file__).resolve().parent.parent)
+except Exception:
+    pass
 
 PB = (os.environ.get("ANTICIPY_PB")
       or os.environ.get("ANTICIPY_BACKEND_URL")
