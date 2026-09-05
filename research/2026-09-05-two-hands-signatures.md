@@ -225,7 +225,7 @@ record**; the key went from the dashboard's copy button to `.env.local` (which
 
 | what | value |
 |---|---|
-| organization | `omar_workspace` (Omar Ebrahim) |
+| organization | `omar_workspace` (Omar Ebrahim), **Pro plan** — confirmed on Billing, "Current Plan" |
 | project | **`anticipy_two_hands`** — created for this work, so the spike never shares a key with `omar_workspace_first_project` |
 | API key | `COMPOSIO_API_KEY` in `.env.local`, shown once and stored |
 | user_id | **`omar`**, in `.env.local` as `TWO_HANDS_OWNER` |
@@ -236,6 +236,11 @@ Hobby plan, with no access to Omar's org — its org switcher offered only Jose'
 Creating the project there would have put Anticipy's integration in a personal
 ColorStack workspace on the wrong plan, with a key nobody else could rotate.
 Check the account chip at the bottom-left before creating anything.
+
+That Hobby badge belongs to JOSE's org and to nothing else. It was briefly
+reported here as the plan for this work, which was wrong: `omar_workspace` is on
+**Pro**, and Pro is what the spike runs against — 100k tool calls plus the $29
+usage credit, so a week-1 spike cannot stall on a free-tier cap.
 
 **The key is live, verified against the real API rather than assumed:**
 `POST /api/v3.1/tool_router/session` with `{"user_id":"omar"}` answered
