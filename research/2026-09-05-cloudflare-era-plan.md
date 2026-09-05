@@ -64,6 +64,20 @@ object is not the source of truth for scheduling; D1 is.
 - **Pendant hardware.** Firmware fixed in source, unbuilt, unflashed; the
   pendant lane has never delivered a row anywhere. Out of reach here.
 
+## Done since the plan was written (same day)
+
+| step | result |
+|---|---|
+| Worker parity | `fields=` projection and the unique-collision 400 (`557e1227`); `heard_ms`/`heard_calls` in schema.sql + the map (`69eac667`); the live D1 ALTER waits for the owner |
+| `/agent/llm` ported | `47c6f8d5`: 22 contract cases on a real workerd with a fake provider; floor 512, ceiling text, key-echo mutations red |
+| Worker vars | `ANTICIPY_BROWSER_MODEL`/`ANTICIPY_VISION_MODEL` = gemini-3.1-pro-preview |
+| **Worker deployed** | version `02aa186d`, `npm run deploy` (assets staged from `backend/pb_public`): `/agent/llm` → 400 credentials (was 503 "not yet ported"); `/agent/key` → 400 credentials (was 503 no model); served zip **338,456 B = 0.13.0**; `fields=id` → 200 |
+| brain ports merged | 09b `8230819d`, 10a `3c36d2f7`, 10b `41ab8015`, 06 `6b7b9e16` — all four Omi ports the ledger ranked open |
+| **brain deployed** | run 33966119164, `confirm=DEPLOY cap=1`, Worker version `b0b2f230`, image `sha256:cf5f8235…` built remotely; application version 1 → 2 by gradual rollout at 12:31Z; the supervisor logs "1 served, 4 unserved (cap 1)" every minute after; the Durable Object reset at 12:29 is the deploy landing |
+| the ears on Cloudflare, measured | `are_the_ears_live.py` against api.anticipy.ai now RUNS (it needed `fields=`) and says **DEAF**: newest speech 2026-09-01 05:02Z (iphone-b113), newest server row 2026-09-02 04:58Z. Not a defect of the ears — no phone posts to Cloudflare until the api-pointed build is on one |
+
+Open question on the brain: `wrangler containers instances` lists only two INACTIVE instances (stale ids; `ssh` says not found) while the supervisor reports one owner served every minute and the DO keeps logging. Whether a container is actually running the new image is proven only functionally — by speech for the served owner reaching D1 and a decision coming back with `heard_ms` stamped. That is the end-to-end run's first hop.
+
 ## The sequence from here
 
 1. **Worker parity** — port `/agent/llm` (building), copy the 0.13.0 zips into
