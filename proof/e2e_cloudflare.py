@@ -104,11 +104,21 @@ D1_NAME = "anticipy-backend"
 # read-declaring triage queues it without an approval card; (c) a direct
 # question, punctuated the way the phone's recognizer punctuates
 # (PhoneListener.swift:1023 addsPunctuation = true).
+# One stamp per run, so the errand's wording is new to the brain each time.
+RUN_STAMP = dt.datetime.now(dt.timezone.utc).strftime("%H%M")
+PROFILE_PHONE = ""   # set by preflight from the owner_profile row
+
 LINES = (
     ("a", "ambient fact",
      "my dentist moved to Thursdays at 3, the one on Broadway"),
     ("b", "errand for the hands",
-     "Anticipy, open example.com in my browser and tell me what the page heading says"),
+     # FRESH WORDING EVERY RUN. The brain refuses to mint the same errand
+     # twice (anticipy_core._queue_job's same-plan dedupe — 2026-07-30's six
+     # jobs from one line is why), so a run whose errand reads exactly like the
+     # last run's is graded on a job the brain correctly declined to mint.
+     # The run stamp is words to the brain, not a tag it strips.
+     "Anticipy, open example.com in my browser and tell me what the page heading says"
+     " — this is check {run}"),
     ("c", "direct question",
      "Anticipy, when is my dentist appointment now?"),
 )
@@ -313,6 +323,11 @@ class HopTable:
     def not_proven(self, hop: str, reason: str):
         self.rows[hop].update(proven=False, detail=reason)
 
+    def not_here(self, hop: str, reason: str):
+        """A hop this run cannot prove by construction (a fictional phone, a
+        next-morning recall): it says so and stops counting toward the exit."""
+        self.rows[hop].update(provable=False, proven=False, detail=reason)
+
     def exit_code(self) -> int:
         provable = [r for r in self.rows.values() if r["provable"]]
         return 0 if provable and all(r["proven"] for r in provable) else 2
@@ -508,7 +523,7 @@ def main() -> int:
 
     if args.dry_run:
         t = now_utc()
-        for key, what, text in LINES:
+        for key, what, text in ((k, w, t.format(run=RUN_STAMP)) for k, w, t in LINES):
             body = phone_body(text, args.owner, t - dt.timedelta(seconds=3), t,
                               device_id=args.device_id, speaker=args.speaker or None)
             say(f"({key}) {what}\n{json.dumps(body, indent=2)}")
@@ -561,6 +576,8 @@ def main() -> int:
         return 1
     say(f"   PASS  the owner exists: {args.owner} · profile {profile.get('id')} "
         f"({profile.get('first_name')} {profile.get('last_name')}, {email}, {phone})")
+    global PROFILE_PHONE
+    PROFILE_PHONE = str(phone or "")
     say(f"         {phone} is a fictional 555 number: Twilio refuses it, so no text reaches anyone")
 
     # Do the Omi-06 columns exist on D1? A filter over the column errors when
@@ -604,7 +621,7 @@ def main() -> int:
     say("2. ears -> API: three lines, posted as the phone posts them")
     posted = []      # (key, what, text, id, created)
     since = ""       # the earliest server `created` we wrote, minus a second
-    for n, (key, what, text) in enumerate(LINES):
+    for n, (key, what, text) in enumerate((k, w, t.format(run=RUN_STAMP)) for k, w, t in LINES):
         if n:
             time.sleep(args.gap)
         ended = now_utc()
@@ -836,6 +853,13 @@ def main() -> int:
             say(f"   anticipy_says {ev['id']} · {ev.get('created')} · decision {ev.get('decision')!r}")
             say(f"      {short(ev.get('text'), 400)!r}")
         table.proven("brain -> mouth", "anticipy_says " + ", ".join(sorted(says)))
+    elif str(PROFILE_PHONE or "").startswith("+1555") or str(PROFILE_PHONE or "")[2:5] == "555":
+        # A 555 number is fictional by construction: Twilio refuses it, the
+        # send fails before the said row is written, and nothing can reach
+        # anyone. That is the design's choice for a disposable owner — the
+        # design's own answer for this hop is the owner's real phone.
+        table.not_here("brain -> mouth", f"not provable here: {PROFILE_PHONE} is a fictional 555 number, "
+                       "Twilio refuses it and no said row is written; the design wants the owner's own phone for this row")
     else:
         reason = ("no anticipy_says row for this owner since the run began"
                   + ("" if len(stamped) == len(ids) else " (the brain never decided)"))
