@@ -163,6 +163,30 @@ Free API Mode (10 contacts). The switch, in the order it has to happen:
 | 8. prove it live: the owner texts the Sendblue number from their own phone → an `sms_reply` row on D1 within seconds → the brain answers from the Sendblue number; `is_the_brain_live.py` reads the slot | owner + Claude | after 6, 7 |
 | 9. Twilio: leave its secrets in place until 8 holds for a day, then remove them from both Workers | owner | last |
 
+### The owner's command sheet for the switch (run from the repo root; nothing here is printed back)
+
+    # 1. the API Worker: the webhook secret you also enter in the Sendblue dashboard
+    cd migration/workers
+    npx wrangler secret put SENDBLUE_WEBHOOK_SECRET --config wrangler.jsonc
+    npx wrangler secret put SENDBLUE_API_KEY_ID    --config wrangler.jsonc    # for the Worker's own texts (reset codes, HQ reminders)
+    npx wrangler secret put SENDBLUE_API_SECRET_KEY --config wrangler.jsonc
+    npx wrangler secret put SENDBLUE_FROM_NUMBER   --config wrangler.jsonc    # your Sendblue number, E.164
+
+    # 2. the brain Worker (the container reads these; FORWARD_KEYS carries them in)
+    npx wrangler secret put SENDBLUE_API_KEY_ID     --config ../config/wrangler.brain.jsonc
+    npx wrangler secret put SENDBLUE_API_SECRET_KEY --config ../config/wrangler.brain.jsonc
+    npx wrangler secret put SENDBLUE_FROM_NUMBER    --config ../config/wrangler.brain.jsonc
+    npx wrangler secret put ANTICIPY_SMS_PROVIDER   --config ../config/wrangler.brain.jsonc   # value: sendblue
+
+    # 3. the Sendblue dashboard, Developer -> Webhooks: URL https://api.anticipy.ai/sms/sendblue, secret = the value from step 1;
+    #    Developer -> Overview: enable Request Logs. (Claude in Chrome can set the URL and the toggle once the domain is allowed; the secret is yours to type.)
+
+    # 4. after Claude has deployed the Worker and dispatched the brain: text your Sendblue number from your own phone.
+    #    Within seconds an sms_reply row lands on D1 and she answers from that number. That is the live proof of the mouth.
+
+    # 5. TestFlight, when the audit is clean:
+    gh workflow run "iOS TestFlight" --ref cloudflare-backend
+
 Nothing in the phone app names the sending number (the welcome text
 introduces her from whatever number sends it), so a new number is not a
 client change.
