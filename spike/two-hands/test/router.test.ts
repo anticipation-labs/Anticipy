@@ -651,6 +651,48 @@ test("rule 3: an OFFLINE read with no licensed tool is queued, not silently drop
 // ===========================================================================
 const writeSig = () => sig({ verb: "send", side_effect: "write", signature_hash: H_WRITE });
 
+// RUNG 3 CONFIRMS EVERY WRITE, NOT JUST THE ONES WHOSE VERB IS SCARY.
+//
+// This suite exists because the defect hid once already. It was reported as
+// "a rung-3 write carries no requiresConfirmation"; the first fix floored
+// `send` at irreversible, the single test covering it happened to use `send`,
+// and the leg went green while archiving somebody's mail — an `update`, which
+// still floors to "write" — went on running unasked at the rung the ladder
+// invented to make it ask.
+//
+// So the case here is deliberately `update`: the write verb with the least
+// alarming name, the one a reader is most likely to wave through. If someone
+// makes rung 3 confirm by widening the irreversible floor again instead of by
+// reading the rung, this goes red.
+test("rung 3 confirms an ordinary write, not only an irreversible one", async () => {
+  const updateSig = sig({ verb: "update", object: "thread", side_effect: "write" });
+  assert.equal(updateSig.side_effect, "write",
+    "the point of this test is a verb that is NOT floored to irreversible");
+
+  const r = await decide(
+    { rung: 3 as Rung, optedIn: true,
+      prior: [stats({ n: 30, successes: 30, signature_hash: updateSig.signature_hash })] },
+    updateSig,
+  );
+
+  assert.equal(r.hand, "api", "rung 3 plus the opt-in is what a write needs");
+  assert.equal(r.rung, 3);
+  assert.equal(r.requiresConfirmation, true,
+    "rung 3 is ASSISTED writes — the API executes it after a confirm showing the payload");
+});
+
+test("rung 4 is where an ordinary write stops asking", async () => {
+  const updateSig = sig({ verb: "update", object: "thread", side_effect: "write" });
+  const r = await decide(
+    { rung: 4 as Rung, optedIn: true,
+      prior: [stats({ n: 40, successes: 40, signature_hash: updateSig.signature_hash })] },
+    updateSig,
+  );
+  assert.equal(r.hand, "api");
+  assert.equal(r.requiresConfirmation, undefined,
+    "rung 4 is auto writes; that is what the three confirmed writes bought");
+});
+
 test("rule 4: a write at rung 2 goes to the browser even with the opt-in", async () => {
   const d = await decide({ rung: 2 as Rung, optedIn: true }, writeSig());
   assert.equal(d.hand, "browser");

@@ -741,7 +741,6 @@ export function createRouter(deps: RouterDeps): TwoHandRouter {
       // to look harmless.
       const effect: SideEffect = tightenSideEffect(sig.side_effect, matched.sideEffectHint);
       const irreversible = effect === "irreversible";
-      const confirmFlag = irreversible ? { requiresConfirmation: true } : {};
 
       const [rung, prior] = await Promise.all([
         safeRung(ctx.userId, sig.signature_hash, matched.app),
@@ -752,6 +751,36 @@ export function createRouter(deps: RouterDeps): TwoHandRouter {
         // why a step went the way it did.
         safePrior(ctx.userId, sig.signature_hash, matched.app),
       ]);
+      // RUNG 3 IS "ASSISTED WRITES", AND UNTIL NOW IT ASKED NOTHING.
+      //
+      // The ladder's own words for rung 3 are: the API executes the write
+      // AFTER a confirm showing the exact payload. That is the entire reason
+      // the rung exists — it is the step between "writes go to the browser"
+      // and "writes run unattended". But `requiresConfirmation` was set for
+      // irreversible steps only, so an executor reading a rung-3 decision for
+      // an ordinary write archived the thread, renamed the doc or updated the
+      // record without asking, at precisely the rung invented to make it ask.
+      //
+      // This was reported, and then it hid. The first fix floored `send` at
+      // irreversible, which made the one test covering this pass — the fixture
+      // happened to use `send` — while the defect stayed live for every other
+      // write verb. `update` still floors to "write", and archiving somebody's
+      // mail is an `update`. A defect that loses its example is not fixed; it
+      // is unwatched.
+      //
+      // So the flag is now the ladder's rule rather than a property of the
+      // verb alone: anything irreversible confirms on any hand at any rung,
+      // and any write confirms at rung 3. Rung 4 is where a write stops
+      // asking, which is what "auto writes" means and why it takes three
+      // confirmed writes with a verified effect to get there.
+      //
+      // Computed here rather than beside `irreversible` because it needs the
+      // rung, and the rung needs the ledger.
+      const assistedWrite = rung === 3 && effect === "write";
+      const confirmFlag = irreversible || assistedWrite
+        ? { requiresConfirmation: true }
+        : {};
+
       const browserStats = browserRowFrom(prior);
       const browserScore = handScore(browserStats, costWeight);
 
