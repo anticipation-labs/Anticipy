@@ -62,6 +62,12 @@ const FORWARD_KEYS = [
   "BRAVE_API_KEY", "TAVILY_API_KEY",
   "TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_PHONE_NUMBER", "TWILIO_FROM",
   "TWILIO_API_KEY_SID", "TWILIO_API_KEY_SECRET",
+  // Sendblue (iMessage/SMS) — the provider Twilio is being replaced by,
+  // 2026-09-05. brain/sendblue_arm.py reads these; the container sees only
+  // what this list carries, so a name missing here is a silent "sms=mock".
+  "ANTICIPY_SMS_PROVIDER", "ANTICIPY_SMS_MOCK",
+  "SENDBLUE_API_KEY_ID", "SENDBLUE_API_SECRET_KEY", "SENDBLUE_FROM_NUMBER",
+  "SENDBLUE_API_BASE", "SENDBLUE_STATUS_CALLBACK",
   "ANTICIPY_BACKUP_S3_BUCKET", "ANTICIPY_BACKUP_S3_ENDPOINT",
   "ANTICIPY_BACKUP_S3_ACCESS_KEY", "ANTICIPY_BACKUP_S3_SECRET",
 ] as const;
