@@ -104,13 +104,23 @@ export async function agentRegister(req: Request, env: AgentEnv): Promise<Respon
   }
   if (!code) return json(503, { error: "registration unavailable" });
 
+  // THE ROW ID IS PART OF THE CONTRACT. agent_auth.pb.js:62 answers
+  // `id: record.id`, and extension/background.js:181-196 stores it as
+  // `recordId` — the handle every later heartbeat and pairing read uses.
+  // Until 2026-09-05 this port minted the id inline in the bind and never
+  // returned it. Measured live against api.anticipy.ai with a real 0.13.0
+  // install: recordId undefined → the next poll re-registers → 409 → a fresh
+  // agent_id → 200 without an id again — one junk agents row per poll,
+  // 62 rows in 165 s, and a browser that can never pair. The smoke leg 3
+  // ("a fresh install can register") is the pin; repo-green never saw it.
+  const id = pbId();
   await env.DB.prepare(
     `INSERT INTO agents (id, agent_id, agent_token, pair_code, paired, created, updated)
      VALUES (?,?,?,?,?,?,?)`)
-    .bind(pbId(), agentId, token, code, 0, pbNow(), pbNow()).run();
+    .bind(id, agentId, token, code, 0, pbNow(), pbNow()).run();
 
   // The only time the credential is ever shown.
-  return json(200, { agent_id: agentId, agent_token: token, pair_code: code });
+  return json(200, { id, agent_id: agentId, agent_token: token, pair_code: code });
 }
 
 export async function agentKey(req: Request, env: AgentEnv): Promise<Response> {

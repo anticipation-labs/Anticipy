@@ -2258,6 +2258,12 @@ class TestAgentRoutes(object):
         assert body.get("agent_id") == agent_id, repr(resp)
         assert len(body.get("agent_token") or "") == 64, repr(resp)
         assert re.match(r"^\d{6}$", body.get("pair_code") or ""), repr(resp)
+        # The row id is part of the contract (agent_auth.pb.js:62). The
+        # extension stores it as recordId and reads its own row through it;
+        # without it a 0.13.0 install against the Worker minted one junk
+        # agents row per poll and never paired (measured 2026-09-05, 62 rows
+        # in 165 s). This line is what would have caught it.
+        assert re.match(r"^[a-z0-9]{15}$", body.get("id") or ""), repr(resp)
         again = call("POST", "/agent/register", json_body={"agent_id": agent_id})
         assert again.status == 409, repr(again)
         assert error_of(again) == "agent already registered", repr(again)
