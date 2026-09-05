@@ -92,7 +92,7 @@ re-derivation) then drove these fixes, all deployed:
 
 Rule change (2026-08-05, Omar): quiet work is no longer invisible.
 Finished research — overheard or asked — texts ONE varied FYI in her
-voice (worker deliver_fyi; overheard FYIs obey quiet hours) and lands on
+voice (worker deliver_fyi; overheard FYIs obey quiet hours — CORRECTED 2026-09-05: deliver_fyi lost its caller in cd4a490f, research is desk-only, and it is deleted with the after-the-fact uninvited counter, Omi port 10b) and lands on
 the feed. Live in production the same night; first FYI observed in the
 worker log minutes after deploy.
 

@@ -141,6 +141,89 @@ def owner_zone(zones: dict | None, owner_ref: str):
         return CLOCK_TZ
 
 
+def reservation_link(e: dict) -> str:
+    """The slot a said row was sent on ("uninvited:<owner>:<day>:<n>"), or ""."""
+    link = str(e.get("external_event_id") or "")
+    if link.startswith("uninvited:") and link.endswith(":said"):
+        return link[:-len(":said")]
+    return ""
+
+
+def uninvited_door(e: dict, by_decision_only: bool = False) -> bool:
+    """Did this said row leave through an uninvited door? Judged by the DOOR
+    (a field's closed value, or a field's emptiness), never by the words.
+
+    decision "clock" is the clock loop; "ask" with an EMPTY goal is the parked
+    ambient question (a sufficiency question carries its job's goal and is the
+    opposite of uninvited — he set the work in motion); "digest" is the
+    meeting digest. Any row carrying a reservation link counts too — that is
+    how the overheard-plan receipt (decision "act") is seen at all.
+    """
+    decision = str(e.get("decision") or "")
+    if decision in ("clock", "digest"):
+        return True
+    if decision == "ask" and not str(e.get("goal") or "").strip():
+        return True
+    return (not by_decision_only) and bool(reservation_link(e))
+
+
+def slot_key(row: dict) -> tuple[str, str] | None:
+    """(owner_ref, owner-local day) from a slot id the brain minted."""
+    link = str(row.get("external_event_id") or "")
+    parts = link.split(":")
+    if len(parts) != 4 or parts[0] != "uninvited":
+        return None
+    return parts[1], parts[2]
+
+
+def evaluate_slots(slots: list[dict], said: list[dict]) -> list[tuple[str, str, str]]:
+    """Judge the uninvited_slot rows the brain wrote against what it promises
+    about them. Pure, like evaluate_rules, and pinned offline the same way.
+
+    Per (owner, day) — the day stamped INTO the slot id, which is the day the
+    brain judged — at most UNINVITED_TEXTS_PER_DAY rows can exist (the unique
+    index makes a fourth impossible, so a fourth is a different brain);
+    linked said rows can never outnumber the slots they claim; and no slot
+    may carry decision "released", because there is no release in this tree
+    (a slot is burned, never given back) and one means the deployed brain is
+    not this brain.
+    """
+    out: list[tuple[str, str, str]] = []
+
+    def check(name: str, good: bool, detail: str = "") -> None:
+        out.append((OK if good else BAD, name, detail))
+
+    taken: dict[tuple[str, str], int] = defaultdict(int)
+    for s in slots:
+        key = slot_key(s)
+        if key:
+            taken[key] += 1
+    busiest = max(taken.values()) if taken else 0
+    check(f"no more than {UNINVITED_TEXTS_PER_DAY} slot row(s) per owner-day (port 10b)",
+          busiest <= UNINVITED_TEXTS_PER_DAY,
+          f"busiest day: {busiest}" if taken else "no slot rows")
+
+    linked: dict[tuple[str, str], int] = defaultdict(int)
+    for e in said:
+        key = slot_key({"external_event_id": reservation_link(e)})
+        if key:
+            linked[key] += 1
+    over = {k: n for k, n in linked.items() if n > taken.get(k, 0)}
+    check("linked said rows never outnumber their slots (port 10b)",
+          not over,
+          (f"{len(over)} owner-day(s) with more said rows than slots, "
+           f"worst {max(over.values())} said on "
+           f"{taken.get(next(iter(over)), 0)} slot(s)")
+          if over else
+          f"{sum(linked.values())} said row(s) on {sum(taken.values())} slot(s)")
+
+    released = [s for s in slots if str(s.get("decision") or "") == "released"]
+    check("no slot was ever released (port 10b: burned, never given back)",
+          not released,
+          f"{len(released)} released slot(s)" if released else "none released")
+    return out
+
+
 def evaluate_rules(said: list[dict],
                    zones: dict | None = None) -> list[tuple[str, str, str]]:
     """Judge a list of anticipy_says rows against the rules the brain promises.
@@ -199,14 +282,19 @@ def evaluate_rules(said: list[dict],
           f"{len(night)} sent in quiet hours" if night else "quiet hours respected")
 
     # ---- ex 28 / ex 112: the daily uninvited budget is absolute -------------
-    # Bucketed by HIS midnight for the same reason, and worker.py counts the
-    # day the same way (`datetime.now(CLOCK_TZ).replace(hour=0, ...)`). On a
-    # UTC boundary one Vancouver day splits across two dates, so a day spent
-    # exactly at the limit reads as two quiet ones — the same defect wearing
-    # the opposite sign, and the direction that hides a real breach.
+    # Bucketed by HIS midnight for the same reason, and worker.py stamps the
+    # slot day the same way (`_uninvited_day`, owner-local under CLOCK_TZ). On
+    # a UTC boundary one Vancouver day splits across two dates, so a day
+    # spent exactly at the limit reads as two quiet ones — the same defect
+    # wearing the opposite sign, and the direction that hides a real breach.
+    #
+    # Omi port 10b (2026-09-05): "uninvited" is the DOOR a row left through,
+    # never its words. Until this date only decision=="clock" was counted —
+    # the one uninvited kind the brain's own counter excluded. Now every door
+    # counts, each row once: see uninvited_door().
     per_day: dict[tuple[str, str], int] = defaultdict(int)
     for e in said:
-        if e.get("decision") == "clock":
+        if uninvited_door(e):
             ts = parse_ts(e.get("created", ""))
             if ts:
                 ref = (e.get("owner_ref") or "").strip()
@@ -216,6 +304,50 @@ def evaluate_rules(said: list[dict],
     check(f"no more than {UNINVITED_TEXTS_PER_DAY} uninvited message(s) a day (ex 28)",
           busiest <= UNINVITED_TEXTS_PER_DAY,
           f"busiest day: {busiest}" if per_day else "none sent")
+
+    # ---- port 10b: every uninvited door row carries its reservation ---------
+    # The brain in this tree reserves one uninvited_slot row BEFORE Twilio and
+    # links the said row to it (external_event_id "uninvited:...:said"). A
+    # clock, parked-ask or digest row with no link is a door that sent without
+    # reserving — or a row written by a brain older than this tree. Either
+    # reading is "the deployed brain is not this brain"; the second ages out
+    # of the window within a day of the deploy. The overheard-plan receipt is
+    # not distinguishable from an invited act by its fields (both are
+    # decision "act"), so that door is pinned offline only, in
+    # tests/test_uninvited_budget.py, and this rule says so rather than
+    # pretending to see it.
+    unlinked = [e for e in said if uninvited_door(e, by_decision_only=True)
+                and not reservation_link(e)]
+    check("every uninvited door row carries its reservation (port 10b)",
+          not unlinked,
+          (f"{len(unlinked)} row(s) sent without a slot: "
+           f"{next(iter(unlinked)).get('decision')!r} "
+           f"{(next(iter(unlinked)).get('text') or '')[:36]!r}")
+          if unlinked else
+          "clock/ask/digest rows all linked; the overheard-plan door is "
+          "pinned offline only")
+
+    # ---- port 10b: the two doors declared OFF the budget stay bounded -------
+    # `welcome` is once per phone by durable stamp and invited by saving the
+    # number; the deafness notice is a fault report bounded to one per 24h by
+    # already_raised(DEAF_GOAL, decision="deaf"). Neither takes a slot, so
+    # each gets its own row here — a regression in those guards must show as
+    # itself, never laundered into the three.
+    for decision, name in (("deaf", "the deafness notice"),
+                           ("welcome", "the welcome")):
+        exempt: dict[tuple[str, str], int] = defaultdict(int)
+        for e in said:
+            if e.get("decision") != decision:
+                continue
+            ts = parse_ts(e.get("created", ""))
+            if ts:
+                ref = (e.get("owner_ref") or "").strip()
+                local = ts.astimezone(owner_zone(zones, ref))
+                exempt[(ref, local.date().isoformat())] += 1
+        worst_exempt = max(exempt.values()) if exempt else 0
+        check(f"{name} at most once per owner-day (off the budget, port 10b)",
+              worst_exempt <= 1,
+              f"busiest day: {worst_exempt}" if exempt else "none sent")
 
     # ---- ex 24: a follow-up says something new ------------------------------
     # "The same sentence twice is not a follow-up, it's a malfunction he can
@@ -278,6 +410,26 @@ def main() -> int:
 
     rows.extend(evaluate_rules(said, zones))
 
+    # The reservation rows (port 10b). Read from two hours before the said
+    # window so a slot taken just before `since` for a said row just after it
+    # is not reported as a said row with no slot.
+    slot_since = (dt.datetime.now(dt.timezone.utc)
+                  - dt.timedelta(hours=args.hours + 2)).strftime("%Y-%m-%d %H:%M:%S")
+    slots: list[dict] | None
+    try:
+        slots = fetch("events", {"perPage": 500, "sort": "-created",
+                                 "filter": f'kind="uninvited_slot" && created>="{slot_since}"'})
+    except Exception as e:
+        check("the uninvited_slot rows can be read (port 10b)", False, str(e)[:88])
+        slots = None
+    if slots is not None:
+        rows.extend(evaluate_slots(slots, said))
+        if not slots:
+            note("uninvited_slot rows read back from production",
+                 "0 — nothing uninvited in the window — not a pass")
+        else:
+            note("uninvited_slot rows read back from production", f"{len(slots)}")
+
     # The fingerprint cannot be fetched: worker.py prints it at startup and
     # publishes it nowhere. So state the expected value and how to compare it,
     # rather than pretending to have verified it.
@@ -296,6 +448,17 @@ def main() -> int:
         print("  The code in this tree enforces them, so the deployed brain is "
               "not this brain.\n")
         return 1
+    if not slots:
+        # A leg that cannot be tested does not pass (are_the_ears_live.py's
+        # convention). The rules above held on what was read, but until one
+        # reservation row has been read back from production the reserved
+        # budget has not been seen working live, and a night with nothing
+        # uninvited is exactly the night a missing reservation looks like.
+        print(f"  UNPROVEN — the reserved uninvited budget (port 10b) wrote no "
+              f"slot row in {args.hours:g}h; the rules above were judged on "
+              f"{len(said)} message(s), and this leg is green only once a slot "
+              "row has been read back and the fingerprint matches\n")
+        return 2
     print("  THE DEPLOYED BRAIN IS KEEPING ITS PROMISES\n")
     return 0
 

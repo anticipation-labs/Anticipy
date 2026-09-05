@@ -177,11 +177,14 @@ def test_parked_question_rechecks_after_refresh_and_stays_retryable(monkeypatch)
     instance, transport, _ = assistant()
     reads = remove_phone_before_effect(monkeypatch, instance)
     now = time.time()
-    instance._pending_ask = ("Which time works for the team sync?", now - 30, 0.0)
+    instance._pending_ask = ("Which time works for the team sync?", now - 30, 0.0, "")
     monkeypatch.setattr(W, "MEETING_ARMED", False)
     monkeypatch.setattr(W, "LAST_HEARD_AT", 0.0)
     daytime(monkeypatch)
-    monkeypatch.setattr(W, "uninvited_sent_today", lambda *a, **k: 0)
+    patches = []
+    monkeypatch.setattr(W.pb, "patch", lambda *a, **k: patches.append(k) or Resp())
+    monkeypatch.setattr(W, "reserve_uninvited_text",
+                        lambda *a, **k: "uninvited:account-one:today:1")
     monkeypatch.setattr(W, "already_said", lambda *a, **k: False)
     monkeypatch.setattr(W, "post_event", lambda *a, **k: pytest.fail(
         "an unsent question must not be recorded as asked"))
@@ -192,6 +195,10 @@ def test_parked_question_rechecks_after_refresh_and_stays_retryable(monkeypatch)
     assert transport.effects == []
     assert instance.owner_phone == ""
     assert instance._pending_ask is not None, "the question must remain retryable"
+    # The revoked send is one None among many the transport cannot tell
+    # apart, so the slot is kept for the retry and never PATCHed back.
+    assert instance._pending_ask[3] == "uninvited:account-one:today:1"
+    assert patches == [], "a slot is burned or reused, never released"
 
 
 def test_digest_rechecks_after_refresh_and_keeps_its_cards(monkeypatch):
@@ -201,7 +208,7 @@ def test_digest_rechecks_after_refresh_and_keeps_its_cards(monkeypatch):
     entries = [("job-sync", "schedule the team sync")]
     instance._meeting_held = list(entries)
     W.DIGEST_PENDING = ("One thing is ready from your meeting.",
-                        now - 30, 0.0, list(entries))
+                        now - 30, 0.0, list(entries), "")
     monkeypatch.setattr(W, "MEETING_ARMED", False)
     monkeypatch.setattr(W, "LAST_HEARD_AT", 0.0)
     monkeypatch.setattr(W, "SPEAK_ONCE", lambda *a, **k: True)
