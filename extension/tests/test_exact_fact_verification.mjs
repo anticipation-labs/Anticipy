@@ -13,7 +13,7 @@ globalThis.chrome = globalThis.chrome || {
   runtime: {}, debugger: {}, tabGroups: {}, notifications: {}, alarms: {},
 };
 
-const { groundedFormCorrections,
+const { boxVerdicts, groundedFormCorrections, unsupportedScopeVerdict,
         normalizedAuthorityText, schemaBoundaryCorrections,
         terminalReceiptEvidence, unsupportedApprovedFacts,
         unsupportedScopeFields } =
@@ -126,28 +126,62 @@ const bounded = groundedFormCorrections({ values: [
 ]);
 check(bounded.length === 0,
   "a text correction cannot absorb the answer to another visible field");
-check(JSON.stringify(unsupportedScopeFields(
-  "Submit an urgent request and allow entry if nobody is home", { fields: [
+// AUDIT #68: whether his words rule a box in or out is a model's verdict now
+// (boxVerdicts), injected into the guard as a map; the guard only compares
+// it. The stub below is the model. What these pins keep is the CALLER'S
+// comparison: CONTRARY is flagged, PERMITTED is not, and a box with no
+// verdict at all is not flagged — the ceiling does not fence on silence.
+// test_box_verdict.mjs owns the boundary itself.
+const boxesFor = async (fields, words, verdict) =>
+  boxVerdicts(fields, words, "", async () => verdict, new Map());
+{
+  const words = "Submit an urgent request and allow entry if nobody is home";
+  const fields = [
     { name: "urgent", label: "Urgent", value: false },
     { name: "entry", label: "Allow entry", value: false },
-  ] })) === JSON.stringify(["urgent", "entry"]),
-  "an unchanged false checkbox cannot contradict a positive approved request");
-check(unsupportedScopeFields("Do not request a refund", { fields: [
-  { name: "refund", label: "Request refund", value: false },
-] }).length === 0, "an explicitly negated checkbox stays false");
-check(unsupportedScopeFields("Do not request a refund", { fields: [
-  { name: "refund", label: "Request refund", value: true },
-] }).includes("refund"), "a checked box cannot reverse an explicit negation");
+  ];
+  check(JSON.stringify(unsupportedScopeFields(words, { fields }, null, "", null,
+    await boxesFor(fields, words, "YES"))) === JSON.stringify(["urgent", "entry"]),
+    "an unchanged false checkbox cannot contradict a positive approved request (verdict: contrary)");
+}
+{
+  const words = "Do not request a refund";
+  const off = [{ name: "refund", label: "Request refund", value: false }];
+  check(unsupportedScopeFields(words, { fields: off }, null, "", null,
+    await boxesFor(off, words, "NO")).length === 0,
+    "an explicitly negated checkbox stays false (verdict: permitted)");
+  const on = [{ name: "refund", label: "Request refund", value: true }];
+  check(unsupportedScopeFields(words, { fields: on }, null, "", null,
+    await boxesFor(on, words, "YES")).includes("refund"),
+    "a checked box cannot reverse an explicit negation (verdict: contrary)");
+  check(unsupportedScopeFields(words, { fields: on }).length === 0,
+    "...and with no verdict at all the box is not flagged: the ceiling does not fence on silence");
+}
 const tomorrow = new Date();
 tomorrow.setDate(tomorrow.getDate() + 1);
 const localTomorrow = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, "0")}-${String(tomorrow.getDate()).padStart(2, "0")}`;
-check(unsupportedScopeFields("Book tomorrow at 10:30 AM", { fields: [
-  { name: "day", value: localTomorrow },
-  { name: "time", value: "10:30" },
-] }).length === 0, "native date and time values preserve relative approved meaning");
-check(unsupportedScopeFields("Book on September 4 at 2:40 PM", { fields: [
-  { name: "time", value: "14:40" },
-] }).length === 0, "24-hour native time preserves an approved 12-hour time");
+// AUDIT #69: whether a typed native date or time is HIS is a model's verdict
+// now (unsupportedScopeVerdict); the sync guard is a floor that can never
+// wave one through on its own. The stub is the model; these pins keep the
+// caller's comparison — and the floor. test_scope_temporal_value.mjs owns
+// the boundary itself.
+{
+  const said = "Book tomorrow at 10:30 AM";
+  const fields = [{ name: "day", value: localTomorrow }, { name: "time", value: "10:30" }];
+  let asked = 0;
+  const yes = await unsupportedScopeVerdict(said, { fields }, null, "", null, null,
+    async () => { asked++; return "YES"; }, new Map());
+  check(yes.unsupported.length === 0 && yes.undecided.length === 0 && asked === 1,
+    "native date and time values preserve relative approved meaning — the time by the literal sift (10:30 is in his words, no call), the day by one YES verdict");
+  check(JSON.stringify(unsupportedScopeFields(said, { fields })) === JSON.stringify(["day"]),
+    "...and the bare sync guard alone flags the day: a floor never waves a date through on its own");
+}
+{
+  const said = "Book on September 4 at 2:40 PM";
+  const fields = [{ name: "time", value: "14:40" }];
+  const yes = await unsupportedScopeVerdict(said, { fields }, null, "", null, null, async () => "YES", new Map());
+  check(yes.unsupported.length === 0, "24-hour native time preserves an approved 12-hour time (verdict: YES)");
+}
 check(unsupportedScopeFields("Renew the license for one year", { fields: [
   { name: "term", value: "1 year" },
 ] }).length === 0, "number words authorize the same native numeric value");

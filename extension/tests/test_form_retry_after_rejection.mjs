@@ -323,6 +323,11 @@ function scripted(actions) {
         : { verified: false, reason: "the live page shows no reference", evidence: [] });
     } else if (/reading the open web to learn HOW/.test(joined)) content = JSON.stringify({ steps: [] });
     else if (/You plan a task/.test(joined)) content = JSON.stringify({ steps: [] });
+    // Audit #68: the declaration box is judged against the goal's words by
+    // its own question. Nothing in this goal speaks to it, so the honest
+    // verdict is NO (permitted) — and answering it here keeps it from eating
+    // a scripted step.
+    else if (/do those words call for this box to be the OTHER way/.test(joined)) content = "NO";
     else content = JSON.stringify(queue.shift() || { action: "wait" });
     return { ok: true, status: 200,
       json: async () => ({ choices: [{ message: { content } }] }), text: async () => "" };

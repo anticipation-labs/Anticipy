@@ -66,6 +66,8 @@ const suites = [
   "test_authored_draft.mjs",
   "test_question_reaches_him.mjs",
   "test_calendar_date.mjs",
+  "test_box_verdict.mjs",
+  "test_scope_temporal_value.mjs",
   "test_vision_cost.mjs",
   "test_walled_source.mjs",
   "test_carried_values.mjs",

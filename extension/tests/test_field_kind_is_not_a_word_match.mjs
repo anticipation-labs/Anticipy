@@ -37,7 +37,7 @@ const FAKE_JPEG = Buffer.from("x".repeat(9000)).toString("base64");
 const {
   FIELD_KINDS, FIELD_KIND_SYSTEM, MODEL_RETRY_ATTEMPTS, declaredFieldKind, fieldKind,
   fieldKindVerdicts, fieldKindsFor, fieldKindsNeeded, runAgentGoal,
-  schemaBoundaryCorrections, unsupportedScopeFields, unsupportedScopeFieldsDetailed,
+  schemaBoundaryCorrections, unsupportedScopeFields, unsupportedScopeFieldsDetailed, unsupportedScopeVerdict,
 } = await import("../agent_loop.js");
 
 // The verdict map a model would have produced for a form.
@@ -169,10 +169,19 @@ const kindsOf = (map) => new Map(Object.entries(map)
     unsupportedScopeFields("Schedule Jordan Chen at West Coast Dental", { fields: [
       { index: 1, name: "clinic", label: "Clinic", value: "Coast Dental" },
     ] }, null, "", kindsOf({ 1: "NAME" })).includes("clinic"));
+  // Audit #69: the clock reading is not a truncated name (T3 stays quiet),
+  // and whether it is HIS is a model's verdict, read through
+  // unsupportedScopeVerdict; the sync guard alone is a floor and flags it.
+  const clock = [{ index: 1, name: "time", label: "time", value: "10:30" }];
+  const evening = [{ index: 1, name: "time", label: "time", value: "14:40" }];
   check("(d) a native time whose neighbour is 'AM' is a clock reading, not a truncated name",
-    unsupportedScopeFields("Book tomorrow at 10:30 AM", { fields: [
-      { index: 1, name: "time", label: "time", value: "10:30" },
-    ] }).length === 0);
+    fieldKindsNeeded("Book tomorrow at 10:30 AM", clock).length === 0
+      // 10:30 is literally in his words: the sift passes it, no call.
+      && unsupportedScopeFields("Book tomorrow at 10:30 AM", { fields: clock }).length === 0
+      // 14:40 is not: the bare guard is a floor and flags it; a YES verdict passes it.
+      && unsupportedScopeFields("Book at 2:40 PM", { fields: evening }).includes("time")
+      && (await unsupportedScopeVerdict("Book at 2:40 PM", { fields: evening },
+        null, "", null, null, async () => "YES", new Map())).unsupported.length === 0);
 }
 
 // ---------------------------------------------------------------------------
@@ -422,9 +431,10 @@ function regexLiterals(text) {
     /export function fieldKind\(field, kinds\) \{\s*return declaredFieldKind\(field\)\s*\?\? kinds\?\.get\?\.\(Number\(field\?\.index\)\)\?\.kind\s*\?\? "UNANSWERED";\s*\}/.test(code));
   check("kinds are threaded through every gate",
     /export function schemaBoundaryCorrections\(fields, authority, allFields, kinds = null\)/.test(code)
-      && /export function unsupportedScopeFields\(scope, currentState, ownerProfile = null, facts = "", kinds = null\)/.test(code)
+      && /export function unsupportedScopeFields\(scope, currentState, ownerProfile = null, facts = "", kinds = null, boxes = null\)/.test(code)
       && /async function auditFormAlignment\(apiKey, model, goal, scope, state, kinds = null\)/.test(code)
-      && /async function clearUnsupportedOptionalFields\([^)]*kinds = null\)/.test(code)
+      && /async function clearUnsupportedOptionalFields\(tabId, unsupportedNames, currentState\)/.test(code)
+      && (code.match(/unsupportedScopeVerdict\(\s*scope \|\| goal, \w+State, ownerProfile, facts, kinds, boxes, temporalJudge, temporalMemo\)/g) || []).length === 4
       && /fieldKinds = null \} = \{\}\) \{/.test(code));
   check("both submit sites compute the kinds once, before the alignment audit",
     (code.match(/const kinds = await fieldKindsFor\(apiKey, model,/g) || []).length === 2
