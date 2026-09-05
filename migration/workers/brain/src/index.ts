@@ -19,6 +19,7 @@
  * pulled into the main Worker's deps — this is a SEPARATE deploy
  * (config/wrangler.brain.jsonc), so the API Worker's bundle stays lean.
  */
+import { planFleet } from "./plan";
 import { Container, getContainer } from "@cloudflare/containers";
 import { DurableObject } from "cloudflare:workers";
 
@@ -29,6 +30,7 @@ export interface BrainEnv {
 
   // The cap and the discovery cadence. supervisor.py MAX_OWNER_WORKERS.
   ANTICIPY_MAX_OWNER_WORKERS?: string;
+  ANTICIPY_SERVE_OWNERS?: string;   // comma list of owner ids always served, outside the cap (e2e probe)
 
   // Everything child_environment() reads or forwards. Non-secrets come from
   // wrangler vars; secrets from `wrangler secret put`. A Worker secret is NOT
@@ -181,21 +183,40 @@ export class BrainSupervisor extends DurableObject<BrainEnv> {
            AND email NOT LIKE '%@example.%'
          ORDER BY id`,
     ).all<Owner>();
-    const owners = (rows.results ?? []).filter((o) => SAFE_ID.test(String(o.id || "")));
+    const discovered = (rows.results ?? []).filter((o) => SAFE_ID.test(String(o.id || "")));
 
-    let room = cap;
-    const unserved: string[] = [];
-    let served = 0;
-    for (const owner of owners) {
-      if (room <= 0) {
-        unserved.push(String(owner.id));
-        continue;
+    // ALWAYS-SERVED OWNERS. ANTICIPY_SERVE_OWNERS is a comma list of owner ids
+    // that get a brain regardless of the cap and regardless of the junk filter
+    // above. It exists for ONE reason: the end-to-end proof
+    // (proof/e2e_cloudflare.py) drives the whole pendant chain against
+    // production with a disposable `…@anticipy-test.invalid` owner, and that
+    // owner is — correctly — invisible to discovery and behind four real
+    // people in id order. Without this the brain hop of the proof could only
+    // run on a real person's account. Allowlisted owners are looked up by id
+    // (never trusted from the env alone: a name that is not an owners row is
+    // skipped and logged) and do not spend a cap slot, so cap=1 still serves
+    // the same first real owner it served before. Empty by default.
+    const allow = String(this.env.ANTICIPY_SERVE_OWNERS ?? "")
+      .split(",").map((x) => x.trim()).filter((x) => SAFE_ID.test(x));
+    let always: Owner[] = [];
+    if (allow.length) {
+      const marks = allow.map(() => "?").join(",");
+      const found = await this.env.DB.prepare(
+        `SELECT id, legacy_uuid FROM owners WHERE id IN (${marks})`,
+      ).bind(...allow).all<Owner>();
+      always = (found.results ?? []).filter((o) => SAFE_ID.test(String(o.id || "")));
+      for (const id of allow) if (!always.some((o) => String(o.id) === id)) {
+        console.log(`serve-owners: ${id} is not an owners row; skipped`);
       }
+    }
+    const { serve, unserved } = planFleet(discovered, always, cap);
+
+    let served = 0;
+    for (const owner of serve) {
       try {
         const brain = getContainer(this.env.OWNER_BRAIN, String(owner.id));
         await brain.ensure({ id: String(owner.id), legacy_uuid: String(owner.legacy_uuid ?? "") });
         served += 1;
-        room -= 1;
       } catch (err) {
         // One owner failing to start must not stop the fleet. Log and continue,
         // exactly as reconcile_children keeps going past a dead child.
@@ -209,7 +230,6 @@ export class BrainSupervisor extends DurableObject<BrainEnv> {
     return { served, unserved };
   }
 }
-
 export default {
   /**
    * The cron drives the supervisor. config/wrangler.brain.jsonc's

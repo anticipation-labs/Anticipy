@@ -220,6 +220,13 @@
     // 404s there; api.anticipy.ai (the D1-backed anticipy-api Worker) serves the
     // PocketBase API the brain polls (verified 2026-09-05: www→404, api→403 gated).
     "ANTICIPY_PB": "https://api.anticipy.ai",
+    // Always-served owners, outside the cap (brain/src/index.ts planFleet).
+    // Only the end-to-end probe owner — `e2e-2026-09-05@anticipy-test.invalid`,
+    // fictional 555 phone, invisible to discovery by design — so that
+    // proof/e2e_cloudflare.py can drive the brain hop against production
+    // without touching a real person's account. Remove it when the proof is
+    // retired; never put a real owner here to skip the cap.
+    "ANTICIPY_SERVE_OWNERS": "qeuy6sv1raof9rw",
 
     // brain/supervisor.py:32-33. Inside the container these are ordinary
     // ephemeral paths; R2 is the durable copy. BRAIN.md §4.
