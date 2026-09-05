@@ -11,8 +11,27 @@ offline. This file asks whether it is true of the WORKER THAT IS RUNNING,
 because repo-green has been mistaken for deployed twice in this repo's
 history (HARNESS-LAWS.md LAW 3).
 
-Three legs, the first two over `railway logs -s worker -n 5000 --json`
-(flags confirmed on railway 5.49.2; lines arrive oldest first):
+WHICH MACHINE THIS READS, and why it changed (audit F25/F33/F34). Until
+2026-09-05 this file shelled `railway logs -s worker`. Production is
+Cloudflare now, and the Railway worker it was grading is a different machine
+on a retired backend — run that day, it reported FAIL about a worker whose own
+banner said `pb=…railway.app`. A wrong-machine verdict is worse than UNPROVEN,
+because somebody acts on it.
+
+The Cloudflare container's stdout is not readable from any terminal:
+`wrangler tail anticipy-brain` carries the DO's RPC events and not the
+container's stdout (measured over 150 s with nine live instances: zero lines
+containing "worker up"), `wrangler containers` has no logs command, and the
+Workers Observability telemetry API answers 403 with a developer's OAuth
+token. So the brain writes its boot line to a `worker_status` events row
+instead (brain/worker.py publish_worker_status), refreshed in place every five
+minutes, and this file reads that row from the same backend every other live
+leg reads. `--source railway` keeps the old log path for the Railway worker,
+which is now the thing it is honest about: that worker, not this one.
+
+Three legs, the first two over the running brain's status text (or, with
+`--source railway`, over `railway logs -s worker -n 5000 --json`; flags
+confirmed on railway 5.49.2, lines arrive oldest first):
 
   1  THE BANNER. The newest `worker up ·` line must carry
      `fallback=<name>:<model>`, not `fallback=none` and not nothing.
@@ -48,24 +67,37 @@ Three legs, the first two over `railway logs -s worker -n 5000 --json`
      primary made unreachable the way an outage makes it. One Gemini call,
      well under a cent, and only when a human runs it.
 
-Law 3 is met only when leg 1 passes on the Railway worker AND (leg 2 is
-PROVEN or leg 3 passes against the deployed commit's env). The live
-precondition on the worker is an ops change: GEMINI_API_KEY,
-ANTICIPY_GEMINI_MODEL and ANTICIPY_LLM_ORDER=openrouter,gemini, so the live
-primary does not move and Gemini-direct becomes the backup.
+Law 3 is met only when leg 1 passes on the RUNNING brain AND (leg 2 is PROVEN
+or leg 3 passes against the deployed commit's env). The live precondition is
+an ops change the owner must make, and it is TWO changes, not one
+(audit F32): `wrangler secret put GEMINI_API_KEY` on the anticipy-brain
+Worker, AND `ANTICIPY_LLM_ORDER=openrouter,gemini` reaching the container —
+brain/llm.py's default order is ("gemini", "openrouter"), so the secret ALONE
+silently promotes Gemini to primary and demotes the configured
+deepseek model to fallback. As of 2026-09-05 that variable is in neither
+wrangler.brain.jsonc's vars nor the DO's FORWARD_KEYS, so it cannot reach the
+container yet: adding the secret first would move production's model.
+
+A stale or absent status row is UNPROVEN, never PASS and never FAIL. It means
+the container is gone, or is running a build from before the row existed —
+a different fact from "the fallback is broken", and one no verdict about the
+gateway may be built on.
 
 WHY THIS IS NOT A LAW 1 VIOLATION: every count here is over the worker's
 own structured log lines — a banner, a tally, a gateway provenance line —
 never over the words of a transcript. The one line family that carries
 speech (`heard: … holding the line`) is COUNTED and never printed.
 
-Read-only against Railway. Exit code is the verdict:
+Read-only against the backend (and against Railway with --source railway).
+Exit code is the verdict:
 
     0   PROVEN
     1   FAIL
-    2   UNPROVEN — logs unreadable, no banner, or nothing to measure
+    2   UNPROVEN — the row/logs could not be read, the status is stale, there
+        is no banner, or there was nothing to measure
 
     python3 overnight/is_the_gateway_live.py
+    python3 overnight/is_the_gateway_live.py --source railway
     python3 overnight/is_the_gateway_live.py --probe
     python3 overnight/is_the_gateway_live.py --self-test
 """
@@ -87,9 +119,21 @@ import _env  # noqa: E402  sibling module; gates are run as scripts
 # below are imported by tests/test_gateway_fallthrough.py, and a test process
 # must never pick up production credentials as a side effect of a collection.
 
+import datetime as dt  # noqa: E402
+
+import requests  # noqa: E402
+
 OK, BAD, INFO = "PASS", "FAIL", "...."
 SERVICE = "worker"
 LINES = 5000
+
+# Where the running brain writes the line its log cannot carry.
+STATUS_KIND = "worker_status"
+# brain/worker.py refreshes the row every WORKER_STATUS_REFRESH_SECONDS (300).
+# Three missed refreshes is not a blip: it is a container that is gone, or one
+# running a build from before the row existed. Either way nothing about the
+# gateway can be read off it, so the verdict is UNPROVEN and says which.
+STATUS_STALE_SECONDS = 900
 
 TALLY_KEYS = ("primary_ok", "rescued", "skipped", "reissued", "both_dead")
 _TALLY_RE = re.compile(r"llm: gateway tally "
@@ -129,6 +173,80 @@ def fetch_messages(lines: int = LINES, service: str = SERVICE):
             continue
         out.append(str(row.get("message", "")) if isinstance(row, dict) else str(row))
     return out
+
+
+def backend_url() -> str:
+    return (os.environ.get("ANTICIPY_PB")
+            or os.environ.get("ANTICIPY_BACKEND_URL")
+            or "https://api.anticipy.ai").rstrip("/")
+
+
+def fetch_status_rows(pb: str = ""):
+    """The status rows the running brains refresh, newest first, or None when
+    they could not be read — which is a different fact from "there are none"."""
+    pb = pb or backend_url()
+    headers = {"X-Anticipy-Worker": "1"}
+    token = os.environ.get("ANTICIPY_SERVICE_TOKEN")
+    if token:
+        headers["X-Anticipy-Token"] = token
+    try:
+        r = requests.get(f"{pb}/api/collections/events/records",
+                         headers=headers, timeout=30,
+                         params={"perPage": 20, "sort": "-updated",
+                                 "filter": f'kind="{STATUS_KIND}"',
+                                 "fields": "text,updated,owner_ref"})
+        if r.status_code != 200:
+            return None
+        return list((r.json() or {}).get("items", []))
+    except Exception:
+        return None
+
+
+def _age_seconds(stamp: str, now: dt.datetime) -> float | None:
+    if not stamp:
+        return None
+    v = str(stamp).replace("Z", "+00:00").replace(" ", "T", 1)
+    try:
+        when = dt.datetime.fromisoformat(v)
+    except ValueError:
+        return None
+    if not when.tzinfo:
+        when = when.replace(tzinfo=dt.timezone.utc)
+    return (now - when).total_seconds()
+
+
+def status_verdict(rows, now=None, stale_after: int = STATUS_STALE_SECONDS):
+    """Which status rows may be graded. (exit_code, status, sentence, texts).
+
+    Pure, so the shapes below are tested without a network. POLARITY: an
+    absent or stale row yields NO texts and exit 2. It can never be a PASS
+    (nothing was proven) and never a FAIL (nothing was measured) — the same
+    rule are_the_ears_live.py keeps for a control it cannot see.
+    """
+    now = now or dt.datetime.now(dt.timezone.utc)
+    if rows is None:
+        return 2, INFO, ("the backend could not be read, so which brain is "
+                         "running is unknown"), []
+    if not rows:
+        return 2, INFO, (f"no `{STATUS_KIND}` row on this backend — no brain "
+                         "has written one, so either none is running or the "
+                         "running one predates the row (audit F34)"), []
+    fresh, ages = [], []
+    for row in rows:
+        age = _age_seconds(str(row.get("updated") or ""), now)
+        if age is None:
+            continue
+        ages.append(age)
+        if age <= stale_after:
+            fresh.append(str(row.get("text") or ""))
+    if not fresh:
+        youngest = min(ages) if ages else float("nan")
+        return 2, INFO, (f"every {STATUS_KIND} row is stale (newest "
+                         f"{youngest / 60:.0f} min old, refresh is "
+                         f"{stale_after // 60} min): the container is gone or "
+                         "is running a build from before the row existed"), []
+    return 0, INFO, (f"{len(fresh)} brain(s) refreshed their status inside "
+                     f"{stale_after // 60} min"), fresh
 
 
 def banner_verdict(messages) -> tuple:
@@ -264,8 +382,22 @@ def self_test() -> int:
         ([_tally(primary_ok=9), "llm: gateway openrouter truncated -> reissuing on gemini",
           _tally(primary_ok=1)], 2, "a reissue with no outcome is the primary's own reply"),
     ]
+    status_cases = [
+        (None, 2, "backend unreadable: not a verdict about the gateway"),
+        ([], 2, "no status row: nothing is running, or it predates F34"),
+        ([{"text": "worker up · primary=a:b fallback=c:d",
+           "updated": "2026-09-05 10:00:00.000Z"}], 2, "one hour stale"),
+        ([{"text": "worker up · primary=a:b fallback=c:d",
+           "updated": "2026-09-05 10:55:00.000Z"}], 0, "refreshed five minutes ago"),
+    ]
     bad = 0
     print("\n  SELF-TEST — the verdicts against log shapes the worker can produce")
+    pinned_now = dt.datetime(2026, 9, 5, 11, 0, tzinfo=dt.timezone.utc)
+    for rows, expected, why in status_cases:
+        code = status_verdict(rows, now=pinned_now)[0]
+        ok = code == expected
+        bad += 0 if ok else 1
+        print(f"  [{'PASS' if ok else 'FAIL'}] status -> exit {code} (want {expected})   {why}")
     print("  " + "-" * 76)
     for messages, expected, why in banner_cases:
         code, _, _ = banner_verdict(messages)
@@ -278,7 +410,7 @@ def self_test() -> int:
         bad += 0 if ok else 1
         print(f"  [{'PASS' if ok else 'FAIL'}] tally  -> exit {code} (want {expected})   {why}")
     print("  " + "-" * 76)
-    total = len(banner_cases) + len(tally_cases)
+    total = len(banner_cases) + len(tally_cases) + len(status_cases)
     print(f"  {total - bad}/{total} cases correct\n")
     return 1 if bad else 0
 
@@ -289,6 +421,11 @@ def main() -> int:
                     help="log lines to read from the worker (default 5000)")
     ap.add_argument("--service", default=SERVICE,
                     help="the Railway service name (default worker)")
+    ap.add_argument("--source", choices=("cloudflare", "railway"),
+                    default="cloudflare",
+                    help="which brain to grade: the Cloudflare container via "
+                         "its status row (default), or the Railway worker via "
+                         "its logs")
     ap.add_argument("--probe", action="store_true",
                     help="also make ONE real call with the primary made unreachable")
     ap.add_argument("--self-test", action="store_true",
@@ -299,13 +436,26 @@ def main() -> int:
 
     _env.load_and_announce(ROOT)
     rows = []
-    messages = fetch_messages(args.lines, args.service)
+    if args.source == "railway":
+        where = f"railway service `{args.service}`"
+        messages = fetch_messages(args.lines, args.service)
+        if messages is None:
+            rows.append((INFO, "railway logs", "could not be read — not logged "
+                         "in, no linked project, or the CLI is missing"))
+        else:
+            rows.append((INFO, f"log lines read from `{args.service}`",
+                         str(len(messages))))
+    else:
+        where = backend_url()
+        code0, status0, detail0, messages = status_verdict(
+            fetch_status_rows(where))
+        rows.append((status0, f"0 THE RUNNING BRAIN", detail0))
+        if code0 != 0:
+            messages = None
+
     if messages is None:
-        rows.append((INFO, "railway logs", "could not be read — not logged in, "
-                     "no linked project, or the CLI is missing"))
         code1 = code2 = 2
     else:
-        rows.append((INFO, f"log lines read from `{args.service}`", str(len(messages))))
         code1, status1, detail1 = banner_verdict(messages)
         rows.append((status1, "1 THE BANNER", detail1))
         code2, status2, detail2 = tally_verdict(messages)
@@ -324,7 +474,7 @@ def main() -> int:
         final = 2
 
     width = max(len(r[1]) for r in rows) + 2
-    print("\n  IS THE GATEWAY LIVE?   railway service `%s`" % args.service)
+    print(f"\n  IS THE GATEWAY LIVE?   {where}")
     print("  " + "-" * (width + 34))
     for status, name, detail in rows:
         print(f"  [{status}] {name.ljust(width)} {detail}")
@@ -332,9 +482,12 @@ def main() -> int:
     if final == 1:
         print("  THE FALLBACK IS NOT CARRYING HER. See the red row above.\n")
     elif final == 2:
-        print("  UNPROVEN — a leg that cannot be tested does not pass. Leg 1 must "
-              "pass on the\n  Railway worker AND (leg 2 PROVEN or --probe passing "
-              "against the deployed env).\n")
+        print("  UNPROVEN — a leg that cannot be tested does not pass. Leg 1 "
+              "must pass on the\n  RUNNING brain AND (leg 2 PROVEN or --probe "
+              "passing against the deployed env).\n"
+              "  If leg 0 is the red one, the brain is not writing its status "
+              "row: deploy a\n  build carrying publish_worker_status (audit "
+              "F34) before reading anything below it.\n")
     else:
         print("  THE SECOND CREDENTIAL CARRIES HER WHEN THE FIRST MACHINE IS ABSENT\n")
     return final

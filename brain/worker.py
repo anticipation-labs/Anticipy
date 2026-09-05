@@ -4387,6 +4387,34 @@ def report_deafness(anticipy) -> None:
 # call. Counts over the worker's own lines, never over a word anyone said.
 _GATEWAY_TALLY_KEYS = ("primary_ok", "rescued", "skipped", "reissued", "both_dead")
 
+# The same counters, NEVER reset, so the status row can carry a running total
+# for a leg that reads one row instead of a window of log lines. report_gateway
+# still zeroes the per-tick tally; these accumulate what it printed.
+_GATEWAY_TOTALS = dict.fromkeys(_GATEWAY_TALLY_KEYS, 0)
+
+# WHERE THE BOOT LINE LIVES WHEN NOTHING CAN READ THE LOG.  Audit F34.
+#
+# On Railway the banner was a log line and `railway logs` could read it. On
+# Cloudflare the container's stdout goes only to the dashboard: measured
+# 2026-09-05, `wrangler tail anticipy-brain` over 150 s with nine live
+# container instances carried 13 events and NOT ONE line containing "worker
+# up", "sms=" or "gateway tally" — the tail stream holds the DO's own RPC
+# events, not the container's stdout, and `wrangler containers` has no logs
+# command. The Workers Observability telemetry API answers 403 with the
+# wrangler OAuth token on a developer machine. So the one thing Law 3 needs
+# most — which build is running, which transport it holds, which vendor sends
+# its texts — became unreadable from any terminal at the moment production
+# moved.
+#
+# The fix is to write it where every other live leg already reads: one events
+# row per owner, refreshed in place. Not one row per tick — the brain's own
+# rows are the CONTROL half of are_the_ears_live.py, and a row every two
+# seconds would drown that gate's asymmetry test. One row, ever, per owner,
+# PATCHed on a slow beat so its `updated` stamp proves the container is alive
+# now rather than proving it booted once.
+WORKER_STATUS_KIND = "worker_status"
+WORKER_STATUS_REFRESH_SECONDS = 300
+
 
 def gateway_banner(llm) -> str:
     """`primary=<name>:<model> fallback=<name>:<model>|none` for the boot line.
@@ -4421,9 +4449,64 @@ def report_gateway(llm) -> str:
     line = "llm: gateway tally " + " ".join(
         f"{k}={int(tally.get(k) or 0)}" for k in _GATEWAY_TALLY_KEYS)
     for k in _GATEWAY_TALLY_KEYS:
+        # The running total outlives the reset, so the status row can answer
+        # "what has carried her calls since boot" without a log (audit F34).
+        _GATEWAY_TOTALS[k] += int(tally.get(k) or 0)
         tally[k] = 0
     print(line)
     return line
+
+
+def worker_status_line(banner: str) -> str:
+    """The boot banner plus the gateway totals since boot, as one string.
+
+    Deliberately the SAME text the log carries, with the same field names, so
+    overnight/is_the_gateway_live.py runs one set of verdicts over either
+    source: `primary=… fallback=…` for the banner leg, `llm: gateway tally
+    primary_ok=N …` for the behaviour leg.
+    """
+    tally = "llm: gateway tally " + " ".join(
+        f"{k}={int(_GATEWAY_TOTALS.get(k) or 0)}" for k in _GATEWAY_TALLY_KEYS)
+    return f"{banner} · {tally}"
+
+
+def publish_worker_status(banner: str, owner_ref: str = "",
+                          owner_id: str = "") -> bool:
+    """Put the running brain's identity where a terminal can read it.
+
+    ONE row per owner, created once and PATCHed thereafter — addressed by
+    `external_event_id`, the same durable-identity mechanism the job notices
+    use. The row's `updated` stamp is the liveness signal: a leg that finds
+    it stale knows the container is gone or is running a build from before
+    this existed, which is a different fact from "the gateway is broken".
+
+    Best effort, always. A brain that cannot describe itself must still
+    listen: every failure here is logged and swallowed. Returns True when the
+    row was written.
+    """
+    ref = _active_owner_ref(owner_ref)
+    if not ref:
+        return False
+    durable_id = f"worker-status:{ref}"
+    line = worker_status_line(banner)
+    try:
+        existing = _event_by_external_id(durable_id, ref, owner_id,
+                                         kind=WORKER_STATUS_KIND)
+        if existing and existing.get("id"):
+            r = pb.patch(
+                f"{PB}/api/collections/events/records/{existing['id']}",
+                json={"text": line}, timeout=10)
+            if not getattr(r, "ok", False):
+                raise RuntimeError(
+                    f"status refresh returned HTTP {getattr(r, 'status_code', '?')}")
+            return True
+        post_event(WORKER_STATUS_KIND, line, decision="", goal="",
+                   owner_ref=ref, owner_id=owner_id,
+                   external_event_id=durable_id)
+        return True
+    except Exception as exc:  # noqa: BLE001 — never let bookkeeping stop her
+        print(f"worker status row not written (harmless to hearing): {exc}")
+        return False
 
 
 def ask_about_stuck_jobs(anticipy, convo) -> None:
@@ -4756,7 +4839,8 @@ def main() -> None:
     # about a container, not about the code inside it. Twice today that gap
     # mattered. This hashes the source of the two files that decide what she
     # does, so the log proves which build is live instead of implying it.
-    print(f"worker up · llm={'live:' + llm.model if llm.live else 'heuristic'}"
+    boot_banner = (
+          f"worker up · llm={'live:' + llm.model if llm.live else 'heuristic'}"
           # "sms=mock" is load-bearing text, not a nicety: proof/local_rig.sh
           # refuses to continue unless the boot banner says it, and kills a
           # laptop worker that could text a real person. Anything else names
@@ -4777,6 +4861,15 @@ def main() -> None:
           f" · budget={DECISION_DEADLINE_SECONDS}s/{DECISION_CALL_CEILING}calls"
           f"/turn{TURN_HEARING_SECONDS}s"
           f" · brain={_brain_fingerprint()}")
+    print(boot_banner)
+    # AND THE SAME LINE WHERE A TERMINAL CAN READ IT (audit F34). On
+    # Cloudflare this print goes only to a dashboard: no gate, no CLI and no
+    # `wrangler tail` can see it, so "which build is live, holding which
+    # wires, sending through which vendor" — the three questions Law 3 asks
+    # after every deploy — had no answer on the platform that now serves
+    # production. One row, refreshed in place on the slow beat below.
+    publish_worker_status(boot_banner, anticipy.owner_ref, anticipy.owner_id)
+    last_status = time.time()
     # Where his texts land, once, per provider. Twilio's is checked every
     # beat below; Sendblue's lives in a dashboard this process cannot read.
     print(inbound_ear_note(sms_provider))
@@ -5156,6 +5249,17 @@ def main() -> None:
             # denominator without which a dead primary and a healthy one
             # look identical in the log.
             report_gateway(llm)
+
+            # And the same two facts where a terminal can read them, at a
+            # cadence that is nothing next to the 2-second poll: one PATCH
+            # every five minutes. It is a PATCH of one row rather than a new
+            # row precisely because the brain's own rows are the control half
+            # of overnight/are_the_ears_live.py — appending here would tell
+            # that gate the machine was busy on a day nobody spoke.
+            if time.time() - last_status > WORKER_STATUS_REFRESH_SECONDS:
+                last_status = time.time()
+                publish_worker_status(boot_banner, anticipy.owner_ref,
+                                      anticipy.owner_id)
 
             # Nightly, while he sleeps: distill the day's episodes into
             # profile facts (roadmap §1). Incremental and idempotent — a

@@ -465,15 +465,25 @@ def test_the_boot_banner_names_the_primary_and_the_fallback(wires, monkeypatch):
 
 
 def test_the_loop_prints_both():
-    """A tested line main() does not print is a comment."""
+    """A tested line main() does not print is a comment.
+
+    The banner is now built into `boot_banner` before it is printed, because
+    on Cloudflare printing it is not enough to make it readable (audit F34):
+    the same string is also written to the worker_status row. Same two
+    assertions as before, plus the row, at the new anchor.
+    """
     import brain.worker as W
     source = open(W.__file__, encoding="utf-8").read()
-    banner = source[source.index('print(f"worker up ·'):]
+    banner = source[source.index("boot_banner = ("):]
     banner = banner[:banner.index("_brain_fingerprint()")]
     assert "gateway_banner(llm)" in banner
     loop = source[source.index("report_deafness(anticipy)\n"):]
     loop = loop[:loop.index("run_nightly_consolidation(memory)")]
     assert "report_gateway(llm)" in loop
+    # And the CLI-readable copy: written at boot and refreshed on the beat.
+    boot = source[source.index("print(boot_banner)"):]
+    assert "publish_worker_status(boot_banner" in boot[:800]
+    assert "publish_worker_status(boot_banner" in loop
 
 
 # ------------------------------------------------ the live leg's verdicts
