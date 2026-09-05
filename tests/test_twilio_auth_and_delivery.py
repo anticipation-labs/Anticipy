@@ -52,7 +52,14 @@ NUMBER = "+15550001111"
 TWILIO_NAMES = ("TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_PHONE_NUMBER",
                 "TWILIO_FROM", "TWILIO_API_KEY_SID", "TWILIO_API_KEY_SECRET",
                 "TWILIO_API_BASE", "TWILIO_MOCK",
-                "ANTICIPY_TWILIO_WEBHOOK_URL")
+                "ANTICIPY_TWILIO_WEBHOOK_URL",
+                # The other arm's variables and the provider switch: with
+                # SENDBLUE_* inherited, the worker's provider is Sendblue and
+                # the Twilio ear check below skips itself on purpose. These
+                # tests are about Twilio, so Twilio has to be the provider.
+                "SENDBLUE_API_KEY_ID", "SENDBLUE_API_SECRET_KEY",
+                "SENDBLUE_FROM_NUMBER", "SENDBLUE_API_BASE",
+                "ANTICIPY_SMS_PROVIDER", "ANTICIPY_SMS_MOCK")
 
 
 @pytest.fixture(autouse=True)

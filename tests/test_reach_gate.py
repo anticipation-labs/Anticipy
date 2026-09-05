@@ -71,3 +71,94 @@ def test_the_gate_never_reads_a_message_body():
     src = inspect.getsource(reach)
     assert '"body"' not in src and "'body'" not in src
     assert "Body" not in src.replace("PageSize", "")
+
+
+# ------------------------------------------------------------------ Sendblue
+
+def test_sendblue_receipts_are_read_through_the_same_threshold():
+    """Sendblue's rows are reshaped to the one receipt `unreachable` reads, so
+    the floor is applied once and means the same thing on both vendors."""
+    rows = reach.sendblue_rows([
+        {"to_number": "+1555", "status": "ERROR", "error_code": 4001,
+         "is_outbound": True, "date_sent": "2026-09-05T01:00:00Z"}
+        for _ in range(4)])
+    bad = reach.unreachable(rows)
+    assert len(bad) == 1 and bad[0]["to"] == "+1555"
+    assert bad[0]["delivered"] == 0 and bad[0]["errors"] == {"4001": 4}
+
+
+def test_sendblue_statuses_on_the_way_are_never_held_against_a_number():
+    rows = reach.sendblue_rows([{"to_number": "+1555", "status": s, "is_outbound": True}
+                                for s in ("REGISTERED", "PENDING", "QUEUED",
+                                          "ACCEPTED", "SENT")])
+    assert reach.unreachable(rows) == []
+
+
+def test_a_sendblue_delivery_or_read_clears_the_number():
+    rows = reach.sendblue_rows(
+        [{"to_number": "+1555", "status": "DECLINED", "is_outbound": True}] * 5
+        + [{"to_number": "+1555", "status": "READ", "is_outbound": True}])
+    assert reach.unreachable(rows) == []
+
+
+def test_sendblue_inbound_rows_are_not_deliveries_to_anyone():
+    rows = reach.sendblue_rows(
+        [{"to_number": "+1555", "status": "ERROR", "is_outbound": True}] * 5
+        + [{"to_number": "+1555", "status": "RECEIVED", "is_outbound": False}])
+    bad = reach.unreachable(rows)
+    assert len(bad) == 1 and bad[0]["delivered"] == 0
+
+
+def test_the_gate_measures_every_configured_vendor(monkeypatch):
+    """Both vendors configured: both legs run, and the Twilio leg is the same
+    fetch it always was. Neither leg is weakened by the other's existence."""
+    names = [name for name, _c, _f in reach.PROVIDERS]
+    assert names == ["twilio", "sendblue"]
+    for name in ("TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN",
+                 "SENDBLUE_API_KEY_ID", "SENDBLUE_API_SECRET_KEY"):
+        monkeypatch.delenv(name, raising=False)
+    assert not reach.twilio_configured() and not reach.sendblue_configured()
+    monkeypatch.setenv("TWILIO_ACCOUNT_SID", "AC1")
+    monkeypatch.setenv("TWILIO_AUTH_TOKEN", "tok")
+    assert reach.twilio_configured() and not reach.sendblue_configured()
+    monkeypatch.setenv("SENDBLUE_API_KEY_ID", "k")
+    monkeypatch.setenv("SENDBLUE_API_SECRET_KEY", "s")
+    assert reach.sendblue_configured()
+    assert reach.PROVIDERS[0][2] is reach.fetch_outbound
+
+
+def test_the_sendblue_fetch_authenticates_with_headers_and_never_sends(monkeypatch):
+    import json as _json
+    seen: list = []
+
+    class _R:
+        def __init__(self, data):
+            self._data = data
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def read(self):
+            return _json.dumps({"data": self._data}).encode()
+
+    def fake_urlopen(req, timeout=0):
+        seen.append(req)
+        return _R([{"to_number": "+1555", "status": "QUEUED", "is_outbound": True}])
+
+    monkeypatch.setenv("SENDBLUE_API_KEY_ID", "k")
+    monkeypatch.setenv("SENDBLUE_API_SECRET_KEY", "s3cret")
+    monkeypatch.delenv("SENDBLUE_API_BASE", raising=False)
+    monkeypatch.delenv("SENDBLUE_FROM_NUMBER", raising=False)
+    monkeypatch.setattr(reach.urllib.request, "urlopen", fake_urlopen)
+    rows = reach.fetch_outbound_sendblue(limit=50)
+    assert rows == [{"to": "+1555", "status": "queued", "error_code": None,
+                     "direction": "outbound-api", "date_sent": None}]
+    req = seen[0]
+    assert req.get_method() == "GET"
+    assert req.full_url.startswith("https://api.sendblue.com/api/v2/messages?")
+    assert "is_outbound=true" in req.full_url
+    assert req.get_header("Sb-api-key-id") == "k"
+    assert req.get_header("Sb-api-secret-key") == "s3cret"

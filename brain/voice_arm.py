@@ -179,8 +179,32 @@ def rest_credential(env: Optional[Mapping[str, str]] = None) -> Credential:
         "(preferred — scoped and revocable) or TWILIO_AUTH_TOKEN"))
 
 
+# The two names that muzzle every outbound arm. TWILIO_MOCK is the original
+# and stays honoured forever (it sits in .env.local and in proof/local_rig.sh);
+# ANTICIPY_SMS_MOCK is the provider-neutral spelling added with the Sendblue
+# arm, because a switch named after one vendor reads as "Twilio only" to the
+# operator who has just switched vendors — and that operator is texting a real
+# person from a laptop the moment the muzzle he set is not the one being read.
+MUZZLE_ENV = ("ANTICIPY_SMS_MOCK", "TWILIO_MOCK")
+
+
+def muzzle_flag(env: Optional[Mapping[str, str]] = None) -> str:
+    """The NAME of the muzzle that is set on this process, or "" if none is.
+
+    Named rather than boolean so a refusal can say which switch it obeyed:
+    "TWILIO_MOCK is set" sends the operator to the right variable, and a
+    refusal that cannot name its reason is the kind that gets worked around.
+    """
+    env = os.environ if env is None else env
+    for name in MUZZLE_ENV:
+        if (env.get(name) or "").strip().lower() in ("1", "true", "yes", "on"):
+            return name
+    return ""
+
+
 def muzzled(env: Optional[Mapping[str, str]] = None) -> bool:
-    """Has this deployment been told to send nothing? TWILIO_MOCK.
+    """Has this deployment been told to send nothing? TWILIO_MOCK or
+    ANTICIPY_SMS_MOCK — either is enough, and both arms read the same answer.
 
     The switch is not new: TWILIO_MOCK=true is what silenced two services that
     were texting the owner test traffic, and it sits in .env.local today. What
@@ -188,13 +212,11 @@ def muzzled(env: Optional[Mapping[str, str]] = None) -> bool:
     it to stop a process from texting got real texts and a false sense of
     safety, which is the worst possible outcome for a switch whose entire
     purpose is to be trusted. It is read in exactly two places, both here: the
-    worker's live/mock decision (`has_credentials`) and the send guard
-    (`_rig_reason`), so a muzzled process cannot text even if a caller builds a
-    VoiceArm by hand.
+    worker's live/mock decision (`has_credentials`, and its twin in
+    brain/sendblue_arm.py) and the send guard (`_rig_reason`), so a muzzled
+    process cannot text even if a caller builds an arm by hand.
     """
-    env = os.environ if env is None else env
-    return (env.get("TWILIO_MOCK") or "").strip().lower() in (
-        "1", "true", "yes", "on")
+    return bool(muzzle_flag(env))
 
 
 def has_credentials(env: Optional[Mapping[str, str]] = None) -> bool:
@@ -298,15 +320,15 @@ def _cannot_reach_a_phone() -> str:
     return ""
 
 
-def _rig_reason() -> str:
+def _rig_reason(cannot_reach_a_phone: Callable[[], str] = _cannot_reach_a_phone) -> str:
     """Why this process must not reach a real phone, or "" if it may.
 
     Credentials in the environment are not permission. A shell export outlives
     the terminal it was typed in, and the configurations below are the ones
     that are demonstrably NOT a worker that may text the owner:
 
-    - TWILIO_MOCK says so out loud. First, and ahead of every exemption, so
-      that setting it is always enough (see `muzzled`).
+    - TWILIO_MOCK / ANTICIPY_SMS_MOCK says so out loud. First, and ahead of
+      every exemption, so that setting it is always enough (see `muzzled`).
     - pytest is running. A test that texts the owner is a bug with a receipt.
     - the backend is on this machine. proof/local_rig.sh exists precisely
       because a laptop worker holding production credentials did real damage on
@@ -315,10 +337,19 @@ def _rig_reason() -> str:
 
     ANTICIPY_PB's default matches brain/worker.py:38, so an unset backend URL
     is a local rig here for the same reason it is one there.
+
+    `cannot_reach_a_phone` is the ONE thing that differs between arms: the
+    physical-impossibility exemption reads the arm's OWN wire (TWILIO_API_BASE
+    here, SENDBLUE_API_BASE in brain/sendblue_arm.py). It is a parameter rather
+    than a shared check so that pointing one vendor's base at loopback can
+    never exempt a send that goes to the other vendor's real API. Everything
+    else — the muzzle, pytest, the local backend, and their ORDER — is this one
+    function, read by both arms, so there is exactly one place to forget it.
     """
-    if muzzled():
-        return "TWILIO_MOCK is set on this process"
-    if _cannot_reach_a_phone():
+    flag = muzzle_flag()
+    if flag:
+        return f"{flag} is set on this process"
+    if cannot_reach_a_phone():
         return ""
     if os.environ.get("PYTEST_CURRENT_TEST") or "pytest" in sys.modules:
         return "pytest is running in this process"

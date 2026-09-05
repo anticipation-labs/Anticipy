@@ -107,10 +107,13 @@ def start_worker(lane: dict, key: str, model: str, log: str):
     # repointed the owner's live number at 127.0.0.1.
     for gone in ("BRAVE_API_KEY", "GEMINI_API_KEY", "ANTICIPY_SERVICE_TOKEN",
                  "TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_PHONE_NUMBER",
-                 "TWILIO_FROM", "TWILIO_API_KEY_SID", "TWILIO_API_KEY_SECRET"):
+                 "TWILIO_FROM", "TWILIO_API_KEY_SID", "TWILIO_API_KEY_SECRET",
+                 "SENDBLUE_API_KEY_ID", "SENDBLUE_API_SECRET_KEY",
+                 "SENDBLUE_FROM_NUMBER", "ANTICIPY_SMS_PROVIDER"):
         env.pop(gone, None)
     env.update({
         "TWILIO_MOCK": "true",
+        "ANTICIPY_SMS_MOCK": "true",
         "ANTICIPY_PB": "http://127.0.0.1:8090",
         "ANTICIPY_OWNER_REF": lane["owner_ref"],
         "ANTICIPY_OWNER_ID": lane["owner_id"],

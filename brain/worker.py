@@ -32,7 +32,9 @@ from .evidence import picture_for_done_text
 from .memory import Memory
 from . import sorter
 from .segmenter import SegmentStore, parse_ts, place_turn
-from .conversation import Conversation, MockTransport, TwilioTransport
+from .conversation import (Conversation, MockTransport, MessageTransport,
+                           TwilioTransport)  # noqa: F401  TwilioTransport is the name tests pin
+from . import sendblue_arm
 from .llm import (LLM, TZ as TZ_FALLBACK, DECISION_CALL_CEILING,
                   DECISION_DEADLINE_SECONDS, budget_spent_last)
 from .voice_arm import VoiceArm, has_credentials, rest_credential
@@ -928,7 +930,55 @@ def webhook_target() -> tuple[str, str]:
     return ours, ""
 
 
+SENDBLUE_INBOUND_PATH = "/sms/sendblue"
+
+
+def inbound_ear_note(provider: str) -> str:
+    """The one startup line about where the owner's texts land, per provider.
+
+    Twilio's binding is READ AND WRITTEN by `ensure_inbound_webhook` every
+    beat, because the number really was repointed at a stranger's app once
+    and nothing said so. Sendblue exposes no per-number binding to this
+    process: its inbound webhook is configured in the dashboard
+    (Developer → Webhooks), so the most this worker can do is say, once,
+    where it has to point — derived from ANTICIPY_PB for the same reason the
+    Twilio target is, so two services cannot disagree about it.
+    """
+    if provider == "sendblue":
+        return (f"inbound texts: Sendblue's webhook is configured in its "
+                f"dashboard (Developer → Webhooks), not by this worker; it "
+                f"must point at {PB.rstrip('/')}{SENDBLUE_INBOUND_PATH}")
+    if provider == "twilio":
+        return "inbound texts: Twilio's binding is checked every beat"
+    return "inbound texts: no message provider, nothing to point anywhere"
+
+
+def sms_banner(provider: str, arm) -> str:
+    """The `sms=` field of the `worker up` line.
+
+    `sms=mock` is load-bearing text: proof/local_rig.sh refuses to continue
+    unless the boot banner says it, because a laptop worker that can text a
+    real person is the 2026-08-19 incident waiting to repeat. The Sendblue
+    form carries the key id's tail — never the secret — so a log can say
+    WHICH key a deploy is texting with.
+    """
+    if provider == "sendblue":
+        return f"sendblue:{sendblue_arm.key_tail(getattr(arm, 'key_id', ''))}"
+    if provider == "twilio":
+        return "twilio"
+    return "mock"
+
+
 def ensure_inbound_webhook() -> None:
+    # TWILIO'S EAR, AND ONLY TWILIO'S. Everything below reads and rewrites the
+    # inbound binding of a Twilio number; a deployment texting through
+    # Sendblue has no business touching it, even when TWILIO_* is still in
+    # its environment from before the switch. Silent on purpose: this runs
+    # every beat from the worker and the supervisor alike, and the one line
+    # about where Sendblue's webhook lives is printed once at startup
+    # (`inbound_ear_note`).
+    if sendblue_arm.choose_provider() != "twilio":
+        return
     sid = os.environ.get("TWILIO_ACCOUNT_SID")
     number = os.environ.get("TWILIO_PHONE_NUMBER") or os.environ.get("TWILIO_FROM")
     # Reading the number's configuration is a REST call like any other, so it
@@ -4554,19 +4604,48 @@ def main() -> None:
                         owner_phone=("" if os.environ.get("ANTICIPY_SUPERVISED") == "1"
                                      else os.environ.get("ANTICIPY_OWNER_PHONE", "owner")),
                         owner_id=legacy_owner, owner_ref=owner_ref)
-    # Live texting when Twilio credentials are present; mock otherwise. The
-    # credential may be an API key OR the auth token, so the gate asks the one
-    # place that knows (brain/voice_arm.py `has_credentials`) instead of listing
-    # variable names here and drifting from it.
-    live_sms = has_credentials()
-    voice = VoiceArm() if live_sms else None
-    if voice:
+    # WHAT WAS HERE UNTIL 2026-09-05, Sendblue arm: `live_sms =
+    # has_credentials(); voice = VoiceArm() if live_sms else None; transport =
+    # TwilioTransport(voice, ...) if voice else MockTransport()`, and the
+    # banner said `sms=live`. One vendor, so "configured" and "which" were
+    # the same question. They are not any more.
+    #
+    # WHICH ARM TEXTS is decided once, by brain/sendblue_arm.py
+    # `choose_provider` — the same rule the reach gate reads — so the banner,
+    # the transport and the measurement can never name different vendors.
+    # Sendblue when its three variables are set, else Twilio when its
+    # credentials are (an API key OR the auth token: brain/voice_arm.py
+    # `has_credentials` is the one place that knows), else mock. A provider
+    # NAMED in ANTICIPY_SMS_PROVIDER but not configured is mock, never the
+    # other vendor, and says so here where the operator is looking.
+    sms_provider = sendblue_arm.choose_provider()
+    asked = (os.environ.get("ANTICIPY_SMS_PROVIDER") or "").strip().lower()
+    if asked and sms_provider == "mock":
+        print(f"ANTICIPY_SMS_PROVIDER={asked!r} but that provider is not "
+              f"configured on this process — texting is MOCK, not the other "
+              f"vendor. Set its credentials or unset the variable.")
+    # The Twilio arm is ALSO the calling arm, so it is built whenever Twilio
+    # is configured, whatever texts ride on. Calls stay on Twilio; Sendblue
+    # does not dial.
+    voice = VoiceArm() if has_credentials() else None
+    if sms_provider == "sendblue":
+        arm = sendblue_arm.SendblueArm()
+    elif sms_provider == "twilio":
+        arm = voice
+    else:
+        arm = None
+    # notify_owner's direct `.text` fallback (brain/anticipy_core.py) must
+    # reach the SAME channel the conversation does, or a text that missed the
+    # conversational lane would go out through the vendor that was retired.
+    if arm is not None:
+        anticipy.voice = arm
+    elif voice:
         anticipy.voice = voice
-    transport = (TwilioTransport(
-        voice,
+    transport = (MessageTransport(
+        arm,
         before_send=lambda destination: canonical_phone_allows_effect(
             anticipy, destination),
-    ) if voice else MockTransport())
+    ) if arm else MockTransport())
     convo = Conversation(anticipy, transport=transport)
     anticipy.conversation = convo
     # This is deliberately installed after every transport is attached and
@@ -4602,13 +4681,15 @@ def main() -> None:
     # mattered. This hashes the source of the two files that decide what she
     # does, so the log proves which build is live instead of implying it.
     print(f"worker up · llm={'live:' + llm.model if llm.live else 'heuristic'}"
-          # "sms=live" is load-bearing text, not a nicety: proof/local_rig.sh:180
-          # greps for it and kills a laptop worker that has live credentials. The
-          # credential goes in its own field so that assertion keeps matching —
-          # after a key is minted, the only way to know whether outbound really
-          # moved off the full-access auth token is to read it off the process.
-          f" · sms={'live' if live_sms else 'mock'}"
-          f"{' · auth=' + voice.credential if voice else ''} · pb={PB}"
+          # "sms=mock" is load-bearing text, not a nicety: proof/local_rig.sh
+          # refuses to continue unless the boot banner says it, and kills a
+          # laptop worker that could text a real person. Anything else names
+          # the vendor (`sms=twilio`, `sms=sendblue:…1234`). The credential
+          # goes in its own field — after a key is minted, the only way to
+          # know whether outbound really moved off the full-access auth token
+          # is to read it off the process.
+          f" · sms={sms_banner(sms_provider, arm)}"
+          f"{' · auth=' + arm.credential if arm else ''} · pb={PB}"
           f" · where={llm.owner_zone or 'server-default:' + str(TZ_FALLBACK)}"
           f" · who={llm.owner_name or 'unknown'}"
           # Which wire is primary and which is the fallback — the one line
@@ -4620,6 +4701,9 @@ def main() -> None:
           f" · budget={DECISION_DEADLINE_SECONDS}s/{DECISION_CALL_CEILING}calls"
           f"/turn{TURN_HEARING_SECONDS}s"
           f" · brain={_brain_fingerprint()}")
+    # Where his texts land, once, per provider. Twilio's is checked every
+    # beat below; Sendblue's lives in a dashboard this process cannot read.
+    print(inbound_ear_note(sms_provider))
     if not anticipy.owner_id:
         # Paired extensions only claim their owner's jobs, so unstamped jobs
         # would sit queued forever with nothing reporting a problem.
