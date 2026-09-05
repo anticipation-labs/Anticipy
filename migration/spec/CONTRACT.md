@@ -45,7 +45,7 @@ and no route accepts more than the ones named in its own row.
 | **internal key** | `X-Internal-Key: <ANTICIPY_INTERNAL_KEY>` | the HQ team, shared | every `/internal/*` route |
 | **HQ session** | `X-HQ-Session: <64 hex>` | one signed-in teammate | every living `/internal/*` route |
 | **Clerk JWT** | request body `token`, HS256 under `CLERK_HQ_JWT_KEY` | anyone Clerk signed in | `internal_hq.pb.js:3400` only |
-| *(none)* | — | anybody | the pairing bootstrap, `/agent/register`, `/auth/reset/*`, `/sms/inbound`, `/internal/cal/{token}`, `/internal/health`, `/fellows/hq` |
+| *(none)* | — | anybody | the pairing bootstrap, `/agent/register`, `/auth/reset/*`, `/sms/inbound`, `/sms/sendblue` (Worker-only, §6.12a), `/internal/cal/{token}`, `/internal/health`, `/fellows/hq` |
 
 Two additional lease-shaped things are **not** credentials but are checked like
 one: `X-Anticipy-Lease` (`workflow_guard.pb.js:193`) and the `X-Anticipy-Worker`
@@ -1872,7 +1872,74 @@ throw — but `findFirstRecordByFilter` *throws* when nothing matches, so
 `findRecordsByFilter(...).length` idiom must invert the condition, not copy the
 shape.
 
+**Port note (Cloudflare line, 2026-09-05):** the Worker does not pre-read
+`external_event_id` at all. The row is written through the records API's own
+`create()` (`migration/workers/src/pb/sender.ts`), and a UNIQUE collision on
+`idx_events_external_event` is the duplicate signal, so the inversion hazard
+above does not arise and two concurrent retries cannot both win. One
+consequence of the ordering: a retried `MessageSid` whose sender now resolves
+to nobody is logged as dropped rather than "already handled" — both are 200
+with the same TwiML. Rule 5 is applied as the oracle applies it: an absent
+`To` is not the number. The resolution and the row are shared with §6.12a.
+
 **Side effects:** at most one `events` row; several `console.log` lines.
+
+### 6.12a `POST /sms/sendblue` — Sendblue shared secret, unauthenticated otherwise
+
+**Worker-only.** PocketBase never had this route and it is not one of the 55
+`routerAdd` registrations §10 counts; it exists because inbound texting moved
+to Sendblue (iMessage + SMS) on the Cloudflare line.
+`migration/workers/src/routes/sendblue.ts`; the owner-resolution and
+event-write half is `src/pb/sender.ts`, SHARED with §6.12 so both carriers
+land the identical row and the brain (`brain/worker.py handle_inbound`, which
+polls `kind="sms_reply"`) cannot tell them apart.
+
+Sendblue (docs.sendblue.com, read 2026-09-05) posts `application/json` to one
+dashboard-configured URL (Developer → Webhooks) for inbound messages AND for
+status updates on texts we sent, and proves itself by sending the dashboard's
+secret verbatim in the `sb-signing-secret` header — a shared secret compared
+directly, not an HMAC. It retries up to three times on a 5xx, 45 s apart, and
+wants a 2xx.
+
+| # | condition | response |
+|---|---|---|
+| 1 | `SENDBLUE_WEBHOOK_SECRET` unset | `503` text `sendblue webhook is not configured` |
+| 2 | `sb-signing-secret` absent, or ≠ the secret (constant-time) | `403` text `forbidden` |
+| 3 | body is not a JSON object | `400 {"ok":false,"error":"body must be a JSON object"}` |
+| 4 | `is_outbound` true — a status update (SENT / DELIVERED / ERROR …) | `200 {"ok":true,"ignored":"status update"}` |
+| 5 | `SENDBLUE_FROM_NUMBER` set and the payload names no number, or names one (`to_number`, `sendblue_number`) that is not it | `403` text `forbidden` |
+| 6 | `group_id` non-empty, or more than two `participants` | `200 {"ok":true,"ignored":"group message"}` |
+| 7 | `message_handle` empty | `400 {"ok":false,"error":"message_handle is required"}` |
+| 8 | `from_number` (fallback `number`) or `content` empty — a media-only message included | `200 {"ok":true,"dropped":"empty content"}` |
+| 9 | phone ownership could not be fully verified | `500` text `temporary routing failure` |
+| 10 | 0 matches | `200 {"ok":true,"dropped":"no owner"}` |
+| 11 | >1 match | `200 {"ok":true,"dropped":"ambiguous sender"}` |
+| 12 | `events.external_event_id` already holds this `message_handle` | `200 {"ok":true,"ignored":"already handled"}` |
+| 13 | the write fails for any other reason | `500 {"ok":false,"error":"could not persist the message"}` |
+| 14 | otherwise | `200 {"ok":true}` |
+
+Owner resolution is §6.12's, step for step (`resolveSenderWith` in
+`src/pb/sender.ts`, pinned by `migration/workers/test/sender.test.ts`: one
+profile match; a stale profile whose current row lost the number; the
+`owners.phone` seed only for an account with no profile; two owners →
+ambiguous; a thrown read → unknown, never nobody). The event row is §6.12's:
+`device_id="sms"`, `kind="sms_reply"`, `text=<trimmed content>`,
+`decision=""`, `goal=<from_number>`, `owner_ref=<the single match>`,
+`external_event_id=<message_handle>`, written through the records API's own
+`create()` so `fillEmpties` and the unique-collision mapping apply.
+
+Every non-event outcome logs `sms/sendblue <status> …` with the
+`message_handle` and the last six digits of the number — never the content.
+A media-only message is dropped rather than written with an empty `text`: no
+`events` column carries `media_url`, the brain marks an empty-text reply
+`ignore` (`brain/worker.py handle_inbound`) so the row would exist only to be
+ignored, and Twilio's MMS-without-Body is dropped at §6.12 for the same reason.
+
+**Side effects:** at most one `events` row; `console.log` lines.
+
+**Proof:** `migration/spec/contract_tests.py::TestSendblueInbound` and the
+write half of `TestSmsInbound`, run against a real workerd by
+`migration/workers/scripts/sms_contract_local.sh` (`npm run test:sms-wire`).
 
 ### 6.13 `POST /transcription/token` — account token, permanently refusing
 
@@ -2060,6 +2127,11 @@ current behaviour; do not "fix" it silently.
 `channels.email` = `RESEND_API_KEY` present.
 `channels.sms` = `TWILIO_ACCOUNT_SID` **and** `TWILIO_AUTH_TOKEN` **and**
 (`TWILIO_PHONE_NUMBER` or `TWILIO_FROM`).
+**Cloudflare line, 2026-09-05:** `channels.sms` = `chooseProvider(env) !== "none"`
+(`migration/workers/src/messaging.ts`) — Sendblue when `SENDBLUE_API_KEY_ID`,
+`SENDBLUE_API_SECRET_KEY` and `SENDBLUE_FROM_NUMBER` are all bound, else Twilio
+as above, or whichever `ANTICIPY_SMS_PROVIDER` names. One derivation for the
+dot and for the texts themselves, so the two cannot disagree.
 
 **Derived from env presence, never from a literal** (`:22-30`). The Settings
 screen used to draw "Connected" from hardcoded strings — a surface reporting the
@@ -3038,6 +3110,9 @@ Do not "fix" these during the port; the conformance suite pins them.
   every failure.
 * `/sms/inbound` returns **200 with empty TwiML** for a dropped message and
   **500** for an uncertain one, because 500 is what makes Twilio retry.
+* `/sms/sendblue` (Worker-only, §6.12a) likewise returns **200 with `ok:true`**
+  for a dropped or ignored message and **500** for an uncertain one, because
+  500 is what makes Sendblue retry (three times, 45 s apart).
 * `/api/files/*` returns **404 with one sentence** for all four public-door
   refusals.
 * The pair-code lookup returns **`e.next()`** (an empty PocketBase list) for a

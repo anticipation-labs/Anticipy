@@ -54,6 +54,20 @@ ENVIRONMENT
     ANTICIPY_TEST_OWNER_REF         an owners id (defaults to the signed-in one)
     ANTICIPY_ALLOW_DESTRUCTIVE=1    unlocks the destructive tests
     ANTICIPY_HTTP_TIMEOUT           seconds, default 30
+    ANTICIPY_LOCAL_WRANGLER_CONFIG  wrangler.jsonc of a LOCAL Worker; unlocks
+                                    the D1 reads (the meter, the events row)
+    ANTICIPY_TEST_SENDBLUE_SECRET   )  /sms/sendblue past its front door
+    ANTICIPY_TEST_SENDBLUE_NUMBER   )  (the Worker's SENDBLUE_FROM_NUMBER)
+    ANTICIPY_TEST_TWILIO_AUTH_TOKEN )  /sms/inbound past its front door --
+    ANTICIPY_TEST_TWILIO_ACCOUNT_SID)  the suite signs the form itself
+    ANTICIPY_TEST_TWILIO_NUMBER     )
+    ANTICIPY_TEST_SMS_OWNER_PHONE   )  a SEEDED owner an inbound text resolves
+    ANTICIPY_TEST_SMS_OWNER_REF     )  to -- never a real person's number
+    ANTICIPY_TEST_SMS_AMBIGUOUS_PHONE  a number two seeded owners share
+    ANTICIPY_TEST_SMS_UNCONFIGURED_URL a Worker with NO Sendblue secret at all
+                                    (the "unset is a 503, not a 403" leg)
+    migration/workers/scripts/sms_contract_local.sh sets all of the SMS ones
+    against a real workerd and a scratch D1.
 
 MARKERS
 -------
@@ -72,8 +86,10 @@ pytest.ini (that one sets `testpaths = tests` for the product suite).
 Run `-m anonymous` first against anything new: it carries the fail-open alarm.
 """
 
+import base64
 import datetime
 import hashlib
+import hmac
 import json
 import os
 import random
@@ -3072,6 +3088,127 @@ class TestServiceRoutes(object):
             "§6.13: the refusal must not name the vendor")
 
 
+# --------------------------------------------------------------------------
+# §6.12 / §6.12a on the wire -- an inbound text lands, whichever carrier
+# brought it.  Unlocked tier by tier, so a partial run reads as "you did not
+# give me X" and never as "inbound is broken":
+#
+#   nothing                              the refusals, any backend
+#   ANTICIPY_TEST_SENDBLUE_SECRET        past Sendblue's front door
+#   ANTICIPY_TEST_TWILIO_AUTH_TOKEN      past Twilio's (the suite signs)
+#   ANTICIPY_TEST_SMS_OWNER_PHONE/_REF   a seeded owner the text resolves to
+#   ANTICIPY_LOCAL_WRANGLER_CONFIG       the events row, read out of D1
+#   ANTICIPY_TEST_SMS_UNCONFIGURED_URL   a Worker with NO Sendblue secret
+#
+# migration/workers/scripts/sms_contract_local.sh sets all of them against a
+# real workerd.  NEVER point the write tests at production with a real
+# owner's number: they land rows the brain reads as that owner's replies.
+# --------------------------------------------------------------------------
+
+SMS_UNCONFIGURED_URL = (os.environ.get("ANTICIPY_TEST_SMS_UNCONFIGURED_URL") or "").rstrip("/")
+SENDBLUE_SECRET = os.environ.get("ANTICIPY_TEST_SENDBLUE_SECRET") or ""
+SENDBLUE_NUMBER = os.environ.get("ANTICIPY_TEST_SENDBLUE_NUMBER") or ""
+SMS_OWNER_REF = os.environ.get("ANTICIPY_TEST_SMS_OWNER_REF") or ""
+SMS_OWNER_PHONE = os.environ.get("ANTICIPY_TEST_SMS_OWNER_PHONE") or ""
+SMS_AMBIGUOUS_PHONE = os.environ.get("ANTICIPY_TEST_SMS_AMBIGUOUS_PHONE") or ""
+TWILIO_TEST_AUTH_TOKEN = os.environ.get("ANTICIPY_TEST_TWILIO_AUTH_TOKEN") or ""
+TWILIO_TEST_ACCOUNT_SID = os.environ.get("ANTICIPY_TEST_TWILIO_ACCOUNT_SID") or ""
+TWILIO_TEST_NUMBER = os.environ.get("ANTICIPY_TEST_TWILIO_NUMBER") or ""
+
+# A number no seeded row carries.  555-01xx is reserved for fiction.
+SMS_NOBODY = "+15550199999"
+
+# The columns the oracle writes (sms.pb.js:280-288), read back for the row
+# assertions; `created`/`updated` are the autodates the Worker fills.
+SMS_ROW_COLUMNS = ("device_id", "kind", "text", "decision", "goal",
+                   "owner_ref", "external_event_id", "created", "updated")
+
+
+def sms_rows(external_id):
+    """Every events row carrying this carrier id, out of the local D1.  Skips,
+    naming the variable, when the suite is not pointed at a local Worker --
+    no HTTP route exposes another owner's events, by design."""
+    safe = external_id.replace("'", "''")
+    return local_d1("SELECT %s FROM events WHERE external_event_id = '%s'"
+                    % (", ".join(SMS_ROW_COLUMNS), safe))
+
+
+def assert_oracle_row(row, sender, text, owner_ref, external_id):
+    """CONTRACT.md §6.12 -- the event row, field by field."""
+    assert row["device_id"] == "sms", row
+    assert row["kind"] == "sms_reply", row
+    assert row["text"] == text, row
+    assert row["decision"] == "", (
+        "§6.12: decision must be the EMPTY STRING -- the brain's poll filters "
+        "on decision=\"\" and a NULL here is a text nobody hears: %r" % (row,))
+    assert row["goal"] == sender, "§6.12: goal is the sender's number: %r" % (row,)
+    assert row["owner_ref"] == owner_ref, row
+    assert row["external_event_id"] == external_id, row
+    assert re.match(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}Z$", row["created"] or ""), (
+        "created is not a PocketBase autodate: %r" % (row["created"],))
+    assert row["updated"] == row["created"], row
+
+
+def twilio_signature(token, url, params):
+    """twilio_signature.js: base64(HMAC-SHA1(token, url + sorted key+value))."""
+    data = url + "".join(k + params[k] for k in sorted(params))
+    return base64.b64encode(
+        hmac.new(token.encode("utf-8"), data.encode("utf-8"), hashlib.sha1).digest()
+    ).decode("ascii")
+
+
+def signed_twilio_form(sender, body, message_sid=None):
+    """A Twilio-shaped form the Worker under test will accept, signed for the
+    URL it will see (BASE_URL + the path, which is what wrangler dev sees).
+    Skips without the token."""
+    need(TWILIO_TEST_AUTH_TOKEN, "ANTICIPY_TEST_TWILIO_AUTH_TOKEN")
+    form = {"From": sender, "Body": body,
+            "MessageSid": message_sid or ("SM" + rand(32, "0123456789abcdef")),
+            "AccountSid": TWILIO_TEST_ACCOUNT_SID or ("AC" + "0" * 32),
+            "To": TWILIO_TEST_NUMBER or "+15550100998"}
+    sig = twilio_signature(TWILIO_TEST_AUTH_TOKEN, BASE_URL + "/sms/inbound", form)
+    return form, {"X-Twilio-Signature": sig}
+
+
+def sendblue_message(**over):
+    """An inbound Sendblue payload with every documented field, as the
+    dashboard's webhook sends it (docs.sendblue.com, read 2026-09-05)."""
+    now = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.000Z")
+    mine = SENDBLUE_NUMBER or "+15550100999"
+    body = {
+        "accountEmail": "owner@anticipy-test.invalid",
+        "content": "yes",
+        "is_outbound": False,
+        "status": "RECEIVED",
+        "error_code": None,
+        "error_message": None,
+        "message_handle": "sbtest-" + rand(24),
+        "date_sent": now,
+        "date_updated": now,
+        "from_number": SMS_NOBODY,
+        "number": SMS_NOBODY,
+        "to_number": mine,
+        "sendblue_number": mine,
+        "media_url": "",
+        "message_type": "message",
+        "group_id": "",
+        "participants": [],
+        "opted_out": False,
+        "service": "iMessage",
+    }
+    body.update(over)
+    return body
+
+
+def sendblue_post(message, secret=None, base=None):
+    """POST the payload with the secret header; secret="" sends NO header."""
+    headers = {}
+    value = SENDBLUE_SECRET if secret is None else secret
+    if value:
+        headers["sb-signing-secret"] = value
+    return call("POST", "/sms/sendblue", headers=headers, json_body=message, base=base)
+
+
 class TestSmsInbound(object):
 
     def test_a_non_form_content_type_is_refused(self):
@@ -3102,6 +3239,245 @@ class TestSmsInbound(object):
                     form={"From": "+15550001111", "Body": "yes",
                           "MessageSid": "SM" + "0" * 32})
         assert resp.status in (403, 503), repr(resp)
+
+    # -- past the signature: the suite signs, so these need the token -------
+
+    def test_a_malformed_message_sid_is_refused_even_when_signed(self):
+        """§6.12 rule 6 -- a signed Twilio SMS always carries SM + 32 hex."""
+        form, headers = signed_twilio_form(SMS_NOBODY, "yes", message_sid="not-a-sid")
+        resp = call("POST", "/sms/inbound", headers=headers, form=form)
+        assert resp.status == 403, repr(resp)
+        assert resp.text.strip() == "forbidden", repr(resp)
+
+    def test_a_signed_text_from_nobody_is_200_twiml_and_writes_no_row(self):
+        """§6.12 -- 0 matches: 200 with the empty TwiML, logged, and no row.
+        Twilio must not retry a text that was refused for a reason."""
+        form, headers = signed_twilio_form(SMS_NOBODY, "yes")
+        resp = call("POST", "/sms/inbound", headers=headers, form=form)
+        assert resp.status == 200, repr(resp)
+        assert "<Response></Response>" in resp.text, repr(resp)
+        assert "xml" in (resp.header("Content-Type") or ""), repr(resp)
+        if LOCAL_WRANGLER_CONFIG:
+            assert sms_rows(form["MessageSid"]) == [], "a text from nobody wrote a row"
+
+    @pytest.mark.destructive
+    def test_a_signed_text_from_the_owner_lands_the_oracle_row_once(self):
+        """§6.12 -- exactly 1 match: the events row, field by field, and a
+        retried MessageSid is still ONE row: the partial-unique index on
+        external_event_id is the idempotency, not a pre-read."""
+        need(SMS_OWNER_PHONE, "ANTICIPY_TEST_SMS_OWNER_PHONE")
+        need(SMS_OWNER_REF, "ANTICIPY_TEST_SMS_OWNER_REF")
+        text = "yes, twilio " + rand(6)
+        form, headers = signed_twilio_form(SMS_OWNER_PHONE, "  " + text + "  ")
+        first = call("POST", "/sms/inbound", headers=headers, form=form)
+        assert first.status == 200, repr(first)
+        assert "<Response></Response>" in first.text, repr(first)
+        rows = sms_rows(form["MessageSid"])
+        assert len(rows) == 1, "expected exactly one events row, found %d" % len(rows)
+        assert_oracle_row(rows[0], SMS_OWNER_PHONE, text, SMS_OWNER_REF, form["MessageSid"])
+        again = call("POST", "/sms/inbound", headers=headers, form=form)
+        assert again.status == 200, repr(again)
+        assert "<Response></Response>" in again.text, repr(again)
+        assert len(sms_rows(form["MessageSid"])) == 1, "Twilio's retry became a second row"
+
+
+class TestSendblueInbound(object):
+    """§6.12a -- Sendblue's webhook.  The same acceptance line as Twilio's:
+    the front door refuses; past it nothing refuses -- a text lands, or it is
+    dropped/ignored with a 200 and a log line, or it is a 500 so Sendblue
+    retries.  Worker-only: PocketBase never had this route."""
+
+    # -- the front door ------------------------------------------------------
+
+    def test_an_unconfigured_worker_answers_503_not_403(self):
+        """§6.12a rule 1 -- an unset secret is a configuration problem and
+        says so.  A 403 would look like a forged request forever and hide a
+        deaf product, which is what 2026-08-12..15 looked like on Twilio."""
+        need(SMS_UNCONFIGURED_URL, "ANTICIPY_TEST_SMS_UNCONFIGURED_URL")
+        resp = sendblue_post(sendblue_message(), secret="anything-at-all",
+                             base=SMS_UNCONFIGURED_URL)
+        assert resp.status == 503, repr(resp)
+        assert "not configured" in resp.text, repr(resp)
+
+    def test_a_missing_secret_header_is_refused(self):
+        """§6.12a rule 2 (or rule 1 on a Worker with no secret bound)."""
+        resp = sendblue_post(sendblue_message(), secret="")
+        assert resp.status in (403, 503), repr(resp)
+        if resp.status == 403:
+            assert resp.text.strip() == "forbidden", repr(resp)
+        else:
+            assert "not configured" in resp.text, repr(resp)
+
+    def test_a_wrong_secret_is_refused(self):
+        """§6.12a rule 2 -- and it is the same refusal the absent header gets,
+        from the caller's point of view."""
+        resp = sendblue_post(sendblue_message(),
+                             secret="definitely-not-the-secret-" + rand(8))
+        assert resp.status in (403, 503), repr(resp)
+        if resp.status == 403:
+            assert resp.text.strip() == "forbidden", repr(resp)
+
+    def test_a_non_json_body_is_400_not_retried(self):
+        """§6.12a rule 3 -- a body that is not JSON will not become JSON on a
+        retry, so it must not be a 5xx."""
+        need(SENDBLUE_SECRET, "ANTICIPY_TEST_SENDBLUE_SECRET")
+        resp = call("POST", "/sms/sendblue", headers={"sb-signing-secret": SENDBLUE_SECRET},
+                    raw="From=%2B15550199999&Body=yes")
+        assert resp.status == 400, repr(resp)
+
+    # -- past the front door: not a reply -------------------------------------
+
+    def test_an_outbound_status_update_is_ignored_not_heard(self):
+        """§6.12a rule 4 -- status callbacks for texts WE sent arrive on this
+        same URL.  One treated as a reply would have the brain hearing its own
+        DELIVERED, and then answering it."""
+        need(SENDBLUE_SECRET, "ANTICIPY_TEST_SENDBLUE_SECRET")
+        mine = SENDBLUE_NUMBER or "+15550100999"
+        theirs = SMS_OWNER_PHONE or SMS_NOBODY
+        msg = sendblue_message(is_outbound=True, status="DELIVERED",
+                               from_number=mine, number=theirs, to_number=theirs,
+                               content="the text Anticipy sent")
+        resp = sendblue_post(msg)
+        assert resp.status == 200, repr(resp)
+        assert (resp.json or {}).get("ignored") == "status update", repr(resp)
+        if LOCAL_WRANGLER_CONFIG:
+            assert sms_rows(msg["message_handle"]) == [], "a status update became a reply row"
+
+    def test_a_group_message_is_ignored(self):
+        """§6.12a rule 6 -- the brain holds one conversation per owner."""
+        need(SENDBLUE_SECRET, "ANTICIPY_TEST_SENDBLUE_SECRET")
+        mine = SENDBLUE_NUMBER or "+15550100999"
+        msg = sendblue_message(from_number=SMS_OWNER_PHONE or SMS_NOBODY,
+                               group_id="grp-" + rand(10),
+                               participants=[SMS_OWNER_PHONE or SMS_NOBODY, "+15550199998", mine])
+        resp = sendblue_post(msg)
+        assert resp.status == 200, repr(resp)
+        assert (resp.json or {}).get("ignored") == "group message", repr(resp)
+        if LOCAL_WRANGLER_CONFIG:
+            assert sms_rows(msg["message_handle"]) == [], "a group message became a reply row"
+
+    def test_the_wrong_sendblue_number_is_refused(self):
+        """§6.12a rule 5 -- as /sms/inbound refuses a To that is not
+        TWILIO_PHONE_NUMBER."""
+        need(SENDBLUE_SECRET, "ANTICIPY_TEST_SENDBLUE_SECRET")
+        need(SENDBLUE_NUMBER, "ANTICIPY_TEST_SENDBLUE_NUMBER")
+        msg = sendblue_message(to_number="+15550100000", sendblue_number="+15550100000")
+        resp = sendblue_post(msg)
+        assert resp.status == 403, repr(resp)
+        assert resp.text.strip() == "forbidden", repr(resp)
+
+    def test_a_message_without_a_handle_is_400_not_retried(self):
+        """§6.12a rule 7 -- without the carrier's id a retry cannot be told
+        from a second text."""
+        need(SENDBLUE_SECRET, "ANTICIPY_TEST_SENDBLUE_SECRET")
+        msg = sendblue_message()
+        del msg["message_handle"]
+        resp = sendblue_post(msg)
+        assert resp.status == 400, repr(resp)
+
+    def test_an_empty_message_is_dropped(self):
+        """§6.12a rule 8."""
+        need(SENDBLUE_SECRET, "ANTICIPY_TEST_SENDBLUE_SECRET")
+        msg = sendblue_message(from_number=SMS_OWNER_PHONE or SMS_NOBODY, content="   ")
+        resp = sendblue_post(msg)
+        assert resp.status == 200, repr(resp)
+        assert (resp.json or {}).get("dropped") == "empty content", repr(resp)
+        if LOCAL_WRANGLER_CONFIG:
+            assert sms_rows(msg["message_handle"]) == [], "an empty message wrote a row"
+
+    def test_a_media_only_message_is_dropped_like_an_mms_without_a_body(self):
+        """§6.12a rule 8 -- no events column carries media_url, and an
+        empty-text row would exist only for the brain to mark it ignore."""
+        need(SENDBLUE_SECRET, "ANTICIPY_TEST_SENDBLUE_SECRET")
+        msg = sendblue_message(from_number=SMS_OWNER_PHONE or SMS_NOBODY, content="",
+                               media_url="https://example.invalid/photo.jpg",
+                               message_type="media")
+        resp = sendblue_post(msg)
+        assert resp.status == 200, repr(resp)
+        assert (resp.json or {}).get("dropped") == "empty content", repr(resp)
+        if LOCAL_WRANGLER_CONFIG:
+            assert sms_rows(msg["message_handle"]) == [], "a media-only message wrote a row"
+
+    # -- past the front door: whose text is it --------------------------------
+
+    def test_an_unknown_sender_is_dropped_and_writes_no_row(self):
+        """§6.12a rule 10 -- 0 matches: 200, logged, no row.  A stranger's
+        text must not become a row anybody's brain could hear."""
+        need(SENDBLUE_SECRET, "ANTICIPY_TEST_SENDBLUE_SECRET")
+        msg = sendblue_message()          # from SMS_NOBODY
+        resp = sendblue_post(msg)
+        assert resp.status == 200, repr(resp)
+        assert (resp.json or {}).get("dropped") == "no owner", repr(resp)
+        if LOCAL_WRANGLER_CONFIG:
+            assert sms_rows(msg["message_handle"]) == [], "a stranger's text wrote a row"
+
+    def test_an_ambiguous_sender_is_dropped_and_writes_no_row(self):
+        """§6.12a rule 11 -- two accounts claim the number: refuse to pick
+        whose browser to drive.  The mutation "resolve to the first owner"
+        lands a row here and goes red."""
+        need(SENDBLUE_SECRET, "ANTICIPY_TEST_SENDBLUE_SECRET")
+        need(SMS_AMBIGUOUS_PHONE, "ANTICIPY_TEST_SMS_AMBIGUOUS_PHONE")
+        msg = sendblue_message(from_number=SMS_AMBIGUOUS_PHONE, number=SMS_AMBIGUOUS_PHONE)
+        resp = sendblue_post(msg)
+        assert resp.status == 200, repr(resp)
+        assert (resp.json or {}).get("dropped") == "ambiguous sender", repr(resp)
+        if LOCAL_WRANGLER_CONFIG:
+            assert sms_rows(msg["message_handle"]) == [], "an ambiguous number wrote a row"
+
+    @pytest.mark.destructive
+    def test_a_known_owner_lands_exactly_one_row_with_the_oracle_fields(self):
+        """§6.12a rule 14 -- the events row, field by field, once."""
+        need(SENDBLUE_SECRET, "ANTICIPY_TEST_SENDBLUE_SECRET")
+        need(SMS_OWNER_PHONE, "ANTICIPY_TEST_SMS_OWNER_PHONE")
+        need(SMS_OWNER_REF, "ANTICIPY_TEST_SMS_OWNER_REF")
+        text = "yes, sendblue " + rand(6)
+        msg = sendblue_message(from_number=SMS_OWNER_PHONE, number=SMS_OWNER_PHONE,
+                               content="  " + text + "  ")
+        resp = sendblue_post(msg)
+        assert resp.status == 200, repr(resp)
+        assert resp.json == {"ok": True}, repr(resp)
+        rows = sms_rows(msg["message_handle"])
+        assert len(rows) == 1, "expected exactly one events row, found %d" % len(rows)
+        assert_oracle_row(rows[0], SMS_OWNER_PHONE, text, SMS_OWNER_REF, msg["message_handle"])
+
+    @pytest.mark.destructive
+    def test_the_same_message_handle_twice_is_one_row(self):
+        """§6.12a rule 12 -- Sendblue retries on a 5xx and may redeliver; the
+        partial-unique index makes the retries one command, not two."""
+        need(SENDBLUE_SECRET, "ANTICIPY_TEST_SENDBLUE_SECRET")
+        need(SMS_OWNER_PHONE, "ANTICIPY_TEST_SMS_OWNER_PHONE")
+        msg = sendblue_message(from_number=SMS_OWNER_PHONE, number=SMS_OWNER_PHONE,
+                               content="yes, again " + rand(6))
+        first = sendblue_post(msg)
+        assert first.status == 200 and first.json == {"ok": True}, repr(first)
+        again = sendblue_post(msg)
+        assert again.status == 200, repr(again)
+        assert (again.json or {}).get("ignored") == "already handled", repr(again)
+        assert len(sms_rows(msg["message_handle"])) == 1, "the retry became a second row"
+
+    @pytest.mark.destructive
+    def test_both_carriers_land_the_same_row_shape(self):
+        """§6.12 and §6.12a share src/pb/sender.ts.  The brain
+        (brain/worker.py handle_inbound) polls kind="sms_reply" and must not
+        be able to tell which carrier delivered a text: every column but the
+        carrier's own id and the timestamps is identical."""
+        need(SENDBLUE_SECRET, "ANTICIPY_TEST_SENDBLUE_SECRET")
+        need(SMS_OWNER_PHONE, "ANTICIPY_TEST_SMS_OWNER_PHONE")
+        words = "same words " + rand(6)
+        form, headers = signed_twilio_form(SMS_OWNER_PHONE, words)
+        twilio = call("POST", "/sms/inbound", headers=headers, form=form)
+        assert twilio.status == 200, repr(twilio)
+        msg = sendblue_message(from_number=SMS_OWNER_PHONE, number=SMS_OWNER_PHONE, content=words)
+        sendblue = sendblue_post(msg)
+        assert sendblue.status == 200, repr(sendblue)
+        a = sms_rows(form["MessageSid"])
+        b = sms_rows(msg["message_handle"])
+        assert len(a) == 1 and len(b) == 1, (a, b)
+        strip = lambda row: {k: v for k, v in row.items()
+                             if k not in ("external_event_id", "created", "updated")}
+        assert strip(a[0]) == strip(b[0]), (
+            "the two carriers landed different rows:\n  twilio:   %r\n  sendblue: %r"
+            % (a[0], b[0]))
 
 
 # ==========================================================================

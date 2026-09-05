@@ -2,7 +2,10 @@
  * POST /sms/inbound   -- Twilio's inbound webhook.
  * POST /transcription/token
  *
- * Ported from backend/pb_hooks/sms.pb.js + twilio_signature.js.
+ * Ported from backend/pb_hooks/sms.pb.js + twilio_signature.js. The signature
+ * half is here; the owner-resolution + event-write half is src/pb/sender.ts,
+ * shared with routes/sendblue.ts so that a text lands in the identical events
+ * row whichever carrier brought it and the brain cannot tell them apart.
  *
  * TWILIO_AUTH_TOKEN IS LOAD-BEARING AND CANNOT BE REPLACED BY AN API KEY.
  * Twilio signs X-Twilio-Signature with the ACCOUNT AUTH TOKEN and offers no
@@ -21,12 +24,19 @@
  * POST parameter, sorted by key, appended as key+value with no separators.
  * Base64 of the digest is the signature.
  */
+import { landInboundText, last6 } from "../pb/sender.ts";
+
 const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), {
     status, headers: { "content-type": "application/json" },
   });
 const text = (status: number, body: string) =>
   new Response(body, { status, headers: { "content-type": "text/plain" } });
+
+/** CONTRACT.md §6.12 rule 8: the one 200 body, whatever became of the text. */
+const twiml = () =>
+  new Response("<?xml version='1.0' encoding='UTF-8'?><Response></Response>",
+    { status: 200, headers: { "content-type": "application/xml" } });
 
 export interface SmsEnv {
   DB: D1Database;
@@ -54,11 +64,34 @@ function constantTimeEqual(a: string, b: string): boolean {
   return d === 0;
 }
 
+/**
+ * Logged URLs never carry a query. The historical binding kept the shared
+ * secret in "?token=...", and a log line is the one place it must not come
+ * back (sms.pb.js:67-72).
+ */
+function safeUrl(url: string): string {
+  const cut = url.indexOf("?");
+  return cut < 0 ? url : url.slice(0, cut) + "?<query redacted>";
+}
+
 export async function smsInbound(req: Request, env: SmsEnv): Promise<Response> {
+  // "Silent failures: zero, ever" (MVP spec §09). Every refusal says which
+  // check refused, because the only symptom of the last inbound outage lived
+  // on Twilio's side of the wire as error 11200 (sms.pb.js:74-80).
+  const refuse = (status: number, check: string, detail: string): Response => {
+    console.log(`sms/inbound ${status}: ${check} — ${detail}`);
+    return text(status, status === 503 ? "sms webhook is not configured" : "forbidden");
+  };
+
   const authToken = env.TWILIO_AUTH_TOKEN || "";
   // Unset is a CONFIGURATION problem and says so. 403 here would look like a
   // forged request forever and hide a deaf product.
-  if (!authToken) return text(503, "sms webhook is not configured");
+  if (!authToken) {
+    return refuse(503, "not configured",
+      "TWILIO_AUTH_TOKEN is unset on this Worker, so EVERY inbound text is being " +
+      "refused. An API key cannot stand in for it — Twilio signs webhooks with the " +
+      "account auth token only. `wrangler secret put TWILIO_AUTH_TOKEN`.");
+  }
 
   const ctype = (req.headers.get("content-type") || "").toLowerCase();
   if (!ctype.includes("application/x-www-form-urlencoded")) {
@@ -67,23 +100,55 @@ export async function smsInbound(req: Request, env: SmsEnv): Promise<Response> {
 
   const raw = await req.text();
   const params = new URLSearchParams(raw);
+  const messageSid = params.get("MessageSid") || params.get("SmsSid") || "";
+  const from = (params.get("From") || "").trim();
+  const who = `MessageSid=${messageSid || "(none)"} From=${last6(from)}`;
 
   // Twilio signs the URL IT called. Behind a proxy that is not necessarily the
   // URL this Worker sees, so an explicit override wins when set.
   const url = env.ANTICIPY_TWILIO_WEBHOOK_URL || req.url;
   const sent = req.headers.get("X-Twilio-Signature") || "";
   const want = await twilioSignature(authToken, url, params);
-  if (!sent || !constantTimeEqual(sent, want)) return text(403, "forbidden");
+  if (!sent || !constantTimeEqual(sent, want)) {
+    return refuse(403, sent ? "signature mismatch" : "signature missing",
+      `Twilio's configured URL must be ${safeUrl(url)} (set ` +
+      `ANTICIPY_TWILIO_WEBHOOK_URL to pin it behind a proxy); ${who}`);
+  }
 
   const accountSid = params.get("AccountSid") || "";
   if (env.TWILIO_ACCOUNT_SID && accountSid !== env.TWILIO_ACCOUNT_SID) {
-    return text(403, "forbidden");                     // wrong account
+    return refuse(403, "wrong account",
+      `AccountSid on the message is not TWILIO_ACCOUNT_SID for this deployment; ${who}`);
   }
+  // The oracle (sms.pb.js:150) refuses when To is not the number, and an
+  // absent To is not the number. The first cut here let an empty To through.
   const to = params.get("To") || "";
   const mine = env.TWILIO_PHONE_NUMBER || env.TWILIO_FROM || "";
-  if (mine && to && to !== mine) return text(403, "forbidden");   // wrong number
+  if (mine && to !== mine) {
+    return refuse(403, "wrong number",
+      `To=${last6(to)} is not this deployment's TWILIO_PHONE_NUMBER; ${who}`);
+  }
 
-  return json(503, { ok: false, message: "inbound routing not yet ported" });
+  const body = (params.get("Body") || "").trim();
+  // A signed Twilio SMS always carries SM + 32 hex (sms.pb.js:152-155,
+  // CONTRACT.md §6.12 rule 6). A carrier id's shape is transport, not meaning.
+  if (!/^SM[a-fA-F0-9]{32}$/.test(messageSid)) {
+    return refuse(403, "malformed MessageSid",
+      "a signed Twilio SMS always carries SM + 32 hex; got " +
+      String(messageSid || "(none)").slice(0, 8) + "…");
+  }
+
+  // Everything above refuses. Everything below accepts the request and decides
+  // whether it becomes an event -- src/pb/sender.ts, shared with Sendblue.
+  const landed = await landInboundText(
+    { DB: env.DB }, "sms/inbound", "MessageSid",
+    { from, text: body, externalId: messageSid });
+  if (landed.kind === "unknown") return text(500, "temporary routing failure");
+  if (landed.kind === "failed") return text(500, "could not persist the message");
+  // Dropped, already handled, written: all 200 with the empty TwiML, as the
+  // oracle answers. The log line is the only place the difference shows, on
+  // purpose -- Twilio must not retry a text that was refused for a reason.
+  return twiml();
 }
 
 export async function transcriptionToken(_req: Request, _env: SmsEnv): Promise<Response> {

@@ -46,6 +46,7 @@ import {
 } from "./routes/fellows.ts";
 import type { FellowsEnv } from "./routes/fellows_base.ts";
 import { smsInbound, transcriptionToken, type SmsEnv } from "./routes/sms.ts";
+import { sendblueInbound, type SendblueEnv } from "./routes/sendblue.ts";
 import { workerOwners, purgeAudit, authClaim, phoneRemove, profileUpsert, type ServiceEnv } from "./routes/service.ts";
 import { agentRegister, agentKey, agentLlm, agentCaptcha, agentUpgradeCredential, type AgentEnv } from "./routes/agent.ts";
 import { COLLECTIONS } from "./pb/schema.ts";
@@ -79,6 +80,11 @@ export interface Env extends CronEnv {
   ANTICIPY_BROWSER_MODEL?: string;
   ANTICIPY_VISION_MODEL?: string;
   LLM_PROVIDER_BASE?: string;
+  // /sms/sendblue — routes/sendblue.ts. The secret is a secret (the value
+  // Sendblue's dashboard sends in sb-signing-secret); the number is a plain
+  // var, an inbound allowlist exactly like TWILIO_PHONE_NUMBER.
+  SENDBLUE_WEBHOOK_SECRET?: string;
+  SENDBLUE_FROM_NUMBER?: string;
 }
 
 /**
@@ -149,6 +155,13 @@ export default {
     // validate X-Twilio-Signature -- there is no API-key equivalent.
     if (path === "/sms/inbound" && method === "POST") {
       return smsInbound(request, env as unknown as SmsEnv);
+    }
+    // Sendblue's webhook: inbound iMessage/SMS AND status updates for texts we
+    // sent, on one URL, proven by the dashboard's secret in sb-signing-secret.
+    // It lands the same events row /sms/inbound lands (src/pb/sender.ts), so
+    // the brain cannot tell the carriers apart.
+    if (path === "/sms/sendblue" && method === "POST") {
+      return sendblueInbound(request, env as unknown as SendblueEnv);
     }
     if (path === "/transcription/token" && method === "POST") {
       return transcriptionToken(request, env as unknown as SmsEnv);
