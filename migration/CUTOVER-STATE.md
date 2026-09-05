@@ -73,16 +73,18 @@ Suite: 147 passed / 0 failed on the Worker, 148 / 0 on production.
 
 ## The two things that must be true before cutover, and are not yet
 
-1. **ANTICIPY_AUTH_SECRET is unset on the Worker.** Owner tokens are signed
-   HS256 with `secret + tokenKey`; tokenKey migrated, the secret is a setting
-   and did not. Every existing iPhone and extension token fails on the Worker,
-   so cutover logs every user out at once. It is in data.db at
-   `_collections.options.authToken.secret` for `owners`. One approved backup
-   download. Matching it also gives a safe rollback. There is a cross-origin
-   test leg that goes green only once it matches.
+1. **ANTICIPY_AUTH_SECRET is present but EMPTY on the Worker.** The failed
+   extract (wrong DB path, `/app/pb_data/data.db` — the empty image default)
+   set it to "". `wrangler secret list` shows the name regardless of value, so
+   presence is not proof. Owner tokens are signed HS256 with `secret +
+   tokenKey`; with an empty secret the key is `"" + tokenKey`, wrong, and every
+   existing iPhone and extension token fails on the Worker — cutover logs every
+   user out at once. Re-set it: `migration/runbooks/extract_auth_secret.py
+   /pb_data/data.db` (the 17 MB volume). Matching the real secret also gives a
+   safe rollback. A cross-origin test leg goes green only once it matches.
 
-2. **CLERK_HQ_JWT_KEY is unset.** Proven absent from this machine. From the
-   Railway or Clerk dashboard.
+2. ~~**CLERK_HQ_JWT_KEY is unset.**~~ **SET this session** — piped from Railway,
+   confirmed in `wrangler secret list`; clerk/exchange 400s like production.
 
 ## The cutover, in the order it has to happen
 
@@ -90,7 +92,8 @@ Suite: 147 passed / 0 failed on the Worker, 148 / 0 on production.
    on PRODUCTION. research/2026-09-04-I-changed-a-real-password-while-probing.md.
    Do this first.
 1. DONE. anticipy-api is canonical; the wedge was propagation.
-2. `wrangler secret put CLERK_HQ_JWT_KEY` and `ANTICIPY_AUTH_SECRET`.
+2. `wrangler secret put ANTICIPY_AUTH_SECRET` (re-set — it is currently empty;
+   use runbooks/extract_auth_secret.py). CLERK_HQ_JWT_KEY is already set.
 3. Port `/internal/me/password`, password login, and `/internal/fellows/*`
    actions — all in the untracked `fellowship_host.pb.js`, readable only off the
    Railway container. `GET /internal/fellows` IS ported and returns real data,

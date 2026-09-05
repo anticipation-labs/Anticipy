@@ -68,13 +68,22 @@ const TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60;
  * to do. That property is the entire reason `tokenKey` exists and is why it
  * has to survive the import.
  *
- * DELIBERATE DIVERGENCE: PocketBase's own signing key derivation is an
- * internal of the Go binary and was not read (it is fetched at image build
- * time, backend/Dockerfile:3-6, and is not in this tree). So tokens minted by
- * PocketBase will NOT verify here, and vice versa. That is a cutover event,
- * not a bug — see ARCHITECTURE.md §4.3 "the one thing that does log people
- * out", and the mitigation: the phone and the Mac both re-authenticate from
- * stored credentials, so the visible cost is one silent re-login.
+ * CROSS-VERIFICATION IS A CONFIG MATCH, NOT AN IMPOSSIBILITY. Corrected
+ * 2026-09-04 (this comment previously claimed the derivation was an unreadable
+ * Go internal — it is not). PocketBase signs a record token with
+ * `HMAC(<owners collection authToken.secret> ‖ tokenKey)`; this Worker signs
+ * with `HMAC(env.ANTICIPY_AUTH_SECRET ‖ tokenKey)`. Those keys are IDENTICAL
+ * exactly when `ANTICIPY_AUTH_SECRET` equals that collection secret. Set it to
+ * match (research/2026-09-04-the-auth-secret-nobody-set.md, extractor at
+ * migration/runbooks/extract_auth_secret.py) and tokens minted by either
+ * backend verify on both — an invisible cutover AND a safe rollback.
+ *
+ * The forced-logout is the FALLBACK, not the design: it happens only while
+ * `ANTICIPY_AUTH_SECRET` is unset or mismatched (its state today — the secret
+ * did not migrate because it is a setting, not a column). Then the key is
+ * `"undefined" ‖ tokenKey`, nothing cross-verifies, and every signed-in user
+ * re-authenticates from stored credentials once (ARCHITECTURE.md §4.3). Matching
+ * the secret is strongly preferred; shipping mismatched also forfeits rollback.
  */
 async function hmacKey(env: AuthEnv, tokenKey: string): Promise<CryptoKey> {
   return crypto.subtle.importKey(

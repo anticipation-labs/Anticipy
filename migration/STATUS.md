@@ -25,8 +25,12 @@ itself the recurring defect.
       Zone      anticipy.ai         PENDING, id 31cfa9047733c3d3616a4825b2117bf9
       Secrets   ANTICIPY_INTERNAL_KEY (production's), ANTICIPY_VAULT_KEY,
                 ANTICIPY_SERVICE_TOKEN, OPENROUTER_API_KEY, RESEND_API_KEY,
-                TWILIO_ACCOUNT_SID/AUTH_TOKEN/PHONE_NUMBER/FROM
-      MISSING   CLERK_HQ_JWT_KEY, ANTICIPY_AUTH_SECRET  <- both block cutover
+                TWILIO_ACCOUNT_SID/AUTH_TOKEN/PHONE_NUMBER/FROM,
+                CLERK_HQ_JWT_KEY (set this session; clerk/exchange 400s like prod)
+      SUSPECT   ANTICIPY_AUTH_SECRET EXISTS in `secret list` but was set to the
+                EMPTY STRING by the failed extract (wrong DB path). Presence in
+                the list is NOT proof — re-set it with runbooks/
+                extract_auth_secret.py and verify the cross-origin auth leg.
 
     Website (separate repo, anticipation-labs/aniticipy-web)
       main        -> Vercel, live at www.anticipy.ai
@@ -135,8 +139,11 @@ ids and order included. The vault decrypts PocketBase's own ciphertext.
 
 ## The blocker that outranks the numbered list
 
-**ANTICIPY_AUTH_SECRET is not set on the Worker.** Both backends sign owner
-tokens HS256 with a per-record key: PocketBase uses
+**ANTICIPY_AUTH_SECRET is present on the Worker but WRONG (empty string).** The
+failed extract set it to "" (it read the empty image-default DB), and
+`wrangler secret list` shows the NAME regardless of value — so "it's in the
+list" is not proof it works; the cross-origin auth leg is. Both backends sign
+owner tokens HS256 with a per-record key: PocketBase uses
 `collections.owners.authToken.secret + owners.tokenKey`, the Worker uses
 `env.ANTICIPY_AUTH_SECRET + tokenKey`. `tokenKey` migrated; the secret is a
 SETTING, not a column, so it did not.
@@ -154,10 +161,16 @@ cross-origin test leg that goes green only once it matches.
 1. **Fix a real password first.** A probe set a teammate's HQ password to `abc`
    on PRODUCTION. research/2026-09-04-I-changed-a-real-password-while-probing.md
    has the two remediation commands. Do this before anything else here.
-2. `wrangler secret put CLERK_HQ_JWT_KEY` — value from the Railway dashboard
-   (backend -> Variables) or Clerk (JWT Templates -> "hq"). Railway's is the one
-   production uses, so copying preserves existing Clerk sign-ins.
-3. `wrangler secret put ANTICIPY_AUTH_SECRET` — from data.db, as above.
+2. ~~`wrangler secret put CLERK_HQ_JWT_KEY`~~ **DONE this session** — piped from
+   Railway (backend -> Variables), never printed; clerk/exchange now 400s on
+   both origins like production, so existing Clerk sign-ins are preserved.
+   Confirmed present in `wrangler secret list --name anticipy-api`.
+3. `wrangler secret put ANTICIPY_AUTH_SECRET` — from data.db, as above. Use
+   `migration/runbooks/extract_auth_secret.py /pb_data/data.db` (the volume, NOT
+   `/app/pb_data/data.db`, which is the empty default that set it to "" last
+   time). The script + guarded command fail closed on a bad DB and add no
+   trailing newline; the exact block is in
+   research/2026-09-04-the-auth-secret-nobody-set.md.
 4. Port `POST /internal/me/password` and password login, from
    `fellowship_host.pb.js` read off the Railway container — NOT by guessing the
    sha256 scheme.
@@ -171,21 +184,28 @@ cross-origin test leg that goes green only once it matches.
 7. Swap the crons, atomically with 6. PocketBase's API can only LIST and RUN
    crons, never disable one, so removing `internal_hq_sweep` needs a Railway
    deploy. `railway` is not installed here.
-8. brain/ onto Containers. migration/BRAIN-ON-CONTAINERS.md. Blocked in order
-   on: `migration/workers/brain/src/index.ts` (does not exist, so `--dry-run`
-   fails before Docker is consulted), `brain/container_entry.py` (does not
-   exist; without it every owner's memory.db is lost on each restart), and a
-   Docker CLI this machine lacks.
+8. brain/ onto Containers. migration/BRAIN-ON-CONTAINERS.md. The two code
+   blockers are now WRITTEN (2026-09-04) and statically validated but
+   runtime-UNTESTED: `migration/workers/brain/src/index.ts` (`tsc --noEmit`
+   green against @cloudflare/containers@0.3.7, vendored into brain/node_modules;
+   OwnerBrain + BrainSupervisor + scheduled()) and `brain/container_entry.py`
+   (py_compile OK; R2 pull that aborts on any non-404 GET). Neither has run —
+   no oracle, and container_entry's failure mode is silent memory loss, so both
+   need a real container + R2 run before trust (research/
+   2026-09-04-brain-container-code-written.md). Still blocked on: a Docker CLI
+   this machine lacks; the R2 bucket `anticipy-owner-state`; and the one-way
+   `brain/Dockerfile:14` CMD flip, which is a cutover step (it would break the
+   live Railway `worker`), not a now-change.
 9. DNS. Smaller than previously recorded: the Cloudflare zone already exists and
    is PENDING. The remaining action is switching nameservers at Porkbun, which
    needs the Porkbun dashboard — no API key on this machine.
 
 ## Access still needed
 
-    CLERK_HQ_JWT_KEY         Railway or Clerk dashboard. Proven absent from
-                             this machine: not in any file, env, git object,
-                             keychain, or the HQ vault.
-    ANTICIPY_AUTH_SECRET     data.db, via one approved backup download.
+    CLERK_HQ_JWT_KEY         DONE — set on anticipy-api this session.
+    ANTICIPY_AUTH_SECRET     data.db at /pb_data/data.db (Railway volume), via
+                             SSH or one approved backup download. Currently set
+                             to EMPTY on the Worker — must be re-set correctly.
     Railway CLI + superuser  the cron swap, and reading fellowship_host.pb.js
                              off the container — the only remaining source for
                              the last routes.

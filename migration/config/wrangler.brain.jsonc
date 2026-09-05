@@ -17,13 +17,25 @@
   //
   // What still stops a deploy, in the order wrangler hits it
   // (migration/BRAIN-ON-CONTAINERS.md is the runbook):
-  //   1. `main` below does not exist — ../workers/brain/src/index.ts was never
-  //      written. `wrangler deploy --dry-run` fails here, before Docker.
-  //   2. brain/container_entry.py does not exist. Without it a container boots
-  //      on an empty /data and every owner's memory.db is silently lost.
-  //   3. No Docker-compatible CLI on the dev machine, so no image can be
+  //   1. [WRITTEN 2026-09-04] `main` (../workers/brain/src/index.ts) now exists:
+  //      OwnerBrain + BrainSupervisor + scheduled(). `tsc --noEmit` is green
+  //      against @cloudflare/containers@0.3.7 (vendored into brain/node_modules;
+  //      brain/package.json declares it so the API Worker's deps stay lean).
+  //      UNTESTED at runtime — no container runtime to run it against.
+  //   2. [WRITTEN 2026-09-04] brain/container_entry.py now exists and compiles
+  //      (py_compile OK); it reuses state_backup's tested snapshot routines and
+  //      aborts the boot loudly on any non-404 R2 GET. UNTESTED — its failure
+  //      mode is silent memory loss, so it MUST run green against a real R2
+  //      bucket before it is trusted (runbook §10.6).
+  //   3. brain/Dockerfile:14 still CMDs `python -m brain.supervisor` — the LIVE
+  //      Railway `worker` image (HANDOFF.md:330). The flip to
+  //      `brain.container_entry` is a ONE-WAY, cutover-time change (BRAIN.md
+  //      §10.4): container_entry refuses to boot without a per-owner
+  //      ANTICIPY_OWNER_REF + R2 config, so flipping it now would break the
+  //      running brain. Left for the cutover sequence on purpose.
+  //   4. No Docker-compatible CLI on the dev machine, so no image can be
   //      built. Build it in CI, not on a laptop.
-  //   4. R2 bucket anticipy-owner-state does not exist yet.
+  //   5. R2 bucket anticipy-owner-state does not exist yet.
   // ==========================================================================
   "$schema": "../../node_modules/wrangler/config-schema.json",
   "name": "anticipy-brain",

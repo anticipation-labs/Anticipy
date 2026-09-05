@@ -27,16 +27,18 @@ blocked before the first deploy, on three things, only one of which needs a huma
 > Until a Docker-compatible engine exists somewhere, no image can be produced and
 > nothing can be deployed.
 
-Two more blockers sit in front of that, and both are **code that does not exist**,
-not access anybody has to grant:
+Two more blockers sat in front of that, both **code that did not exist**. As of
+2026-09-04 both are WRITTEN and statically validated (compile / typecheck), but
+**UNTESTED at runtime** — there is no container runtime or R2 token here to run
+them against, so neither is done in the CLAUDE.md sense (green against live):
 
 | # | Missing | Why it stops the deploy |
 |---|---|---|
-| 1 | `migration/workers/brain/src/index.ts` | `config/wrangler.brain.jsonc` names it as `main`. The file was never written. `wrangler deploy` fails at bundling, *before* it ever reaches Docker. |
-| 2 | `brain/container_entry.py` | `workers/BRAIN.md` §4 designs it; it does not exist anywhere in this tree. Without it a container starts with an **empty** `/data`, and every owner's `memory.db` is gone on every restart — silently. This is the one that must not be skipped to "get something up". |
-| 3 | A Docker-compatible engine | The build above. |
+| 1 | `migration/workers/brain/src/index.ts` | ~~Never written.~~ **WRITTEN 2026-09-04** — OwnerBrain + BrainSupervisor + `scheduled()`. `tsc --noEmit` green against `@cloudflare/containers@0.3.7` (vendored into `migration/workers/brain/node_modules`; `brain/package.json` declares the dep so the API Worker stays lean). Runtime-UNTESTED. |
+| 2 | `brain/container_entry.py` | ~~Does not exist.~~ **WRITTEN 2026-09-04** — pulls memory.db + clock_state.json from R2 before boot, aborts loudly on any non-404 GET, reuses `state_backup`'s tested snapshot routines. `py_compile` OK. Runtime-UNTESTED; its failure mode is silent memory loss, so it must run green against a real R2 bucket (§10.6) before it is trusted. |
+| 3 | A Docker-compatible engine | The build above. Still absent. |
 
-Order matters: 1 and 2 are writable from here, 3 is not.
+Order matters: 1 and 2 are done from here (pending runtime validation); 3 is not.
 
 ---
 
@@ -298,7 +300,7 @@ The task framing offered "D1 or R2". It is **R2**, and the reasoning is not tast
 So: **R2 `anticipy-owner-state`, keys `owners/<ref>/memory.db` and
 `owners/<ref>/clock_state.json`.** Container disk is scratch.
 
-### 5.3 What `container_entry.py` must do (it does not exist — write it)
+### 5.3 What `container_entry.py` must do (WRITTEN 2026-09-04 — this is the spec it follows; runtime-untested)
 
 1. **On boot, before starting the child**: GET both objects from R2 into
    `/data/owners/<ref>/`. Absent object = new owner, create the directory `0o700`
@@ -364,12 +366,18 @@ against `env.DB`, filtered by `/^[A-Za-z0-9_-]{8,64}$/` — the same guard as
 a state path and later deleted. Preserve `reconcile_children`'s two properties:
 the cap **turns owners away, never evicts**, and over-capacity **prints every pass**.
 
-`npm install @cloudflare/containers` in `migration/workers/` first — it is **not**
-currently installed anywhere in this tree (I installed 0.3.7 to
-`migration/spike/containers-sdk/` only to read its source).
+**[DONE 2026-09-04]** `@cloudflare/containers@0.3.7` is now vendored into
+`migration/workers/brain/node_modules` and declared in a new
+`migration/workers/brain/package.json` — kept out of the API Worker's
+`package.json` on purpose (separate deploy, lean API bundle). CI must run a real
+`npm install` there before building.
 
-**2. Write `brain/container_entry.py`** to §5.3, and change `brain/Dockerfile`'s
-`CMD` to it. Add `boto3` — already there. The image otherwise does not change.
+**2. [WRITTEN 2026-09-04] `brain/container_entry.py`** now exists per §5.3
+(py_compile OK, runtime-UNTESTED). Changing `brain/Dockerfile:14`'s `CMD` to it
+is deliberately NOT done yet: that image is the LIVE Railway `worker`
+(HANDOFF.md:330), and container_entry refuses to boot without a per-owner
+`ANTICIPY_OWNER_REF` + R2 config — so the flip is a one-way **cutover-time** step
+(BRAIN.md §10.4), not a now-change. `boto3` is already in the image.
 
 **3. Create the bucket and fix the placeholder.**
 

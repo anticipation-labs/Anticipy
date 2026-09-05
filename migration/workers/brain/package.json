@@ -1,0 +1,12 @@
+{
+  "name": "anticipy-brain",
+  "private": true,
+  "type": "module",
+  "description": "Per-owner brain fleet on Cloudflare Containers. SEPARATE deploy from the API Worker (config/wrangler.brain.jsonc) so the API bundle stays lean. UNTESTED — see src/index.ts header.",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@cloudflare/containers": "^0.3.7"
+  }
+}

@@ -53,9 +53,29 @@ Not readable over the API. `GET /api/settings` no longer carries it (PocketBase
 `secret` masked — checked both.
 
 It IS in `data.db`, in `_collections.options.authToken.secret` for the `owners`
-row. That means the daily backup zip. Reading it needs one approved download,
-the same artifact approved once already today; the attempt was correctly gated
-and is left for the owner to allow.
+row. Two sources for that file: the daily backup zip, or the live Railway volume
+at `/pb_data/data.db` over SSH. **Not** `/app/pb_data/data.db` — that is the
+156 KB empty image default, and reading it is exactly how a first attempt set
+`ANTICIPY_AUTH_SECRET` to the empty string (`_collections` empty → lookup
+returns None → `wrangler secret put` fed nothing).
+
+`migration/runbooks/extract_auth_secret.py` now does this safely and is the
+command to run (owner drives it — Railway SSH + wrangler auth):
+
+    python3 extract_auth_secret.py /pb_data/data.db --check      # proof-of-life first
+    # then, guarded so a failed extract can never feed wrangler an empty value:
+    set -euo pipefail
+    SECRET="$(python3 extract_auth_secret.py /pb_data/data.db)"
+    [ -n "$SECRET" ] || { echo "empty — refusing"; exit 1; }
+    printf %s "$SECRET" | npx wrangler secret put ANTICIPY_AUTH_SECRET --name anticipy-api
+    unset SECRET
+
+It aborts loudly on the empty/wrong DB, searches the owners row without assuming
+the schema version, prints only length + a sha256 prefix (never the value), and
+emits the secret with NO trailing newline (a newline would corrupt the HMAC
+key). Tested against synthetic good / empty-default / no-table fixtures. Prefer
+running it ON the container so the customer DB never leaves the box; a local copy
+is the approved-download path.
 
 ## The two ways forward
 
@@ -76,5 +96,16 @@ Option 1 is strongly preferred and the difference is one secret.
 
 `JWT_SECRET`, `GATE_COOKIE_SECRET`, `ANALYTICS_SECRET` and `CRON_SECRET` are
 website-side and belong on Vercel, not the Worker — listed here so the next
-person does not rediscover them as Worker gaps. `CLERK_HQ_JWT_KEY` remains the
-one HQ credential still missing.
+person does not rediscover them as Worker gaps. `CLERK_HQ_JWT_KEY` was the one
+HQ credential still missing; it was SET this session (piped from Railway,
+confirmed in `wrangler secret list`, clerk/exchange 400s like prod).
+
+## Update 2026-09-04 — the secret now EXISTS but is EMPTY, which is worse
+
+The extract was attempted and failed against `/app/pb_data/data.db` (the 156 KB
+empty image default, not the volume). `_collections` was empty, the lookup
+returned None, and `wrangler secret put` was fed an empty string. So today
+`ANTICIPY_AUTH_SECRET` is IN the secret list — and still wrong. "Is it set?"
+answered by `wrangler secret list` now returns yes and lies. The only true test
+is the cross-origin auth leg. Re-set it with the guarded command above; the
+extractor aborts on that exact empty-DB mistake instead of emitting nothing.
