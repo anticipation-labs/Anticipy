@@ -465,16 +465,37 @@ def test_the_compliance_badge_is_not_a_captcha_wall():
     only the invisible reCAPTCHA v3 badge every booking page carries, and a
     date-of-birth field. He was looking straight at it: "there's no captcha,
     just press submit, enter a date of birth and press submit."
+
+    Until audit #71 (2026-09-05) this pinned `looksLikeCaptcha`, a phrase list
+    over the page text that stripped the badge's disclosure sentence before
+    looking — which is a word list deciding what words mean, the thing Law 1
+    forbids, and exactly the shape that failed live. Now whether a page is
+    asking a person to prove they are human is a model's verdict, and what
+    stays deterministic is STRUCTURE: `challengeFurniture` lists the painted
+    challenge-provider frames and containers the page actually carries. The
+    badge page carries an anchor frame that declares itself invisible, so its
+    furniture is empty, the question is never asked, and nothing parks — that
+    is the property this test now pins. A painted Turnstile frame IS furniture,
+    which means the question is asked; the answer, and that a wrong CLEAR is
+    caught by the click seatbelt, are pinned by the extension's own suite
+    (extension/tests/test_challenge_is_a_verdict.mjs).
     """
     import subprocess
     out = subprocess.run(["node", "--input-type=module", "-e", """
-import { looksLikeCaptcha } from '%s/extension/agent_loop.js';
-const badge = {url:'https://sevenrooms.com/reservations/cactusclub', title:'Reserve',
-  text:'Complete your reservation. Date of birth. Submit. This site is protected by reCAPTCHA and the Google Privacy Policy and Terms of Service apply.'};
-const real = {url:'https://www.google.com/sorry/index', title:'',
-  text:'Our systems have detected unusual traffic from your computer network.'};
-if (looksLikeCaptcha(badge)) throw new Error('a compliance badge is not a wall');
-if (!looksLikeCaptcha(real)) throw new Error('a real challenge must still stop it');
+import * as loop from '%s/extension/agent_loop.js';
+const { challengeFurniture } = loop;
+if ('looksLikeCaptcha' in loop) throw new Error('the phrase list is back');
+const badge = { url:'https://sevenrooms.com/reservations/cactusclub', title:'Reserve',
+  text:'Complete your reservation. Date of birth. Submit. This site is protected by reCAPTCHA and the Google Privacy Policy and Terms of Service apply.',
+  frames: [{ src:'https://www.google.com/recaptcha/api2/anchor?ar=1&k=6LcAbCdEfGh&co=aHR0&hl=en&v=1&size=invisible&cb=1',
+             x: 0, y: 900, w: 256, h: 60, inViewport: false }],
+  widgets: [] };
+const turnstile = { url:'https://shop.example.com/checkout', title:'Checkout', text:'Verify you are human',
+  frames: [{ src:'https://challenges.cloudflare.com/cdn-cgi/challenge-platform/h/b/turnstile/if/ov2/av0/rcv/abc/0x4AAAAAAA/light/normal/auto/',
+             x: 40, y: 300, w: 300, h: 65, inViewport: true }],
+  widgets: [] };
+if (challengeFurniture(badge).length !== 0) throw new Error('a compliance badge is not furniture: nothing to ask, nothing to park');
+if (challengeFurniture(turnstile).length !== 1) throw new Error('a painted Turnstile frame is furniture: the question must be asked');
 console.log('ok');
 """ % ROOT], capture_output=True, text=True)
     assert "ok" in out.stdout, out.stderr
