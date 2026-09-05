@@ -552,7 +552,15 @@ settings:
     # confirmed it. The flush used to empty the durable queue before posting
     # anything, so iOS suspending a backgrounded app mid-flush lost every
     # unposted line with no counter and no journal entry.
-    CURRENT_PROJECT_VERSION: "123"
+    # 124: after a crash the retry cites what the extension found on the
+    # surviving page (params._reconciliation) and refuses on the phone for
+    # every verdict but not_applied, instead of writing a constant the DB
+    # guard could not tell from a finding (audit #90 E). The Listening
+    # screen shows the day's delivered lines by ear, and a line sent from
+    # the queue keeps its ear in the journal. A battery reading is written
+    # with every start and stop line so the measured window is closed, and
+    # drain per hour rides beside it — no threshold anywhere.
+    CURRENT_PROJECT_VERSION: "124"
     DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: NO
@@ -604,7 +612,7 @@ targets:
         # literal from a Mac one, and two products answering "which build
         # are you holding" with different numbers is the exact disease this
         # gate exists to prevent.
-        CURRENT_PROJECT_VERSION: "123"
+        CURRENT_PROJECT_VERSION: "124"
         DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_ENTITLEMENTS: ../macos/AnticipyMac/AnticipyMac.entitlements
