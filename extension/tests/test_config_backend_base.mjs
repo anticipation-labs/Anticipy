@@ -19,7 +19,12 @@
 // been observed must survive one.
 import assert from "node:assert/strict";
 
-const PROD = "https://backend-production-61e0a.up.railway.app";
+// PRODUCTION IS api.anticipy.ai since the 2026-09-05 cutover (Worker + D1;
+// research/2026-09-05-cloudflare-era-plan.md). This literal is the pin that the
+// extension's DEFAULT really is the backend that serves users — it must not be
+// imported from config.js, or "no override resolves to production" proves
+// nothing.
+const PROD = "https://api.anticipy.ai";
 const OVERRIDE = "http://127.0.0.1:8090";
 
 // A chrome.storage stand-in with a failure mode. test_config_base.mjs has a

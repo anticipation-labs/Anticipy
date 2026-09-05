@@ -9,7 +9,13 @@
 // so half a run happened in one world and half in another and neither console
 // said a word about it. A dev override has to be in effect everywhere or
 // nowhere, which means exactly one place may know the URL.
-export const DEFAULT_BASE = "https://backend-production-61e0a.up.railway.app";
+// CUTOVER 2026-09-05: production is the Cloudflare Worker at api.anticipy.ai
+// (Worker + D1; research/2026-09-05-cloudflare-era-plan.md). The Railway host
+// stays up only for installs older than this line. A fresh install pairs with
+// a phone that is itself api-pointed, and pairing needs both halves on one
+// backend. Proven before this flip: proof/extension_smoke.mjs against
+// api.anticipy.ai, 10/10, on the real 0.13.0 install.
+export const DEFAULT_BASE = "https://api.anticipy.ai";
 
 // A trailing slash turns every `${base}/api/...` into `//api/...`, which
 // PocketBase answers with a redirect the fetch then follows without the

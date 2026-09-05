@@ -13,7 +13,12 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ext = join(dirname(fileURLToPath(import.meta.url)), "..");
-const PROD = "https://backend-production-61e0a.up.railway.app";
+// PRODUCTION IS api.anticipy.ai since the 2026-09-05 cutover (Worker + D1;
+// research/2026-09-05-cloudflare-era-plan.md). This literal is the pin that the
+// extension's DEFAULT really is the backend that serves users — it must not be
+// imported from config.js, or "no override resolves to production" proves
+// nothing.
+const PROD = "https://api.anticipy.ai";
 const read = (f) => readFileSync(join(ext, f), "utf8");
 
 // A chrome.storage stand-in that fires onChanged the way Chrome does — the
@@ -160,6 +165,8 @@ assert.equal(bg.split(PROD).length - 1, 0,
   "background.js must not contain the production backend URL — it lives in config.js");
 assert.equal(/https?:\/\/[^"'`\s]*railway\.app/.test(bg), false,
   "background.js must not name the backend host at all, under any spelling");
+assert.equal(/https?:\/\/api\.anticipy\.ai/.test(bg), false,
+  "background.js must not name the Cloudflare backend host either — it lives in config.js");
 assert.match(bg, /import \{ backendBase \} from "\.\/config\.js";/,
   "background.js must consume the shared resolver");
 assert.equal(/^\s*(const|let|var)\s+(DEFAULT_BASE|BASE|DEFAULT_LLM_BASE)\b/m.test(bg), false,
