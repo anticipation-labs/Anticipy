@@ -143,12 +143,23 @@ assert.deepStrictEqual(
 console.log("PASS: memory alone cannot supply a submittable field value");
 
 // And the guarantee is structural: memory is not a parameter of the boundary
-// function at all, so no call site can accidentally widen it.
+// function at all, so no call site can accidentally widen it. Pinned on the
+// DECLARED parameter list, not on Function.length: length only counts the
+// parameters before the first default, so it stayed 2 when audit #67 added
+// the trailing `kinds` map and would stay 2 if `memory = ""` were added too.
 assert.strictEqual(
   unsupportedScopeFields.length,
   2,
-  "unsupportedScopeFields takes (scope, currentState) plus two defaults — "
-    + "if memory was added as a parameter, the prompt text must change with it",
+  "unsupportedScopeFields takes (scope, currentState) and defaults the rest",
+);
+const declared = loop.match(/export function unsupportedScopeFields\(([^)]*)\)/)[1]
+  .split(",").map((part) => part.trim().split(/\s*=/)[0]);
+assert.deepStrictEqual(
+  declared,
+  ["scope", "currentState", "ownerProfile", "facts", "kinds"],
+  "unsupportedScopeFields takes (scope, currentState, ownerProfile, facts, kinds) — "
+    + "kinds is what a field is FOR, never a source of values; if memory is ever "
+    + "added as a parameter, the prompt text must change with it",
 );
 assert.ok(
   /RECALLED MEMORY IS DELIBERATELY ABSENT FROM approvedText/.test(loop),

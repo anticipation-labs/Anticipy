@@ -24,6 +24,7 @@ const suites = [
   "test_done_is_not_a_sentence_match.mjs",
   "test_verification_fail_closed.mjs",
   "test_exact_fact_verification.mjs",
+  "test_field_kind_is_not_a_word_match.mjs",
   "test_research_query_hygiene.mjs",
   "test_search_provider.mjs",
   "test_workflow_state.mjs",

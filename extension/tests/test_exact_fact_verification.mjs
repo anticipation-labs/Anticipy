@@ -19,6 +19,12 @@ const { groundedFormCorrections,
         unsupportedScopeFields } =
   await import(join(here, "..", "agent_loop.js"));
 const source = readFileSync(join(here, "..", "agent_loop.js"), "utf8");
+// AUDIT #67: what a field is FOR is no longer read off its label. Where a pin
+// below depends on the kind, the kind is DECLARED on the row (type:"tel") or
+// handed in as the verdict map a model would have produced for the form.
+// test_field_kind_is_not_a_word_match.mjs owns the boundary itself.
+const kindsOf = (map) => new Map(Object.entries(map)
+  .map(([index, kind]) => [Number(index), { state: "answered", kind }]));
 
 let failed = 0;
 const check = (condition, label) => {
@@ -79,8 +85,8 @@ check(unsupportedScopeFields("Open a mail-in warranty repair", { fields: [
 ] }).length === 0, "short categorical values may remove redundant page context");
 check(unsupportedScopeFields(
   "Cancel at the end of the current billing period", { fields: [
-    { name: "effective", label: "When", value: "End of current billing period" },
-  ] }).length === 0,
+    { index: 1, name: "effective", label: "When", value: "End of current billing period" },
+  ] }, null, "", kindsOf({ 1: "CHOICE" })).length === 0,
   "text-rendered choices may omit surrounding determiners without leaving scope");
 check(unsupportedScopeFields("sink leaking under the cabinet", { fields: [
   { name: "issue", label: "Issue", value: "sink leaking under cabinet" },
@@ -159,24 +165,25 @@ check(unsupportedScopeFields(
 "an exact value spanning a recognizer join remains authorized");
 check(unsupportedScopeFields(
   "Schedule Jordan Chen at West Coast Dental", { fields: [
-    { name: "clinic", label: "Clinic", value: "Coast Dental" },
-  ] }).includes("clinic"),
+    { index: 1, name: "clinic", label: "Clinic", value: "Coast Dental" },
+  ] }, null, "", kindsOf({ 1: "NAME" })).includes("clinic"),
 "a named field cannot silently drop a leading proper-name word");
 check(unsupportedScopeFields(
   "Cancel membership MBR-80189 at StudioBox", { fields: [
-    { name: "member", label: "Membership", value: "MBR-80189 at StudioBox" },
-  ] }).includes("member"),
+    { index: 1, name: "member", label: "Membership", value: "MBR-80189 at StudioBox" },
+  ] }, null, "", kindsOf({ 1: "CODE" })).includes("member"),
 "an identifier field cannot absorb its service or location");
 const schoolScope = "Emergency contact Jordan Kim at +1 604 555 4798";
 const schoolFields = { fields: [
   { index: 1, name: "contact", label: "Emergency contact", value: "Jordan Kim at +1 604 555 4798" },
-  { index: 2, name: "phone", label: "Phone", value: "+16045550142" },
+  { index: 2, name: "phone", label: "Phone", type: "tel", value: "+16045550142" },
 ] };
+const schoolKinds = kindsOf({ 1: "NAME" });
 check(JSON.stringify(unsupportedScopeFields(schoolScope, schoolFields,
-  { phone: "+16045550142" })) === JSON.stringify(["contact", "phone"]),
+  { phone: "+16045550142" }, "", schoolKinds)) === JSON.stringify(["contact", "phone"]),
 "task contact data cannot bleed across fields or lose to a saved profile phone");
 const boundaryFixes = schemaBoundaryCorrections(schoolFields.fields, schoolScope,
-  schoolFields.fields);
+  schoolFields.fields, schoolKinds);
 check(boundaryFixes.some((row) => row.index === 1 && row.value === "Jordan Kim")
       && boundaryFixes.some((row) => row.index === 2
         && row.value === "+1 604 555 4798"),
@@ -185,14 +192,14 @@ const indexedBoundaryFixes = schemaBoundaryCorrections([
   { index: 1, name: "member", label: "Membership", value: "MBR-80189 at StudioBox" },
 ], "Cancel membership MBR-80189 at StudioBox", [
   { index: 1, name: "member", label: "Membership", value: "MBR-80189 at StudioBox" },
-]);
+], kindsOf({ 1: "CODE" }));
 check(indexedBoundaryFixes.length === 1 && indexedBoundaryFixes[0].value === "MBR-80189",
 "schema boundaries repair an identifier contaminated by portal context");
 const windowFixes = schemaBoundaryCorrections([
   { index: 2, name: "window", label: "Window", value: "OLD-3" },
 ], "Register the guest from 6 PM to 11 PM", [
   { index: 2, name: "window", label: "Window", value: "OLD-3" },
-]);
+], kindsOf({ 2: "WINDOW" }));
 check(windowFixes.length === 1 && windowFixes[0].value === "6 PM to 11 PM",
 "schema boundaries reconstruct a complete approved time window");
 check(terminalReceiptEvidence({

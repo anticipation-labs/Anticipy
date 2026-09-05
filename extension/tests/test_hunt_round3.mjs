@@ -91,7 +91,7 @@ assert.ok(!samePhoneDigits("5550142", "6045550142"),
 assert.ok(!samePhoneDigits("6045550142", "6045550143"), "and two real phones stay different");
 assert.deepEqual(
   unsupportedScopeFields("Book for Omar, phone +1 604 555 0142", { fields: [
-    { name: "phone", label: "Phone", value: "(604) 555-0142" },
+    { name: "phone", label: "Phone", type: "tel", value: "(604) 555-0142" },
   ] }),
   [], "the masked phone is the approved phone");
 assert.deepEqual(
@@ -100,9 +100,9 @@ assert.deepEqual(
   [], "and it is evidenced, so completion can actually be verified");
 assert.deepEqual(
   schemaBoundaryCorrections(
-    [{ index: 1, name: "phone", label: "Phone", value: "(604) 555-0142" }],
+    [{ index: 1, name: "phone", label: "Phone", type: "tel", value: "(604) 555-0142" }],
     "Book for Omar, phone +1 604 555 0142",
-    [{ index: 1, name: "phone", label: "Phone" }]),
+    [{ index: 1, name: "phone", label: "Phone", type: "tel" }]),
   [], "and nothing retypes it into a loop with the site's own mask");
 console.log("PASS 4: a reformatted phone is the same phone");
 

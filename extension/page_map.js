@@ -316,6 +316,7 @@
           name: String(el.name || el.id || "").slice(0, 100),
           label: label(el).slice(0, 160),
           type,
+          autocomplete: String(el.getAttribute("autocomplete") || "").toLowerCase().slice(0, 80),
           searchLike: isSearchControl(el),
           required: !!el.required,
           readOnly: !!el.readOnly,
