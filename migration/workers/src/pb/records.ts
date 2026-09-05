@@ -67,6 +67,19 @@ export function projectFields(record: Record<string, unknown>, fieldsParam: stri
 // text". Until 2026-09-05 the INSERT here threw straight through as a 500, so
 // on Cloudflare a collision would have muted the text instead of naming the
 // slot. This reads an SQLite message, not a word of the owner's — structure.
+// D1 "no such column: X" — the map in schema.ts is ahead of the live table.
+// 2026-09-05: the brain's decision stamp (Omi port 06, heard_ms/heard_calls)
+// hit exactly this — the map knew the columns, D1 did not — and the UPDATE
+// threw straight through as a Cloudflare 1101, which the brain's fail-safe
+// (keyed on a 400) never saw; every decided line stayed unstamped and was
+// re-heard by the sweep every ten minutes, minting a duplicate job each time.
+// A skew between the map and the table is a 400 with the column's name, the
+// same shape create() and update() already give an unknown field.
+export function missingColumn(message: string): string | null {
+  const m = /no such column:\s*(?:[A-Za-z0-9_]+\.)?([A-Za-z0-9_]+)/i.exec(String(message || ""));
+  return m ? m[1] : null;
+}
+
 export function uniqueViolationColumn(message: string): string | null {
   const m = /UNIQUE constraint failed:\s*([A-Za-z0-9_]+)\.([A-Za-z0-9_]+)/.exec(String(message || ""));
   return m ? m[2] : null;
@@ -395,7 +408,14 @@ export async function create(env: Env, req: RecordsRequest): Promise<Response> {
       `VALUES (${placeholders})`,
     ).bind(...vals).run();
   } catch (e) {
-    const column = uniqueViolationColumn((e as Error)?.message ?? String(e));
+    const msg = (e as Error)?.message ?? String(e);
+    const missing = missingColumn(msg);
+    if (missing) {
+      return badRequest("failed to create record", {
+        [missing]: { code: "unknown_field", message: `${def.name} has no column ${missing} on this database` },
+      });
+    }
+    const column = uniqueViolationColumn(msg);
     if (!column) throw e;
     return json(400, {
       data: { [column]: NOT_UNIQUE },
@@ -447,9 +467,21 @@ export async function update(env: Env, req: RecordsRequest): Promise<Response> {
     vals.push(req.forcedScope.value);
   }
 
-  const res = await env.DB.prepare(
-    `UPDATE ${quoteIdent(def.name)} SET ${sets.join(", ")} WHERE ${where}`,
-  ).bind(...vals).run();
+  let res;
+  try {
+    res = await env.DB.prepare(
+      `UPDATE ${quoteIdent(def.name)} SET ${sets.join(", ")} WHERE ${where}`,
+    ).bind(...vals).run();
+  } catch (e) {
+    // The map knows a column the live table lacks: a 400 that names it, the
+    // shape an unknown field already gets above — not a 1101. See
+    // missingColumn for the day this was a ten-minute duplicate-job loop.
+    const missing = missingColumn((e as Error)?.message ?? String(e));
+    if (!missing) throw e;
+    return badRequest("failed to update record", {
+      [missing]: { code: "unknown_field", message: `${def.name} has no column ${missing} on this database` },
+    });
+  }
 
   if (!res.meta.changes) return notFound();
 
