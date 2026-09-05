@@ -104,3 +104,15 @@ until both 200, then: final verify + push the iOS commit to trigger TestFlight.
 - iPhone + Chrome-extension releases (they hit the backend directly) — owner only.
 - brain/ → Cloudflare Containers (code written, untested, no Docker).
 - Arav's HQ password remediation (`abc`, from an earlier probe).
+
+## COMPLETE 2026-09-05 — verified in production
+- www.anticipy.ai → HTTP 200, `server: cloudflare`, `cf-ray` (Cloudflare Worker; Vercel gone from the path).
+- anticipy.ai (apex) → HTTP 301 → https://www.anticipy.ai/, `server: cloudflare` (CF Redirect Rule; apex A record set to Proxied). Vercel fully out of the web path.
+- api.anticipy.ai → HTTP 200 (D1-backed anticipy-api Worker).
+- Email intact: MX 1 smtp.google.com.
+- iOS: commit db43db14 on jose_anticipy_system; ios-testflight.yml run 33945943140 SUCCEEDED (build .github#3) — new build uploaded to TestFlight pointing at api.anticipy.ai.
+
+STILL ON RAILWAY (not part of the web cutover; unchanged): PocketBase `backend`
+and the brain `worker` service. iPhone traffic moves off Railway only once users
+install the new TestFlight/App Store build. Extension + brain/ + the Stripe/Twilio
+secrets remain as previously documented.
