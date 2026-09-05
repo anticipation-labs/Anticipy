@@ -24,10 +24,10 @@ owner's logged-in browser with `<all_urls>` and the debugger, so the bar for
 | 65 | `completionContradiction` | VIOLATION | **FIXED `43f96128`** | regex ceiling deleted; auditor owns the verdict; 4-leg suite |
 | 66 | `isAuthored` | VIOLATION | **FIXED before this session** (`c30157ee`) | |
 | 67 | `phoneField`/`identifierField`/`namedIdentityField`/`compactChoiceField`/`timeWindowField` | VIOLATION | **FIXED `448bc592`** | six classifiers deleted; `fieldKind` = declared ?? verdict ?? UNANSWERED, a FLOOR; 80-check suite, 6 mutations |
-| 68 | `approvedBoolean` negation window | VIOLATION | OPEN — design NEEDS-REWORK | own-question box verdict |
-| 69 | date/time approval regexes | PARTIAL | OPEN — design NEEDS-REWORK | typed native date/time half |
+| 68 | `approvedBoolean` negation window | VIOLATION | **FIXED `ba12df46`** | window deleted; `boxVerdictJudge`, CEILING with an UNCLEAR hand-back; `box_verdict_gate.py` UNPROVEN until a paired credential exists; 4 mutations |
+| 69 | date/time approval regexes | PARTIAL | **FIXED `ee7e4d6a`** | both regexes deleted; native temporal fields deferred to `unsupportedScopeVerdict`, FLOOR, undecided never cleared; 4 mutations |
 | 70 | `login_wall.js` scored classifier | VIOLATION | **FIXED 2026-09-05** | sixteen regexes deleted; one CEILING question; golden set 66/66 live (OpenRouter direct — proxy UNPROVEN) |
-| 71 | `looksLikeCaptcha` phrase list | VIOLATION | OPEN — design NEEDS-REWORK | provider-markup sift + model |
+| 71 | `looksLikeCaptcha` phrase list | VIOLATION | **FIXED `b0db7ec7`** | painted provider furniture (structure) → one question, CEILING, made safe by the challenge-frame click seatbelt; the 2026-08-16 badge page asks nothing; 7 mutations |
 | 72 | `page_map.js` control-deletion keywords | VIOLATION | OPEN — design NEEDS-REWORK | read what a list is ATTACHED to |
 | 73 | placeholder-option word list | VIOLATION (L) | OPEN — design NEEDS-REWORK | |
 | 74 | `explicitRequestedCount`/`reportedRecordCount` | VIOLATION | **FIXED `9d83e056`** | DELETED with `completionCoverageScore`; the auditor is the only judge, taught three sentences; zero extra calls; 5 mutations |
