@@ -89,6 +89,30 @@ PB = (os.environ.get("ANTICIPY_PB")
 # can name the BUILD that last spoke.
 SERVER_DEVICE = "anticipy-brain"
 
+# THE PROBE IS NOT A PHONE.
+#
+# proof/e2e_cloudflare.py drives the whole chain against production with
+# `device_id = "e2e-phone-<date>"` and posts kind="transcript" rows exactly as
+# a phone would. Its `--sweep` cancels the jobs it made and leaves those rows
+# behind, so for 24 hours after any proof run this gate counted synthetic
+# speech as speech and done_gate leg 1 printed "and a real phone reached the
+# server" (audit F11/F19). Measured on 2026-09-05: 13 transcripts in the
+# window, ALL of them `e2e-phone-2026-09-05`, gate green — while the newest
+# real phone on this backend had spoken four days earlier. That is the exact
+# shape this file exists to catch, produced by this file.
+#
+# Filtering on device_id is PROVENANCE — which machine wrote the row — and the
+# header above already classes provenance as permitted: the words are never
+# read, never requested, never counted. A phone stamps
+# "iphone-b<CFBundleVersion>" (AnticipyApp.swift) and nothing real begins
+# "e2e-".
+#
+# The filter is `!~` (NOT LIKE) on the Worker, so a row with NO device_id at
+# all falls OUT of the heard half rather than into it. That is the direction
+# an alarm should fail: an unattributable row cannot prove a phone was heard.
+PROBE_DEVICE = "e2e-"
+NOT_A_PROBE = f'device_id !~ "{PROBE_DEVICE}"'
+
 # How much server-originated work counts as "the machine was demonstrably
 # working". DERIVED, not invented: on the recorded days where the ears were
 # genuinely deaf the server wrote 16 and 63 rows; on 2026-08-09, a day nobody
@@ -217,6 +241,12 @@ def self_test() -> int:
         # too. The first rule alone says "unproven"; two missed cycles say red.
         (0, 3, 49.0, 1, "2026-08-25 — hour 49, server gone idle too: still DEAF"),
         (0, 3, 30.0, 2, "hour 30 — one cycle, idle machine: honestly unproven"),
+        # 2026-09-05, the day this exclusion was written: 13 probe lines, no
+        # real phone since 09-01, the brain writing nothing because every row
+        # it wrote was being 400ed (audit F04). Before the exclusion the same
+        # day reported PASS and done_gate said "a real phone reached the
+        # server". Counted honestly it is four days of silence.
+        (0, 0, 107.0, 1, "2026-09-05 — 13 probe lines excluded: still DEAF"),
     ]
     bad = 0
     print("\n  SELF-TEST — the verdict against days production actually had")
@@ -268,7 +298,10 @@ def main() -> int:
     rows.append((INFO, "backend answers /api/health", "200"))
 
     try:
-        heard = count(f'kind="transcript" && created >= "{since_s}"')
+        heard = count(f'kind="transcript" && created >= "{since_s}" '
+                      f'&& {NOT_A_PROBE}')
+        probes = count(f'kind="transcript" && created >= "{since_s}" '
+                       f'&& device_id ~ "{PROBE_DEVICE}"')
         server_writes = count(f'device_id="{SERVER_DEVICE}" && created >= "{since_s}"')
     except Exception as e:
         print(f"\n  ARE THE EARS LIVE?   {PB}")
@@ -280,7 +313,14 @@ def main() -> int:
         rows.append((INFO, "window is shorter than a full day",
                      f"{args.hours}h can be legitimately empty; 24h cannot"))
 
-    rows.append((INFO, f"speech heard in the last {args.hours:g}h", str(heard)))
+    rows.append((INFO, f"speech heard in the last {args.hours:g}h",
+                 f"{heard} (from real devices)"))
+    # Say what was thrown away, so the exclusion is visible on the screen
+    # rather than being a silent difference between two runs.
+    if probes:
+        rows.append((INFO, f"probe lines IGNORED in the last {args.hours:g}h",
+                     f"{probes} (device_id ~ {PROBE_DEVICE!r} — "
+                     "proof/e2e_cloudflare.py, not a phone)"))
     rows.append((INFO, f"rows the SERVER wrote in the last {args.hours:g}h",
                  f"{server_writes} (the control half)"))
 
@@ -288,7 +328,7 @@ def main() -> int:
     # the ears last spoke and WHICH BUILD was wearing them. On 2026-08-24 this
     # would have read "30.3h ago, from iphone-b75" — and iphone-b75 is the
     # build that was replaced at that exact minute, which is the finding.
-    last = newest('kind="transcript"')
+    last = newest(f'kind="transcript" && {NOT_A_PROBE}')
     silence_hours = None
     if last:
         when = parse_ts(last.get("created", ""))
