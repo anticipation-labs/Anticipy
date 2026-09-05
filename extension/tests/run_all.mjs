@@ -53,6 +53,7 @@ const suites = [
   "test_learn_before_doing.mjs",
   "test_server_procedure_reaches_the_hands.mjs",
   "test_recall_is_not_gated.mjs",
+  "test_recall_is_confirmed.mjs",
   "test_otp_wall.mjs",
   "test_inbox_consent.mjs",
   "test_private_places.mjs",

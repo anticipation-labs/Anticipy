@@ -69,6 +69,9 @@ chrome.tabs.create = async (props) => {
 // `unfamiliar` is what the planner reports. Flipped per scenario below; the
 // point of the suite is that recall does not depend on it.
 let plannerSaysUnfamiliar = false;
+// Audit #76: the judge that reads whether the cached procedure is the SAME
+// errand. Section 6 flips it to NO; every other section leaves it at YES.
+let judgeSays = "YES";
 let seen = [];
 globalThis.fetch = async (url, opts = {}) => {
   if (!String(url).includes("openrouter")) {
@@ -84,6 +87,7 @@ globalThis.fetch = async (url, opts = {}) => {
   else if (/reading the open web to learn HOW/.test(joined)) kind = "learn";
   else if (/You audit a browser agent's claim/.test(joined)) kind = "verify";
   else if (/pre-submit form auditor/.test(joined)) kind = "form-audit";
+  else if (/would following the remembered procedure/.test(joined)) kind = "recall";
   seen.push({ kind, user: all[all.length - 1] });
 
   let content;
@@ -100,6 +104,13 @@ globalThis.fetch = async (url, opts = {}) => {
     });
   } else if (kind === "verify") {
     content = JSON.stringify({ verified: true });
+  } else if (kind === "recall") {
+    // The floor added 2026-09-05 (audit #76): a cached candidate is released
+    // only on a positive YES. Sections 1-5 are about recall not being GATED on
+    // the planner's mood, so the judge says yes there; section 6 says NO and
+    // proves the loop honours it. test_recall_is_confirmed.mjs pins the floor
+    // itself, all four states.
+    content = judgeSays;
   } else {
     content = JSON.stringify({ action: "done", result: "Return started, reference R-1190" });
   }
@@ -201,6 +212,30 @@ async function run(opts = {}) {
     out.status === "done" && learned.length === 1);
   check("...and what it learned rides into the run",
     steps.length > 0 && steps.every((s) => s.user.includes("A freshly researched step")));
+}
+
+// ------------------------------------------ 6. THE LOOP GOES THROUGH THE DOOR
+// Audit #76. The shape key is blind to direction, so it hands back whatever
+// collided; the floor's job is to stop the LOOP replaying it when a model says
+// it is a different errand. This is the behavioural pin for that: same seeded
+// procedure, same familiar planner, judge says NO — and the procedure must
+// reach no step prompt at all. A source grep for "no bare recall call" was
+// tried first and a mutation that reached the bare function through an alias
+// walked past it; this cannot be dodged by spelling.
+{
+  plannerSaysUnfamiliar = false;
+  judgeSays = "NO";
+  const refused = await run();
+  check("when the judge says NO, the cached procedure reaches no step prompt",
+    refused.steps.length > 0 && refused.steps.every((s) => !s.user.includes(PROCEDURE_STEP)));
+  check("...and the run still finishes, reasoning live instead of replaying unread",
+    refused.out.status === "done");
+  // THE CONTROL. Flip only the judge back and the identical seed IS replayed —
+  // so what stopped it above was the verdict, not the fixture.
+  judgeSays = "YES";
+  const released = await run();
+  check("flip the judge back to YES and the identical seed is replayed — the verdict is what decided",
+    released.steps.length > 0 && released.steps.every((s) => s.user.includes(PROCEDURE_STEP)));
 }
 
 if (failures) {

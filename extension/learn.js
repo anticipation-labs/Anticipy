@@ -384,6 +384,55 @@ export async function recallProcedure(shape, storage, now = Date.now()) {
   return hit;
 }
 
+// THE FOUR STATES, and why a bool cannot carry them. "It was a different
+// errand", "nobody was there to ask" and "the answer was unreadable" are three
+// different things to go and fix. Names and semantics are the ones
+// brain/research.py uses (RECALL_YES/NO/UNASKED/UNANSWERED) so the server-side
+// twin and this one cannot drift — tests/test_research_recall.py is the same
+// suite as tests/test_recall_is_confirmed.mjs, case for case.
+export const RECALL_YES = "yes";
+export const RECALL_NO = "no";
+export const RECALL_UNASKED = "unasked";
+export const RECALL_UNANSWERED = "unanswered";
+
+/**
+ * The whole recall: the free sift, then the floor.
+ *
+ * WHAT WAS HERE UNTIL 2026-09-05 (audit #76): `recallProcedure(taskShape(goal))`
+ * was the entire decision. taskShape is a normalised word SET — digits, dates
+ * and thirty stop words stripped, the rest sorted — so it is blind to direction
+ * and role: "transfer money from savings to checking" and "transfer money from
+ * checking to savings" are one key, and so are "cancel the subscription" and
+ * "dispute the charge for the subscription". The cache handed back whatever
+ * collided, and the loop replayed it on the owner's real accounts. The word
+ * sets are the key's job and they keep it; what is taken off them is the one
+ * question they were never able to answer — does this remembered thing MEAN
+ * the same errand — which HARNESS-LAWS.md law 1 hands to a model.
+ *
+ * A FLOOR: the candidate is released on a positive YES and on nothing else.
+ * No judge, a judge that throws, a judge that answers in prose — all refuse,
+ * and the run researches or reasons live instead, which was last week's
+ * behaviour and the safe way to lose. The sift stays in FRONT so a cache miss
+ * — the common case — never costs a model call.
+ */
+export async function recallConfirmedProcedure(goal, storage, judge, now = Date.now()) {
+  const candidate = await recallProcedure(taskShape(goal), storage, now);
+  if (!candidate) return { procedure: null, verdict: RECALL_UNASKED, why: "nothing cached for this shape — nobody to ask about" };
+  if (typeof judge !== "function") return { procedure: null, verdict: RECALL_UNASKED, why: "no live model to confirm the cached procedure applies — researching rather than replaying it unread" };
+  let raw;
+  try {
+    raw = await judge({ goal, remembered: { question: candidate.question, startUrl: candidate.startUrl, steps: candidate.steps, sources: candidate.sources } });
+  } catch (_) {
+    return { procedure: null, verdict: RECALL_UNANSWERED, why: "asked whether the cached procedure applies and got no readable answer — researching rather than guessing" };
+  }
+  // A SHAPE CHECK ON THE MODEL'S OWN REPLY, the same containment inboxConsent
+  // applies: the verdict is a token we specified, not prose we interpret.
+  const token = String(raw == null ? "" : raw).trim();
+  if (token === "YES") return { procedure: candidate, verdict: RECALL_YES, why: "already know how — a live procedure, confirmed to apply" };
+  if (token === "NO") return { procedure: null, verdict: RECALL_NO, why: "a live model refused the cached procedure — a different errand, or not sure" };
+  return { procedure: null, verdict: RECALL_UNANSWERED, why: "asked whether the cached procedure applies and got no readable answer — researching rather than guessing" };
+}
+
 export async function rememberProcedure(shape, procedure, storage, limit = 60) {
   if (!shape || !procedure || !storage) return;
   try {

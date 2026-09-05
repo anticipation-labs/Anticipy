@@ -310,6 +310,7 @@ const check = (name, ok) => {
     else if (/reading the open web to learn HOW/.test(joined)) kind = "learn";
     else if (/You audit a browser agent's claim/.test(joined)) kind = "verify";
     else if (/pre-submit form auditor/.test(joined)) kind = "form-audit";
+    else if (/would following the remembered procedure/.test(joined)) kind = "recall";
     seen.push({ kind, user: all[all.length - 1] });
 
     let content;
@@ -327,6 +328,12 @@ const check = (name, ok) => {
       });
     } else if (kind === "verify") {
       content = JSON.stringify({ verified: true });
+    } else if (kind === "recall") {
+      // Audit #76: a cached procedure is released only on a positive YES from
+      // the judge. This suite is about learning BEFORE doing and replaying on
+      // the second run, so the judge agrees; the other three answers are
+      // pinned in test_recall_is_confirmed.mjs.
+      content = "YES";
     } else {
       content = JSON.stringify(a.shift() || { action: "wait" });
     }

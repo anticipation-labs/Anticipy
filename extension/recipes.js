@@ -172,6 +172,34 @@ export async function recall(shape, storage, now = Date.now()) {
 }
 
 /**
+ * The recipe twin of learn.recallConfirmedProcedure — same floor, same four
+ * states, same reason (audit #76: the shape key is blind to direction).
+ *
+ * A recipe carries no owner wording by rule 3, so what the judge is handed is
+ * the recipe's own page-derived checkpoints — "on telus.com, the button
+ * labelled 'Turn off autopay' at slot 4". A direction that lives entirely in
+ * one toggle click keys identically to its opposite and its checkpoints may
+ * not show it either; the prompt's "cannot tell -> NO" line means such a route
+ * is reasoned live rather than replayed, which is the direction a cache is
+ * allowed to fail in.
+ */
+export async function recallConfirmed(goal, storage, judge, now = Date.now()) {
+  const candidate = await recall(taskShape(goal), storage, now);
+  if (!candidate) return { recipe: null, verdict: "unasked", why: "nothing compiled for this shape — nobody to ask about" };
+  if (typeof judge !== "function") return { recipe: null, verdict: "unasked", why: "no live model to confirm the compiled route applies — reasoning live rather than replaying it unread" };
+  let raw;
+  try {
+    raw = await judge({ goal, remembered: { question: candidate.goal || "", startUrl: candidate.startUrl || "", steps: candidate.steps.map((s) => s.checkpoint), sources: candidate.sources || [] } });
+  } catch (_) {
+    return { recipe: null, verdict: "unanswered", why: "asked whether the compiled route applies and got no readable answer — reasoning live rather than guessing" };
+  }
+  const token = String(raw == null ? "" : raw).trim();
+  if (token === "YES") return { recipe: candidate, verdict: "yes", why: "walked this before — a compiled route, confirmed to apply" };
+  if (token === "NO") return { recipe: null, verdict: "no", why: "a live model refused the compiled route — a different errand, or not sure" };
+  return { recipe: null, verdict: "unanswered", why: "asked whether the compiled route applies and got no readable answer — reasoning live rather than guessing" };
+}
+
+/**
  * Record a clean run, or store an already-compiled recipe.
  *
  * Given a run, this is the two-clean-runs gate: the first one is kept as a

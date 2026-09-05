@@ -59,6 +59,7 @@ function scripted(actions, { onPrompt } = {}) {
     else if (/reading the open web to learn HOW/.test(joined)) kind = "learn";
     else if (/You audit a browser agent's claim/.test(joined)) kind = "verify";
     else if (/pre-submit form auditor/.test(joined)) kind = "form-audit";
+    else if (/would following the remembered procedure/.test(joined)) kind = "recall";
     seen.push({ kind, user: all[all.length - 1], hasImage: /\[image\]/.test(joined) });
     if (onPrompt) onPrompt(kind, all[all.length - 1]);
     let content;
@@ -66,6 +67,8 @@ function scripted(actions, { onPrompt } = {}) {
       content = JSON.stringify({ start_url: "https://cactusclubcafe.com/happy-hour", why: "the venue", steps: [], unfamiliar: false });
     } else if (kind === "verify") {
       content = JSON.stringify({ verified: true, evidence: ["happy hour 3-6pm"] });
+    } else if (kind === "recall") {
+      content = "YES";
     } else {
       content = JSON.stringify(a.shift() || { action: "wait" });
     }
@@ -92,6 +95,7 @@ function reactive(answer) {
     else if (/reading the open web to learn HOW/.test(joined)) kind = "learn";
     else if (/You audit a browser agent's claim/.test(joined)) kind = "verify";
     else if (/pre-submit form auditor/.test(joined)) kind = "form-audit";
+    else if (/would following the remembered procedure/.test(joined)) kind = "recall";
     const prompt = all[all.length - 1];
     seen.push({ kind, user: prompt, hasImage: /\[image\]/.test(joined) });
     let content;
@@ -99,6 +103,8 @@ function reactive(answer) {
       content = JSON.stringify({ start_url: "https://cactusclubcafe.com/happy-hour", why: "the venue", steps: [], unfamiliar: false });
     } else if (kind === "verify") {
       content = JSON.stringify({ verified: true, evidence: ["happy hour 3-6pm"] });
+    } else if (kind === "recall") {
+      content = "YES";
     } else {
       content = JSON.stringify(answer(prompt));
     }
