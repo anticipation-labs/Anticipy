@@ -197,6 +197,25 @@
   //                            models while no Gemini key is bound.
   //   TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN / TWILIO_PHONE_NUMBER
   //                            the sweep's SMS and /sms/inbound's HMAC.
+  //   SENDBLUE_WEBHOOK_SECRET  /sms/sendblue — the shared secret Sendblue sends
+  //                            verbatim in its `sb-signing-secret` header. The
+  //                            owner generates it, enters it in Sendblue's
+  //                            dashboard (Developer → Webhooks, beside the URL
+  //                            https://api.anticipy.ai/sms/sendblue) and puts
+  //                            the same value here. Unset = 503, logged, never
+  //                            a 403 that would look like a forged request.
+  //
+  //   SENDBLUE_API_KEY_ID / SENDBLUE_API_SECRET_KEY
+  //                            outbound texts, src/messaging.ts (the sweep's
+  //                            reminders and the password-reset code).
+  //
+  // /sms/sendblue AND src/messaging.ts ALSO READ ONE PLAIN VAR, not a secret,
+  // and it is not set here yet: SENDBLUE_FROM_NUMBER — this deployment's
+  // Sendblue number in E.164. Outbound texts name it as the sender; once it
+  // is set, an inbound message addressed to any other number is refused
+  // (403), as /sms/inbound refuses a To that is not TWILIO_PHONE_NUMBER. Add
+  // it to `vars` when the number is known; unset, that inbound check is
+  // skipped and messaging.ts does not choose Sendblue.
   //
   // /agent/llm ALSO READS TWO PLAIN VARS, not secrets, and neither is set here
   // yet: ANTICIPY_BROWSER_MODEL and ANTICIPY_VISION_MODEL — the only two models

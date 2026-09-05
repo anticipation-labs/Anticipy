@@ -19,6 +19,7 @@
 import { sha256Hex } from "../llm.ts";
 import { newRecordId, pbNow } from "../pb/wire.ts";
 import { hqCors, type HqEnv } from "./hq.ts";
+import { chooseProvider } from "../messaging.ts";
 
 const json = (status: number, body: unknown, extra?: Record<string, string>) =>
   new Response(JSON.stringify(body), {
@@ -836,8 +837,10 @@ export async function hqState(req: Request, env: HqEnv): Promise<Response> {
   // ---- delivery channels: env presence, booleans, never the values --------
   out.channels = {
     email: !!(env.RESEND_API_KEY || ""),
-    sms: !!((env.TWILIO_ACCOUNT_SID || "") && (env.TWILIO_AUTH_TOKEN || "")
-            && ((env.TWILIO_PHONE_NUMBER || "") || (env.TWILIO_FROM || ""))),
+    // Sendblue OR Twilio, decided in ONE place: src/messaging.ts chooses the
+    // provider every text leaves through (the sweep's reminders included), and
+    // the dot reads "SMS connected" exactly when it would choose one.
+    sms: chooseProvider(env) !== "none",
   };
 
   // ---- meters --------------------------------------------------------------

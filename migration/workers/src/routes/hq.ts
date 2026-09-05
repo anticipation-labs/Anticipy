@@ -14,12 +14,15 @@
  *   a Clerk JWT exchange at /internal/clerk/exchange
  * Four ways in, none of them `owners`.
  */
+import { chooseProvider, type MessagingEnv } from "../messaging.ts";
+
 const json = (status: number, body: unknown, extra?: Record<string, string>) =>
   new Response(JSON.stringify(body), {
     status, headers: { "content-type": "application/json", ...(extra ?? {}) },
   });
 
-export interface HqEnv {
+/** The SENDBLUE_* / TWILIO_* / ANTICIPY_SMS_PROVIDER names come from MessagingEnv. */
+export interface HqEnv extends MessagingEnv {
   DB: D1Database;
   ASSETS: Fetcher;
   ANTICIPY_INTERNAL_KEY?: string;
@@ -85,7 +88,10 @@ export function hqHealth(req: Request, env: HqEnv): Response {
     version: "hq-2",
     channels: {
       email: !!(env.RESEND_API_KEY || ""),
-      sms: !!(env.TWILIO_AUTH_TOKEN || ""),
+      // Sendblue OR Twilio, decided in ONE place: src/messaging.ts chooses
+      // the provider every text leaves through, and "configured" means it
+      // would choose one. Re-deriving it here is how two answers drift.
+      sms: chooseProvider(env) !== "none",
     },
   }, hqCors(req, env));
 }
