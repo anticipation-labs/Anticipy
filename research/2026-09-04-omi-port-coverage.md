@@ -38,7 +38,7 @@ unflashed, and `firmware_gate.py` reports UNPROVEN.
 | 03 | The phone relay | HTTPS + poll, WAL, gap assembler | **DONE — 3 fixes** |
 | 04 | Ingest / STT / speaker | on-device Apple STT, no VAD, tagger unlinked | **DECLINED, deliberately** |
 | 05 | Memory | SQLite temporal KG, no vectors | **DONE — 4/5 already built, board corrected** |
-| 06 | Reasoning + bounds | ~13 single-question calls, NO bounds | **OPEN — the largest remaining gap** |
+| 06 | Reasoning + bounds | ~13 single-question calls, NO bounds | **DONE in repo (`6b7b9e16`), NOT LIVE** — 150 s / 32 calls per decision, 300 s per poll turn, DeadlineExceeded held not faulted; `heard_ms`/`heard_calls` on `events` (PocketBase migration 056; D1 ALTER pending the owner's go); `is_the_decision_bounded.py` UNPROVEN until a deployed worker stamps a row |
 | 07 | Action / tools | seatbelt, digest-bound approval | **DECLINED — ours is the control group** |
 | 08 | Pusher / blast wall | none | **OPEN — but premature** |
 | 09 | Model gateway | env-var model, no retry, no fallback | **DONE in repo (`8230819d`), NOT LIVE** — truncation flag, 3-attempt retry, ordered transports with a 60 s dead-primary memory; `is_the_gateway_live.py` exits 1 until a worker with both keys and `ANTICIPY_LLM_ORDER` runs |

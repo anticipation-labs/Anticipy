@@ -65,7 +65,7 @@ export const COLLECTIONS: Readonly<Record<string, CollectionDef>> = {
       needs_confirmation: B, capture_started_at: D, capture_ended_at: D, gap_before_ms: N,
       seq: N, boot_id: T, source: T, backfill: B, segment: R, speaker: T, owner_ref: R,
       addressee: T, spoken_at: D, parent_line: T, external_event_id: T, explicit: B,
-      importance: N
+      importance: N, heard_ms: N, heard_calls: N
     },
     boolColumns: ["needs_confirmation", "backfill", "explicit"],
     createdColumn: "created", updatedColumn: "updated",

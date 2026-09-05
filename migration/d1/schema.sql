@@ -239,7 +239,9 @@ CREATE TABLE IF NOT EXISTS "events" (
   "parent_line"         TEXT    NOT NULL DEFAULT '',      -- 1700000020_events_capture_and_link.js:38  self-id = "new thread"
   "external_event_id"   TEXT    NOT NULL DEFAULT '',      -- 1700000028_event_sources.js:9-11  Twilio idempotency key
   "explicit"            INTEGER NOT NULL DEFAULT 0,       -- 1700000029_event_intent.js:9 bool — typed vs ambient
-  "importance"          REAL    NOT NULL DEFAULT 0        -- 1700000040_event_importance.js:23-28 number, PB min 1 max 5; 0 = unset, worker reads missing as 4
+  "importance"          REAL    NOT NULL DEFAULT 0,       -- 1700000040_event_importance.js:23-28 number, PB min 1 max 5; 0 = unset, worker reads missing as 4,
+  "heard_ms"            REAL    NOT NULL DEFAULT 0,       -- 1700000056_events_heard.js  Omi port 06: wall-clock the decision spent
+  "heard_calls"         REAL    NOT NULL DEFAULT 0        -- 1700000056_events_heard.js  Omi port 06: model calls the decision spent
 );
 CREATE UNIQUE INDEX IF NOT EXISTS "idx_events_external_event"
   ON "events" ("external_event_id") WHERE "external_event_id" != '';
