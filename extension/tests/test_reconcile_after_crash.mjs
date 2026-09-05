@@ -54,7 +54,7 @@ const {
 } = await import("../reconcile.js");
 const { rowWriters, recoverUncertainEffect } = await import("../background.js");
 const { effectIntentAfter, parseJobParams } = await import("../workflow_state.js");
-const { runAgentGoal } = await import("../agent_loop.js");
+const { runAgentGoal, MODEL_REPLY_FLOOR } = await import("../agent_loop.js");
 // The worker polls on import, exactly as it does on boot. Let that settle so
 // its writes cannot land in the middle of a leg below.
 await new Promise((r) => setTimeout(r, 30));
@@ -321,7 +321,7 @@ const tabWith = (page) => { const t = harness.addTab({ url: page.url }); pages.s
   // 8 tokens are requested; modelFetch floors every request at 64 on the
   // wire, so the bound seen here is that floor, the same as #64's call.
   check("C: the call is the #64 shape — its own system prompt, temperature 0, a token-sized budget, two messages",
-    modelCalls[0].temperature === 0 && modelCalls[0].max_tokens === 64
+    modelCalls[0].temperature === 0 && modelCalls[0].max_tokens === MODEL_REPLY_FLOOR
       && modelCalls[0].messages?.length === 2 && modelCalls[0].messages[0].role === "system"
       && !modelCalls[0].response_format);
   check("C: what went to the model is the confirmation page, and no form value",

@@ -87,17 +87,36 @@ async function retryableFailure(r) {
   return { retry: !ceiling, r: replay };
 }
 
+// THE FLOOR UNDER EVERY REPLY, AND WHY IT IS NOT SMALL.
+//
+// Every one-token judge in this file asks for 8 tokens; the wire carries this
+// number instead. It was 64 until 2026-09-05, when audit #70's live leg
+// (research/evals/login-wall-2026-09-05/FINDINGS.md) measured the browser
+// model — google/gemini-3.1-pro-preview, a thinking model whose reasoning
+// counts against max_tokens — on 22 pages at that cap: `PAY`, `SS`, `SSO`,
+// empty, 15 of 22 wrong, every one of them cut off before the visible answer.
+// Every truncated reply is a NO-VERDICT, so at 64 a CEILING judge (the wall,
+// the challenge, the box, the suggestion list) never fenced and a FLOOR judge
+// (field kind, native date, narration, code, reconcile) refused everything —
+// and the offline suites stayed green throughout, because a stub answers in
+// one token. At 512 the same 22 pages read 66/66. Gemini 3 cannot have its
+// thinking turned off (the proxy sends the lowest level it accepts), so the
+// room has to be in the cap. It is a cap, not a spend: the answer is still one
+// line at temperature 0. The proxy floors at the same number.
+export const MODEL_REPLY_FLOOR = 512;
+
 export async function modelFetch(apiKey, payload, signal = undefined) {
   // Every browser response is a tiny JSON decision.  Without an explicit
   // cap, OpenRouter prices/checks the request against the model's full
   // 65,535-token output window; a live run exhausted its apparent budget
   // after 70 actions even though replies were only tens of tokens.  Bound it
-  // on both transports, and let callers request less when appropriate.
+  // on both transports, and let callers request less when appropriate —
+  // never less than MODEL_REPLY_FLOOR, for the reason above it.
   const requested = Number(payload && payload.max_tokens);
   const boundedPayload = {
     ...payload,
-    max_tokens: Math.min(4096, Math.max(64,
-      Number.isFinite(requested) ? Math.floor(requested) : 512)),
+    max_tokens: Math.min(4096, Math.max(MODEL_REPLY_FLOOR,
+      Number.isFinite(requested) ? Math.floor(requested) : MODEL_REPLY_FLOOR)),
   };
   let url, headers;
   if (apiKey !== BACKEND_LLM) {
@@ -5247,7 +5266,7 @@ export const CODE_SENT_PAGE_LIMIT = 6000;
  * field whose attributes mark it a one-time-code box, and once per page state
  * within a run — so an ordinary run never pays for it.
  *
- * max_tokens is asked as 8; modelFetch floors every request at 64, and the
+ * max_tokens is asked as 8; modelFetch floors every request at MODEL_REPLY_FLOOR, and the
  * exact-token compare in whereCodeWent is the real bound.
  */
 export function codeSentJudge(apiKey, model, service) {
@@ -5297,7 +5316,7 @@ export function codeSentJudge(apiKey, model, service) {
  * The page is a person's mailbox and UNTRUSTED. It rides only inside a
  * one-time fenced block in the user turn, cut to CODE_PAGE_LIMIT; the system
  * turn never carries it. max_tokens is asked as 16; modelFetch floors every
- * request at 64, and the one-token rule in codeFromPage is the real bound.
+ * request at MODEL_REPLY_FLOOR, and the one-token rule in codeFromPage is the real bound.
  *
  * Privacy, said plainly: every taken trip now ships the list page — other
  * senders' snippets included — to the model provider one to two times, where

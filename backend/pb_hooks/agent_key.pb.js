@@ -236,9 +236,16 @@ routerAdd("POST", "/agent/llm", (e) => {
   // Browser responses are compact JSON. Never let an omitted client cap turn
   // into the provider's 65k-token maximum: OpenRouter performs an
   // affordability check against that maximum before generating anything.
-  const requestedMax = Number(body.max_tokens || 512);
-  const boundedMax = Math.min(4096, Math.max(64,
-    isFinite(requestedMax) ? Math.floor(requestedMax) : 512));
+  // The floor is 512, not 64, since 2026-09-05: the browser model is a
+  // thinking model whose reasoning counts against max_tokens, and at 64 its
+  // one-token verdicts came back cut off mid-word on 15 of 22 measured pages
+  // (research/evals/login-wall-2026-09-05/FINDINGS.md). The extension floors
+  // at the same number (MODEL_REPLY_FLOOR in agent_loop.js); this is the
+  // second lock on the same door, for any caller that is not the extension.
+  const REPLY_FLOOR = 512;
+  const requestedMax = Number(body.max_tokens || REPLY_FLOOR);
+  const boundedMax = Math.min(4096, Math.max(REPLY_FLOOR,
+    isFinite(requestedMax) ? Math.floor(requestedMax) : REPLY_FLOOR));
   const payload = { model: model, messages: messages, temperature: 0,
                     max_tokens: boundedMax };
   if (body.response_format && body.response_format.type === "json_object") {

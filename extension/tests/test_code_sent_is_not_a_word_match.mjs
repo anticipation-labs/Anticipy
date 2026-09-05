@@ -30,7 +30,7 @@ const check = (name, ok, detail = "") => {
 };
 
 const harness = installChrome();
-const { runAgentGoal, codeSentJudge, CODE_SENT_PAGE_LIMIT } = await import("../agent_loop.js");
+const { runAgentGoal, codeSentJudge, CODE_SENT_PAGE_LIMIT, MODEL_REPLY_FLOOR } = await import("../agent_loop.js");
 
 // The wall page, worded the way the deleted regex could not read: no "sent",
 // no "check your email", no "code was sent".
@@ -268,8 +268,8 @@ for (const [name, reply] of [
     `fence=${fence} user=${user.length} chars`);
   check("the limit is the page map's own cap, never lower", CODE_SENT_PAGE_LIMIT >= 6000, String(CODE_SENT_PAGE_LIMIT));
   check("the system turn carries no page text", !system.includes("Menu item") && !system.includes("on its way"));
-  check("max_tokens is asked small; modelFetch floors it at 64 and the token compare is the real bound",
-    Number(sent[0]?.max_tokens) === 64, String(sent[0]?.max_tokens));
+  check("max_tokens is asked small; modelFetch floors it at MODEL_REPLY_FLOOR and the token compare is the real bound",
+    Number(sent[0]?.max_tokens) === MODEL_REPLY_FLOOR, String(sent[0]?.max_tokens));
 
   // (b) A HUNG MODEL CANNOT HANG THE RUN, and is read as unanswered — not
   // none. The clock is shrunk rather than the code.

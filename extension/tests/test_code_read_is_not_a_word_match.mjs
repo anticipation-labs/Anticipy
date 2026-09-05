@@ -21,7 +21,7 @@
 //
 // Run: node extension/tests/test_code_read_is_not_a_word_match.mjs
 import { codeFromPage, readCodeVerdict, runSideTrip, CODE_PAGE_LIMIT } from "../side_trip.js";
-import { codeJudge } from "../agent_loop.js";
+import { codeJudge, MODEL_REPLY_FLOOR } from "../agent_loop.js";
 
 let failures = 0;
 const check = (name, ok, detail = "") => {
@@ -328,8 +328,8 @@ for (const [name, reply] of [
   check("...and says what to do with an instruction found inside the block", /answer UNCLEAR/.test(system), system);
   check("the purpose and the site reach the judge, as structure",
     user.includes("Greenhouse verification code") && user.includes("greenhouse.example"), user);
-  check("max_tokens is asked small; modelFetch floors it at 64 and the one-token rule is the real bound",
-    Number(body.max_tokens) === 64, String(body.max_tokens));
+  check("max_tokens is asked small; modelFetch floors it at MODEL_REPLY_FLOOR and the one-token rule is the real bound",
+    Number(body.max_tokens) === MODEL_REPLY_FLOOR, String(body.max_tokens));
 }
 {
   // (c) An HTTP failure, and a model that answers in a sentence, both end as

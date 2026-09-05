@@ -26,8 +26,7 @@ import { installChrome } from "./chrome_mock.mjs";
 
 const harness = installChrome();
 const {
-  runAgentGoal, challengeFurniture, challengeProvider, CHALLENGE_ASK_CAP,
-} = await import("../agent_loop.js");
+  runAgentGoal, challengeFurniture, challengeProvider, CHALLENGE_ASK_CAP, MODEL_REPLY_FLOOR } = await import("../agent_loop.js");
 
 let failures = 0;
 const check = (name, ok, detail = "") => {
@@ -278,7 +277,7 @@ const DONE = { action: "done", result: "The table is held and the booking is con
   const q = r.questions[0];
   check("the question travels alone: never inside the step contract",
     q && !q.joined.includes(STEP_CONTRACT));
-  check("...and asks for a handful of tokens", q && Number(q.body.max_tokens) <= 64, q && String(q.body.max_tokens));
+  check("...and asks for a handful of tokens", q && Number(q.body.max_tokens) <= MODEL_REPLY_FLOOR, q && String(q.body.max_tokens));
   check("...at temperature 0", q && q.body.temperature === 0);
   check("...carrying the furniture the sift found", q && /frame from Cloudflare Turnstile/.test(q.joined));
   check("...carrying the page text the step prompt already shows",

@@ -28,6 +28,13 @@ def test_model_proxy_requires_private_agent_credential_and_allowlist():
     assert "inlineData" in proxy
     assert 'provider: "google"' in proxy
     assert "max_tokens: boundedMax" in proxy
+    # 2026-09-05: the floor is 512, not 64 — the browser model thinks before it
+    # answers and the thinking counts against the cap; at 64 its one-token
+    # verdicts came back cut off (research/evals/login-wall-2026-09-05/).
+    # The extension floors at the same number; this pins the proxy's lock.
+    assert "const REPLY_FLOOR = 512;" in proxy
+    assert "Math.max(REPLY_FLOOR," in proxy
+    assert "Math.max(64," not in proxy
     assert "Math.min(4096" in proxy
     assert "maxOutputTokens: boundedMax" in proxy
     assert "const gemini3" in proxy
