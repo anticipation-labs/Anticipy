@@ -75,7 +75,15 @@ export const MAX_RECIPES = 40;
 // commit costs a slower live step, under-calling it hands a submit button to a
 // replay. When these lists disagree, this one must be the stricter.
 const COMMIT_VERB = /\b(submit|send|confirm|place\s+order|buy|purchase|book|schedule|request|apply|pay|delete|remove|save|renew|register|file|complete|finish|finalize|create|open\s+(?:a\s+)?claim)\b|^\s*cancel\s+\w+/i;
-const REVERSIBLE_LABEL = /^\s*(?:(?:search|find|filter|look\s*up|next|continue|back|previous)(?:\b|\s)|(?:cancel|close|dismiss)\s*$|(?:see|show|view)\s+[0-9][0-9,.\s]*\s+results?\b|(?:apply|update)\s+(?:filters?|search|results?)\b)/i;
+// Split in two on 2026-09-05 (F08), following the loop. A WHOLE-LABEL
+// reversible form is the entire gesture and still wins outright. A reversible
+// PREFIX only claims the first word moves you along, and it used to beat a
+// commit verb standing right beside it: "Continue and pay" and "Next: Place
+// order" compiled as non-committing steps, which in this module is the
+// dangerous direction — `commits` is what `nextStep` refuses to replay, so a
+// mislabelled step is a submit a replay presses on its own.
+const REVERSIBLE_WHOLE = /^\s*(?:(?:cancel|close|dismiss)\s*$|(?:see|show|view)\s+[0-9][0-9,.\s]*\s+results?\b|(?:apply|update)\s+(?:filters?|search|results?)\b)/i;
+const REVERSIBLE_PREFIX = /^\s*(?:search|find|filter|look\s*up|next|continue|back|previous)(?:\b|\s)/i;
 // An action-shaped GET: the URL itself names the mutation, so following it is
 // the commit. Same test the loop applies to anchors.
 const MUTATING_ROUTE = /(?:^|[/?#&=_-])(?:delete|remove|unsubscribe|logout|purchase|checkout|confirm|pay)(?:$|[/?#&=_-])/i;
@@ -457,7 +465,8 @@ function isCommit(verb, label, decision) {
   if (verb === "navigate") return MUTATING_ROUTE.test(String(decision.url || ""));
   if (verb !== "click") return false;
   if (!label) return false;
-  if (REVERSIBLE_LABEL.test(label)) return false;
+  if (REVERSIBLE_WHOLE.test(label)) return false;
+  if (REVERSIBLE_PREFIX.test(label) && !COMMIT_VERB.test(label)) return false;
   return COMMIT_VERB.test(label);
 }
 

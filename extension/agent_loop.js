@@ -4551,8 +4551,38 @@ export function externalControlSemantics({ label = "", explicitSubmit = false,
   // reservation" / "Cancel subscription" is a world-changing commit that
   // the old prefix-match waved through every gate (hunt find, 2026-08-15).
   const commit = /\b(submit|send|confirm|place\s+order|buy|purchase|book|schedule|request|apply|pay|delete|remove|save|renew|register|file|complete|finish|finalize|create|open\s+(?:a\s+)?claim)\b|^\s*cancel\s+\w+/i;
-  const reversible = /^\s*(?:(?:search|find|filter|look\s*up|next|continue|back|previous)(?:\b|\s)|(?:cancel|close|dismiss)\s*$|(?:see|show|view)\s+[0-9][0-9,.\s]*\s+results?\b|(?:apply|update)\s+(?:filters?|search|results?)\b)/i;
-  if (reversible.test(text)) return false;
+  // A REVERSIBLE PREFIX IS NOT THE WHOLE LABEL, AND USED TO BEAT ONE (F05's
+  // sibling, F08, 2026-09-05). Until today this was ONE alternation and it ran
+  // BEFORE the commit test, start-anchored with `(?:\b|\s)` after
+  // next|continue|back|previous — so a label that merely BEGINS with one of
+  // those words was judged reversible whatever else it said. Measured on the
+  // shipped regexes with explicitSubmit true:
+  //     "Continue"           -> false   (right, and why the exemption exists)
+  //     "Continue and pay"   -> false   (wrong)
+  //     "Next: Place order"  -> false   (wrong)
+  // A false here is not a soft answer: in commitControl it skips the read-only
+  // refusal, the authorization hand-back, the at-most-once submission keys and
+  // every pre-submit auditor, so a read-only run would press "Continue and
+  // pay". Audit row #80 dispositioned these lists as a LEGAL seatbelt, which
+  // they are — they read what a control DOES — but it never considered that
+  // the reversible half switches the seatbelt OFF.
+  //
+  // So the two shapes are separated. A WHOLE-LABEL reversible form is the
+  // entire gesture and keeps winning outright ("Cancel", "See 3,631 results",
+  // "Apply filters" — the filter idiom collides with `\bapply\b` and must not
+  // flip). A reversible PREFIX only says the first word moves you along; a
+  // commit verb anywhere else in the label overrides it.
+  //
+  // STILL OPEN, deliberately, and recorded rather than patched: a bare
+  // "Continue" that IS the final commit, and "Continue to payment" (no `\bpay\b`
+  // boundary), cannot be told from Shopify's "Continue to shipping" by any
+  // pattern — that is what the button MEANS, a law-1 question for a model
+  // verdict at the gate, and widening the vocabulary here would only reopen
+  // the 2026-08-20 booking deadlock this exemption exists to prevent.
+  const reversibleWhole = /^\s*(?:(?:cancel|close|dismiss)\s*$|(?:see|show|view)\s+[0-9][0-9,.\s]*\s+results?\b|(?:apply|update)\s+(?:filters?|search|results?)\b)/i;
+  const reversiblePrefix = /^\s*(?:search|find|filter|look\s*up|next|continue|back|previous)(?:\b|\s)/i;
+  if (reversibleWhole.test(text)) return false;
+  if (reversiblePrefix.test(text) && !commit.test(text)) return false;
   return commit.test(text) || !!explicitSubmit;
 }
 
@@ -4778,9 +4808,23 @@ async function commitControl(tabId, index, viaEnter = false) {
       };
       const calendarLike = dayCell(source);
       const consentBox = source.closest('[role="dialog"],[aria-modal="true"],aside');
-      const cookieLike = /\bcookies?\b|\bconsent\b/i.test(sourceLabel)
-        || (/\b(accept|reject|manage|settings|preferences?|confirm\s+choices?)\b/i.test(sourceLabel)
-          && /\bcookies?\b|\bconsent\b/i.test(String(consentBox?.innerText || "").slice(0, 1200)));
+      // A CONSENT DIALOG IS PROSE, AND PROSE ON A CHECKOUT PAGE CAN SAY
+      // "consent" (F08). The second arm reads 1200 characters of whatever
+      // dialog or aside encloses the control, so a checkout modal carrying the
+      // word — a terms line, a marketing opt-in — made every button in it a
+      // cookie button, and a cookie button skips the whole gate stack above.
+      // A control whose own label names a payment or an order is not a cookie
+      // button, whatever the box around it says. Deliberately only money and
+      // orders: that is the one category this file already hard-codes
+      // (BLOCKED_DOMAINS), the exemption's real job — "Accept all cookies",
+      // "Confirm choices", "Manage preferences" — is untouched by it, and the
+      // wider question of what a button in a consent box MEANS is a model's,
+      // not a longer list's.
+      const paysOrOrders = /\b(pay|purchase|buy|place\s+order|checkout|order)\b/i.test(sourceLabel);
+      const cookieLike = !paysOrOrders
+        && (/\bcookies?\b|\bconsent\b/i.test(sourceLabel)
+          || (/\b(accept|reject|manage|settings|preferences?|confirm\s+choices?)\b/i.test(sourceLabel)
+            && /\bcookies?\b|\bconsent\b/i.test(String(consentBox?.innerText || "").slice(0, 1200))));
       if (searchLike || calendarLike || cookieLike || choiceLike || disclosureLike) return false;
       const controls = enter && source.form
         ? [...source.form.querySelectorAll('button,input[type="submit"],input[type="button"],[role="button"]')]
@@ -4794,12 +4838,24 @@ async function commitControl(tabId, index, viaEnter = false) {
         // button in the form, so without this an Enter keypress in a booking
         // form is judged a commit by whichever day cell it happens to scan.
         const calendar = dayCell(el);
-        const cookies = /\bcookies?\b|\bconsent\b/i.test(label);
+        // Same carve-out as the source control above (F08): a label that names
+        // a payment or an order is not a cookie button.
+        const cookies = /\bcookies?\b|\bconsent\b/i.test(label)
+          && !/\b(pay|purchase|buy|place\s+order|checkout|order)\b/i.test(label);
         const isSearch = /^(?:search|find|filter|look\s*up)(?:\b|\s)/i.test(label);
         if (isSearch || calendar || cookies) return false;
         const commit = /\b(submit|send|confirm|place\s+order|buy|purchase|book|schedule|request|apply|pay|delete|remove|save|renew|register|file|complete|finish|finalize|create|open\s+(?:a\s+)?claim)\b|^\s*cancel\s+\w+/i;
-        const reversible = /^\s*(?:(?:search|find|filter|look\s*up|next|continue|back|previous)(?:\b|\s)|(?:cancel|close|dismiss)\s*$|(?:see|show|view)\s+[0-9][0-9,.\s]*\s+results?\b|(?:apply|update)\s+(?:filters?|search|results?)\b)/i;
-        if (reversible.test(label)) return false;
+        // THE LIVE HALF OF F08. Same split as externalControlSemantics above,
+        // where the record of what this cost sits: a whole-label reversible
+        // form still wins outright, a reversible PREFIX loses to a commit verb
+        // anywhere else in the label. "Continue and pay" and "Next: Place
+        // order" were judged reversible here, and a false skips the read-only
+        // refusal, the authorization gate, the at-most-once keys and every
+        // pre-submit auditor below.
+        const reversibleWhole = /^\s*(?:(?:cancel|close|dismiss)\s*$|(?:see|show|view)\s+[0-9][0-9,.\s]*\s+results?\b|(?:apply|update)\s+(?:filters?|search|results?)\b)/i;
+        const reversiblePrefix = /^\s*(?:search|find|filter|look\s*up|next|continue|back|previous)(?:\b|\s)/i;
+        if (reversibleWhole.test(label)) return false;
+        if (reversiblePrefix.test(label) && !commit.test(label)) return false;
         return commit.test(label) || explicitSubmit;
       });
     }, [viaEnter]));
