@@ -2014,6 +2014,119 @@ function taskAllowsLoopback(...values) {
     .test(String(value || "")));
 }
 
+// ---------------------------------------------------------- internal network
+// THE WHOLE INTERNAL NETWORK, not just this machine. Omi's teardown item #04.
+//
+// `loopbackTarget` was written for a mail catcher on localhost, and it does
+// that job. But an agent holding <all_urls> and the debugger in the owner's
+// own browser can be steered — by a page it is reading — to anything the
+// owner's network can reach: the router's admin panel at 192.168.1.1, a NAS,
+// a printer, a work VPN host, or on a cloud desktop the metadata service at
+// 169.254.169.254 that hands out credentials. None of those is loopback and
+// every one walked straight past the old guard. Measured against WHATWG on
+// 2026-09-05: 10.0.0.1, 172.16.0.1, 192.168.1.1, 100.64.0.1, 169.254.169.254,
+// 0.1.2.3, [fe80::1], [fc00::1] and [::] all returned false.
+//
+// The one that needs explaining is IPv4-mapped IPv6. Omi's own URL-fetch
+// guard misses it, and their audit stood up a listener to prove
+// ::ffff:127.0.0.1 completes a real request. WHATWG does not hand us the
+// dotted form: `new URL("http://[::ffff:127.0.0.1]/").hostname` is
+// "[::ffff:7f00:1]". So the low 32 bits are decoded out of the hex and run
+// through the IPv4 check — the address is judged by where it goes, not by
+// how it was spelled.
+//
+// A SEATBELT, and legal under HARNESS-LAWS law 1 for the same reason
+// BLOCKED_DOMAINS and loopbackTarget are: it checks what a plan TOUCHES —
+// an address class — never what a sentence means. The ranges are the ones
+// Omi's http_client refuses (private, loopback, link-local, multicast,
+// reserved, unspecified, and carrier-grade NAT, which ipaddress libraries
+// forget) written out as CIDR so a reviewer can check them against the RFCs
+// rather than against a library's definition of "private".
+//
+// It composes loopbackTarget rather than restating it, so loopback keeps
+// exactly one definition and the two cannot drift.
+const INTERNAL_V4 = [
+  [0x00000000, 8],  // 0.0.0.0/8      "this" network — 0.0.0.0 reaches localhost on Linux
+  [0x0a000000, 8],  // 10.0.0.0/8     RFC 1918
+  [0x64400000, 10], // 100.64.0.0/10  RFC 6598 carrier-grade NAT
+  [0x7f000000, 8],  // 127.0.0.0/8    loopback (loopbackTarget covers it; kept so this list is complete on its own)
+  [0xa9fe0000, 16], // 169.254.0.0/16 link-local, incl. the cloud metadata address
+  [0xac100000, 12], // 172.16.0.0/12  RFC 1918
+  [0xc0000000, 24], // 192.0.0.0/24   IETF protocol assignments
+  [0xc0a80000, 16], // 192.168.0.0/16 RFC 1918
+  [0xc6120000, 15], // 198.18.0.0/15  benchmarking
+  [0xe0000000, 4],  // 224.0.0.0/4    multicast
+  [0xf0000000, 4],  // 240.0.0.0/4    reserved, incl. broadcast
+];
+
+function v4ToInt(host) {
+  const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(host);
+  if (!m) return null;
+  const o = m.slice(1).map(Number);
+  if (o.some((n) => n > 255)) return null;
+  return ((o[0] << 24) | (o[1] << 16) | (o[2] << 8) | o[3]) >>> 0;
+}
+
+function internalV4(ip) {
+  return INTERNAL_V4.some(([net, bits]) => {
+    const mask = bits === 0 ? 0 : (0xffffffff << (32 - bits)) >>> 0;
+    return ((ip & mask) >>> 0) === net;
+  });
+}
+
+// Expand a WHATWG-serialised IPv6 host into eight 16-bit groups, or null.
+function v6Groups(host) {
+  if (!/^[0-9a-f:]+$/.test(host)) return null;
+  const halves = host.split("::");
+  if (halves.length > 2) return null;
+  const head = halves[0] ? halves[0].split(":") : [];
+  const tail = halves.length === 2 && halves[1] ? halves[1].split(":") : [];
+  const fill = halves.length === 2 ? 8 - head.length - tail.length : 0;
+  if (fill < 0 || (halves.length === 1 && head.length !== 8)) return null;
+  const groups = [...head, ...Array(fill).fill("0"), ...tail];
+  if (groups.length !== 8 || groups.some((g) => g === "" || g.length > 4)) return null;
+  return groups.map((g) => parseInt(g, 16));
+}
+
+export function internalNetworkTarget(url) {
+  if (loopbackTarget(url)) return true;
+  try {
+    const host = new URL(String(url || "")).hostname
+      .toLowerCase().replace(/^\[|\]$/g, "").replace(/\.$/, "");
+    const v4 = v4ToInt(host);
+    if (v4 !== null) return internalV4(v4);
+    const g = v6Groups(host);
+    if (!g) return false;
+    // IPv4-mapped ::ffff:a.b.c.d arrives as ::ffff:hhhh:hhhh — judge the IPv4.
+    if (g.slice(0, 5).every((x) => x === 0) && g[5] === 0xffff) {
+      return internalV4(((g[6] << 16) | g[7]) >>> 0);
+    }
+    if (g.every((x) => x === 0)) return true;                 // ::   unspecified
+    if (g.slice(0, 7).every((x) => x === 0) && g[7] === 1) return true; // ::1
+    if ((g[0] & 0xffc0) === 0xfe80) return true;              // fe80::/10 link-local
+    if ((g[0] & 0xfe00) === 0xfc00) return true;              // fc00::/7  unique-local
+    if ((g[0] & 0xff00) === 0xff00) return true;              // ff00::/8  multicast
+    return false;
+  } catch (_) { return false; }
+}
+
+// The owner may name an internal address in his own words — "check the
+// router at 192.168.1.1", "open the NAS on 10.0.0.5" — and then it is his
+// errand, not a hijack. Same rule and same inputs as taskAllowsLoopback: only
+// owner-supplied text, never anything a model wrote. A literal that is not an
+// internal address does not authorise one, so a public IP in the goal buys
+// nothing here.
+export function taskAllowsInternalNetwork(...values) {
+  if (taskAllowsLoopback(...values)) return true;
+  return values.some((value) => {
+    const text = String(value || "");
+    const v4s = text.match(/\b\d{1,3}(?:\.\d{1,3}){3}\b/g) || [];
+    if (v4s.some((h) => { const n = v4ToInt(h); return n !== null && internalV4(n); })) return true;
+    const v6s = text.match(/\[([0-9a-f:]+)\]/gi) || [];
+    return v6s.some((b) => internalNetworkTarget("http://" + b + "/"));
+  });
+}
+
 // ------------------------------------------------------------- solving
 // Read the challenge's own parameters off the page. Nothing is guessed: a
 // sitekey is either present in the DOM or this is not a challenge we can
@@ -4239,6 +4352,7 @@ export async function runAgentGoal(goal, opts) {
   // researcher's go_to, a cited URL in a rejected result — is model output
   // and must never be able to widen this.
   const allowLoopback = taskAllowsLoopback(goal, scope, startUrl);
+  const allowInternal = taskAllowsInternalNetwork(goal, scope, startUrl);
 
   // Same hard policy as BLOCKED_DOMAINS, applied to the TASK: a goal that is
   // itself about operating a financial account never even starts — the
@@ -4376,7 +4490,7 @@ export async function runAgentGoal(goal, opts) {
   // agent could operate any service on the owner's machine with a
   // fully model-authored justification. Authorization comes from the owner's
   // words and the caller's explicit start URL — never from a model.
-  const firstUrl = (loopbackTarget(openAt) && !allowLoopback) ? startUrl : openAt;
+  const firstUrl = (internalNetworkTarget(openAt) && !allowInternal) ? startUrl : openAt;
   if (plan) console.log(`agent: plan -> ${plan.startUrl} (${plan.why})`);
 
   const preexisting = new Set((await chrome.tabs.query({})).map((t) => t.id));
@@ -4630,8 +4744,8 @@ export async function runAgentGoal(goal, opts) {
     if (!/^https?:\/\//i.test(target)) return "it is not an http(s) address";
     const banked = blockedDomain(target);
     if (banked) return `${banked} is a protected financial site`;
-    if (loopbackTarget(target) && !allowLoopback) {
-      return "this task never authorized a local site";
+    if (internalNetworkTarget(target) && !allowInternal) {
+      return "this task never authorized a local or internal-network site";
     }
     // A fallback URL and a research destination are model-composed places to
     // go and LOOK SOMETHING UP. His mailbox is never that, and neither is his
@@ -5125,9 +5239,9 @@ export async function runAgentGoal(goal, opts) {
       // request. A redirect, or any navigation path that predates this gate,
       // could therefore leave the working tab sitting on a local service and
       // the loop would map it and start clicking.
-      if (loopbackTarget(state.url) && !allowLoopback) {
+      if (internalNetworkTarget(state.url) && !allowInternal) {
         return (handBack = true) && { status: "needs_user",
-          result: `refused: this ended up on ${String(state.url).slice(0, 120)}, a service on your own machine that the task never authorized — I stopped rather than operate it`,
+          result: `refused: this ended up on ${String(state.url).slice(0, 120)}, a service on your own machine or network that the task never authorized — I stopped rather than operate it`,
           tabId: tab.id };
       }
       if (looksLikeCaptcha(state)) {
@@ -5587,8 +5701,8 @@ export async function runAgentGoal(goal, opts) {
         // "we stopped in his inbox" and "we never opened it".
         const privateTarget = await privatePlaceHandBack(decision.url, tab.id);
         if (privateTarget) return privateTarget;
-        if (loopbackTarget(decision.url) && !allowLoopback) {
-          history.push(`step ${step}: BLOCKED UNEXPECTED LOCAL TARGET — ignored ${String(decision.url).slice(0, 120)} because this task never authorized a local site`);
+        if (internalNetworkTarget(decision.url) && !allowInternal) {
+          history.push(`step ${step}: BLOCKED UNEXPECTED INTERNAL TARGET — ignored ${String(decision.url).slice(0, 120)} because this task never authorized a local or internal-network site`);
           continue;
         }
         await navigateWorkingTab(tab.id, decision.url);

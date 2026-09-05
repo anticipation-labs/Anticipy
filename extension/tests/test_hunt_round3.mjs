@@ -226,8 +226,23 @@ assert.ok(/const allowLoopback = taskAllowsLoopback\(goal, scope, startUrl\);/.t
   "loopback authorization comes from the owner's words and the caller only");
 assert.ok(!/taskAllowsLoopback\([^)]*openAt/.test(src),
   "model output must never be one of the values that authorizes it");
-assert.ok(/const firstUrl = \(loopbackTarget\(openAt\) && !allowLoopback\) \? startUrl : openAt;/.test(src),
+// 2026-09-05: the guard at this site widened from loopback to the whole
+// internal network (Omi teardown item #04 — 192.168.x, 10.x, 169.254.x and
+// IPv4-mapped IPv6 all walked past loopbackTarget). The PROPERTY is unchanged
+// and pinned the same way for the wider pair: authorization comes from the
+// owner's words and the caller's start URL only, never from a value the
+// planner produced, and an unauthorized start_url is replaced, not opened.
+assert.ok(/const allowInternal = taskAllowsInternalNetwork\(goal, scope, startUrl\);/.test(src),
+  "internal-network authorization comes from the owner's words and the caller only");
+assert.ok(!/taskAllowsInternalNetwork\([^)]*openAt/.test(src),
+  "model output must never be one of the values that authorizes the internal network");
+assert.ok(/const firstUrl = \(internalNetworkTarget\(openAt\) && !allowInternal\) \? startUrl : openAt;/.test(src),
   "and an unauthorized planner start_url is not what gets opened");
+// The narrow guard still exists and is still composed by the wide one; a
+// site that quietly fell back to it would be a site that lost the network
+// ranges, so no consult site may use it directly any more.
+assert.ok(!/loopbackTarget\((?:openAt|target|state\.url|decision\.url)\) && !allowLoopback/.test(src),
+  "no navigation gate consults the narrow loopback guard directly — all four go through internalNetworkTarget");
 // Every navigation, not only the model's `navigate` action.
 assert.ok(/function navigationRefusal\(url\)/.test(src), "one gate exists");
 const fallback = src.slice(src.indexOf("async function advanceFallback"),
@@ -240,7 +255,7 @@ assert.ok(/navigationRefusal\(next\)/.test(research),
   "so does a URL quoted out of the model's own rejected result");
 assert.ok(/navigationRefusal\(found\.goTo\)/.test(src),
   "so does the stuck researcher's destination");
-assert.ok(/if \(loopbackTarget\(state\.url\) && !allowLoopback\) \{/.test(src),
+assert.ok(/if \(internalNetworkTarget\(state\.url\) && !allowInternal\) \{/.test(src),
   "and the LANDED page is re-checked every step, as blockedDomain already was");
 console.log("PASS 9: nothing model-authored can reach the owner's own machine");
 

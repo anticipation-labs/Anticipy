@@ -12,6 +12,8 @@ import {
   extractVerifierVerdict,
   goalMatchingElements,
   loopbackTarget,
+  internalNetworkTarget,
+  taskAllowsInternalNetwork,
   missingCompletionEvidence,
   nonAuthoritativeCompletionEvidence,
   normalizedResult,
@@ -205,6 +207,46 @@ assert.equal(loopbackTarget("http://127.0.0.1:18092/_/#/login"), true);
 assert.equal(loopbackTarget("http://localhost:8090/_/"), true);
 assert.equal(loopbackTarget("https://zoom.us/pricing"), false);
 console.log("PASS 2: reversible controls are distinct from external effects");
+
+// THE WHOLE INTERNAL NETWORK, not just this machine — Omi teardown item #04.
+// Every row here returned FALSE from loopbackTarget on 2026-09-05, measured
+// against WHATWG, and would have let a page steer the agent onto the owner's
+// router, NAS, or a cloud metadata service. The IPv4-mapped rows are the ones
+// Omi's own guard misses; WHATWG serialises them as hex, so a guard that
+// looks for dotted digits inside the brackets sees nothing.
+for (const [u, want] of [
+  ["http://[::ffff:127.0.0.1]/", true],        // mapped loopback  -> [::ffff:7f00:1]
+  ["http://[::ffff:169.254.169.254]/", true],  // mapped metadata  -> [::ffff:a9fe:a9fe]
+  ["http://[::ffff:192.168.1.1]/", true],      // mapped RFC 1918
+  ["http://[::ffff:8.8.8.8]/", false],         // mapped PUBLIC stays public
+  ["http://0.0.0.0/", true], ["http://0.1.2.3/", true],   // 0.0.0.0/8, not just the one address
+  ["http://169.254.169.254/", true],           // the credential-handing metadata service
+  ["http://10.0.0.1/", true], ["http://172.16.0.1/", true], ["http://192.168.1.1/", true],
+  ["http://172.32.0.1/", false],               // one past 172.16/12 — the boundary, not the block
+  ["http://100.64.0.1/", true], ["http://100.128.0.1/", false], // CGNAT /10 and one past it
+  ["http://198.18.0.1/", true], ["http://224.0.0.1/", true], ["http://255.255.255.255/", true],
+  ["http://[fe80::1]/", true], ["http://[fc00::1]/", true], ["http://[fd12::1]/", true],
+  ["http://[ff02::1]/", true], ["http://[::]/", true], ["http://[::1]/", true],
+  ["https://[2606:4700::1111]/", false],       // a real public v6 stays public
+  ["https://8.8.8.8/", false], ["https://zoom.us/pricing", false],
+  ["http://localhost/", true],                 // composes loopbackTarget; one definition
+  ["not a url", false], ["", false],
+]) {
+  assert.equal(internalNetworkTarget(u), want, `internalNetworkTarget(${JSON.stringify(u)})`);
+}
+console.log("PASS 2b: every internal-network address form is refused, every public one is not");
+
+// The owner naming the address in his OWN words is authorisation; a model
+// writing it is not, and the caller only ever passes owner text here. A
+// public literal authorises nothing, so "go to 8.8.8.8" cannot be laundered
+// into permission for 192.168.1.1.
+assert.equal(taskAllowsInternalNetwork("check the router at 192.168.1.1", "", ""), true);
+assert.equal(taskAllowsInternalNetwork("", "open the NAS on 10.0.0.5 and download the backup", ""), true);
+assert.equal(taskAllowsInternalNetwork("", "", "http://[fe80::1]/admin"), true);
+assert.equal(taskAllowsInternalNetwork("look up 8.8.8.8 on a DNS site", "", ""), false);
+assert.equal(taskAllowsInternalNetwork("book a table for four", "at 7pm", "https://opentable.com"), false);
+assert.equal(taskAllowsInternalNetwork("try localhost:3000", "", ""), true); // still composes the loopback allowance
+console.log("PASS 2c: only an owner-named internal address opens the internal network, and only that one class");
 
 const ranked = goalMatchingElements(
   "Choose a cordless drill kit with battery and charger under CAD 300.",
