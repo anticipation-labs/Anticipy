@@ -20,6 +20,7 @@ const suites = [
   "test_takeover_list.mjs",
   "test_evidence_capture.mjs",
   "test_done_is_not_a_word_match.mjs",
+  "test_done_is_not_a_sentence_match.mjs",
   "test_verification_fail_closed.mjs",
   "test_exact_fact_verification.mjs",
   "test_research_query_hygiene.mjs",

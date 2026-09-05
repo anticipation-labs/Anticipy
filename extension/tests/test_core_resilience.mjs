@@ -3,7 +3,6 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  completionContradiction,
   completionEvidenceGap,
   completionRecoveryReversal,
   completionShapeGap,
@@ -32,7 +31,6 @@ import {
 assert.equal(normalizedResult({ named: { fee: "$350" }, numbered: { fee: "$350" } }),
   '{"named":{"fee":"$350"},"numbered":{"fee":"$350"}}');
 assert.equal(normalizedResult("  finished  "), "finished");
-assert.equal(completionContradiction("SFU returned 0 results. I will now try BCIT."), true);
 assert.equal(completionShapeGap("Find three active listings.", JSON.stringify([{ id: 1 }])),
   "the goal requests 3 records but the result contains 1");
 assert.equal(completionShapeGap("Find three active listings.", JSON.stringify([{ id: 1 }, { id: 2 }, { id: 3 }])), "");

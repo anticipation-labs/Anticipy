@@ -1332,16 +1332,6 @@ async function clearUnsupportedOptionalFields(tabId, scope, currentState,
   return cleared;
 }
 
-export function completionContradiction(result) {
-  const text = normalizedResult(result);
-  const action = "submitted|sent|booked|scheduled|registered|filed|created|completed|done|granted|renewed|cancelled|canceled|updated|changed|saved|placed|reflected";
-  return new RegExp(`\\b(?:has|have|was|were|is|are)\\s+not\\s+(?:been\\s+)?(?:correctly\\s+)?(?:${action})\\b`, "i").test(text)
-    || new RegExp(`\\b(?:could not|couldn't|did not|didn't|unable to|failed to)\\s+(?:submit|send|book|schedule|register|file|create|complete|grant|renew|cancel|update|change|save|place)\\b`, "i").test(text)
-    // A progress note is not a terminal result.  This catches the generic
-    // class ("I will now try BCIT", "we need to check the next vendor")
-    // without knowing which site, sector, or entity the task contains.
-    || /\b(?:i|we|the agent)\s+(?:will|need to|must|should|can)\s+(?:now\s+)?(?:try|continue|next|look|search|visit|check|navigate|open|find|research|compare|verify)\b/i.test(text);
-}
 
 const COUNT_WORDS = { one: 1, two: 2, three: 3, four: 4, five: 5,
   six: 6, seven: 7, eight: 8, nine: 9, ten: 10 };
@@ -1778,9 +1768,36 @@ export async function verifyDone(apiKey, model, goal, result, tabId,
   if (shapeGap) {
     return { verified: false, reason: shapeGap, evidence: [] };
   }
-  if (completionContradiction(claimedResult)) {
-    return { verified: false, reason: "the claimed result says the action did not complete", evidence: [] };
-  }
+  // WHAT WAS HERE UNTIL 2026-09-05 (audit #65):
+  //     if (completionContradiction(claimedResult)) {
+  //       return { verified: false, reason: "the claimed result says the action did not complete", evidence: [] };
+  //     }
+  // Three regexes over the agent's OWN result sentence — a negated verb list,
+  // a could-not/failed-to verb list, and an "I will now try/check" list —
+  // returned verified:false and RETURNED, before mapPage and before the
+  // auditor sixty lines below ever ran. Measured on the shipped loop:
+  //     "Booked. The confirmation email was not sent to the address on file,
+  //      so I noted the reference: RG-88214."     -> false, mapPage 0, audits 0
+  // That is a completed booking with a negated side-remark. The loop was told
+  // its done was rejected with a reason none of its recovery paths match, so
+  // the model drove on and re-attempted the action it had already performed:
+  // a second booking in the owner's name, with no post-effect page captured
+  // to tell it the first had landed. And "saved" was absent from the second
+  // verb list, so the identical sentence shape passed or failed on which verb
+  // the model happened to pick.
+  //
+  // HARNESS-LAWS.md law 1. Not a sense; not the seatbelt — it read what the
+  // agent SAID, not what the plan TOUCHES; not a gate. It was recorded on
+  // 2026-08-25 as fail-closed and therefore acceptable (research/
+  // 2026-08-25-hands3.md:159-163), but fail-closed is not one of law 1's
+  // three exemptions, and under the polarity rule this was a CEILING — "is
+  // completion positively contradicted?" — fencing with no model verdict at
+  // all. The auditor below already owns exactly this question, already runs
+  // on its own call with a grounded-quote reply, and already can say no. It
+  // is now the only thing that reads the claim's wording; the three
+  // alternations ride into its prompt as three examples instead of three
+  // verb lists. Zero added model calls on any run: the auditor fires once per
+  // done claim that reaches it, as it always did.
   let state;
   try { state = await withTimeout(mapPage(tabId), 20000, "verify mapPage"); }
   catch { return { verified: false, reason: "page unreadable; completion is unverified", evidence: [] }; }
@@ -1856,7 +1873,7 @@ export async function verifyDone(apiKey, model, goal, result, tabId,
     : (Array.isArray(evidenceJournal) ? evidenceJournal : []);
   const messages = [
     { role: "system", content: `Interpret the owner's grammar literally. "A, B, or C" permits any named alternative unless the goal explicitly says each/all. A range attached to "start" or "begin" does not constrain an end date. Different labels are not contradictions by themselves: reject only when their evidenced meanings or values materially conflict, not because the result normalized the source's label to the field name requested by the goal.` },
-    { role: "system", content: `You audit a browser agent's claim of task completion. Given the goal, exact approved scope and facts, the claimed result, the page immediately before the external effect, and the CURRENT page, decide if the claim is actually supported. THE GOAL IS THE COMPLETE REQUIREMENT: never add a currency, locale, vendor, field, record, or constraint that the goal does not contain. Every approved fact must agree with the evidence; a default, different option, amount, date, person, address, or resolution is a contradiction even when the page says success. Keep field identities exact: taxes are not association fees, a list price is not a monthly payment, and two similarly named plans/records are not interchangeable. When a requested field is qualified by "if displayed", absence of that exact field is not a contradiction and a result may say it was not displayed. For a mutable page such as a cart, form, or editor, the CURRENT page is authoritative over an older snapshot at that same URL because the agent may have repaired the state. For form/submission goals, the current page must also show terminal evidence (confirmation text or a post-submit page). For research goals, the CLAIMED RESULT itself must explicitly answer EVERY requested entity, field and quantity in the goal. If the goal names multiple products/vendors/places or asks for N records/options, count them and verify=false when any named item, requested field, or record is missing; a page for one item cannot prove the omitted items. If the goal requires an OFFICIAL source, the evidence must show that the page is operated by the named organization, government, health authority, institution, vendor, organizer, or authorized ticketing service. A third-party finder, review site, generic directory, search engine, or aggregator is NOT official merely because it repeats the facts; ambiguity means verified=false. Treat each earlier evidence entry as belonging only to its own URL; never attach a fact from one entry to a different claimed URL or record. Search-result snippets, partial views, or a page consistent with an INCLUDED claim may support that included claim, but never fill an omission in the result. Also verify=false if ANY statement in the claimed result is contradicted by the authoritative evidence. The goal's TERMINAL state must actually be reached: a result saying an action "would lead to" or "is ready to" reach the goal page is NOT done. Likewise a research result that admits the requested information was NOT found is NOT done. Reply EXACTLY {"verified":true} or, for false, {"verified":false,"reason":"under 120 words","goal_quote":"exact short quote from GOAL that creates the requirement","claimed_quote":"exact short quote from CLAIMED RESULT being rejected","evidence_quote":"exact short quote from the supplied live evidence","evidence_url":"the supplied URL containing that quote"}. Every false rejection must ground all three quotes verbatim; do not paraphrase or invent evidence.` },
+    { role: "system", content: `You audit a browser agent's claim of task completion. Given the goal, exact approved scope and facts, the claimed result, the page immediately before the external effect, and the CURRENT page, decide if the claim is actually supported. THE GOAL IS THE COMPLETE REQUIREMENT: never add a currency, locale, vendor, field, record, or constraint that the goal does not contain. Every approved fact must agree with the evidence; a default, different option, amount, date, person, address, or resolution is a contradiction even when the page says success. Keep field identities exact: taxes are not association fees, a list price is not a monthly payment, and two similarly named plans/records are not interchangeable. When a requested field is qualified by "if displayed", absence of that exact field is not a contradiction and a result may say it was not displayed. For a mutable page such as a cart, form, or editor, the CURRENT page is authoritative over an older snapshot at that same URL because the agent may have repaired the state. For form/submission goals, the current page must also show terminal evidence (confirmation text or a post-submit page). For research goals, the CLAIMED RESULT itself must explicitly answer EVERY requested entity, field and quantity in the goal. If the goal names multiple products/vendors/places or asks for N records/options, count them and verify=false when any named item, requested field, or record is missing; a page for one item cannot prove the omitted items. If the goal requires an OFFICIAL source, the evidence must show that the page is operated by the named organization, government, health authority, institution, vendor, organizer, or authorized ticketing service. A third-party finder, review site, generic directory, search engine, or aggregator is NOT official merely because it repeats the facts; ambiguity means verified=false. Treat each earlier evidence entry as belonging only to its own URL; never attach a fact from one entry to a different claimed URL or record. Search-result snippets, partial views, or a page consistent with an INCLUDED claim may support that included claim, but never fill an omission in the result. Also verify=false if ANY statement in the claimed result is contradicted by the authoritative evidence. The goal's TERMINAL state must actually be reached: a result saying an action "would lead to" or "is ready to" reach the goal page is NOT done. Likewise a research result that admits the requested information was NOT found is NOT done. A result whose own words say the action did NOT complete — "has not been submitted", "could not book", "the amounts were not correctly reflected" — is NOT done, and neither is a progress note such as "I will now try the other site". But a completed action with a negated SIDE-remark — "Booked. The confirmation email was not sent" — IS done when the evidence shows the booking; judge the action the goal asked for, not every clause. Reply EXACTLY {"verified":true} or, for false, {"verified":false,"reason":"under 120 words","goal_quote":"exact short quote from GOAL that creates the requirement","claimed_quote":"exact short quote from CLAIMED RESULT being rejected","evidence_quote":"exact short quote from the supplied live evidence","evidence_url":"the supplied URL containing that quote"}. Every false rejection must ground all three quotes verbatim; do not paraphrase or invent evidence.` },
     // The auditor is told to demand "correctly-filled fields" as evidence, so
     // it must actually SEE the fields: page text alone (capped at 1500 chars,
     // usually nav and menus) made it reject correct completions, the run

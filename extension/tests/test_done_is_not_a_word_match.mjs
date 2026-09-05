@@ -1,11 +1,12 @@
 // A CANCELLATION VERIFIED A BOOKING AS DONE, AND NO MODEL EVER LOOKED.
 //
 // `verifyDone` (agent_loop.js:1773) is the last thing standing between a model
-// saying "done" and the owner being told his table is booked. Five guards run
+// saying "done" and the owner being told his table is booked. Four guards run
 // in front of it and every one of them is fail-CLOSED: `completionShapeGap`,
-// `completionContradiction`, `completionEvidenceGap`,
-// `officialRecordEvidenceGap` and `unsupportedApprovedFacts` can each return
-// "no" and none of them can return "yes".
+// `completionEvidenceGap`, `officialRecordEvidenceGap` and
+// `unsupportedApprovedFacts` can each return "no" and none of them can return
+// "yes". (A fifth, `completionContradiction`, was here until 2026-09-05 —
+// see test_done_is_not_a_sentence_match.mjs for why it went.)
 //
 // One thing in that function could return YES: `terminalReceiptEvidence`, two
 // regexes over the live page's prose. When it matched and `effectState` was

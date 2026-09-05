@@ -13,7 +13,7 @@ globalThis.chrome = globalThis.chrome || {
   runtime: {}, debugger: {}, tabGroups: {}, notifications: {}, alarms: {},
 };
 
-const { completionContradiction, groundedFormCorrections,
+const { groundedFormCorrections,
         normalizedAuthorityText, schemaBoundaryCorrections,
         terminalReceiptEvidence, unsupportedApprovedFacts,
         unsupportedScopeFields } =
@@ -204,12 +204,6 @@ check(!terminalReceiptEvidence({
 check(!terminalReceiptEvidence({
   text: "Submitted successfully.", title: "Request Portal",
 }), "success prose without a receipt identifier is not terminal evidence");
-check(completionContradiction("Permission has NOT been submitted and was not granted."),
-  "an explicit non-completion can never become done");
-check(completionContradiction("The amounts were not correctly reflected."),
-  "an admitted incorrect submission can never become done");
-check(!completionContradiction("Replacement, not a refund, was submitted successfully."),
-  "a negated alternative does not erase a successful action");
 check(/if \(externalClick\)[\s\S]*unsupportedApprovedFacts\(facts, controlState, controlState\)[\s\S]*PRE-SUBMIT BLOCK[\s\S]*trustedClick/.test(source),
   "the exact-fact guard runs before a final click");
 // The GATE, not the wording. This used to match the literal sentence "owner has
