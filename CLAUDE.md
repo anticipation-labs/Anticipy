@@ -29,7 +29,17 @@ completing the task.
 
 Scoreboards (run them, believe them): `python3 overnight/tejas_gate.py`,
 `overnight/done_gate.py`, `overnight/tape_gate.py`, `overnight/stranger_gate.py`,
-`overnight/are_the_ears_live.py`, `overnight/firmware_gate.py`.
+`overnight/are_the_ears_live.py`, `overnight/firmware_gate.py`,
+`overnight/box_verdict_gate.py`, `overnight/login_wall_gate.py`.
+
+`box_verdict_gate.py` and `login_wall_gate.py` (both 2026-09-05) are UNPROVEN
+(exit 2) for one reason, and it is not theirs: the live `/agent/llm` proxy
+needs a paired browser credential, and production's `agents` table is
+malformed (`research/2026-09-05-agents-table-malformed.md`), so no credential
+can be minted until the repair switch is thrown. They are the instruments that
+will say whether the 512-token reply floor is enough over the proxy's own
+Gemini path; until they exit 0, every judge in the browser region is
+repo-green and question-green, not Law-3 done.
 
 `firmware_gate.py` is UNPROVEN (exit 2) on purpose, and that is a third state,
 not a soft fail. The pendant's capture path was fixed in source on 2026-09-04 —

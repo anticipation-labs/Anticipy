@@ -133,6 +133,21 @@ If the log says the recovered file is NOT clean, nothing was swapped, the
 original is untouched, and the next step is a person with the 2026-09-01
 backup, not this script.
 
+## What else waits on the switch — added after the browser-region merges
+
+Every model judge in the extension now rides `/agent/llm`, and the proxy
+refuses every agent while `agents` cannot be read. So three things that were
+built and proven offline today cannot be proven live until the repair runs:
+
+- the 512-token reply floor (`MODEL_REPLY_FLOOR`, commit "The floor under
+  every model reply is 512"), measured over OpenRouter, unmeasured over the
+  proxy's Gemini path;
+- `overnight/login_wall_gate.py` (audit #70, 22-page golden set, 66/66 over
+  the question) — exits 2 for want of a credential;
+- `overnight/box_verdict_gate.py` (audit #68) — same.
+
+The repair is the one act that turns those from UNPROVEN into a verdict.
+
 ## Blast radius while it stays open
 
 Every browser-agent path: registration, pairing, `/agent/key`, jobs pickup by
