@@ -23,7 +23,7 @@ owner's logged-in browser with `<all_urls>` and the debugger, so the bar for
 | 64 | `questionShaped`/`pageFailure` | VIOLATION | **FIXED before this session** | model call at `agent_loop.js` ~5539 |
 | 65 | `completionContradiction` | VIOLATION | **FIXED `43f96128`** | regex ceiling deleted; auditor owns the verdict; 4-leg suite |
 | 66 | `isAuthored` | VIOLATION | **FIXED before this session** (`c30157ee`) | |
-| 67 | `phoneField`/`identifierField`/`namedIdentityField`/`compactChoiceField`/`timeWindowField` | VIOLATION | **BUILDING** — worktree agent, 7-point corrected mechanism | see below |
+| 67 | `phoneField`/`identifierField`/`namedIdentityField`/`compactChoiceField`/`timeWindowField` | VIOLATION | **FIXED `448bc592`** | six classifiers deleted; `fieldKind` = declared ?? verdict ?? UNANSWERED, a FLOOR; 80-check suite, 6 mutations |
 | 68 | `approvedBoolean` negation window | VIOLATION | OPEN — design NEEDS-REWORK | own-question box verdict |
 | 69 | date/time approval regexes | PARTIAL | OPEN — design NEEDS-REWORK | typed native date/time half |
 | 70 | `login_wall.js` scored classifier | VIOLATION | OPEN — design NEEDS-REWORK | one CEILING question |
@@ -39,7 +39,7 @@ owner's logged-in browser with `<all_urls>` and the debugger, so the bar for
 | 90 | intent journal before every click | **BRIEF DEVIATION** | **FIXED `8e6673ed`** (the crash-resume half) | see below |
 | — | SSRF guard: loopback only | not in the audit | **FIXED `09ec97ad`** | Omi teardown item #04 |
 
-Six commits, two of them not from the audit at all.
+Eight commits, three of them not from the audit at all (the SSRF guard, the intent journal, and a modelFetch retry found while tracing the model path).
 
 ## The two that were not Law-1 findings
 
@@ -112,6 +112,26 @@ back to YES as the control — and that catches the alias bypass. Recorded
 because it is the shape the laws warn about, and it was in a test I had just
 written.
 
+**#67 form-field kind** (`448bc592`, built by a worktree agent from the reviewed
+seven-point mechanism, verified independently before merge). Five functions
+decided what a form field was FOR from the English words in its label — and
+that classification chose which pre-submit rule ran, so it decided whether a
+value was retyped, wiped, or submit-blocked in the owner's browser. Measured:
+"Order comments" matched `identifierField` via `\border\b` and a comment
+holding an approved code was cut to the bare code; a German "Kontakt" phone
+bleed passed untouched. Now `fieldKind` = declared (type/autocomplete, exact
+tokens) ?? one batched model verdict per form (no values ever shown) ??
+UNANSWERED, as a FLOOR: on UNCLEAR/UNANSWERED every refusal fires and every
+rewrite is withheld, and a floor-only flag ends the step by asking the owner
+instead of wedging. Zero cost on an ordinary run. Independent re-verification
+before merge: the six names survive only in the WHAT-WAS-HERE record; the
+prompt carries exactly index/name/label/type/autocomplete/required; and the
+agent's headline mutation held up under my hands — with retry and cache
+removed, the loop still asked twice, one per step, so a COUNT-only pin would
+have passed; the pin asserts adjacency and went red. That is the finding worth
+the whole item: a green test that only looked load-bearing, caught by mutation
+before it shipped.
+
 ## What is still open, and in what order
 
 The eleven NEEDS-REWORK designs all failed the attack on the same front:
@@ -125,18 +145,15 @@ workflow result; none should be built from the original design.
 
 Ranked by blast radius, which is what should order the work:
 
-1. **#67 form-field kind** — BUILDING. Decides what the pre-submit auditor
-   rewrites, wipes and blocks, in the owner's browser, on the step before a
-   send/pay/book. Seven-point corrected mechanism; four mutations specified.
-2. **#68 `approvedBoolean`** — whether ticking a checkbox counts as approved.
-3. **#69 date/time approval** — which calendar cells may be clicked; comment at
+1. **#68 `approvedBoolean`** — whether ticking a checkbox counts as approved.
+2. **#69 date/time approval** — which calendar cells may be clicked; comment at
    ~:908 records a live near-miss.
-4. **#71 `looksLikeCaptcha`** — abandons the run; comment records a live
+3. **#71 `looksLikeCaptcha`** — abandons the run; comment records a live
    incident that scrapped a real reservation.
-5. **#72 `page_map` control deletion** — deletes real controls before the model
+4. **#72 `page_map` control deletion** — deletes real controls before the model
    sees them.
-6. **#70 `login_wall`** — parks the errand and texts the owner.
-7. **#74, #78, #79, #73, #77** — medium/low, in that order.
+5. **#70 `login_wall`** — parks the errand and texts the owner.
+6. **#74, #78, #79, #73, #77** — medium/low, in that order.
 
 ## What was NOT verified, said plainly
 
