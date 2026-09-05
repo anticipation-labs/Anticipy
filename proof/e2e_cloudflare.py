@@ -106,6 +106,8 @@ D1_NAME = "anticipy-backend"
 # (PhoneListener.swift:1023 addsPunctuation = true).
 # One stamp per run, so the errand's wording is new to the brain each time.
 RUN_STAMP = dt.datetime.now(dt.timezone.utc).strftime("%H%M")
+ERRAND_SITES = ("example.com", "example.org", "example.net", "iana.org")
+ERRAND_SITE = ERRAND_SITES[int(RUN_STAMP) % len(ERRAND_SITES)]
 PROFILE_PHONE = ""   # set by preflight from the owner_profile row
 
 LINES = (
@@ -117,7 +119,11 @@ LINES = (
      # jobs from one line is why), so a run whose errand reads exactly like the
      # last run's is graded on a job the brain correctly declined to mint.
      # The run stamp is words to the brain, not a tag it strips.
-     "Anticipy, open example.com in my browser and tell me what the page heading says"
+     # ...and a fresh TARGET too: the dedupe is by meaning, not spelling.
+     # Eight "open example.com" jobs done in one day made the ninth request
+     # "already done" — correctly — whatever words carried it. Four IANA
+     # reserved sites rotate by run, so a target repeats only every fourth run.
+     "Anticipy, open {site} in my browser and tell me what the page heading says"
      " — this is check {run}"),
     ("c", "direct question",
      "Anticipy, when is my dentist appointment now?"),
@@ -523,7 +529,7 @@ def main() -> int:
 
     if args.dry_run:
         t = now_utc()
-        for key, what, text in ((k, w, t.format(run=RUN_STAMP)) for k, w, t in LINES):
+        for key, what, text in ((k, w, t.format(run=RUN_STAMP, site=ERRAND_SITE)) for k, w, t in LINES):
             body = phone_body(text, args.owner, t - dt.timedelta(seconds=3), t,
                               device_id=args.device_id, speaker=args.speaker or None)
             say(f"({key}) {what}\n{json.dumps(body, indent=2)}")
@@ -621,7 +627,7 @@ def main() -> int:
     say("2. ears -> API: three lines, posted as the phone posts them")
     posted = []      # (key, what, text, id, created)
     since = ""       # the earliest server `created` we wrote, minus a second
-    for n, (key, what, text) in enumerate((k, w, t.format(run=RUN_STAMP)) for k, w, t in LINES):
+    for n, (key, what, text) in enumerate((k, w, t.format(run=RUN_STAMP, site=ERRAND_SITE)) for k, w, t in LINES):
         if n:
             time.sleep(args.gap)
         ended = now_utc()
@@ -741,6 +747,7 @@ def main() -> int:
 
     # 4 -------------------------------------------------------- brain -> hands
     say("4. brain -> hands: did the errand become a job, and did a Chrome run it")
+    errand_goal = next((t for k, _w, t, _i, _c in posted if k == "b"), "")
     job = None
     if jobs:
         # THE ERRAND'S JOB IS THE ONE ON THE BROWSER LANE (lane ""). The ambient
@@ -754,97 +761,104 @@ def main() -> int:
         for card in research:
             say(f"   ....  research card {card['id']} (lane \"research\", {card.get('status')}): "
                 f"{(card.get('goal') or '')[:80]!r} — the brain's own lane, not the hands'")
-        job = (browser or ordered)[0]
-        if job.get("workflow_id"):
-            table.proven("brain -> hands", f"jobs row {job['id']} · lane {job.get('lane')!r} · "
-                                           f"consequence {job.get('consequence')!r} · status at mint {job.get('status')}")
+        if not browser:
+            table.not_proven("brain -> hands", "no browser-lane job minted from the errand line "
+                             f"(decision act, goal {errand_goal!r}); the research card above is the ambient line's, not the hands'")
+            table.not_proven("hands", "nothing for the hands to run: no browser-lane job")
+            job = None
         else:
-            table.not_proven("brain -> hands", f"jobs row {job['id']} carries no workflow metadata; "
-                                               "the extension's poll filter can never see it")
-    elif len(stamped) == len(ids):
-        b_row = stamped.get(posted[1][3], {})
-        table.not_proven("brain -> hands", f"no job minted; the errand line was stamped "
-                                           f"{b_row.get('decision')!r} ({short(b_row.get('goal'), 80)!r})")
-        table.not_proven("hands", "nothing to run: no job was minted")
-    else:
-        table.not_proven("brain -> hands", "no job: the brain never decided the errand line")
-        table.not_proven("hands", "nothing to run: the brain never decided the errand line")
-
-    if job:
-        paired, beating = census()
-        lane = str(job.get("lane") or "")
-        if lane == "research":
-            say(f"   ....  job {job['id']} is on the brain's own research lane (lane=\"research\"); "
-                "Chrome is kept away from it by design — watching the brain run it instead")
-        elif lane:
-            say(f"   ....  job {job['id']} is on lane {lane!r}, which is not the browser's")
-        if not beating and lane == "":
-            say(f"   ....  job {job['id']} is queued and no arm is beating; nothing can claim it")
-            for c in arm_commands(args.arm_script, args.base, args.owner):
-                say(f"           {c}")
-            table.not_proven("hands", f"job {job['id']} queued, no arm beating (bring one up: see above)")
-        else:
-            t1 = time.time()
-            last = None
-            ending = None
-            while time.time() - t1 < args.job_wait:
-                row = api.record("jobs", job["id"])
-                sig = (row.get("status"), row.get("workflow_state"), row.get("claimed_by"),
-                       int(float(row.get("attempts") or 0)))
-                if sig != last:
-                    last = sig
-                    say(f"   [{clock()}] job {job['id']} status {sig[0]!r} · workflow_state {sig[1]!r} · "
-                        f"claimed_by {sig[2] or '-'} · attempt {sig[3]} · lease_until {row.get('lease_until') or '-'}")
-                if row.get("status") in TERMINAL_JOB:
-                    ending = row
-                    break
-                if row.get("status") == "awaiting_confirm":
-                    say("   ....  held for approval — a read-only errand should not land here, and "
-                        "this file never approves on the owner's behalf")
-                    ending = row
-                    break
-                time.sleep(3)
-            if not ending:
-                table.not_proven("hands", f"job {job['id']} still {last[0] if last else '?'} after {args.job_wait} s")
-            elif ending.get("status") == "done":
-                say(f"   PASS  done in {int(time.time() - t1)} s · result: {short(ending.get('result'), 300)!r}")
-                say(f"         receipt: {short(ending.get('receipt'), 300) or '(empty)'}")
-                say(f"         claimed_by {ending.get('claimed_by')} · attempts {ending.get('attempts')} · "
-                    f"workflow_version {ending.get('workflow_version')}")
-                who = "the brain's research arm" if ending.get("claimed_by") == "worker-research" else "a Chrome"
-                if who != "a Chrome":
-                    table.not_proven("hands", f"job {job['id']} was finished by {who}, not by the hands")
-                else:
-                    table.proven("hands", f"job {job['id']} done by {ending.get('claimed_by')} · receipt "
-                                          f"{'present' if ending.get('receipt') else 'EMPTY'}")
+            job = browser[0]
+        if job is not None:
+            if job.get("workflow_id"):
+                table.proven("brain -> hands", f"jobs row {job['id']} · lane {job.get('lane')!r} · "
+                                               f"consequence {job.get('consequence')!r} · status at mint {job.get('status')}")
             else:
-                say(f"   ....  job ended as {ending.get('status')!r}: {short(ending.get('result'), 300)!r}")
-                table.not_proven("hands", f"job {job['id']} ended as {ending.get('status')}: "
-                                          f"{short(ending.get('result'), 120)}")
-            # The model calls, from the ledger the Worker keeps off the HTTP surface.
-            if not args.no_wrangler:
-                say("   ....  agent_llm_audit rows for this owner since the run began (wrangler d1, read-only):")
-                try:
-                    out = subprocess.run(
-                        ["npx", "--no-install", "wrangler", "d1", "execute", D1_NAME, "--remote",
-                         "--json", "--config", WRANGLER_CONFIG, "--command",
-                         audit_sql(args.owner, since)],
-                        capture_output=True, text=True, timeout=120, cwd=REPO)
-                    text = out.stdout[out.stdout.find("["):] if "[" in out.stdout else ""
-                    results = json.loads(text)[0].get("results", []) if text else []
-                    if out.returncode != 0:
-                        say(f"         could not read: wrangler exit {out.returncode}: {short(out.stderr, 200)}")
-                    elif not results:
-                        say("         none — the run made no model call through /agent/llm")
-                    for a in results:
-                        s = audit_summary(a)
-                        say(f"         {s['id']} · {s['created']} · provider {s['provider']} · model {s['model']} "
-                            f"· status {s['status']} ({s['http_status']}) · {s['duration_ms']} ms · "
-                            f"max_tokens client {s['max_tokens_client']} / provider {s['max_tokens_provider']} "
-                            f"· agent {s['agent_id']}")
-                except (OSError, ValueError, subprocess.TimeoutExpired, IndexError) as e:
-                    say(f"         could not read: {e}")
-    say()
+                table.not_proven("brain -> hands", f"jobs row {job['id']} carries no workflow metadata; "
+                                                   "the extension's poll filter can never see it")
+        elif len(stamped) == len(ids):
+            b_row = stamped.get(posted[1][3], {})
+            table.not_proven("brain -> hands", f"no job minted; the errand line was stamped "
+                                               f"{b_row.get('decision')!r} ({short(b_row.get('goal'), 80)!r})")
+            table.not_proven("hands", "nothing to run: no job was minted")
+        else:
+            table.not_proven("brain -> hands", "no job: the brain never decided the errand line")
+            table.not_proven("hands", "nothing to run: the brain never decided the errand line")
+
+        if job:
+            paired, beating = census()
+            lane = str(job.get("lane") or "")
+            if lane == "research":
+                say(f"   ....  job {job['id']} is on the brain's own research lane (lane=\"research\"); "
+                    "Chrome is kept away from it by design — watching the brain run it instead")
+            elif lane:
+                say(f"   ....  job {job['id']} is on lane {lane!r}, which is not the browser's")
+            if not beating and lane == "":
+                say(f"   ....  job {job['id']} is queued and no arm is beating; nothing can claim it")
+                for c in arm_commands(args.arm_script, args.base, args.owner):
+                    say(f"           {c}")
+                table.not_proven("hands", f"job {job['id']} queued, no arm beating (bring one up: see above)")
+            else:
+                t1 = time.time()
+                last = None
+                ending = None
+                while time.time() - t1 < args.job_wait:
+                    row = api.record("jobs", job["id"])
+                    sig = (row.get("status"), row.get("workflow_state"), row.get("claimed_by"),
+                           int(float(row.get("attempts") or 0)))
+                    if sig != last:
+                        last = sig
+                        say(f"   [{clock()}] job {job['id']} status {sig[0]!r} · workflow_state {sig[1]!r} · "
+                            f"claimed_by {sig[2] or '-'} · attempt {sig[3]} · lease_until {row.get('lease_until') or '-'}")
+                    if row.get("status") in TERMINAL_JOB:
+                        ending = row
+                        break
+                    if row.get("status") == "awaiting_confirm":
+                        say("   ....  held for approval — a read-only errand should not land here, and "
+                            "this file never approves on the owner's behalf")
+                        ending = row
+                        break
+                    time.sleep(3)
+                if not ending:
+                    table.not_proven("hands", f"job {job['id']} still {last[0] if last else '?'} after {args.job_wait} s")
+                elif ending.get("status") == "done":
+                    say(f"   PASS  done in {int(time.time() - t1)} s · result: {short(ending.get('result'), 300)!r}")
+                    say(f"         receipt: {short(ending.get('receipt'), 300) or '(empty)'}")
+                    say(f"         claimed_by {ending.get('claimed_by')} · attempts {ending.get('attempts')} · "
+                        f"workflow_version {ending.get('workflow_version')}")
+                    who = "the brain's research arm" if ending.get("claimed_by") == "worker-research" else "a Chrome"
+                    if who != "a Chrome":
+                        table.not_proven("hands", f"job {job['id']} was finished by {who}, not by the hands")
+                    else:
+                        table.proven("hands", f"job {job['id']} done by {ending.get('claimed_by')} · receipt "
+                                              f"{'present' if ending.get('receipt') else 'EMPTY'}")
+                else:
+                    say(f"   ....  job ended as {ending.get('status')!r}: {short(ending.get('result'), 300)!r}")
+                    table.not_proven("hands", f"job {job['id']} ended as {ending.get('status')}: "
+                                              f"{short(ending.get('result'), 120)}")
+                # The model calls, from the ledger the Worker keeps off the HTTP surface.
+                if not args.no_wrangler:
+                    say("   ....  agent_llm_audit rows for this owner since the run began (wrangler d1, read-only):")
+                    try:
+                        out = subprocess.run(
+                            ["npx", "--no-install", "wrangler", "d1", "execute", D1_NAME, "--remote",
+                             "--json", "--config", WRANGLER_CONFIG, "--command",
+                             audit_sql(args.owner, since)],
+                            capture_output=True, text=True, timeout=120, cwd=REPO)
+                        text = out.stdout[out.stdout.find("["):] if "[" in out.stdout else ""
+                        results = json.loads(text)[0].get("results", []) if text else []
+                        if out.returncode != 0:
+                            say(f"         could not read: wrangler exit {out.returncode}: {short(out.stderr, 200)}")
+                        elif not results:
+                            say("         none — the run made no model call through /agent/llm")
+                        for a in results:
+                            s = audit_summary(a)
+                            say(f"         {s['id']} · {s['created']} · provider {s['provider']} · model {s['model']} "
+                                f"· status {s['status']} ({s['http_status']}) · {s['duration_ms']} ms · "
+                                f"max_tokens client {s['max_tokens_client']} / provider {s['max_tokens_provider']} "
+                                f"· agent {s['agent_id']}")
+                    except (OSError, ValueError, subprocess.TimeoutExpired, IndexError) as e:
+                        say(f"         could not read: {e}")
+        say()
 
     # 5 -------------------------------------------------------- brain -> mouth
     say("5. brain -> mouth: what she wrote back")
@@ -853,7 +867,7 @@ def main() -> int:
             say(f"   anticipy_says {ev['id']} · {ev.get('created')} · decision {ev.get('decision')!r}")
             say(f"      {short(ev.get('text'), 400)!r}")
         table.proven("brain -> mouth", "anticipy_says " + ", ".join(sorted(says)))
-    elif str(PROFILE_PHONE or "").startswith("+1555") or str(PROFILE_PHONE or "")[2:5] == "555":
+    elif re.search(r"^\+1\d{3}555\d{4}$", str(PROFILE_PHONE or "")):
         # A 555 number is fictional by construction: Twilio refuses it, the
         # send fails before the said row is written, and nothing can reach
         # anyone. That is the design's choice for a disposable owner — the
