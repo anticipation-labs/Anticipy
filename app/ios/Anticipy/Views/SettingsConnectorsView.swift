@@ -82,7 +82,7 @@ struct SettingsConnectorsView: View {
 private struct SettingsBrowserConnectorView: View {
     @ObservedObject var session: AnticipySession
     @Environment(\.dismiss) private var dismiss
-    @AppStorage("backendURL") private var backendURL = "https://backend-production-61e0a.up.railway.app"
+    @AppStorage("backendURL") private var backendURL = "https://api.anticipy.ai"
     @State private var pairCode = ""
     @State private var pairOutcome: AnticipySession.PairOutcome?
     @State private var pairing = false
@@ -187,7 +187,7 @@ private struct SettingsBrowserConnectorView: View {
 
 private struct SettingsMacConnectorView: View {
     @Environment(\.dismiss) private var dismiss
-    @AppStorage("backendURL") private var backendURL = "https://backend-production-61e0a.up.railway.app"
+    @AppStorage("backendURL") private var backendURL = "https://api.anticipy.ai"
 
     var body: some View {
         SheetChrome(title: "Mac app", leading: .back) {

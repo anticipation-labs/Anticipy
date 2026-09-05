@@ -100,7 +100,7 @@ struct OnboardingView: View {
     @State private var micAsked = false
 
     // Computer handoff
-    @AppStorage("backendURL") private var backendURL = "https://backend-production-61e0a.up.railway.app"
+    @AppStorage("backendURL") private var backendURL = "https://api.anticipy.ai"
     @State private var pairCode = ""
     @State private var pairOutcome: AnticipySession.PairOutcome?
     @State private var pairingBrowser = false

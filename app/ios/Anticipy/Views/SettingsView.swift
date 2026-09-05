@@ -10,7 +10,7 @@ struct SettingsView: View {
     // standing on this screen testing it.
     @ObservedObject private var haptics = HapticEngine.shared
     #endif
-    @AppStorage("backendURL") private var backendURL = "https://backend-production-61e0a.up.railway.app"
+    @AppStorage("backendURL") private var backendURL = "https://api.anticipy.ai"
     /// The same key AnticipyApp routes on and the account lifecycle clears -
     /// declared once, in FirstRunOwnership. This was a second copy of the raw
     /// string, which is exactly how a rename leaves a "Replay the welcome
@@ -723,7 +723,7 @@ struct SettingsView: View {
                         .font(.caption)
                         .foregroundStyle(serverDeleteFailed ? Theme.alarm : Theme.accent)
                 }
-                if let privacy = URL(string: "https://backend-production-61e0a.up.railway.app/privacy.html") {
+                if let privacy = URL(string: "https://api.anticipy.ai/privacy.html") {
                     Link(destination: privacy) {
                         Label("Read the privacy policy", systemImage: "hand.raised")
                     }

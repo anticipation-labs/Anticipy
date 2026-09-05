@@ -589,7 +589,7 @@ final class AnticipySession: ObservableObject {
     /// How many spoken lines are still waiting for a network.
     @Published var pendingCount = 0
 
-    @AppStorage("backendURL") var backendURLString = "https://backend-production-61e0a.up.railway.app"
+    @AppStorage("backendURL") var backendURLString = "https://api.anticipy.ai"
     @AppStorage("ownerID") var ownerID = ""
     /// Listening is a STANDING state, not a per-open chore: once you turn it
     /// on, she keeps it on — across backgrounds and relaunches — until you
@@ -779,7 +779,7 @@ final class AnticipySession: ObservableObject {
 
     var backend: AnticipyBackend {
         AnticipyBackend(
-            baseURL: URL(string: backendURLString) ?? URL(string: "https://backend-production-61e0a.up.railway.app")!,
+            baseURL: URL(string: backendURLString) ?? URL(string: "https://api.anticipy.ai")!,
             // Build-stamped so production events reveal WHICH build spoke —
             // "are you sure it's updated?" gets answered by the data.
             deviceID: "iphone-b\(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?")",
@@ -792,6 +792,12 @@ final class AnticipySession: ObservableObject {
     }
 
     init() {
+        // MIGRATION 2026-09-05: backend moved off Railway to the Cloudflare
+        // Worker at api.anticipy.ai. Installs still holding the old Railway
+        // default are moved automatically; a user's own custom override is kept.
+        if UserDefaults.standard.string(forKey: "backendURL") == "https://backend-production-61e0a.up.railway.app" {
+            UserDefaults.standard.set("https://api.anticipy.ai", forKey: "backendURL")
+        }
         if ownerID.isEmpty { ownerID = UUID().uuidString }
         if isSignedIn { restorePendingAppReplyState() }
         // Seed from disk. The count is otherwise only written by the `unsent`
