@@ -3167,6 +3167,51 @@ decision, because clients may depend on the current shape.
    every stored vault secret is unreadable.
 5. Existing PocketBase auth tokens still verify, or every iPhone is signed out.
 
+### 9.6 Where the Worker is known to differ from this document
+
+Measured, not assumed, and dated so a reader can tell a stale row from a live
+one. This section exists because the four routes above it were documented,
+implemented as `verifyToken` followed by `503 {"ok":false,"message":"… not yet
+ported"}`, and reported as done for a day — while the suite ran green on them,
+because every test it had drove the **401 in front of the stub**, and the gate
+in front of a stub answers exactly like the gate in front of a route.
+
+**Closed 2026-09-05** (`migration/workers/scripts/service_contract_local.sh`
+runs the account half against a real workerd and a scratch D1; it is the first
+thing in the tree that ever set `ANTICIPY_TEST_OWNER_EMAIL`):
+
+| route | was | now |
+|---|---|---|
+| §6.8 `/auth/claim` | 503 stub | ported, per this document |
+| §6.9 `/me/phone/remove` | 503 stub | ported, per this document |
+| §6.10 `/me/profile/upsert` | 503 stub | ported, per this document |
+| §6.3 `/agent/key` | no `owner`, no `vision_model` | both, per this document |
+| §6.1 `/agent/register` | no `browser`, no `last_seen` | both, per this document |
+| §5.3 `/me/delete` | no `account_deleted` / `memory_purge`; 500 where the hook says 409; `purges.legacy_uuid` never written | all three, per this document |
+
+The three ported routes take §9.2's prescription for `runInTransaction`
+literally: read → decide → **one `env.DB.batch()`** → verify after the commit.
+A batch that throws answers with the hook's rollback sentence and has written
+nothing; a batch that lands but does not verify answers with the hook's
+post-commit sentence. Neither ever answers `ok:true` over unproven state.
+
+**Still open**, found by that same first run of the account half:
+
+* **§6.13 `/transcription/token`** — a signed-in caller must get
+  `410 {"error":"transcription tokens are not issued", "reason":"raw audio
+  never leaves a device …"}`. The Worker
+  (`migration/workers/src/routes/sms.ts:154-159`) ignores the `Authorization`
+  header entirely and answers `401 {"ok":false,"message":"Sign in first."}` to
+  everyone. Pinned by
+  `TestServiceRoutes::test_transcription_tokens_are_410_for_a_signed_in_caller`,
+  which had never run before 2026-09-05 because it needs an account.
+* **§6.5 `/agent/solve-captcha`** — an unconfigured instance must answer
+  `501 {"error":"solving is not configured"}`. The Worker answers
+  `503 {"error":"captcha solving is not configured"}`; both the status and the
+  sentence differ, and the status is the one
+  `TestAgentRoutes::test_captcha_never_solves_a_protected_host` skips on, so
+  the difference makes that test FAIL rather than skip.
+
 ---
 
 ## §10. THE CONFORMANCE SUITE
@@ -3213,6 +3258,17 @@ checkout. The markers are `destructive` (writes or deletes real rows),
 still pass the morning after cutover), `slow` (spends a rate-limit budget),
 `offline` (reads CONTRACT.md and nothing else), `guard_on`, and the four
 `needs_*` credential markers.
+
+**Three runners set those variables for you, against a real workerd and a
+scratch D1, with nothing deployed and no money spent.** Each exists because the
+tier it unlocks was otherwise never run, and a tier that never runs is a tier
+that is green while absent:
+
+| runner | unlocks |
+|---|---|
+| `migration/workers/scripts/llm_contract_local.sh` | `/agent/llm` past the credential gate, against a fake provider |
+| `migration/workers/scripts/sms_contract_local.sh` | both carriers' inbound webhooks, signed for real |
+| `migration/workers/scripts/service_contract_local.sh` | the **account-token** half: `/me/profile/upsert`, `/me/phone/remove`, `/auth/claim`, `/agent/key`'s owner card, and `/me/delete` — three disposable accounts, because the delete consumes the one it signs in as |
 
 The **`anonymous`** subset is the one to run first against anything new. It
 contains the fail-open alarm: an anonymous `GET` of `events`, `owners`, `jobs`,
