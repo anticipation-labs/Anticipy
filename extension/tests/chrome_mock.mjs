@@ -144,9 +144,9 @@ export function installChrome() {
         const src = func ? String(func) : "";
         if (src.includes("__anticipyMapPage")) {
           const m = harness.mapPage ? harness.mapPage(target.tabId) : { url: "", title: "", elements: "", text: "" };
-          return [{ frameId: 0, result: { w: 1280, h: 800, iframes: [], sugg: "", ...m } }];
+          return [{ frameId: 0, result: { w: 1280, h: 800, iframes: [], sugg: { lists: [] }, ...m } }];
         }
-        if (src.includes("__anticipySuggestions")) return [{ result: "" }];
+        if (src.includes("__anticipySuggestions")) return [{ result: { lists: [] } }];
         if (src.includes("__anticipyCenter")) return [{ result: { x: 5, y: 5 } }];
         // Everything else injected into the page. The default is null, which is
         // what the real API returns for a frame that has gone — and which the

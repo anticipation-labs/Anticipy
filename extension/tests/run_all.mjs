@@ -27,6 +27,7 @@ const suites = [
   "test_exact_fact_verification.mjs",
   "test_field_kind_is_not_a_word_match.mjs",
   "test_record_count_is_not_a_regex_match.mjs",
+  "test_suggestions_keep_every_option.mjs",
   "test_research_query_hygiene.mjs",
   "test_search_provider.mjs",
   "test_workflow_state.mjs",
