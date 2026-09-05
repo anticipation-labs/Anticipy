@@ -26,7 +26,18 @@ That is a per-owner choice, so it is an allowlist, not a cap:
 `ANTICIPY_MAX_OWNER_WORKERS=0` keeps discovery from adding anyone else.
 `parseCap` now reads 0 as 0 (the 16:58Z deploy read it as 100).
 
-## Today (2026-09-05, 17:1xZ)
+## What the 17:03Z deploy showed, and the fix
+
+`parseCap` read 0 as 0, the supervisor served only the probe — and the five
+real owners' containers KEPT RUNNING. The supervisor never evicted, by its own
+rule ("the cap turns owners away, never evicts"), written for a cap lowered
+by accident. A container sleeps only after 24 h idle, so "not ensured" meant
+"runs another day". Each tick now retires every discovered-and-unserved
+owner with `shutdown()`; the allowlist is never retired; state lives in R2,
+so a re-served owner is simply ensured again. No duplicate text left while
+they ran (nothing on D1 for them to hear).
+
+## Today (2026-09-05, 17:4xZ)
 
 - Cloudflare: cap 0, allowlist = the probe `qeuy6sv1raof9rw` only.
 - Railway: every real owner, as before.
