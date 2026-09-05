@@ -54,7 +54,12 @@ def test_extension_uses_opaque_proxy_marker_for_production_calls():
     loop = (ROOT / "extension/agent_loop.js").read_text()
     assert 'const BACKEND_LLM = "backend-proxy"' in background
     assert "openrouterKey: BACKEND_LLM" in background
-    assert "fetch(`${base}/agent/llm`" in loop
+    # The proxy URL is built from backendBase() at call time — pinned as the
+    # expression, not the old inline fetch(...) spelling, which a 2026-09-05
+    # retry refactor moved into a `url` variable. This is the stronger pin:
+    # it also proves the base is resolved, never hardcoded.
+    assert "`${await backendBase()}/agent/llm`" in loop
+    assert "fetch(url, { signal, method: \"POST\", headers, body })" in loop
     assert "X-Anticipy-Agent-Token" in loop
     assert loop.count("await modelFetch(") >= 5
     assert "const boundedPayload" in loop

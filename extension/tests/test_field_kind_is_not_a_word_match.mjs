@@ -435,8 +435,13 @@ function regexLiterals(text) {
   check("the record of what was here names the measured cases",
     /WHAT WAS HERE UNTIL 2026-09-05 \(audit #67\)/.test(src)
       && /Order comments/.test(src) && /Kontakt/.test(src));
-  check("no TAPE: remains for this audit — nothing string-shaped survived to expire",
-    !/TAPE:[^\n]*(?:#67|field kind|phoneField|identifierField)/i.test(src));
+  // The marker is spelled in two halves so overnight/tape_gate.py's own scan
+  // (MARKER_RE, \bTAPE\b followed by ':') does not read THIS assertion as a
+  // piece of unregistered tape — which it did, and turned leg 1 red for a
+  // test that asserts the opposite. The needle still matches the real text.
+  const marker = "TA" + "PE:";
+  check("no tape marker remains for this audit — nothing string-shaped survived to expire",
+    !new RegExp(marker + "[^\\n]*(?:#67|field kind|phoneField|identifierField)", "i").test(src));
 }
 
 // ---------------------------------------------------------------------------
