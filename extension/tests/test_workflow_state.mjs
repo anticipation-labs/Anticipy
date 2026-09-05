@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {
   heartbeatPatch,
   markEffectUncertainPatch,
+  uncertainEffectMessage,
   parseJobParams,
   workflowPatch,
 } from "../workflow_state.js";
@@ -65,6 +66,39 @@ function job(state = "queued") {
   assert.equal(p.effect_uncertain, true);
   assert.equal(parseJobParams(p)._workflow.lease, null);
   console.log("PASS: an uncertain external effect parks without a retry lease");
+}
+
+// THE INTENT, NOT JUST THE FLAG. The Brief promises an intent journal written
+// before every click; the flag alone left a crash-then-retry able to re-send.
+{
+  const j = job("running");
+  const before = JSON.stringify(parseJobParams(j)._workflow);
+  const patch = markEffectUncertainPatch(j, {
+    doing: "Clicking Book table on fixture.test", url: "https://fixture.test/book",
+    sig: "https://fixture.test/book|click|button|Book table|||book|3",
+    digest: "d1gest", at: "2026-09-05T00:00:00.000Z",
+  });
+  assert.equal(patch.effect_uncertain, true);
+  const written = parseJobParams(patch)._effect_intent;
+  assert.deepEqual(Object.keys(written).sort(), ["at", "digest", "doing", "sig", "url"],
+    "exactly these keys and no other — no form value may ever ride here");
+  assert.equal(written.sig, "https://fixture.test/book|click|button|Book table|||book|3");
+  assert.equal(written.digest, "d1gest");
+  // The PocketBase guard compares _workflow's fields against the row; this
+  // write must leave every one of them untouched.
+  assert.equal(JSON.stringify(parseJobParams(patch)._workflow), before,
+    "_workflow is byte-identical after the intent is written beside it");
+  // And the owner's card now says what to look for.
+  const parked = { ...j, ...patch };
+  const msg = uncertainEffectMessage(parked);
+  assert.ok(msg.includes("Clicking Book table on fixture.test"), "the card names what was about to be sent");
+  assert.ok(msg.includes("https://fixture.test/book"), "and where");
+  assert.ok(/Check the site before I try again/.test(msg), "on top of the standing warning, not instead of it");
+  // No intent recorded (a pre-2026-09-05 row, or a non-workflow job) -> the
+  // old sentence, unchanged, so nothing that read it before breaks.
+  assert.equal(uncertainEffectMessage(j), uncertainEffectMessage({ params: "{}" }));
+  assert.ok(!/It was:/.test(uncertainEffectMessage(j)));
+  console.log("PASS: the pre-click write carries the intent, keeps _workflow intact, and the card can say what to look for");
 }
 
 {

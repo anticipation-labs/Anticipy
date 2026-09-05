@@ -14,8 +14,7 @@ import {
   isWorkflowJob,
   markEffectUncertainPatch,
   parseJobParams,
-  workflowPatch,
-} from "./workflow_state.js";
+  workflowPatch, uncertainEffectMessage } from "./workflow_state.js";
 
 // Keep an engine marker in the service-worker entry file itself. Updating an
 // imported module alone can leave Chrome running a cached worker graph for an
@@ -382,7 +381,7 @@ async function requeueStaleJobs() {
     const tries = Number(j.attempts) || 0;
     if (isWorkflowJob(j) && j.effect_uncertain) {
       await updateJob(j.id, workflowPatch(j, "needs_user", {
-        reason: "I may have already sent that before I lost the page — I could not confirm either way. Check the site before I try again, so you don't end up with two.",
+        reason: uncertainEffectMessage(j),
         effectUncertain: true,
       }), j.lease_token);
       continue;
@@ -1540,6 +1539,11 @@ async function runJobInner(job, params) {
         // forgetting two clinics/listings/vendors and starting from zero.
         initialEvidenceJournal: Array.isArray(params._execution_journal)
           ? params._execution_journal : [],
+        // The intent the previous run wrote before its click, if this is a
+        // resume after a crash. It seeds the at-most-once gate so the retry
+        // refuses to re-send what may already have gone out.
+        initialEffectIntent: params._effect_intent && typeof params._effect_intent === "object"
+          ? params._effect_intent : null,
         // The step-by-step trace lands on the job row as the agent works, so
         // a run is auditable after the fact. Throttled: at most one write
         // every few seconds, always carrying the latest tail.
@@ -1585,8 +1589,10 @@ async function runJobInner(job, params) {
             if (active) active.job = job;
           };
         })(),
-        onBeforeExternalEffect: isWorkflowJob(job) ? async () => {
-          job = await updateJob(job.id, markEffectUncertainPatch(job), job.lease_token);
+        // The loop hands over (decision, state, intent); until 2026-09-05 this
+        // wrapper was `async () => {…}` and dropped all three on the floor.
+        onBeforeExternalEffect: isWorkflowJob(job) ? async (_decision, _state, intent) => {
+          job = await updateJob(job.id, markEffectUncertainPatch(job, intent), job.lease_token);
           const active = activeJobs.get(job.id);
           if (active) active.job = job;
         } : null,
@@ -1622,7 +1628,7 @@ async function runJobInner(job, params) {
       const canonicalState = status === "done" ? "succeeded"
         : status === "needs_user" || job.effect_uncertain ? "needs_user" : "failed";
       const result = status === "failed" && job.effect_uncertain
-        ? "I may have already sent that before I lost the page — I could not confirm either way. Check the site before I try again, so you don't end up with two."
+        ? uncertainEffectMessage(job)
         : (out.result || "");
       // §9: a kept-back tab never surfaces itself — badge + notification, and
       // the owner's click is what focuses it (openHandBack). Surfaced before
@@ -1689,7 +1695,7 @@ async function runJobInner(job, params) {
       if (String(e).includes("job gone")) throw e;
       const uncertain = !!job.effect_uncertain;
       const result = uncertain
-        ? "I may have already sent that before I lost the page — I could not confirm either way. Check the site before I try again, so you don't end up with two."
+        ? uncertainEffectMessage(job)
         : String(e);
       const patch = isWorkflowJob(job)
         ? { ...workflowPatch(job, uncertain ? "needs_user" : "failed", {

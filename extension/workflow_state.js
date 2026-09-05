@@ -151,12 +151,56 @@ export function workflowPatch(job, nextState, options = {}) {
   return patch;
 }
 
-export function markEffectUncertainPatch(job) {
+// THE INTENT, NOT JUST THE FLAG. docs/BRIEF.html promises "an intent journal
+// written before every click, so 'did the send actually happen?' is
+// answerable after any crash". Until 2026-09-05 this wrote one boolean. The
+// control's label, the page, and the two keys the at-most-once gate refuses
+// repeats by (the control signature and the submission digest) lived only in
+// the worker's memory — and a Manifest V3 worker is reclaimed mid-run as a
+// matter of course. So a crash between the click and the receipt left the
+// owner a card saying "check the site" with nothing to look for, and a retry
+// after it started with an EMPTY performedExternalEffects set, re-sending the
+// same submission the flag had been set to prevent. That is the duplicate
+// booking the loop's own comment calls the cardinal sin, and the Brief's
+// moment 49 ("nothing is lost and nothing duplicates") names outright.
+//
+// `intent` is `{ doing, url, sig, digest, at }`. `doing` is humanStep's
+// sentence, which names the FIELD and never the value typed into it — the same
+// rule _execution_journal keeps, because this row is exportable. `sig` and
+// `digest` are hashes. No form value is written here, and none may be added.
+//
+// Written into params beside _workflow using the idiom heartbeatPatch uses,
+// which the PocketBase guard already accepts: it compares _workflow's fields,
+// and this touches none of them.
+export function markEffectUncertainPatch(job, intent = null) {
   if (!isWorkflowJob(job)) return { effect_uncertain: true };
   if ((job.workflow_state || embeddedWorkflow(job).state) !== "running") {
     throw new Error("only running work can reach an external effect");
   }
-  return { effect_uncertain: true };
+  if (!intent || typeof intent !== "object") return { effect_uncertain: true };
+  const params = parseJobParams(job);
+  params._effect_intent = {
+    doing: String(intent.doing || "").slice(0, 120),
+    url: String(intent.url || "").slice(0, 200),
+    sig: intent.sig ? String(intent.sig) : null,
+    digest: intent.digest ? String(intent.digest) : null,
+    at: intent.at || new Date().toISOString(),
+  };
+  return { effect_uncertain: true, params: JSON.stringify(params) };
+}
+
+// What to tell the owner when an effect may have gone out and nothing can
+// confirm it. One definition for the three places that used to carry the same
+// sentence by hand — and now, when the intent was recorded, it says WHAT was
+// about to be sent and WHERE, so "check the site" is an instruction he can
+// actually follow rather than a shrug.
+export function uncertainEffectMessage(job) {
+  const base = "I may have already sent that before I lost the page — I could not "
+    + "confirm either way. Check the site before I try again, so you don't end up with two.";
+  const intent = parseJobParams(job)._effect_intent;
+  if (!intent || typeof intent !== "object" || !intent.doing) return base;
+  const where = intent.url ? ` at ${intent.url}` : "";
+  return `${base} It was: ${intent.doing}${where}.`;
 }
 
 export function heartbeatPatch(job, { leaseToken, leaseUntil, now } = {}) {

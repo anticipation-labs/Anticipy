@@ -31,6 +31,7 @@ const suites = [
   "test_hunt_round3.mjs",
   "test_commit_integrity.mjs",
   "test_commit_once.mjs",
+  "test_effect_intent_survives_crash.mjs",
   "test_form_retry_after_rejection.mjs",
   "test_captcha_solving.mjs",
   "test_no_domain_hardcoding.mjs",

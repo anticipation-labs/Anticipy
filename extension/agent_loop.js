@@ -4298,7 +4298,7 @@ export async function runAgentGoal(goal, opts) {
   // No caller URL means a provider-neutral browser search.  createBackgroundTab
   // turns this internal target into Chrome's configured provider before the
   // first page map, so about:blank is never handed to the agent.
-  const { apiKey, model = "anthropic/claude-sonnet-4.6", maxSteps = DEFAULT_MAX_STEPS, budgetMs = RUN_BUDGET_MS, startUrl: suppliedStartUrl = "", stillLive = null, visionModel = "anthropic/claude-sonnet-4.6", authorized = false, readOnly = false, scope = "", ownerProfile = null, planning = true, facts = "", memory = "", onTrace = null, onBeforeExternalEffect = null, resumeTabId = null, initialEvidenceJournal = [], offerRef = "" } = opts;
+  const { apiKey, model = "anthropic/claude-sonnet-4.6", maxSteps = DEFAULT_MAX_STEPS, budgetMs = RUN_BUDGET_MS, startUrl: suppliedStartUrl = "", stillLive = null, visionModel = "anthropic/claude-sonnet-4.6", authorized = false, readOnly = false, scope = "", ownerProfile = null, planning = true, facts = "", memory = "", onTrace = null, onBeforeExternalEffect = null, resumeTabId = null, initialEvidenceJournal = [], initialEffectIntent = null, offerRef = "" } = opts;
   const startUrl = suppliedStartUrl
     || searchTarget(sanitizedResearchTerms(goal));
   // `let`, not `const`: a code fetched from the owner's own inbox with his
@@ -4691,6 +4691,19 @@ export async function runAgentGoal(goal, opts) {
   // inspect current state—not dispatch the same effect again and duplicate
   // an item, message, booking, deletion, or submission.
   const performedExternalEffects = new Set();
+  // REHYDRATED FROM THE DURABLE ROW. This set is what stops the same
+  // submission going out twice, and it used to start empty on every run —
+  // including the run that resumes a job whose worker was reclaimed between
+  // the click and the receipt. That run would re-send. The intent the
+  // previous run wrote before its click (markEffectUncertainPatch) carries the
+  // two keys the at-most-once gate refuses by; seeding them here makes that
+  // gate fire on the retry exactly as it would have on the original run.
+  // Nothing is loosened: a genuinely new payload still passes, as it always
+  // did, because the gate keys on content.
+  if (initialEffectIntent && typeof initialEffectIntent === "object") {
+    if (initialEffectIntent.sig) performedExternalEffects.add(String(initialEffectIntent.sig));
+    if (initialEffectIntent.digest) performedExternalEffects.add(String(initialEffectIntent.digest));
+  }
   // The one plain sentence the phone shows while this runs.
   let doingNow = "Getting started";
   // Multi-page research needs evidence memory. Keep a bounded journal of live
@@ -6290,7 +6303,13 @@ export async function runAgentGoal(goal, opts) {
           // picture is of the form that actually goes out, and so a run that
           // was stopped by a gate never leaves a photo suggesting it wasn't.
           await captureMilestone("before-commit", tab.id, state.url);
-          if (onBeforeExternalEffect) await onBeforeExternalEffect(decision, state);
+          // The intent goes to disk with the flag: what is about to be sent
+          // and the keys that identify it, never a form value. See
+          // markEffectUncertainPatch for why the flag alone was not enough.
+          if (onBeforeExternalEffect) await onBeforeExternalEffect(decision, state, {
+            doing: humanStep({ ...decision, label: decision.label || (context && context.label) }, state), url: state.url,
+            sig: externalSig, digest: submitted || null, at: new Date().toISOString(),
+          });
         }
         if (c.inFrameOnly) await frameClick(tab.id, decision.index);
         else await trustedClick(tab.id, c.x, c.y);
@@ -6520,7 +6539,10 @@ export async function runAgentGoal(goal, opts) {
               // needed every guard the click path has (that is why this branch
               // is a mirror of it). The milestone is no different.
               await captureMilestone("before-commit", tab.id, beforeEnter.url);
-              if (onBeforeExternalEffect) await onBeforeExternalEffect(decision, enterState);
+              if (onBeforeExternalEffect) await onBeforeExternalEffect(decision, enterState, {
+                doing: humanStep({ ...decision, action: "enter", label: decision.label || (enterContext && enterContext.label) }, enterState), url: beforeEnter.url,
+                sig: enterSig, digest: submitted || null, at: new Date().toISOString(),
+              });
             }
             await new Promise((r) => setTimeout(r, 200));
             await pressEnter(tab.id);
