@@ -80,6 +80,28 @@ export function missingColumn(message: string): string | null {
   return m ? m[1] : null;
 }
 
+// EVERY FIELD HAS A VALUE. PocketBase fills a field the client did not send
+// with the field's empty value ("" for text, 0 for number, false for bool) at
+// write time, so a row never carries NULL. The live D1 events table was
+// created without the NOT NULL DEFAULT '' that migration/d1/schema.sql
+// declares, and this file inserted only the keys a client sent — so a row
+// posted without `decision` stored NULL, and brain/worker.py's poll
+// (`decision=""`) never saw it. The phone never sends `decision` or `goal`
+// (AnticipyBackend.swift sets keys conditionally). Measured 2026-09-05 on
+// api.anticipy.ai: a line posted as the phone posts it was NULL-decision and
+// unheard for ten minutes; the same line with decision:"" was heard in 15 s.
+// The fix belongs here, not in a table rebuild: fill the empties the way the
+// backend this replaces did, for every mapped column the body omits.
+export function fillEmpties(def: CollectionDef, body: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...body };
+  for (const [name, spec] of Object.entries(def.columns)) {
+    if (name === "id" || name === def.createdColumn || name === def.updatedColumn) continue;
+    if (name in out) continue;
+    out[name] = spec.type === "number" ? 0 : spec.type === "bool" ? false : "";
+  }
+  return out;
+}
+
 export function uniqueViolationColumn(message: string): string | null {
   const m = /UNIQUE constraint failed:\s*([A-Za-z0-9_]+)\.([A-Za-z0-9_]+)/.exec(String(message || ""));
   return m ? m[2] : null;
@@ -371,7 +393,7 @@ async function createOwner(env: Env, req: RecordsRequest): Promise<Response> {
 
 export async function create(env: Env, req: RecordsRequest): Promise<Response> {
   const def = req.collection;
-  const body = req.body ?? {};
+  const body = fillEmpties(def, req.body ?? {});
 
   // owners is an AUTH collection and does not go through the generic writer.
   if (def.name === "owners") return createOwner(env, req);

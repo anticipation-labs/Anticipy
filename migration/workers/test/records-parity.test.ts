@@ -2,7 +2,7 @@
 // send since 2026-09-05: `fields=` projection and a unique-index collision on
 // create. Run: node --experimental-strip-types test/records-parity.test.ts
 import assert from "node:assert/strict";
-import { projectFields, uniqueViolationColumn, missingColumn } from "../src/pb/records.ts";
+import { projectFields, uniqueViolationColumn, missingColumn, fillEmpties } from "../src/pb/records.ts";
 
 let n = 0;
 const check = (name: string, fn: () => void) => { fn(); n++; console.log(`PASS: ${name}`); };
@@ -30,5 +30,19 @@ check("...with a table prefix too", () =>
   assert.equal(missingColumn("D1_ERROR: no such column: events.heard_calls"), "heard_calls"));
 check("any other D1 error is not a missing column", () =>
   assert.equal(missingColumn("D1_ERROR: UNIQUE constraint failed: events.external_event_id"), null));
+
+const eventsDef = { name: "events", createdColumn: "created", updatedColumn: "updated", boolColumns: ["backfill"],
+  columns: { id: { type: "text" }, created: { type: "date" }, updated: { type: "date" }, kind: { type: "text" },
+             text: { type: "text" }, decision: { type: "text" }, goal: { type: "text" }, seq: { type: "number" },
+             backfill: { type: "bool" }, owner_ref: { type: "relation" } } } as any;
+check("a line posted the way the phone posts it gets decision \"\" — the brain's filter can see it", () => {
+  const row = fillEmpties(eventsDef, { kind: "transcript", text: "hi", owner_ref: "o1" });
+  assert.equal(row.decision, ""); assert.equal(row.goal, ""); assert.equal(row.seq, 0); assert.equal(row.backfill, false);
+});
+check("a value the client sent is never overwritten by the empty", () =>
+  assert.equal(fillEmpties(eventsDef, { decision: "act" }).decision, "act"));
+check("id, created and updated are the writer's, not filled here", () => {
+  const row = fillEmpties(eventsDef, {}); assert.equal("id" in row, false); assert.equal("created" in row, false);
+});
 
 console.log(`records-parity: ${n} checks passed`);
