@@ -214,3 +214,57 @@ test, `^[0-9a-f]{40}$`.
   has no enforcement anywhere. It is the thing most likely to quietly stop the
   ledger from ever promoting, and when the planner exists it needs either a
   prompt line and an eval, or a gate leg counting rungs per (app, verb).
+
+---
+
+## Composio account, project and key (2026-09-05 evening)
+
+Set up through the dashboard in the owner's own browser. **No credential in this
+record**; the key went from the dashboard's copy button to `.env.local` (which
+`.gitignore` covers at `.env.*`) without passing through a transcript.
+
+| what | value |
+|---|---|
+| organization | `omar_workspace` (Omar Ebrahim) |
+| project | **`anticipy_two_hands`** — created for this work, so the spike never shares a key with `omar_workspace_first_project` |
+| API key | `COMPOSIO_API_KEY` in `.env.local`, shown once and stored |
+| user_id | **`omar`**, in `.env.local` as `TWO_HANDS_OWNER` |
+
+**A trap worth writing down: there were two Composio logins on this machine.**
+Browser 1 was signed in as **Jose Lopez / `jose.colorstack_workspace`**, on the
+Hobby plan, with no access to Omar's org — its org switcher offered only Jose's.
+Creating the project there would have put Anticipy's integration in a personal
+ColorStack workspace on the wrong plan, with a key nobody else could rotate.
+Check the account chip at the bottom-left before creating anything.
+
+**The key is live, verified against the real API rather than assumed:**
+`POST /api/v3.1/tool_router/session` with `{"user_id":"omar"}` answered
+**HTTP 201**, and the session's `tool_router_tools` are exactly the meta tools
+the plan was chosen for — `COMPOSIO_SEARCH_TOOLS`,
+`COMPOSIO_MANAGE_CONNECTIONS`, `COMPOSIO_MULTI_EXECUTE_TOOL`, plus
+`COMPOSIO_GET_TOOL_SCHEMAS`, `COMPOSIO_REMOTE_WORKBENCH` and
+`COMPOSIO_REMOTE_BASH_TOOL`.
+
+**user_id is ours to choose, not something the dashboard issues.** The Users
+page says so in as many words — "users appear here when your app creates
+sessions" — and the three shown (`sarah_user`, `james_user`, `priya_user`) are
+Composio's own illustration, not real accounts. It is `omar`, and every connect
+link below was minted under it; a link minted under a different id produces an
+empty connection list, which reads exactly like "he connected nothing".
+
+**Connect links, generated under `user_id=omar`** (they are the owner's to
+click — granting OAuth consent is not something Claude does):
+
+    gmail           https://connect.composio.dev/link/lk_OSCPVWOiKvmc
+    googlecalendar  https://connect.composio.dev/link/lk_B3-qQoTUaotK
+    notion          https://connect.composio.dev/link/lk_ugrj2ErY407L
+    slack           https://connect.composio.dev/link/lk_wqCrhtGjsF_2
+
+Measured after generating them: **0 connected accounts** for `omar`.
+
+**Gate state.** `tasks/run_ten.ts` now finds both keys and the owner id, and
+refuses for exactly one remaining reason — six unfilled placeholders in
+`tasks/ten_read_tasks.local.json` (`PERSON_A`, `PERSON_B`, `SENDER_INVOICE`,
+`NOTION_TOPIC`, `SLACK_CHANNEL`, `SLACK_SEARCH`). It prints no table and no
+numbers, which is the behaviour law 3 asks for: a run that could not happen is
+not a pass.
