@@ -4010,6 +4010,56 @@ def report_deafness(anticipy) -> None:
         print(f"deafness report failed: {e}")
 
 
+# ------------------------------------------------------ the gateway, out loud
+# The second model credential became a FALLBACK on 2026-09-05 (Omi port 09b,
+# brain/llm.py `_fall_through`): with both keys set, a Gemini outage used to
+# raise straight out of LLM.chat() while a working OpenRouter key idled, and
+# the owner was texted "cannot reach the model" about a model she could reach.
+# Two log lines make the new behaviour visible to the leg that proves it live,
+# overnight/is_the_gateway_live.py. NOTHING here decides anything: the banner
+# says which wires this build holds, the tally says which wire carried each
+# call. Counts over the worker's own lines, never over a word anyone said.
+_GATEWAY_TALLY_KEYS = ("primary_ok", "rescued", "skipped", "reissued", "both_dead")
+
+
+def gateway_banner(llm) -> str:
+    """`primary=<name>:<model> fallback=<name>:<model>|none` for the boot line.
+
+    `fallback=none` is load-bearing text for the live leg: a worker holding
+    one credential has nothing to fall through to, and deployed-but-inert is
+    not done under HARNESS-LAWS.md LAW 3. A keyless worker says heuristic.
+    """
+    names = list(getattr(llm, "transport_names", lambda: [])())
+
+    def label(name: str) -> str:
+        model = llm.gemini_model if name == "gemini" else llm.model
+        return f"{name}:{model}"
+
+    primary = label(names[0]) if names else "heuristic"
+    fallback = label(names[1]) if len(names) > 1 else "none"
+    return f"primary={primary} fallback={fallback}"
+
+
+def report_gateway(llm) -> str:
+    """One `llm: gateway tally …` line per tick that saw a model call, then
+    the counters reset, so the live leg sums lines over its window and has a
+    denominator. A tick with no calls prints nothing; an ordinary day with a
+    healthy primary prints `primary_ok=N` and nothing else, which is the
+    control half. A call therefore reaches the log on the next tick — two
+    seconds, well inside the ten-minute floor the port asks for. Cheap: one
+    dict read per tick. Returns the line it printed, "" when it had nothing
+    to say."""
+    tally = getattr(llm, "gateway_tally", None)
+    if not tally or not any(tally.get(k) for k in _GATEWAY_TALLY_KEYS):
+        return ""
+    line = "llm: gateway tally " + " ".join(
+        f"{k}={int(tally.get(k) or 0)}" for k in _GATEWAY_TALLY_KEYS)
+    for k in _GATEWAY_TALLY_KEYS:
+        tally[k] = 0
+    print(line)
+    return line
+
+
 def ask_about_stuck_jobs(anticipy, convo) -> None:
     """Text the owner about anything the browser handed back, once each.
 
@@ -4321,6 +4371,10 @@ def main() -> None:
           f"{' · auth=' + voice.credential if voice else ''} · pb={PB}"
           f" · where={llm.owner_zone or 'server-default:' + str(TZ_FALLBACK)}"
           f" · who={llm.owner_name or 'unknown'}"
+          # Which wire is primary and which is the fallback — the one line
+          # overnight/is_the_gateway_live.py leg 1 keys on. `fallback=none`
+          # there is a red leg, not a detail.
+          f" · {gateway_banner(llm)}"
           f" · brain={_brain_fingerprint()}")
     if not anticipy.owner_id:
         # Paired extensions only claim their owner's jobs, so unstamped jobs
@@ -4645,6 +4699,11 @@ def main() -> None:
             # lines are being kept, not lost, and he is owed the difference
             # between "she's quiet" and "she can't hear me".
             report_deafness(anticipy)
+
+            # And which wire carried the calls this tick, if any ran — the
+            # denominator without which a dead primary and a healthy one
+            # look identical in the log.
+            report_gateway(llm)
 
             # Nightly, while he sleeps: distill the day's episodes into
             # profile facts (roadmap §1). Incremental and idempotent — a

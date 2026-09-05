@@ -1,7 +1,9 @@
 """LLM client for Anticipy's brain.
 
-Uses Google Gemini when GEMINI_API_KEY is set, or OpenRouter when only its
-credential is present.
+Every credential the process holds is a TRANSPORT, and a second one is a
+fallback, not a switch: they are tried in ANTICIPY_LLM_ORDER (default
+"gemini,openrouter"), and when the first machine is absent the next one
+carries the call — see `_transports` and `_fall_through`.
 Falls back to a deterministic heuristic engine when no key is present, so the
 whole pipeline is provable end-to-end without secrets. The real key only
 swaps the reasoning core; the plumbing is identical.
@@ -215,6 +217,97 @@ def _post_json(url: str, headers: dict, payload: dict) -> dict:
     raise last
 
 
+# ------------------------------------------ a second credential is a fallback
+# BOTH KEYS SET USED TO MEAN "GEMINI, AND ONLY GEMINI".
+#
+# chat() was a precedence ladder: Gemini if its key existed, else OpenRouter
+# if its key existed, else the heuristic. The second credential was never
+# reached while the first was configured — so with both keys set, a Gemini
+# 503 that survived _post_json's three attempts, a timeout, or a reply with no
+# text raised straight out of chat() while a working OpenRouter key sat
+# unused. On the transcript loop that is a held line, a climbing deaf streak,
+# and after three lines a text saying she "cannot reach the model" — sent
+# while a model she could reach idled.
+#
+# Now the keyed transports are ORDERED. The first is the primary, the next is
+# the fallback, and the fall-through is chosen by structure only: an exception
+# TYPE, a finish-reason enum, an HTTP status inside _post_json, and a clock.
+# Never by the words of a reply (HARNESS-LAWS.md LAW 1) — _TRANSPORT_FAULTS
+# below is the one place that distinction is load-bearing.
+#
+# Retry stays INSIDE a transport (_post_json: three attempts, one URL).
+# Falling through is ACROSS transports and sits above it, so each wire still
+# gets its bounded tries and a 402 is still never re-sent to the same
+# provider.
+#
+# ANTICIPY_LLM_ORDER is a comma-separated list of transport names. Unset,
+# empty or misspelt it is the old precedence byte for byte; unknown names are
+# ignored; and any keyed transport the variable forgot is appended in default
+# order, so a typo can never make a credential unreachable.
+_DEFAULT_TRANSPORT_ORDER = ("gemini", "openrouter")
+_TRANSPORT_ORDER = tuple(
+    n.strip() for n in os.environ.get(
+        "ANTICIPY_LLM_ORDER", ",".join(_DEFAULT_TRANSPORT_ORDER)).split(",")
+    if n.strip())
+
+# THE DEAD-PRIMARY MEMORY. After the primary's MACHINE fails (the types in
+# _TRANSPORT_FAULTS), the next minute of calls goes straight to the fallback
+# instead of paying the primary's three attempts again, and at the minute the
+# primary is probed once. The owner's configured model wins back by default;
+# a still-dead primary costs one discovery per minute, not one per line.
+#
+# Sixty seconds and a single probe are borrowed from Omi's PUSHER circuit
+# breaker (research/2026-09-04-omi-architecture-extraction.md, "Degradation
+# is the right shape") — the transcription socket, NOT its model gateway.
+# Omi's gateway ships every lane with max_attempts 1 and an empty fallback
+# list, i.e. no failover at all. The number is a sensible cooldown, not a
+# gateway precedent, and the ledger must not launder it into one.
+_PRIMARY_RETRY_AFTER_SECONDS = 60.0
+
+# WHICH FAILURES MEAN THE MACHINE WAS ABSENT. Any exception from the primary
+# falls through to the fallback — a reply this code cannot parse is still a
+# call that produced nothing. But only a TRANSPORT-typed failure is
+# REMEMBERED as "the primary is down". `_gemini` raises ValueError for a
+# SAFETY or RECITATION refusal or a thoughts-only reply, and those are
+# outcomes of that ONE line's content: letting them start the cooldown would
+# move the next minute of every call — other lines included — onto a
+# different model because of what one sentence said, with no log line saying
+# so. Content never steers the wire.
+#
+# This is brain/worker.py `_UNREACHABLE` minus its `requests` entry, which
+# the model path never raises. Keep the two aligned: the exception that
+# leaves chat() when both transports fail is chosen from this tuple (rule R,
+# `_raise_the_one_that_leaves`) precisely so the worker's hold-or-tombstone
+# split reads it the same way.
+_TRANSPORT_FAULTS = (
+    httpx.HTTPError,     # status, timeout, transport — everything httpx raises
+    ConnectionError,
+    TimeoutError,
+    OSError,             # DNS, socket, and the rest of the plumbing
+)
+
+
+def _raise_the_one_that_leaves(first: Exception, second: Exception) -> None:
+    """RULE R: which exception leaves chat() when BOTH transports failed.
+
+    The transport-typed one, preferring the primary's when both are, with
+    the other chained on as its cause; only when NEITHER is transport-typed
+    is the fallback's raised, chained from the primary's.
+
+    A type check, and it exists so brain/worker.py's hold-or-tombstone split
+    never buries a spoken line because the SECOND machine's reply was
+    unparseable while the first was merely absent. Primary 503 plus a
+    fallback answering 200 with an {"error": …} body is a KeyError in our
+    parser, and a KeyError is a tombstone; that line WAITED before this port
+    and must not DIE because of it. When neither failure is transport-typed
+    the defect is ours and deterministic, and the tombstone is right —
+    identical input through identical code cannot come out differently.
+    """
+    if isinstance(first, _TRANSPORT_FAULTS):
+        raise first from second
+    raise second from first
+
+
 @dataclass
 class LLMResult:
     text: str
@@ -241,6 +334,14 @@ class LLMResult:
     # uses: a check that fires when it cannot see would discard good answers
     # the first time a provider renamed a field.
     truncated: bool = False
+    # WHICH WIRE WAS ASKED FIRST, when it was not the one that answered.
+    #
+    # "" when the primary transport answered, or there was only one. The
+    # primary's NAME when the fallback carried this call. Provenance for the
+    # log and the live leg, read by nobody as a verdict; `mode` stays what it
+    # always was — the transport that actually answered — which is what
+    # memory.py's _LIVE_EXTRACTOR_MODES keeps reading.
+    fell_through_from: str = ""
 
 
 # ---------------------------------------------------------------- cost ledger
@@ -312,6 +413,17 @@ class LLM:
         self.api_key = api_key or os.environ.get("OPENROUTER_API_KEY")
         self.model = model
         self.gemini_model = os.environ.get("ANTICIPY_GEMINI_MODEL", "gemini-2.5-flash")
+        # The dead-primary memory: a monotonic deadline before which the
+        # primary transport is skipped. 0.0 means nothing is remembered, and
+        # it is only ever set by a transport-typed failure (_TRANSPORT_FAULTS).
+        self._primary_down_until = 0.0
+        # What carried each call, counted here and printed by the worker as
+        # one `llm: gateway tally` line per tick that saw a call. Nothing
+        # about a call is decided by it; it is the denominator the live leg
+        # needs to tell "the primary answered 900 and the fallback 3" from
+        # "the primary answered nothing and the fallback carried everything".
+        self.gateway_tally = {"primary_ok": 0, "rescued": 0, "skipped": 0,
+                              "reissued": 0, "both_dead": 0}
 
     @property
     def live(self) -> bool:
@@ -354,6 +466,55 @@ class LLM:
                                                 where_line(self.owner_zone),
                                                 now_line(self.owner_zone))
                               if part)
+        transports = self._transports(system, user, temperature, grounding, aux)
+        if not transports:
+            return LLMResult(text=self._heuristic(system, user), used_model="heuristic", mode="heuristic")
+        if len(transports) == 1:
+            # ONE credential is the pre-port path, byte for byte: no try, no
+            # clock, no print, no tally. There is nothing to fall through to,
+            # and the exception that leaves here is the one the worker's
+            # hold-or-tombstone split has always classified.
+            return transports[0][1]()
+        return self._fall_through(transports[0], transports[1])
+
+    # WHAT WAS HERE UNTIL 2026-09-05 (Omi port 09b), and why it is gone.
+    #
+    #     if self.gemini_api_key:
+    #         return self._gemini(f"{system}\n\n{grounding}", user, temperature,
+    #                             model=self._gemini_model_for(aux))
+    #     if self.live:
+    #         return self._openrouter(system, user, temperature, grounding,
+    #                                 model=(AUX_MODEL if (aux and AUX_MODEL) else self.model))
+    #     return LLMResult(text=self._heuristic(system, user), used_model="heuristic", mode="heuristic")
+    #
+    # A precedence ladder. The presence of GEMINI_API_KEY was a provider
+    # SWITCH, and OpenRouter was reachable only while that key was absent;
+    # commit 4c3cf7e3 ("add billed model fallback") added the Gemini branch
+    # and called it a fallback, and it was a precedence. With both keys set, a
+    # Gemini failure that survived _post_json's three attempts — 429, 5xx, a
+    # timeout, a refused connection — or a reply with no text raised straight
+    # out of chat() (raise_for_status, `raise last`, "Gemini returned no
+    # text") while a working OpenRouter credential idled. The worker held the
+    # line, the deaf streak climbed, and after three lines the owner was told
+    # she "cannot reach the model". The empty-reply case was worse: ValueError
+    # is not on the worker's _UNREACHABLE list, so that spoken line was
+    # tombstoned with no retry. Replaced by _transports (which wires exist, in
+    # which order) and _fall_through (which one answers — by exception type,
+    # finish reason and clock, never by what a reply said).
+
+    def _transports(self, system: str, user: str, temperature: float,
+                    grounding: str, aux: bool) -> list:
+        """Every credential this process holds, as (name, thunk) pairs in
+        the order they are to be tried. A thunk is one complete call on that
+        wire, and it is aux-aware on BOTH transports: a mechanical call that
+        falls through still lands on the fallback's aux model, and a
+        judgement call never lands on an aux model on any wire — the split
+        ANTICIPY_AUX_MODEL draws does not move when the wire does.
+
+        Configuration only. A credential is present or it is not, and
+        ANTICIPY_LLM_ORDER is a string; nothing here has seen a reply.
+        """
+        wires: dict = {}
         if self.gemini_api_key:
             # THE GROUNDING GOES LAST HERE TOO, for the identical reason
             # spelled out above: a prompt cache is keyed on an exact PREFIX,
@@ -371,12 +532,110 @@ class LLM:
             # this branch returns before the aux-aware one below it: every
             # mechanical call paid the judgement model's rate and nothing
             # said so.
-            return self._gemini(f"{system}\n\n{grounding}", user, temperature,
-                                model=self._gemini_model_for(aux))
-        if self.live:
-            return self._openrouter(system, user, temperature, grounding,
-                                    model=(AUX_MODEL if (aux and AUX_MODEL) else self.model))
-        return LLMResult(text=self._heuristic(system, user), used_model="heuristic", mode="heuristic")
+            wires["gemini"] = lambda: self._gemini(
+                f"{system}\n\n{grounding}", user, temperature,
+                model=self._gemini_model_for(aux))
+        if self.api_key:
+            wires["openrouter"] = lambda: self._openrouter(
+                system, user, temperature, grounding,
+                model=(AUX_MODEL if (aux and AUX_MODEL) else self.model))
+        ordered: list = []
+        for name in (*_TRANSPORT_ORDER, *_DEFAULT_TRANSPORT_ORDER):
+            if name in wires and name not in ordered:
+                ordered.append(name)
+        return [(name, wires[name]) for name in ordered]
+
+    def transport_names(self) -> list:
+        """The wires in order, by name — for the worker's boot banner."""
+        return [name for name, _ in self._transports("", "", 0.0, "", False)]
+
+    def _fall_through(self, primary: tuple, secondary: tuple) -> LLMResult:
+        """Two wires: the first that answers, chosen by structure only.
+
+        POLARITY, decided here and nowhere else. Primary raised, fallback
+        answered: the line is judged and the owner hears nothing about it,
+        because she CAN hear — a broken primary is an ops signal and goes to
+        the log, the banner and the live leg, not to his phone. Both dead:
+        the exception that leaves is chosen by TYPE (rule R) so the worker
+        holds a line whose machines were absent and tombstones one that our
+        own code broke, exactly as it did with one wire. Cooldown running and
+        the fallback dies: forget the cooldown and probe the primary in the
+        SAME call — the safe side is "forget what you knew when both are
+        down", never "wait out a minute with both known dead". Truncated
+        primary and dead fallback: return the primary's reply with its flag
+        intact — an honest flag beats no answer, and every consumer already
+        handles the flag. Truncation never starts the cooldown: the primary
+        answered.
+        """
+        pname, first_wire = primary
+        sname, second_wire = secondary
+        tally = self.gateway_tally
+        if time.monotonic() < self._primary_down_until:
+            # The primary's machine was absent inside the last minute. Skip
+            # it — silently; the tally carries the count — and if the
+            # fallback now dies too, drop the memory and probe the primary
+            # right here rather than raising with one wire untried.
+            tally["skipped"] += 1
+            try:
+                res = second_wire()
+            except Exception as second:
+                self._primary_down_until = 0.0
+                print(f"llm: gateway {sname} {type(second).__name__} during "
+                      f"{pname} cooldown -> probing {pname}")
+                try:
+                    res = first_wire()
+                except Exception as first:
+                    tally["both_dead"] += 1
+                    print(f"llm: gateway {pname} {type(first).__name__} too "
+                          f"— no transport answered")
+                    _raise_the_one_that_leaves(first, second)
+                tally["primary_ok"] += 1
+                print(f"llm: gateway {pname} answered the probe")
+                return res
+            res.fell_through_from = pname
+            tally["rescued"] += 1
+            return res
+        try:
+            res = first_wire()
+        except Exception as first:
+            # Anything falls through. Only a machine-absent failure is
+            # REMEMBERED; a ValueError for an empty reply, or our own parse
+            # error, is rescued and forgotten — content never steers the wire.
+            if isinstance(first, _TRANSPORT_FAULTS):
+                self._primary_down_until = (time.monotonic()
+                                            + _PRIMARY_RETRY_AFTER_SECONDS)
+            print(f"llm: gateway {pname} {type(first).__name__} -> trying {sname}")
+            try:
+                res = second_wire()
+            except Exception as second:
+                tally["both_dead"] += 1
+                print(f"llm: gateway {sname} {type(second).__name__} too "
+                      f"— no transport answered")
+                _raise_the_one_that_leaves(first, second)
+            res.fell_through_from = pname
+            tally["rescued"] += 1
+            print(f"llm: gateway {sname} answered for {pname}")
+            return res
+        if res.truncated:
+            # The provider's own finish-reason enum says it ran out of room.
+            # One bounded re-issue on the other wire; if that dies, the
+            # primary's flagged reply stands and the caller's existing
+            # handling (template speaks, triage re-asks) takes it from here.
+            print(f"llm: gateway {pname} truncated -> reissuing on {sname}")
+            try:
+                again = second_wire()
+            except Exception:
+                # Counted as the primary's call, because that is whose reply
+                # goes back: the tally says which wire CARRIED it, and the
+                # `truncated -> reissuing` line above says why it was tried.
+                tally["primary_ok"] += 1
+                return res
+            again.fell_through_from = pname
+            tally["reissued"] += 1
+            print(f"llm: gateway {sname} answered for {pname} (truncation)")
+            return again
+        tally["primary_ok"] += 1
+        return res
 
     def _gemini_model_for(self, aux: bool) -> str:
         """Which Gemini model serves this call.
