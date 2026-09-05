@@ -41,8 +41,8 @@ unflashed, and `firmware_gate.py` reports UNPROVEN.
 | 06 | Reasoning + bounds | ~13 single-question calls, NO bounds | **OPEN — the largest remaining gap** |
 | 07 | Action / tools | seatbelt, digest-bound approval | **DECLINED — ours is the control group** |
 | 08 | Pusher / blast wall | none | **OPEN — but premature** |
-| 09 | Model gateway | env-var model, no retry, no fallback | **PARTIAL — truncation fixed, retry open** |
-| 10 | Proactivity | 0 asks in 137 decisions; caps checked not reserved | **OPEN — highest product value** |
+| 09 | Model gateway | env-var model, no retry, no fallback | **DONE in repo (`8230819d`), NOT LIVE** — truncation flag, 3-attempt retry, ordered transports with a 60 s dead-primary memory; `is_the_gateway_live.py` exits 1 until a worker with both keys and `ANTICIPY_LLM_ORDER` runs |
+| 10 | Proactivity | 0 asks in 137 decisions; caps checked not reserved | **HALF DONE in repo** — 10a no-verdict-below-the-floor (`3c36d2f7`, `unattributed_lane_live.py` UNPROVEN); 10b reserved text budget building |
 | 11 | Apps / extensibility | none | N/A — no third-party surface |
 | 12 | MCP | none | N/A |
 | 13 | Desktop eye | macOS meeting capture, different design | N/A |

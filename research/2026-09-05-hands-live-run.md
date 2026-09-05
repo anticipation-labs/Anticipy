@@ -66,3 +66,37 @@ extension is not broken.
 Not proven: how WELL it does the errands that matter (the battery is the
 instrument for that, running), and anything about production — where the
 same hooks refuse every install until the `agents` table is repaired.
+
+## Proof 1, the result — `proof/hands_battery.py --rig`, 0.13.0, gemini-3.1-pro-preview
+
+    hands battery (rig): 7/8
+      ok   native_date    — status=done  site {'date':'2026-08-12','time':'2:00 PM'}                       [78s]
+      ok   readonly_date  — status=done  site {'date':'Tue Aug 11','time':'1:30 PM','party':'3 people'}   [36s]
+      ok   site_defaults  — status=done  site {'date':'Wed Aug 12','time':'12:00 PM','party':'4 people'}  [34s]
+      ok   no_identity    — needs_user "I need your first and last name to finish the reservation." invented=None [10s]
+      ok   unnamed_branch — needs_user "Which location would you like to book?" visited=[] booked=None   [10s]
+      ok   otp_resume     — phase1 needs_user (resume_tab carried) → v2 resume accepted by the guard → phase2 done, site_verified=True [50s]
+      ok   autocomplete   — status=done  picked {'city':'Vancouver (YVR)'}                                [20s]
+      FAIL general_form  — needs_user "I am about to submit the ticket with the message: 'I was charged twice for order A-7741.'" ticket=None [32s]
+
+Every claim landed in 2–4 s through `workflow_guard`; the OTP resume, version
+2 with the approval re-bound, was accepted by the guard live and re-claimed in
+2 s. Traces: `proof/hands_battery_traces.json` (committed with the port).
+
+**The eighth row is the law working, not the hands failing.** A support ticket
+is a message to another human — shelf 3 in Omar's ruling, tap first, forever —
+and audit #66 made "a message the agent composed in his name is shown to him
+before it goes out" a verdict. The hands stopped and showed the draft. The
+grader, written before both rules, expected a silent submit. It now grades two
+shapes: his words carry the text → submitted; his words do not → the draft is
+shown and nothing is sent (commit alongside this note). Not yet re-run.
+
+## The map moved while this ran
+
+Production is on Cloudflare (`api.anticipy.ai` = Worker + D1; brain on
+Containers; Railway is the fallback for shipped clients). Everything above
+was measured on the repo's local rig, which runs the PocketBase hooks — the
+Worker carries its own TypeScript port of them, and on the Worker
+`POST /agent/llm` still answers 503 "llm proxy not yet ported". So on
+Cloudflare the browser agent cannot make one model call until that port
+lands. `research/2026-09-05-cloudflare-era-plan.md` is the plan from here.
