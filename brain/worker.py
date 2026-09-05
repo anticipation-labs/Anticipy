@@ -1062,15 +1062,25 @@ def post_event(kind: str, text: str, decision: str = "", goal: str = "",
                owner_ref: str = "", owner_id: str = "",
                source: str = "", external_event_id: str = "") -> None:
     ref = _active_owner_ref(owner_ref)
-    legacy = str(owner_id or ACTIVE_OWNER_ID or "").strip()
     body = {
         "device_id": "anticipy-brain", "kind": kind, "text": text,
         "decision": decision, "goal": goal or "",
     }
     if ref:
         body["owner_ref"] = ref
-    if legacy:
-        body["owner"] = legacy
+    # WHAT WAS HERE UNTIL 2026-09-05, audit F04: `if legacy: body["owner"] =
+    # legacy`, stamping the pre-account UUID onto every row the brain writes.
+    #
+    # events has no `owner` column and never had one on this backend
+    # (migration/workers/src/pb/schema.ts, and `pragma_table_info('events')`
+    # on live D1 returns nothing for it), so the Worker answered
+    # 400 unknown_field BEFORE the INSERT — measured against production on
+    # 2026-09-05: every brain event since the cutover was rejected at the
+    # door. Nothing she said reached the feed, and because
+    # claim_notification_attempt only wins the SMS fence on a 2xx from here,
+    # no text was ever attempted either. `owner_id` stays in the signature:
+    # the READ side still scopes on the legacy id where a row carries one
+    # (_event_matches_owner), and every caller passes it.
     # WHICH EARS SET THIS OFF, carried onto the row the brain itself writes.
     #
     # An anticipy_says row is the only durable record that she spoke, and it
@@ -2552,9 +2562,9 @@ def reserve_uninvited_text(owner_ref: str, door: str,
                     "goal": "", "external_event_id": slot}
             if ref:
                 body["owner_ref"] = ref
-            legacy = str(ACTIVE_OWNER_ID or "").strip()
-            if legacy:
-                body["owner"] = legacy
+            # No `owner` key: see post_event above (audit F04). events has no
+            # such column, so stamping it made every slot create a 400 and the
+            # uninvited budget unprovable rather than merely spent.
             try:
                 r = pb.post(f"{PB}/api/collections/events/records",
                             json=body, timeout=10)

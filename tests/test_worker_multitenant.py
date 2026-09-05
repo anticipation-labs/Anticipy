@@ -82,7 +82,19 @@ def test_a_missing_profile_uses_the_account_seed_and_a_failed_read_is_unknown(
     assert W.fetch_owner_phone("owner_alpha") is None
 
 
-def test_brain_output_is_stamped_with_both_canonical_and_legacy_owner(monkeypatch):
+def test_brain_output_is_scoped_by_owner_ref_and_never_sends_the_owner_column(
+        monkeypatch):
+    """Audit F04. This test used to assert the opposite — that the brain
+    stamps `owner` as well as `owner_ref` — and that assertion is what kept
+    a 400 in production invisible.
+
+    events has no `owner` column on this backend (the Worker's column map,
+    and `pragma_table_info('events')` on live D1), so the Worker answered
+    400 unknown_field before the INSERT and EVERY row the brain tried to
+    write since the cutover was rejected: no reply in the feed, and no text,
+    because the SMS fence is only won on a 2xx from this call. Scope is
+    carried by owner_ref alone.
+    """
     sent = {}
     monkeypatch.setattr(W, "ACTIVE_OWNER_REF", "owner_alpha")
     monkeypatch.setattr(W, "ACTIVE_OWNER_ID", "legacy-alpha")
@@ -92,7 +104,8 @@ def test_brain_output_is_stamped_with_both_canonical_and_legacy_owner(monkeypatc
     monkeypatch.setattr(W.pb, "post", fake_post)
     W.post_event("anticipy_says", "Done", decision="done", goal="renew permit")
     assert sent["json"]["owner_ref"] == "owner_alpha"
-    assert sent["json"]["owner"] == "legacy-alpha"
+    assert "owner" not in sent["json"], (
+        "events has no `owner` column: sending one is a 400 and the row is lost")
 
 
 def test_new_accounts_get_distinct_memory_and_clock_files(tmp_path):
