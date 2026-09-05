@@ -93,7 +93,15 @@ owner's) — or the supervisor learns an explicit list instead of "first N by
 id". That is a product decision for the owner; the end-to-end run below
 needs it settled first.
 
-Open question on the brain: `wrangler containers instances` lists only two INACTIVE instances (stale ids; `ssh` says not found) while the supervisor reports one owner served every minute and the DO keeps logging. Whether a container is actually running the new image is proven only functionally — by speech for the served owner reaching D1 and a decision coming back with `heard_ms` stamped. That is the end-to-end run's first hop.
+**Answered at 13:50Z.** After the allowlist deploy (run 33969999772, Worker
+version `24041939`, `ANTICIPY_SERVE_OWNERS=qeuy6sv1raof9rw`, cap still 1)
+`wrangler containers instances` lists TWO RUNNING instances on image
+version 2: `43dl3t9oz7q34qc` (the first real owner, unchanged) and
+`qeuy6sv1raof9rw` (the probe). The earlier "both inactive" listing was the
+gradual rollout in flight, not a dead fleet. The brain is running the code
+merged today, and the probe owner has a brain to hear it.
+
+Earlier open question, kept for the record: `wrangler containers instances` listed only two INACTIVE instances (stale ids; `ssh` says not found) while the supervisor reports one owner served every minute and the DO keeps logging. Whether a container is actually running the new image is proven only functionally — by speech for the served owner reaching D1 and a decision coming back with `heard_ms` stamped. That is the end-to-end run's first hop.
 
 ## The sequence from here
 
