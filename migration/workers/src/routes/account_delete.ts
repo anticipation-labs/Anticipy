@@ -125,11 +125,20 @@ export async function accountDelete(req: Request, env: AuthEnv & { DB: D1Databas
 
   // The brain's per-owner memory lives outside this database, so the erasure is
   // not finished here -- it is REQUESTED, and the worker drains it.
+  //
+  // `legacy_uuid` RIDES ALONG, and until 2026-09-05 it did not (audit F14).
+  // The pre-migration founder's memory lives OUTSIDE <state root>/<owner_ref>,
+  // on the older ANTICIPY_MEMORY_DB / ANTICIPY_CLOCK_STATE paths, and
+  // brain/supervisor.py:215 reads exactly this column to find it. Without the
+  // value the drain checks the tidy directory, finds nothing, and marks the
+  // purge COMPLETE over a memory database still fully on disk -- the one lie
+  // that function's docstring forbids. The value is already in hand: it is the
+  // `legacy` read above.
   try {
     await env.DB.prepare(
-      `INSERT INTO purges (id, owner_ref, requested_at, memory_purged, created, updated)
-       VALUES (?,?,?,?,?,?)`)
-      .bind(pbId(), ref, new Date().toISOString(), 0, pbNow(), pbNow()).run();
+      `INSERT INTO purges (id, owner_ref, legacy_uuid, requested_at, memory_purged, created, updated)
+       VALUES (?,?,?,?,?,?,?)`)
+      .bind(pbId(), ref, legacy, new Date().toISOString(), 0, pbNow(), pbNow()).run();
   } catch {
     return json(500, {
       ok: false,
@@ -138,15 +147,39 @@ export async function accountDelete(req: Request, env: AuthEnv & { DB: D1Databas
     });
   }
 
+  // THE LAST TWO ANSWERS ARE READ BY A DECODER, NOT BY A HUMAN, and until
+  // 2026-09-05 neither carried what it reads (audit F14).
+  // AnticipyApp.swift:303-336 decodes `account_deleted` and `memory_purge` and
+  // calls the delete a success only when
+  //   status == 200 && ok && account_deleted && purge in {scheduled, purged}.
+  // A body of {ok, message, deleted} leaves account_deleted nil, so `success`
+  // was false on a delete that had entirely succeeded: the phone rendered
+  // "Deleted." as the FAILURE copy and, because outcome.ok was false, skipped
+  // clearPendingLinesOwned, clearPendingAppRepliesOwned and signOut
+  // (:1764-1785) -- leaving somebody signed into a closed account with speech
+  // lines still stamped to it. And the survived-account branch answered 500
+  // where the hook answers 409, which is the status the iOS comment
+  // (AnticipyBackend.swift:483-489) singles out as "the rows went but the
+  // account survived".
   try {
     await env.DB.prepare(`DELETE FROM owners WHERE id = ?`).bind(ref).run();
-  } catch {
-    return json(500, {
+  } catch (err) {
+    console.log("DELETE INCOMPLETE: rows cleared but the account survived for "
+      + ref + ": " + String(err).slice(0, 200));
+    return json(409, {
       ok: false,
       message: "I deleted your data but couldn't close the account itself. Ask me again — what's already gone stays gone.",
       deleted,
+      account_deleted: false,
+      memory_purge: "waiting on the account closing",
     });
   }
 
-  return json(200, { ok: true, message: "Deleted.", deleted });
+  return json(200, {
+    ok: true,
+    message: "Deleted.",
+    deleted,
+    account_deleted: true,
+    memory_purge: "scheduled",
+  });
 }
