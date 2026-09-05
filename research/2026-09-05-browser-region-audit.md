@@ -34,8 +34,8 @@ owner's logged-in browser with `<all_urls>` and the debugger, so the bar for
 | 75 | `goalMatchingElements` hoist | VIOLATION (L) | **FIXED `e961e023`** — DELETED | the planner already sees every control |
 | 76 | `taskShape` as the only recall judge | VIOLATION | **FIXED `f8de9303`** | four-state floor, twin of `brain/research.py` |
 | 77 | `supervised_read` narration filter | borderline | **FIXED `a3bc04e9`** | four wording legs deleted; `lineVerdict` one question, four states, FLOOR; byte/address/link budget stays as the carries-only seatbelt; 6 mutations + 1 |
-| 78 | `detectsCodeWasSent` | VIOLATION | OPEN — design NEEDS-REWORK | |
-| 79 | `extractCode` scoring | borderline | OPEN — design NEEDS-REWORK | parsing a machine code out of prose |
+| 78 | `detectsCodeWasSent` | VIOLATION | **FIXED** (commit "Where the code went is read by a model, not a phrasing regex") | regex + two word lists deleted; `whereCodeWent` four-state FLOOR over `codeSentJudge`; proof `test_code_sent_is_not_a_word_match.mjs`, 3 mutations |
+| 79 | `extractCode` scoring | borderline | **FIXED** (commit "Which value is the code is read by a model, not ranked by a word list") | `CODE_CONTEXT`/`NOT_A_CODE`/`extractCode` and the askModel re-parse deleted; `readCodeVerdict` four-state FLOOR over `codeJudge`, `codeFromPage` shape+provenance containment on the reply; proof `test_code_read_is_not_a_word_match.mjs`, 4 mutations |
 | 90 | intent journal before every click | **BRIEF DEVIATION** | **FIXED `8e6673ed`** (the crash-resume half) | see below |
 | — | SSRF guard: loopback only | not in the audit | **FIXED `09ec97ad`** | Omi teardown item #04 |
 
@@ -163,6 +163,54 @@ have passed; the pin asserts adjacency and went red. That is the finding worth
 the whole item: a green test that only looked load-bearing, caught by mutation
 before it shipped.
 
+**#78 `detectsCodeWasSent`** (built by a worktree agent from the reviewed
+corrected mechanism). A phrasing regex over the rendered page decided whether
+the page was SAYING a code had been sent, and two word lists decided the
+channel — the verdict that decides whether the run offers to open the owner's
+inbox at all. The function's own comment records the shape's live failure:
+the two commonest wordings matched nothing until they were added by hand, and
+"a one-time passcode is on its way" still matched nothing after. Now
+`whereCodeWent` hands the whole page to `codeSentJudge` — one question on its
+own, the page fenced in the user turn, shown up to page_map's own 6000-char
+cap (the attack found the design's 4000 would have re-created the miss on
+long pages) — and maps the token in four states; `tripOnOffer` is a FLOOR
+over the verdict: no verdict is no offer and no ref, but still a hand-back
+with a plain ask, never the stall. Asked only inside the code wall, once per
+page state per run. **Mutation testing**: a `\bsent\b` sift put back in front
+of the judge and the judge skipped both stall the "on its way" run for 19
+steps with judge count 0; no-verdict read as EMAIL mints the offer and a live
+ref on an empty reply, prose, "EMAIL." and UNSURE. Pre-existing and
+unchanged: the plain-address regex names the tail `r@gmail.com` of a masked
+`o***r@gmail.com` in the offer sentence; `looksReal` keeps it from steering
+the URL. Not verified live (law 3).
+
+**#79 `extractCode`** (built by a worktree agent from the reviewed corrected
+mechanism). A word list ranked the digit runs on an inbox page — labelled 100,
+alone on a line 80, near `confirm|security|access|pin|…` 60 — and the winner
+was typed into a live one-time-code field with `unquotedCode` satisfied by the
+regex's own output; a model was consulted only when the regexes found nothing,
+never when they found a wrong one, and its prose was then re-parsed by the
+same regex. Measured (audit row 79): "Order #482130 confirmed" beat a
+truncated real code and 482130 was submitted; the `confidence` field never
+had a consumer. Now `readCodeVerdict` asks `codeJudge` one question on its
+own — which value on this page is the code that site sent — in four states
+(code / none / unclear / unread), and `codeFromPage` is the deterministic half
+that stays: one token, 4-8 alphanumerics with a digit, present on the exact
+4000-char slice the model was shown, either as a whole token or as one line
+compacted. It can only refuse a reply, never choose between candidates — the
+test says so the honest way round: the footer year passes provenance, and it
+is the model's job not to name it. `runSideTrip` is a FLOOR: no judge means
+no tab is opened; unread ends the trip at once as undecidable, never "keep
+clicking through his mailbox"; UNCLEAR on the list page opens the message,
+UNCLEAR on any later page stops. **Cost, said plainly**: every taken trip now
+ships the list page (other senders' snippets included) to the model one to two
+times, where a regex hit used to keep it on the machine — within the consent
+the owner gave, and recorded here as a change. **Mutation testing**: a
+labelled-code regex put back in front of the judge, the judge skipped for the
+first digit run, unread read as none, and the provenance check bypassed each
+went red on the pin and its companions, and each restore was byte-identical.
+Not verified live (law 3).
+
 ## What is still open, and in what order
 
 The eleven NEEDS-REWORK designs all failed the attack on the same front:
@@ -184,7 +232,7 @@ Ranked by blast radius, which is what should order the work:
 4. **#72 `page_map` control deletion** — deletes real controls before the model
    sees them.
 5. **#70 `login_wall`** — parks the errand and texts the owner.
-6. **#74, #78, #79, #73, #77** — medium/low, in that order.
+6. **#74, #73, #77** — medium/low, in that order (#78 and #79 closed, above).
 
 ## What was NOT verified, said plainly
 

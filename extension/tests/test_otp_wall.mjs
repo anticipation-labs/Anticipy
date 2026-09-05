@@ -60,30 +60,33 @@ const ALWAYS_YES = async () => "YES";
 }
 
 // --------------------------------------------- 2. what the offer actually says
+// `tripOnOffer` is synchronous over the verdict a model gave (`whereCodeWent`,
+// Audit #78); the page's wording never reaches it.
 {
   const owner = { email: "omar@gmail.com" };
-  const emailed = tripOnOffer("We just sent a verification code to your email.", owner, "Anker");
+  const emailed = tripOnOffer({ state: "email", address: null }, owner, "Anker");
   check("an emailed code produces an offer and somewhere to go",
     !!emailed && !!emailed.url && /Want me to go and read it/.test(emailed.offer));
   check("the destination comes from HIS address, never the errand",
     emailed.url.includes("mail.google.com"));
 
   // His phone is not ours to read, and it is already the channel we text him on.
-  const texted = tripOnOffer("We sent a code by SMS to your phone.", owner, "Anker");
+  const texted = tripOnOffer({ state: "phone", address: null }, owner, "Anker");
   check("a texted code asks him for it and offers no trip",
     !!texted && texted.url === null && /Send it to me/.test(texted.offer));
 
 
   // A masked address is not an address: the plain-address pattern happily
   // matches the tail of "o***r@gmail.com" and would send a trip to a fragment.
-  const masked = tripOnOffer("Code sent to o***r@outlook.com", { email: "omar@gmail.com" }, "X");
+  const masked = tripOnOffer({ state: "email", address: "o***r@outlook.com" }, { email: "omar@gmail.com" }, "X");
   check("a masked address falls back to the address HE gave us",
     !!masked && masked.url.includes("mail.google.com"));
 
   check("a page with no code notice offers nothing",
-    tripOnOffer("Welcome to our homepage.", owner, "X") === null);
+    tripOnOffer({ state: "none", address: null }, owner, "X") === null);
 
-  const unknownHost = tripOnOffer("Code sent to me@my-own-company.example", { email: "me@my-own-company.example" }, "X");
+  const unknownHost = tripOnOffer({ state: "email", address: "me@my-own-company.example" },
+                                  { email: "me@my-own-company.example" }, "X");
   check("an inbox we cannot locate asks WHERE instead of guessing",
     !!unknownHost && unknownHost.url === null && /tell me where/.test(unknownHost.offer));
 }
@@ -124,8 +127,14 @@ const ALWAYS_YES = async () => "YES";
         content = JSON.stringify({ start_url: "https://shop.example.com/verify", why: "the site", steps: [], unfamiliar: false });
       } else if (/You audit a browser agent's claim/.test(joined)) {
         content = JSON.stringify({ verified: true });
-      } else if (/find ONE verification code/.test(joined)) {
+      } else if (/ONE page from a person's mailbox/.test(joined)) {
+        // The code judge (Audit #79): the value it names must be on the page.
         content = "483920";
+      } else if (/JUST BEEN SENT to this person/.test(joined)) {
+        // The code-sent judge (Audit #78), answered from the page it was
+        // shown — never a scripted step. A stub may pattern-match a fixture.
+        const page = (joined.match(/<PAGE [^>]+>\n([\s\S]*?)\n<\/PAGE /) || [])[1] || "";
+        content = /SMS|phone/i.test(page) ? "PHONE" : (/e-?mail|@/i.test(page) ? "EMAIL" : "NONE");
       } else {
         content = JSON.stringify(a.shift() || { action: "wait" });
       }
@@ -511,8 +520,11 @@ const ALWAYS_YES = async () => "YES";
       content = JSON.stringify({ start_url: "https://shop.example.com/verify", why: "site", steps: [], unfamiliar: false });
     } else if (/You audit a browser agent's claim/.test(joined)) {
       content = JSON.stringify({ verified: true });
-    } else if (/find ONE verification code/.test(joined)) {
+    } else if (/ONE page from a person's mailbox/.test(joined)) {
       content = "483920";
+    } else if (/JUST BEEN SENT to this person/.test(joined)) {
+      const page = (joined.match(/<PAGE [^>]+>\n([\s\S]*?)\n<\/PAGE /) || [])[1] || "";
+      content = /SMS|phone/i.test(page) ? "PHONE" : (/e-?mail|@/i.test(page) ? "EMAIL" : "NONE");
     } else if (/did this person agree to let/.test(joined)) {
       // The consent judge. It is asked the question we parked on and his reply,
       // and answers in one token. This is the ONLY thing in the run that may
