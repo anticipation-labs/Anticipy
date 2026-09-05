@@ -1,0 +1,61 @@
+name: Delta re-sync PocketBase → D1 (one-time, pre-retirement)
+
+# Copies PocketBase records changed since --since into D1, so users who update
+# their app don't lose recent data. Runs on the GitHub runner so customer data
+# NEVER touches a laptop. READ-ONLY on PocketBase; upsert-only on D1 (no deletes).
+# This is the LAST time PocketBase is read — after it (and the Railway retire),
+# Cloudflare/D1 is the only datastore.
+#
+# ALWAYS run with dry_run=true FIRST to see the counts, then dry_run=false at the
+# freeze moment (just before flipping clients / retiring Railway). Idempotent.
+#
+# REQUIRED REPO SECRETS:
+#   POCKETBASE_ADMIN_EMAIL, POCKETBASE_ADMIN_PASSWORD   (a PB superuser)
+#   CLOUDFLARE_API_TOKEN     (D1:Edit — already set for the brain deploy)
+#   CLOUDFLARE_ACCOUNT_ID    (already set)
+# Optional vars default in the script: PB_BASE, D1_DATABASE_ID.
+
+on:
+  workflow_dispatch:
+    inputs:
+      since:
+        description: 'Cutoff, UTC space-format, e.g. 2026-09-04 00:00:00 (use a bit before the original migration; upsert is idempotent)'
+        required: true
+      dry_run:
+        description: 'true = count only, write nothing (run this first)'
+        required: true
+        default: 'true'
+      confirm:
+        description: 'Type SYNC to run'
+        required: true
+        default: ''
+
+concurrency:
+  group: delta-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    if: ${{ github.event.inputs.confirm == 'SYNC' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      PB_BASE: https://backend-production-61e0a.up.railway.app
+      POCKETBASE_ADMIN_EMAIL: ${{ secrets.POCKETBASE_ADMIN_EMAIL }}
+      POCKETBASE_ADMIN_PASSWORD: ${{ secrets.POCKETBASE_ADMIN_PASSWORD }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      D1_DATABASE_ID: f341f23d-ec52-4b2f-9a2d-13117ebee86e
+    steps:
+      - uses: actions/checkout@v4
+      - name: Delta re-sync (dry-run honored via input)
+        run: |
+          set -euo pipefail
+          ARGS=(--since "${{ github.event.inputs.since }}")
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then ARGS+=(--dry-run); fi
+          python3 migration/runbooks/delta_sync_pb_to_d1.py "${ARGS[@]}"
+      - name: Note
+        if: always()
+        run: |
+          echo "Dry-run first. When counts look right, re-run with dry_run=false."
+          echo "After a clean non-dry run + client cutover, retire Railway (keep the volume 2 weeks)."
