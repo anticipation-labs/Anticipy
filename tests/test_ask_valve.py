@@ -49,8 +49,13 @@ def _quiet_worker(monkeypatch, recorded, uninvited=0, said=False):
     # Push quiet hours out of reach so wall-clock never decides a test.
     monkeypatch.setattr(worker, "CLOCK_QUIET_START", 25)
     monkeypatch.setattr(worker, "CLOCK_QUIET_END", 0)
-    monkeypatch.setattr(worker, "uninvited_sent_today",
-                        lambda owner_ref="": uninvited)
+    # The daily budget is RESERVED, not counted (Omi port 10b): a fake slot id
+    # while there is room, False once `uninvited` texts have taken the day.
+    # The reservation itself is driven for real in tests/test_uninvited_budget.py.
+    monkeypatch.setattr(worker, "reserve_uninvited_text",
+                        lambda owner_ref="", door="", now=None:
+                        False if uninvited >= worker.UNINVITED_TEXTS_PER_DAY
+                        else f"uninvited:test-owner:today:{uninvited + 1}")
     monkeypatch.setattr(worker, "already_said",
                         lambda text, within_hours=24.0, owner_ref="": said)
     monkeypatch.setattr(worker, "post_event",
@@ -141,9 +146,10 @@ def test_failed_send_backs_off_then_retries(monkeypatch):
                         lambda text, channel="sms": calls.append(text) or {"ok": 1})
     worker.maybe_ask_parked(a)
     assert calls == []
-    # Past the backoff: it sends.
-    text, stamped, _ = a._pending_ask
-    a._pending_ask = (text, stamped, time.time() - worker.ASK_RETRY_S - 1)
+    # Past the backoff: it sends — on the slot the first attempt reserved.
+    text, stamped, _, slot = a._pending_ask
+    assert slot, "a failed send keeps its reservation for the retry"
+    a._pending_ask = (text, stamped, time.time() - worker.ASK_RETRY_S - 1, slot)
     worker.maybe_ask_parked(a)
     assert len(calls) == 1 and a._pending_ask is None
 
@@ -163,8 +169,8 @@ def test_stale_questions_expire_unasked(monkeypatch):
     sent, recorded = [], []
     a = _park(monkeypatch, sent)
     _quiet_worker(monkeypatch, recorded)
-    text, _, _ = a._pending_ask
-    a._pending_ask = (text, time.time() - 601, 0.0)
+    text, _, _, _ = a._pending_ask
+    a._pending_ask = (text, time.time() - 601, 0.0, "")
     worker.maybe_ask_parked(a)
     assert a._pending_ask is None and sent == []
 
@@ -262,17 +268,18 @@ def test_parked_digest_waits_for_a_dead_room(monkeypatch):
     worker.DIGEST_PENDING = None
 
 
-def test_invited_questions_do_not_burn_the_uninvited_cap(monkeypatch):
-    """A direct-lane sufficiency question (carries the job's goal) is the
-    OPPOSITE of uninvited; only goal-less parked asks count."""
-    rows = [
-        {"decision": "ask", "goal": "", "params": ""},          # parked: counts
-        {"decision": "ask", "goal": "book Cactus Club", "params": ""},  # invited
-        {"decision": "done", "goal": "g", "params": "uninvited fyi"},   # counts
-        {"decision": "done", "goal": "g", "params": ""},        # plain FYI: no
-    ]
-    class R:
-        ok = True
-        def json(self): return {"items": rows}
-    monkeypatch.setattr(worker.pb, "get", lambda *a, **k: R())
-    assert worker.uninvited_sent_today("o") == 2
+def test_invited_questions_never_touch_the_uninvited_budget(monkeypatch):
+    """A direct-lane sufficiency question (kind "ask", carrying the job's
+    goal) is the OPPOSITE of uninvited: he set the work in motion and she
+    cannot finish without an answer. Counting those once let three invited
+    clarifications exhaust the day and mute every FYI. Now the tag is the
+    DOOR (Omi port 10b): only "clock" and "ambient_act" reserve, so a spent
+    day cannot mute an invited kind, and an invited kind never writes a row."""
+    posts = []
+    monkeypatch.setattr(worker.pb, "get", lambda *a, **k: _Resp())
+    monkeypatch.setattr(worker.pb, "post", lambda *a, **k: posts.append(k) or _Resp())
+    monkeypatch.setattr(worker, "UNINVITED_SPENT_UNTIL", time.time() + 3600)
+    for kind in ("ask", "act", "needs_user", "compute_answer", ""):
+        assert worker.SPEAK_ONCE("Quick question — which Priya?",
+                                 goal="Email Priya the invoice", kind=kind) is True
+    assert posts == [], "an invited kind must never spend a slot"

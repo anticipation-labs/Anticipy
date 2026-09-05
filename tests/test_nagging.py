@@ -201,6 +201,11 @@ def test_a_fresh_overheard_plan_is_never_nagging(monkeypatch):
     monkeypatch.setattr(W, "CLOCK_QUIET_START", 24)
     monkeypatch.setattr(W, "CLOCK_QUIET_END", 0)
     monkeypatch.setattr(W.pb, "get", backend(says(THE_FIVE, days_ago=3))[0])
+    # The door's last gate is the reserved daily budget (Omi port 10b), a row
+    # write; give it a store that accepts one.
+    monkeypatch.setattr(W.pb, "post", lambda *a, **k: types.SimpleNamespace(
+        ok=True, status_code=200, json=lambda: {"id": "slot1"}))
+    monkeypatch.setattr(W, "UNINVITED_SPENT_UNTIL", 0.0)
     assert W.SPEAK_ONCE("Caught your plan — dinner at Earls tomorrow at 7.",
                         goal="Book dinner for tomorrow at Earls in West Van",
                         kind="ambient_act") is True
@@ -225,6 +230,9 @@ def test_a_new_card_speaks_even_when_yesterdays_plan_rhymed_with_it(monkeypatch)
         ["Caught your plan — dinner at Earls in West Van tomorrow."],
         goal="Book dinner for tomorrow at Earls in West Van",
         days_ago=0.1))[0])
+    monkeypatch.setattr(W.pb, "post", lambda *a, **k: types.SimpleNamespace(
+        ok=True, status_code=200, json=lambda: {"id": "slot1"}))
+    monkeypatch.setattr(W, "UNINVITED_SPENT_UNTIL", 0.0)
     assert W.SPEAK_ONCE("Ready to book Earls in West Van for tomorrow.",
                         goal="Confirm dinner at Earls West End tomorrow",
                         kind="ambient_act") is True

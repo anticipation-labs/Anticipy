@@ -16,25 +16,36 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from brain.worker import STUCK_ASKS_CEILING, UNINVITED_TEXTS_PER_DAY  # noqa: E402
-from overnight.is_the_brain_live import evaluate_rules  # noqa: E402
+from overnight.is_the_brain_live import evaluate_rules, evaluate_slots  # noqa: E402
 
 
 # `created` is UTC, exactly as PocketBase stores it. The quiet-hours and
 # per-day rules are judged in the OWNER'S zone (CLOCK_TZ, default
 # America/Vancouver = UTC-7 in August), so a fixture hour is NOT the hour the
 # rule sees. Every timestamp below is UTC with its local time in a comment.
-def says(created, decision, goal="", text="lorem", notified=True):
+def says(created, decision, goal="", text="lorem", notified=True, link=""):
+    # `link` is the reservation a said row was sent on (Omi port 10b): the
+    # brain in this tree reserves an uninvited_slot row before Twilio and
+    # stamps "uninvited:<owner>:<day>:<n>:said" on the said row.
     return {"kind": "anticipy_says", "created": created, "decision": decision,
-            "goal": goal, "text": text, "notified": notified}
+            "goal": goal, "text": text, "notified": notified,
+            "external_event_id": link}
+
+
+def slot(day, n, owner=""):
+    return f"uninvited:{owner}:{day}:{n}"
 
 
 # A day that breaks nothing: one errand asked twice (the ceiling ALLOWS two),
-# two uninvited nudges inside waking hours, all differently worded.
+# two uninvited nudges inside waking hours, each on its reserved slot, all
+# differently worded.
 CLEAN = [
     says("2026-08-18 09:12:00", "needs_user", "book the dentist", "Need a date."),
     says("2026-08-18 14:40:00", "needs_user", "book the dentist", "Still need a date."),
-    says("2026-08-18 17:05:00", "clock", "bins out", "Bins tonight."),   # 10:05 local
-    says("2026-08-18 18:30:00", "clock", "call mum", "You said you'd call her."),  # 11:30 local
+    says("2026-08-18 17:05:00", "clock", "bins out", "Bins tonight.",   # 10:05 local
+         link=slot("2026-08-18", 1) + ":said"),
+    says("2026-08-18 18:30:00", "clock", "call mum", "You said you'd call her.",  # 11:30 local
+         link=slot("2026-08-18", 2) + ":said"),
     says("2026-08-18 11:00:00", "done", "book the dentist", "Booked for Tuesday."),
 ]
 
@@ -222,3 +233,105 @@ def test_an_owner_with_no_timezone_on_file_uses_the_workers_own_default():
         .astimezone(CLOCK_TZ).hour >= 22 or _dt.datetime(
             2026, 8, 24, 8, tzinfo=_dt.timezone.utc).astimezone(CLOCK_TZ).hour < 8 else "PASS"
     assert verdict(evaluate_rules(unknown, {}), "uninvited between") == expect
+
+
+# --------------------------------------------------------------------------
+# THE BUDGET IS RESERVED, AND THE ROWS SAY SO (Omi port 10b, 2026-09-05).
+#
+# Until this date the per-day rule counted decision=="clock" alone — the one
+# uninvited kind the brain's own counter excluded — and saw neither parked
+# asks nor digests. "Uninvited" is the DOOR a row left through, never its
+# words, and every door row must carry the reservation it was sent on.
+# --------------------------------------------------------------------------
+
+def linked(created, decision, n, goal="", text="lorem", day="2026-08-18"):
+    return says(created, decision, goal, text, link=slot(day, n) + ":said")
+
+
+def test_a_door_row_without_a_reservation_screams():
+    """A clock row with no "uninvited:" link is a door that sent without
+    reserving — or a brain older than this tree. Either way, not this brain."""
+    unlinked = CLEAN + [says("2026-08-18 19:00:00", "clock", "g", "t")]  # 12:00 local
+    assert verdict(evaluate_rules(unlinked), "carries its reservation") == "FAIL"
+    assert verdict(evaluate_rules(CLEAN), "carries its reservation") == "PASS"
+
+
+def test_a_goalless_ask_and_a_digest_count_against_the_day():
+    """The parked ambient question (decision ask, EMPTY goal) and the meeting
+    digest are uninvited doors. Three clock nudges plus one of either is a
+    fourth text."""
+    three = [linked(f"2026-08-18 {17 + i}:00:00", "clock", i + 1, f"g{i}", f"nudge {i}")
+             for i in range(UNINVITED_TEXTS_PER_DAY)]
+    ask = three + [linked("2026-08-18 21:00:00", "ask", 4, "", "which garage?")]
+    assert verdict(evaluate_rules(ask), "uninvited message") == "FAIL"
+    digest = three + [linked("2026-08-18 21:00:00", "digest", 4, "", "one thing ready")]
+    assert verdict(evaluate_rules(digest), "uninvited message") == "FAIL"
+    assert verdict(evaluate_rules(three), "uninvited message") == "PASS"
+
+
+def test_an_invited_question_carries_its_goal_and_does_not_count():
+    """A sufficiency question about work HE started carries the job's goal
+    and is the opposite of uninvited; counting it once muted every FYI."""
+    three = [linked(f"2026-08-18 {17 + i}:00:00", "clock", i + 1, f"g{i}", f"nudge {i}")
+             for i in range(UNINVITED_TEXTS_PER_DAY)]
+    invited = three + [says("2026-08-18 21:00:00", "ask", "book Cactus Club",
+                            "which night?")]
+    assert verdict(evaluate_rules(invited), "uninvited message") == "PASS"
+    assert verdict(evaluate_rules(invited), "carries its reservation") == "PASS"
+
+
+def test_the_overheard_receipt_is_seen_only_by_its_link():
+    """decision "act" is an invited act OR an overheard-plan receipt; only the
+    reservation link tells them apart, so a linked act counts and an
+    unlinked one does not — and the link rule does not demand one."""
+    three = [linked(f"2026-08-18 {17 + i}:00:00", "clock", i + 1, f"g{i}", f"nudge {i}")
+             for i in range(UNINVITED_TEXTS_PER_DAY)]
+    receipt = three + [linked("2026-08-18 21:00:00", "act", 4, "book dinner",
+                              "caught your plan")]
+    assert verdict(evaluate_rules(receipt), "uninvited message") == "FAIL"
+    direct = three + [says("2026-08-18 21:00:00", "act", "book dinner", "on it")]
+    assert verdict(evaluate_rules(direct), "uninvited message") == "PASS"
+    assert verdict(evaluate_rules(direct), "carries its reservation") == "PASS"
+
+
+def test_a_row_matching_two_door_shapes_counts_once():
+    rows = [linked(f"2026-08-18 {17 + i}:00:00", "clock", i + 1, f"g{i}", f"nudge {i}")
+            for i in range(UNINVITED_TEXTS_PER_DAY)]
+    assert verdict(evaluate_rules(rows), "uninvited message") == "PASS"
+
+
+def test_the_exempt_doors_have_their_own_rows():
+    """The welcome and the deafness notice stay off the budget by name, so a
+    regression in THEIR guards must show as itself, never laundered into the
+    three."""
+    for decision, needle in (("deaf", "deafness notice"), ("welcome", "the welcome")):
+        one = CLEAN + [says("2026-08-18 19:00:00", decision, "", "notice")]
+        assert verdict(evaluate_rules(one), needle) == "PASS"
+        assert verdict(evaluate_rules(one), "uninvited message") == "PASS", \
+            "an exempt door must not eat the budget"
+        two = one + [says("2026-08-18 20:00:00", decision, "", "notice again")]
+        assert verdict(evaluate_rules(two), needle) == "FAIL"
+
+
+def slot_row(day, n, decision="clock", owner=""):
+    return {"kind": "uninvited_slot", "decision": decision,
+            "external_event_id": slot(day, n, owner),
+            "created": f"{day} 17:00:00"}
+
+
+def test_slot_rows_are_judged_in_both_directions():
+    clean_slots = [slot_row("2026-08-18", 1), slot_row("2026-08-18", 2)]
+    rows = evaluate_slots(clean_slots, CLEAN)
+    assert rows and [r for r in rows if r[0] == "FAIL"] == []
+    # A fourth slot row in one owner-day cannot come from this tree's index.
+    four = clean_slots + [slot_row("2026-08-18", 3), slot_row("2026-08-18", 4)]
+    assert verdict(evaluate_slots(four, CLEAN), "slot row(s) per owner-day") == "FAIL"
+    # Two said rows claiming one slot.
+    doubled = CLEAN + [linked("2026-08-18 19:00:00", "clock", 1, "again", "t")]
+    assert verdict(evaluate_slots(clean_slots, doubled), "never outnumber") == "FAIL"
+    # There is no release in this tree; one means a different brain.
+    released = clean_slots + [slot_row("2026-08-18", 3, decision="released")]
+    assert verdict(evaluate_slots(released, CLEAN), "ever released") == "FAIL"
+    # Days are separate.
+    two_days = clean_slots + [slot_row("2026-08-19", n) for n in (1, 2, 3)]
+    assert verdict(evaluate_slots(two_days, CLEAN), "slot row(s) per owner-day") == "PASS"

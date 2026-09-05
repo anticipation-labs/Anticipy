@@ -825,7 +825,17 @@ def clock_should_run(now: float, state: dict) -> bool:
     hour = datetime.fromtimestamp(now, CLOCK_TZ).hour
     if CLOCK_QUIET_START <= hour or hour < CLOCK_QUIET_END:
         return False
-    return now - state.get("last_outreach_ts", 0) >= CLOCK_MIN_GAP_SECONDS
+    if now - state.get("last_outreach_ts", 0) < CLOCK_MIN_GAP_SECONDS:
+        return False
+    # A SPENT DAY RUNS NO CLOCK MODEL CALL. The reservation itself sits after
+    # "decided to speak" (SPEAK_ONCE), which is right for a silent day — but a
+    # refused clock stamps nothing, so once the three slots are gone this
+    # would otherwise run initiative + work_is_licensed every 30 minutes until
+    # 22:00 and be refused each time. This is a CHECK that can only skip work:
+    # True (spent, memoised until owner-local midnight) stays quiet; False and
+    # None (unreadable) run the clock exactly as before, and the grant is
+    # still decided by the slot row at the door.
+    return uninvited_budget_spent(ACTIVE_OWNER_REF, now=now) is not True
 
 
 # ---- the number must keep pointing at US -------------------------------
@@ -1108,10 +1118,12 @@ def mark_sent(key: str, now: float | None = None) -> None:
 # about an Earls restaurant in Vancouver", verbatim, in production.
 #
 # The answer is not to stop speaking; the good 10% is the whole point of the
-# product. It is that an uninvited text has to earn the interruption on three
-# counts, and NONE of these lose the finding — everything still lands in the
-# feed for whenever he looks. The only question here is whether it is worth a
-# buzz in his pocket right now.
+# product. It is that an uninvited text costs one of three slots a day, and
+# the slot is RESERVED before Twilio is touched (reserve_uninvited_text, beside
+# the notification fences below) — never counted back afterwards. Research and
+# ambient results have been desk-only since cd4a490f (2026-09-01: the
+# `"lane": "desk"` params in hear()'s ambient arm, anticipy_core.py) and reach
+# no text path at all.
 UNINVITED_TEXTS_PER_DAY = 3
 
 # How many times ONE stuck task may ask him for help before it goes quiet and
@@ -1119,159 +1131,32 @@ UNINVITED_TEXTS_PER_DAY = 3
 # said "one question, one second chance, then quiet"; this is what makes that
 # true regardless of how the browser rephrases the obstacle.
 STUCK_ASKS_CEILING = 2
-FYI_STALE_AFTER_SECONDS = 45 * 60
 
-# A lookup that came back empty-handed. Texting this is strictly worse than
-# saying nothing: it spends his attention to tell him he learned nothing.
-_NON_ANSWER = re.compile(
-    r"\b(do(es)? not contain|don'?t contain|no information|not (?:able to )?find|"
-    r"could ?n'?t find|couldn't find|unable to|nothing (?:was )?found|no results?|"
-    r"i (?:do ?n'?t|don't) have|no relevant|not available|sources? (?:do not|don't))\b",
-    re.I)
-
-
-def worth_interrupting_him(goal: str, result: str, age_seconds: float,
-                           sent_today: int) -> tuple[bool, str]:
-    """Should this uninvited finding buzz his phone, or just land in the feed?
-
-    Returns (worth_it, reason_if_not). A False here NEVER discards anything —
-    the finding still reaches the feed. It only declines to interrupt.
-    """
-    text = (result or "").strip()
-    if len(text) < 25:
-        return False, "too thin to be worth a buzz"
-    if _NON_ANSWER.search(text):
-        return False, "it found nothing — that is not news"
-    if age_seconds > FYI_STALE_AFTER_SECONDS:
-        return False, (f"the moment has passed "
-                       f"({int(age_seconds // 60)} min since he said it)")
-    if sent_today >= UNINVITED_TEXTS_PER_DAY:
-        return False, f"already sent {sent_today} uninvited texts today"
-    return True, ""
-
-
-def job_age_seconds(job: dict) -> float:
-    """How long ago he said the thing this job came from.
-
-    Measured from the job row rather than now-minus-nothing: a finding that
-    lands three hours after he mentioned something is not "caught this
-    earlier", it is an interruption about a moment that has gone.
-    """
-    raw = (job.get("created") or "")[:19]
-    try:
-        made = datetime.strptime(raw, "%Y-%m-%d %H:%M:%S").replace(
-            tzinfo=timezone.utc)
-    except Exception:
-        return 0.0          # unreadable: treat as fresh rather than mute it
-    return max(0.0, (datetime.now(timezone.utc) - made).total_seconds())
-
-
-def uninvited_sent_today(owner_ref: str = "") -> int:
-    """How many uninvited texts have already gone out today.
-
-    Read from the durable record rather than a counter in memory: a redeploy
-    resetting this to zero is how a daily cap quietly becomes no cap at all.
-    """
-    try:
-        since = (datetime.now(CLOCK_TZ).replace(hour=0, minute=0, second=0,
-                                                microsecond=0)
-                 .astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"))
-        filt = (f'kind="anticipy_says" && created>="{since}" && '
-                f'(decision="done" || decision="ask")')
-        r = pb.get(f"{PB}/api/collections/events/records",
-                   params={"filter": _scoped_filter(filt, owner_ref),
-                           "perPage": 100, "sort": "-created"}, timeout=10)
-        if not getattr(r, "ok", False):
-            return 0
-        # A parked ambient ask is uninvited BY DEFINITION and posts with
-        # goal="" — that emptiness is its tag. A direct-lane sufficiency
-        # question carries the job's goal and is the OPPOSITE of uninvited
-        # (he set the work in motion; she cannot finish without an answer);
-        # counting those once let three invited clarifications exhaust the
-        # daily budget and mute every FYI.
-        return sum(1 for ev in r.json().get("items", [])
-                   if (ev.get("decision") == "ask"
-                       and not (ev.get("goal") or "").strip())
-                   or (ev.get("params") or "").find("uninvited") >= 0)
-    except Exception as e:
-        print(f"uninvited count failed: {e}")
-        return 0
-
-
-# One Twilio attempt per finding per two minutes when a send keeps failing.
-# Far longer than the two-second sweep that would otherwise hammer Twilio, far
-# shorter than a person's patience for an answer he asked for out loud.
-FYI_RETRY_SECONDS = 120
-
-
-def deliver_fyi(anticipy, goal: str, result: str, overheard: bool) -> bool:
-    """Text him what she found — her words, varied every time, one text.
-
-    Returns whether the text actually went out. That return value is not
-    bookkeeping: "held for morning" and "delivered" used to be the same
-    silent None, so the caller marked a held FYI as delivered and the
-    morning never came. Quiet hours are ten hours long, so every overheard
-    lookup that finished overnight was destroyed rather than deferred —
-    exactly the "I'll text you what I find" that never arrives. A caller
-    that gets False must leave the finding undelivered so a later sweep
-    can send it — a failed SEND is one of those cases, see below.
-
-    Overheard FYIs ("caught this earlier, looked into it") respect the same
-    quiet hours as every other uninvited text; an answer he asked for out
-    loud goes out whenever it is ready. The caller's already_raised guard
-    on the goal is what keeps this to one text per finding — this function
-    is only ever reached for a fresh result."""
-    trimmed = (result or "").strip()
-    if not trimmed:
-        return False
-    if overheard:
-        hour = datetime.now(CLOCK_TZ).hour
-        if CLOCK_QUIET_START <= hour or hour < CLOCK_QUIET_END:
-            print(f"fyi held for morning (quiet hours): {goal[:50]}")
-            return False
-    if len(trimmed) > 320:
-        trimmed = trimmed[:317] + "…"
-    # A HARD SEND FAILURE IS NOT A DELIVERY.
-    #
-    # This used to return True whatever came back, so a Twilio 4xx, an account
-    # with no owner number and the rig guard all read to the caller as "he has
-    # it": the finding was recorded as delivered and never sent again. What
-    # justified that was fear of a retry storm, since the caller re-enters this
-    # on every two-second sweep for as long as it gets False. So the storm is
-    # bounded HERE — one attempt per FYI_RETRY_SECONDS per finding — instead of
-    # by lying about the outcome. Only FAILURES back off; a success leaves no
-    # mark, because the caller's already_raised guard is what stops a second
-    # text of a delivered finding.
-    #
-    # Reporting False is also what every other send in this file does with a
-    # failure (the stall notice, the result text, the stuck-job notice all
-    # `continue` without recording), so a finding that cannot be texted stays
-    # on the books with a log line saying why, on every pass.
-    failed_recently = f"fyi-failed:{goal}"
-    if sent_moments_ago(failed_recently, within=FYI_RETRY_SECONDS):
-        return False
-    try:
-        say = anticipy._voice({
-            "situation": ("you caught something he said to someone earlier, "
-                          "quietly looked into it, and are sharing what you "
-                          "found — a light fyi, nothing needed from him, do "
-                          "not ask a question"
-                          if overheard else
-                          "you finished looking into what he asked out loud "
-                          "and are texting him the answer"),
-            "goal": goal, "answer": trimmed,
-        }) or (f"caught the {goal} thing earlier — fyi: {trimmed}"
-               if overheard else trimmed)
-        if not anticipy.notify_owner(say):
-            mark_sent(failed_recently)
-            print(f"fyi NOT delivered — the send failed, so it stays "
-                  f"undelivered: {goal[:50]}")
-            return False
-    except Exception as e:
-        mark_sent(failed_recently)
-        print(f"fyi text failed (feed still has it), staying undelivered: {e}")
-        return False
-    return True
+# WHAT WAS HERE UNTIL 2026-09-05, Omi port 10b, and why it is gone.
+#
+# `uninvited_sent_today()` — the daily cap as an after-the-fact COUNT of
+# anticipy_says rows, read back from the server on exactly one door (the
+# parked ask), fail-OPEN to 0 on any non-ok response or exception, and looking
+# for an "uninvited" tag in `params` — a field the events schema does not
+# carry (1700000000_anticipy.js), which nothing in the tree ever wrote. So it
+# counted parked asks alone: a flaky PocketBase removed the cap outright, two
+# workers for one owner both read the same count and both sent, a send whose
+# record failed was invisible to the next count, and the clock, the
+# overheard-plan receipt and the meeting digest never touched it at all — up
+# to 4 clock nudges plus every receipt plus a digest plus 3 asks a day, none
+# summed against the "3". Replaced by reserve_uninvited_text(): one slot row
+# per uninvited text, taken before the transport at all four doors,
+# fail-CLOSED, exclusive across processes by the unique index.
+#
+# `worth_interrupting_him()`, `_NON_ANSWER`, `FYI_STALE_AFTER_SECONDS`,
+# `FYI_RETRY_SECONDS`, `deliver_fyi()`, `job_age_seconds()` — the FYI text
+# path for finished ambient research. No production caller since cd4a490f
+# (2026-09-01): research and ambient results are desk-only, so these ran only
+# under their own tests. `_NON_ANSWER` was audit item 27
+# (research/2026-08-24-law1-audit.md) — a wording regex deciding that a
+# finding MEANT "found nothing" — and is deleted rather than kept as a dead
+# sibling. What made the FYI text worth having ("Noted — nothing needed" made
+# finished work look dead) is answered by the desk card, not by a buzz.
 
 
 def ambient_job(job: dict) -> bool:
@@ -2451,6 +2336,223 @@ def claim_stall_notification_attempt(job: dict) -> bool | None:
         return None
 
 
+# ---- THE UNINVITED-TEXT BUDGET IS RESERVED, NOT COUNTED (Omi port 10b) ------
+#
+# Omi's second ordering: the budget is reserved BEFORE the side effect, never
+# checked after it. Until 2026-09-05 this file counted anticipy_says rows after
+# the fact, on one door of four, fail-open to zero on any read error (the WHAT
+# WAS HERE record above UNINVITED_TEXTS_PER_DAY has the measured shape).
+#
+# Now every uninvited text takes ONE slot row first: kind="uninvited_slot",
+# external_event_id="uninvited:{owner}:{owner-local day}:{n}", n in 1..3. The
+# partial unique index on external_event_id (backend/pb_migrations/
+# 1700000028_event_sources.js, WHERE external_event_id != '') is the
+# compare-and-set: two processes racing for slot n get one 2xx and one 400,
+# and only the process whose CREATE got an unambiguous 2xx may touch Twilio —
+# the rule claim_notification_attempt above states for done-texts. The slot
+# rides on the events collection, so no migration; the iOS feed filters on
+# kind == anticipy_says/anticipy_text, so the rows never render, exactly like
+# notification_status.
+#
+# THE TAG IS THE DOOR, NEVER THE WORDS. "Uninvited" is declared by which door
+# the text leaves through — the clock loop, hear()'s overheard-plan arm, the
+# parked-ask sweep, the meeting digest — the `kind` SPEAK_ONCE already
+# receives. Nothing here reads `text`; the only comparisons are a row count,
+# an HTTP status and an identity this code minted. Invited kinds — a direct
+# ask, a sufficiency question carrying the job's goal, a done text, a stall
+# notice, a compute answer, a reply — never reach a reservation: counting
+# those once let three invited clarifications mute every FYI (2026-08), and
+# that stays out by construction because the tag is the door.
+#
+# NO RELEASE, ANYWHERE. notify_owner collapses a Twilio 4xx, a rig refusal, a
+# missing phone, a revocation and a socket timeout after Twilio committed the
+# message into one None, so no caller can prove a non-send; giving a slot back
+# on None is how three "failed" sends plus three real ones become six texts
+# under a "3 by construction" claim. A slot is consumed at reservation and
+# FOLLOWS ITS MESSAGE across retries (the parked ask and the digest carry
+# theirs), so a blip does not spend the day. A Twilio-dead morning burns at
+# most three slots and never mints a fourth text — the side the owner asked
+# for: "90% of the time it's bad".
+#
+# TWO DOORS STAY OFF THE BUDGET, on purpose and by name. `welcome`
+# (maybe_welcome_new_owner) is once per phone by durable stamp and invited by
+# the act of saving a number. `report_deafness` is a fault report, not an
+# initiative, bounded to one per 24h by already_raised(DEAF_GOAL,
+# decision="deaf"). overnight/is_the_brain_live.py counts each in its own
+# <=1/day row so a regression in those guards is visible, not laundered into
+# the three.
+#
+# EDGE, accepted and bounded: the slot day is the owner-local date under
+# CLOCK_TZ, which the profile beat may rewrite mid-process; a zone change that
+# moves the date hands out a fresh three, once.
+UNINVITED_KINDS = ("clock", "ambient_act")
+# Epoch of the next owner-local midnight once a day is found spent, so a spent
+# day costs one read per process and then nothing. A stale memo can only ever
+# make her quieter until midnight or a restart; it can never add a text.
+UNINVITED_SPENT_UNTIL: float = 0.0
+# The slot SPEAK_ONCE just took, consumed by whichever caller entered the core
+# (clock_tick, hear) so the said row can carry its reservation.
+UNINVITED_HELD_SLOT: str = ""
+
+
+def _uninvited_local(now: float | None = None) -> datetime:
+    return datetime.fromtimestamp(time.time() if now is None else now, CLOCK_TZ)
+
+
+def _uninvited_day(now: float | None = None) -> str:
+    """The owner-local date a slot belongs to."""
+    return _uninvited_local(now).date().isoformat()
+
+
+def _uninvited_since_utc(now: float | None = None) -> str:
+    """Owner-local midnight as the UTC string PocketBase compares `created` to."""
+    midnight = _uninvited_local(now).replace(hour=0, minute=0, second=0,
+                                             microsecond=0)
+    return midnight.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _uninvited_next_midnight(now: float | None = None) -> float:
+    midnight = _uninvited_local(now).replace(hour=0, minute=0, second=0,
+                                             microsecond=0)
+    return (midnight + timedelta(days=1)).timestamp()
+
+
+def uninvited_slot_id(owner_ref: str, day: str, n: int) -> str:
+    return f"uninvited:{owner_ref}:{day}:{n}"
+
+
+def _uninvited_slots_today(owner_ref: str, now: float | None = None) -> list[dict]:
+    """Today's slot rows for this owner. RAISES when they cannot be read —
+    an unreadable budget is not an empty one."""
+    filt = (f'kind="uninvited_slot" && '
+            f'created>="{_uninvited_since_utc(now)}"')
+    r = pb.get(f"{PB}/api/collections/events/records",
+               params={"filter": _scoped_filter(filt, owner_ref),
+                       "perPage": 10, "sort": "created"}, timeout=10)
+    if not getattr(r, "ok", False):
+        raise RuntimeError(
+            f"slot read returned HTTP {getattr(r, 'status_code', '?')}")
+    return [ev for ev in (r.json() or {}).get("items", [])
+            if str(ev.get("kind") or "") == "uninvited_slot"]
+
+
+def uninvited_budget_spent(owner_ref: str = "",
+                           now: float | None = None) -> bool | None:
+    """Is today's budget gone? A CHECK that can only skip work, never grant it.
+
+    True: spent (memoised until owner-local midnight). False: room remains —
+    which is not a grant; the door still has to take its slot. None: the
+    store could not be read; the caller proceeds exactly as before, and the
+    reservation at the door is what refuses.
+    """
+    global UNINVITED_SPENT_UNTIL
+    if time.time() < UNINVITED_SPENT_UNTIL:
+        return True
+    try:
+        taken = len(_uninvited_slots_today(_active_owner_ref(owner_ref), now))
+    except Exception as exc:
+        print(f"uninvited budget could not be read: {exc}")
+        return None
+    if taken >= UNINVITED_TEXTS_PER_DAY:
+        UNINVITED_SPENT_UNTIL = _uninvited_next_midnight(now)
+        return True
+    return False
+
+
+def reserve_uninvited_text(owner_ref: str, door: str,
+                           now: float | None = None) -> str | bool | None:
+    """Take one of today's slots for an uninvited text — the only grant.
+
+    Returns the slot id (this process may send ONE text on it), False (the
+    day is spent), or None (nothing could be proven: the store was unreadable
+    or a CREATE's outcome is unknown). POLARITY, written here because this is
+    where it is decided: every failure is None and None never sends. Today's
+    counterpart returned 0 — "nothing sent yet" — on exactly those errors, so
+    the cap vanished when the server was flaky. The callers each already own
+    a "not now" that keeps the work (the ask stays parked inside its expiry,
+    the clock stamps nothing, the card stays on the desk as "defer", the
+    digest stays parked), so refusing costs one text and cancels nothing.
+
+    A slot n is claimed by CREATING its row; a 400 from the unique index means
+    another process holds n, so the next n is tried. A lost response is read
+    back: the row found means n is taken (by another process, or by this one
+    a moment ago — either way this process cannot prove it owns n and moves
+    on, burning at most one slot for the day); the read-back itself failing
+    is None. Never raises: _may_say's fail-open ("a broken guard must never
+    silence a genuine message") is left alone and made unreachable from here.
+    """
+    global UNINVITED_SPENT_UNTIL
+    try:
+        ref = _active_owner_ref(owner_ref)
+        if time.time() < UNINVITED_SPENT_UNTIL:
+            return False
+        try:
+            taken = len(_uninvited_slots_today(ref, now))
+        except Exception as exc:
+            print(f"uninvited slot could not be read ({door}): {exc}")
+            return None
+        day = _uninvited_day(now)
+        n = taken + 1
+        while n <= UNINVITED_TEXTS_PER_DAY:
+            slot = uninvited_slot_id(ref, day, n)
+            body = {"device_id": "anticipy-brain", "kind": "uninvited_slot",
+                    "decision": door,
+                    "text": f"slot {n}/{UNINVITED_TEXTS_PER_DAY}",
+                    "goal": "", "external_event_id": slot}
+            if ref:
+                body["owner_ref"] = ref
+            legacy = str(ACTIVE_OWNER_ID or "").strip()
+            if legacy:
+                body["owner"] = legacy
+            try:
+                r = pb.post(f"{PB}/api/collections/events/records",
+                            json=body, timeout=10)
+                if getattr(r, "ok", False) and (r.json() or {}).get("id"):
+                    return slot
+                raise RuntimeError(
+                    f"slot create returned HTTP {getattr(r, 'status_code', '?')}")
+            except Exception as exc:
+                try:
+                    existing = _event_by_external_id(
+                        slot, ref, kind="uninvited_slot")
+                except Exception as read_exc:
+                    print(f"uninvited slot {n} unprovable ({door}): {exc}; "
+                          f"read-back: {read_exc}")
+                    return None
+                if existing:
+                    n += 1
+                    continue
+                print(f"uninvited slot {n} could not be taken ({door}): {exc}")
+                return None
+        UNINVITED_SPENT_UNTIL = _uninvited_next_midnight(now)
+        print(f"uninvited budget spent for today — {door} text refused")
+        return False
+    except Exception as exc:
+        print(f"uninvited reservation failed ({door}): {exc}")
+        return None
+
+
+def _hold_uninvited_slot(kind: str, slot: str = "") -> bool:
+    """SPEAK_ONCE's last gate for an uninvited kind: the message either
+    already owns a slot (a retry) or takes one now and parks it for the
+    caller that entered the core. False means no text."""
+    global UNINVITED_HELD_SLOT
+    if slot:
+        return True
+    got = reserve_uninvited_text(ACTIVE_OWNER_REF, kind)
+    if not got:
+        return False
+    UNINVITED_HELD_SLOT = got
+    return True
+
+
+def take_held_slot() -> str:
+    """Hand the slot SPEAK_ONCE took to the caller that owns the send, once."""
+    global UNINVITED_HELD_SLOT
+    slot, UNINVITED_HELD_SLOT = UNINVITED_HELD_SLOT, ""
+    return slot
+
+
 def report_finished_jobs(anticipy) -> None:
     """Tell him the answer.
 
@@ -3121,9 +3223,16 @@ def deliver_pending_digest(anticipy, now: float = 0.0) -> None:
     global DIGEST_PENDING
     if not DIGEST_PENDING:
         return
-    text, composed, last_try, entries = DIGEST_PENDING
+    # (text, composed_at, last_try_at, entries, slot). The slot is the
+    # uninvited-budget reservation this digest holds; it follows the digest
+    # across retries so a blip never spends a second one. A pre-port
+    # 4-tuple reads as "no slot yet".
+    text, composed, last_try, entries, slot = (
+        tuple(DIGEST_PENDING) + ("",))[:5]
     t = now or time.time()
     if t - composed > 12 * 3600:
+        # The slot, if any, is simply burned: consumed at reservation, never
+        # given back (see reserve_uninvited_text).
         DIGEST_PENDING = None
         anticipy.clear_meeting_held(entries)
         print("parked digest expired — cards remain visible in the app")
@@ -3133,9 +3242,13 @@ def deliver_pending_digest(anticipy, now: float = 0.0) -> None:
         return
     if t - last_try < ASK_RETRY_S:
         return
-    DIGEST_PENDING = (text, composed, t, entries)
-    verdict = SPEAK_ONCE(text, kind="ambient_act")
+    DIGEST_PENDING = (text, composed, t, entries, slot)
+    verdict = SPEAK_ONCE(text, kind="ambient_act", slot=slot)
+    if verdict is True and not slot:
+        slot = take_held_slot()
+        DIGEST_PENDING = (text, composed, t, entries, slot)
     if verdict == "defer":
+        # Quiet hours, or no room in today's budget: NOT NOW. Cards kept.
         return
     if not verdict:
         DIGEST_PENDING = None
@@ -3147,7 +3260,19 @@ def deliver_pending_digest(anticipy, now: float = 0.0) -> None:
         DIGEST_PENDING = None
         anticipy.clear_meeting_held(entries)
         print(f"meeting digest sent: {text[:90]!r}")
+        # The durable row this door never wrote: without it already_said,
+        # the feed and the live leg could not see that a digest went out.
+        # Linked to its reservation so the record joins to the slot at no
+        # extra call.
+        try:
+            post_event("anticipy_says", text, decision="digest",
+                       owner_ref=getattr(anticipy, "owner_ref", "") or "",
+                       external_event_id=f"{slot}:said" if slot else "")
+        except Exception as e:
+            print(f"digest sent but could not record it: {e}")
     else:
+        # Parked WITH its slot: the retry reuses it. No give-back — the
+        # transport cannot prove a non-send.
         print("meeting digest send failed — will retry")
 
 
@@ -3301,15 +3426,20 @@ def sweep_closed_segments(anticipy, now=None, sink=None):
 
 def maybe_ask_parked(anticipy, now: float = 0.0) -> None:
     """Send the parked question, fully governed: real quiet, daylight only,
-    counted against the daily uninvited cap, deduped against what she has
-    actually sent, recorded durably so the feed and every guard can see it,
-    and backed off on transport failure."""
+    one of the day's three uninvited slots RESERVED before the transport,
+    deduped against what she has actually sent, recorded durably so the feed
+    and every guard can see it, and backed off on transport failure."""
     pa = getattr(anticipy, "_pending_ask", None)
     if not pa or MEETING_ARMED:
         return
-    text, stamped, last_try = pa
+    # (text, stamped_at, last_try_at, slot). The slot is this question's
+    # uninvited-budget reservation and follows it across retries. A 3-tuple
+    # from a pre-port core reads as "no slot yet", so an old core cannot
+    # crash the sweep.
+    text, stamped, last_try, slot = (tuple(pa) + ("",))[:4]
     t = now or time.time()
     if t - stamped > 600:
+        # A slot it may hold is burned with it — never given back.
         anticipy._pending_ask = None
         print(f"parked question expired unasked: {text[:70]!r}")
         return
@@ -3323,19 +3453,34 @@ def maybe_ask_parked(anticipy, now: float = 0.0) -> None:
         return
     if t - last_try < ASK_RETRY_S:
         return
-    anticipy._pending_ask = (text, stamped, t)
-    if uninvited_sent_today(anticipy.owner_ref) >= UNINVITED_TEXTS_PER_DAY:
-        anticipy._pending_ask = None
-        print(f"parked question dropped — daily uninvited cap reached: "
-              f"{text[:60]!r}")
-        return
+    anticipy._pending_ask = (text, stamped, t, slot)
+    # Dedupe BEFORE the budget: a question she has already asked is dropped
+    # without a slot ever existing, so a dedupe drop never touches the day.
     if already_said(text, within_hours=24.0, owner_ref=anticipy.owner_ref):
         anticipy._pending_ask = None
         print(f"parked question already asked recently — dropped: "
               f"{text[:60]!r}")
         return
+    if not slot:
+        slot = reserve_uninvited_text(anticipy.owner_ref, "ask")
+        if slot is False:
+            anticipy._pending_ask = None
+            print(f"parked question dropped — daily uninvited budget spent: "
+                  f"{text[:60]!r}")
+            return
+        if not slot:
+            # Unreadable store: NOT NOW. It stays parked and retries per
+            # ASK_RETRY_S inside its ten-minute expiry — at most ten reads —
+            # rather than reading "unknown" as "nothing sent today".
+            print("parked question held — the uninvited budget could not be "
+                  f"read: {text[:60]!r}")
+            return
+        anticipy._pending_ask = (text, stamped, t, slot)
     r = anticipy.notify_owner(text)
     if r is None:
+        # Parked WITH its slot: the retry reuses it. The transport cannot
+        # prove a non-send (a timeout after Twilio committed is one None
+        # among many), so the slot is never given back.
         print("parked question send failed — will retry")
         return
     anticipy._pending_ask = None
@@ -3344,7 +3489,8 @@ def maybe_ask_parked(anticipy, now: float = 0.0) -> None:
         return
     try:
         post_event("anticipy_says", text, decision="ask",
-                   owner_ref=anticipy.owner_ref)
+                   owner_ref=anticipy.owner_ref,
+                   external_event_id=f"{slot}:said")
     except Exception as e:
         print(f"asked but could not record it: {e}")
     print(f"asked: {text[:80]!r}")
@@ -3420,15 +3566,23 @@ def maybe_meeting_digest(anticipy, now: float = 0.0) -> None:
         return
     global DIGEST_PENDING
     DIGEST_PENDING = (text, t, 0.0,
-                      [tuple(e) for e in anticipy._meeting_held])
+                      [tuple(e) for e in anticipy._meeting_held], "")
     deliver_pending_digest(anticipy, now=t)
-def SPEAK_ONCE(text: str, goal: str = "", kind: str = "") -> bool:
+def SPEAK_ONCE(text: str, goal: str = "", kind: str = "", slot: str = "") -> bool:
     """May she say this unprompted? Only if she has not already — and, for
     speech born from OVERHEARD plans (kind="ambient_act"), only in waking
     hours. He never invited that text, so it obeys the same quiet hours as
     the clock; the card is already on his desk either way, and the morning
     clock pass raises anything still waiting. A direct ask keeps texting at
-    any hour — answering him is a reply, not an interruption."""
+    any hour — answering him is a reply, not an interruption.
+
+    For the two uninvited kinds (UNINVITED_KINDS: "clock", "ambient_act") the
+    LAST gate is the day's budget: one slot row reserved before the transport
+    (reserve_uninvited_text). Last on purpose — a refusal for quiet hours,
+    nagging or dedupe never touches the budget, so a silent day pays nothing.
+    `slot` is passed by a caller whose message already owns one (a retry);
+    otherwise the slot taken here is parked in UNINVITED_HELD_SLOT for the
+    caller that entered the core to attach to the said row."""
     # DO NOT ASK INTO A SENTENCE THAT IS STILL ARRIVING. Watched live
     # 2026-08-16: "...should grab dinner tomorrow at like 6 PM for" triaged on
     # its own, so she asked "which restaurant, and for how many people?" —
@@ -3482,9 +3636,19 @@ def SPEAK_ONCE(text: str, goal: str = "", kind: str = "") -> bool:
     # text and then cancelled the card. Three times, live, in one day —
     # each a different guard doing the same wrong thing.
     if kind == "ambient_act":
-        return True
-    return not already_raised(goal, text,
-                              decision=_KIND_TO_DECISION.get(kind))
+        # The budget, last. No room (spent, or unreadable) is "defer", never
+        # False: the core cancels the card on False ("SILENCE MUST MEAN
+        # STILLNESS"), and a plan he made is real whether or not there is
+        # room to text about it today. The card stays; the morning pass or
+        # the digest raises it when there is.
+        return True if _hold_uninvited_slot(kind, slot) else "defer"
+    if already_raised(goal, text, decision=_KIND_TO_DECISION.get(kind)):
+        return False
+    if kind == "clock":
+        # The budget, last. False here leaves the loop alone: clock_tick
+        # queues nothing and stamps nothing, so the next window may try.
+        return _hold_uninvited_slot(kind, slot)
+    return True
 
 
 def _brain_fingerprint() -> str:
@@ -4488,14 +4652,24 @@ def main() -> None:
                     out = anticipy.clock_tick(
                         now, already_reached_out=set(state.get("reached_loop_ids", [])),
                         may_say=SPEAK_ONCE)
+                    # The uninvited slot SPEAK_ONCE took for this tick, if
+                    # any. A falsy `out` after a reservation means the core
+                    # decided to speak and could not prove it did (nothing
+                    # queued, or the send failed) — the slot is burned, never
+                    # given back.
+                    slot = take_held_slot()
                     if out:
                         state["last_outreach_ts"] = now
                         state["reached_loop_ids"] = list(
                             set(state.get("reached_loop_ids", [])) | set(out["loop_ids"]))
                         _save_clock_state(state)
                         post_event("anticipy_says", out["say"], decision="clock",
-                                   goal=out.get("goal") or "")
+                                   goal=out.get("goal") or "",
+                                   external_event_id=f"{slot}:said" if slot else "")
                         print(f"clock: initiated -> {out['say']!r}")
+                    elif slot:
+                        print(f"clock: reserved {slot} and did not speak — "
+                              "slot burned")
             # Hand back anything a previous life claimed and never finished,
             # BEFORE asking for new work — otherwise a deploy silently eats
             # whatever was mid-understanding at the moment it happened.
@@ -4541,6 +4715,10 @@ def main() -> None:
                 if LINKS_ON:
                     cands = [c for c in link_candidates(owner_ref=anticipy.owner_ref)
                              if c[0] != ev["id"]]
+                # Nothing from an earlier pass may ride into this one: a
+                # slot held by a hear() that escaped would otherwise attach
+                # to the next said row, whatever door it came through.
+                take_held_slot()
                 try:
                     # The phone's local voice verdict rides along when the
                     # app stamped one (owner|other); absent on old builds.
@@ -4578,8 +4756,15 @@ def main() -> None:
                                         may_say=SPEAK_ONCE,
                                         explicit=bool(ev.get("explicit")))
                 except Exception as e:
+                    # A reservation taken before the failure is burned with
+                    # it; nothing was proven sent.
+                    take_held_slot()
                     record_failure(ev["id"], line, e)
                     continue
+                # The uninvited slot hear() took on its overheard-plan arm,
+                # if any; the said row below carries it. (The TypeError retry
+                # cannot have reserved: the signature fails before the body.)
+                slot = take_held_slot()
                 note_heard(True)
                 # Store the link. A self-link (points at its own id) is the
                 # "starts something new" answer, and it is written down just
@@ -4617,7 +4802,13 @@ def main() -> None:
                     post_event("anticipy_says", out["anticipy_says"],
                                decision=decision,
                                goal=out["decision"].goal or "",
-                               source=(ev.get("source") or ""))
+                               source=(ev.get("source") or ""),
+                               external_event_id=f"{slot}:said" if slot else "")
+                elif slot:
+                    # Allowed, reserved, and nothing was proven said — the
+                    # send failed, or the card was withdrawn. Burned.
+                    print(f"heard: reserved {slot} and did not speak — "
+                          "slot burned")
                 print(f"heard: {line!r} -> {decision}"
                       f" ({out['decision'].goal or 'no goal'})"
                       f" [{getattr(out['decision'], 'reason', '') or '-'}]")

@@ -467,61 +467,11 @@ def test_a_correct_binding_costs_one_read_and_no_probe(clean_env):
     assert rec.posts == [] and rec.health_urls == []
 
 
-# ------------------------------------------- a failed text is not a delivered one
-
-class _Anticipy:
-    def __init__(self, ok=True):
-        self.ok = ok
-        self.said: list[str] = []
-        self.owner_id = "t"
-
-    def _voice(self, _ctx):
-        return None
-
-    def notify_owner(self, message, channel="sms"):
-        self.said.append(message)
-        return {"sid": "SM1"} if self.ok else None
-
-
-def test_a_finding_whose_text_failed_is_not_recorded_as_delivered(clean_env):
-    """It returned True whatever happened, so a Twilio outage, a missing owner
-    number and the rig guard all read as "he has it" and the answer he asked
-    for out loud was never sent again."""
-    worker._SENT_RECENTLY.clear()
-    a = _Anticipy(ok=False)
-    printed: list[str] = []
-    clean_env.setattr("builtins.print", lambda *x, **k: printed.append(" ".join(map(str, x))))
-    assert worker.deliver_fyi(a, "flights to Paris", "YVR-CDG from $612",
-                              overheard=False) is False
-    assert a.said, "it did attempt the send"
-    assert any("NOT delivered" in line for line in printed), printed
-
-
-def test_a_failing_send_is_retried_but_never_on_every_two_second_sweep(clean_env):
-    worker._SENT_RECENTLY.clear()
-    a = _Anticipy(ok=False)
-    clean_env.setattr("builtins.print", lambda *x, **k: None)
-    assert worker.deliver_fyi(a, "flights to Paris", "$612", overheard=False) is False
-    assert worker.deliver_fyi(a, "flights to Paris", "$612", overheard=False) is False
-    assert len(a.said) == 1, "the second pass must not hammer Twilio"
-    # ...and it is a BACKOFF, not a giveaway: the finding stays undelivered and
-    # the next window tries again.
-    worker.mark_sent("fyi-failed:flights to Paris",
-                     now=0)  # age the failure past the window
-    assert worker.deliver_fyi(a, "flights to Paris", "$612", overheard=False) is False
-    assert len(a.said) == 2
-
-
-def test_a_delivered_finding_leaves_no_backoff_behind(clean_env):
-    """Only failures back off. Marking successes would silence the NEXT finding
-    that happened to share a goal string."""
-    worker._SENT_RECENTLY.clear()
-    a = _Anticipy(ok=True)
-    clean_env.setattr("builtins.print", lambda *x, **k: None)
-    assert worker.deliver_fyi(a, "dinner spots", "Jeju", overheard=False) is True
-    assert worker.deliver_fyi(a, "dinner spots", "Jeju", overheard=False) is True
-    assert len(a.said) == 2
-
+# WHAT WAS HERE UNTIL 2026-09-05, Omi port 10b: three cases for deliver_fyi,
+# the FYI text path for finished ambient research, which has had no production
+# caller since cd4a490f (2026-09-01) and was deleted with the after-the-fact
+# uninvited counter. The daily budget is now reserved before the transport;
+# see tests/test_uninvited_budget.py.
 
 # ------------------------------------------------------- calling, still gated
 

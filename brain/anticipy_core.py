@@ -1348,12 +1348,14 @@ class Anticipy:
         # are durable rows and still on his desk.
         self._meeting_held: list[tuple[str, str]] = []
         # One parked question from the ambient lane, waiting for the room to
-        # go quiet. (text, stamped_at, last_try_at). One slot, FIRST parked
-        # wins — a queue of questions is a form, and a later garbled
+        # go quiet. (text, stamped_at, last_try_at, slot). One slot, FIRST
+        # parked wins — a queue of questions is a form, and a later garbled
         # fragment must not evict the good question already waiting. The
-        # WORKER owns sending (caps, dedupe, quiet hours, the durable
-        # record all live there); this side owns parking and cancelling.
-        self._pending_ask: tuple[str, float, float] | None = None
+        # WORKER owns sending (the reserved daily budget, dedupe, quiet
+        # hours, the durable record all live there); this side owns parking
+        # and cancelling. The fourth field is the worker's budget
+        # reservation, empty until it takes one (Omi port 10b).
+        self._pending_ask: tuple[str, float, float, str] | None = None
         self._prev: Optional[tuple[str, float]] = None  # (last ignored line, ts)
         # Who the owner was talking to on the last classified line. Sticky:
         # people don't switch addressee mid-breath, so the previous
@@ -2517,15 +2519,18 @@ class Anticipy:
                     verdict = self._may_say(may_say, handled, goal,
                                             "ambient_act")
                     if verdict == "defer":
-                        # Quiet hours. He planned something at midnight; the
-                        # plan is real and so is the card — it simply waits
-                        # for a civilised hour. Cancelling here would make
-                        # every plan made late at night silently vanish.
+                        # Quiet hours, or no room left in today's uninvited
+                        # budget (the worker reserves one slot per text, Omi
+                        # port 10b). He planned something; the plan is real
+                        # and so is the card — it simply waits for a
+                        # civilised hour, or for room. Cancelling here would
+                        # make every plan made late at night, or on a
+                        # talkative day, silently vanish.
                         handled = None
                         decision = Decision(
                             decision="act", goal=goal,
-                            reason=(f"{who}-directed: held quietly "
-                                    "overnight; raised in the morning"),
+                            reason=(f"{who}-directed: held quietly; "
+                                    "raised when there is room"),
                             needs_confirmation=True, addressee=addressee)
                     elif not verdict:
                         handled = None
@@ -2601,7 +2606,7 @@ class Anticipy:
                     print(f"question slot taken — dropped: {question[:60]!r}")
                     question = ""
                 if question:
-                    self._pending_ask = (question, time.time(), 0.0)
+                    self._pending_ask = (question, time.time(), 0.0, "")
                     decision = Decision(
                         decision="ask", goal="",
                         reason=(f"{who}-directed: one question parked "
