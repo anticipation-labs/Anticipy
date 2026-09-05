@@ -37,6 +37,7 @@ const suites = [
   "test_effect_intent_survives_crash.mjs",
   "test_form_retry_after_rejection.mjs",
   "test_captcha_solving.mjs",
+  "test_challenge_is_a_verdict.mjs",
   "test_no_domain_hardcoding.mjs",
   "test_stop_before_submit.mjs",
   "test_park_not_burn.mjs",

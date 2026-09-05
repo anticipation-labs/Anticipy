@@ -24,10 +24,12 @@
 //              instead of burying it inside "it needs a login".
 //   paywall  — money, not identity. Signing in cannot fix it. Saying "this
 //              needs a paid subscription" is honest; looking broken is not.
-//   captcha  — NOT OURS. agent_loop.js owns the challenge path end to end
-//              (looksLikeCaptcha + its hand-back). We detect it only so a
-//              challenge page can never be mislabelled a login wall, and so
-//              the caller can defer. See CHALLENGE below.
+//   captcha  — NOT OURS. agent_loop.js owns the challenge path end to end:
+//              challengeFurniture (what the page renders) + challengeVerdict
+//              (one model question, four states) + its hand-back. This file
+//              has NO challenge judgement of its own; the caller injects the
+//              verdict as deps.isChallenge so a challenge page can never be
+//              mislabelled a login wall. See the record below the vocabulary.
 //
 // TWO RULES THIS FILE IS BUILT AROUND.
 //
@@ -101,37 +103,39 @@ const OPTIONAL_ACCOUNT = /\(\s*optional\s*\)|\boptional\b|\bif\s+you\s+(?:want|w
 const AUTH_PATH = /(?:^|\/)(?:log-?in|sign-?in|sign-?on|signin|login|auth|authorize|authorization|oauth2?|openid|sso|saml|session|sessions\/new|account\/log-?in|u\/log-?in|users\/sign_in|identity|idp|adfs)(?:\/|$|[?#])/i;
 const AUTH_TITLE = /^(?:\s*)(?:sign\s*-?\s*in|log\s*-?\s*in|login|sign\s*on|authentication|authenticate|welcome\s+back|account\s+log-?in)\b|\b(?:sign\s*-?\s*in|log\s*-?\s*in)\s*(?:[|\u2013\u2014-]|to\b)/i;
 
-/// A challenge page. DELIBERATELY NARROW, AND DELIBERATELY NOT THE GATE.
-///
-/// agent_loop.js owns CAPTCHAs: looksLikeCaptcha() decides, a solver path may
-/// run, and its own hand-back sentence is already written. Duplicating that
-/// judgement here would produce two detectors that disagree, and the one this
-/// module would win with is the one nobody maintains. So this recognises only
-/// the unmistakable phrases, for one purpose: never call a robot check a login
-/// wall. Callers that already have the real predicate should inject it —
-/// detectsLoginWall(state, { isChallenge: looksLikeCaptcha }).
-///
-/// THE BADGE IS NOT THE WALL. Nearly every booking page carries an invisible
-/// reCAPTCHA v3 and its legally-required disclosure. Matching the bare word
-/// cost this product a live booking on 2026-08-16 — it texted him about a
-/// CAPTCHA four times over two hours on a page that had none, then scrapped
-/// the reservation. The disclosure is stripped before looking, same as in
-/// agent_loop.js, and what remains must name an actual challenge.
-const CHALLENGE = /\bare\s+you\s+a\s+robot\b|\bi'?m\s+not\s+a\s+robot\b|verify\s+(?:that\s+)?you(?:'re|\s+are)\s+(?:a\s+)?human|verify\s+you\s+are\s+human|checking\s+your\s+browser|just\s+a\s+moment|unusual\s+traffic|(?:complete|solve|pass)\s+the\s+(?:captcha|security\s+check|challenge)|select\s+all\s+(?:images|squares)/i;
-
-function stripBadge(text) {
-  return String(text || "")
-    .replace(/(?:this\s+(?:site|page)\s+is\s+)?protected\s+by\s+recaptcha[^.]{0,120}\.?/gi, " ")
-    .replace(/recaptcha\s+(?:privacy|terms)[^.]{0,60}\.?/gi, " ")
-    .replace(/privacy\s*[-\u2013|]\s*terms/gi, " ");
-}
-
-export function looksLikeChallenge(state) {
-  const s = state || {};
-  const blob = stripBadge(`${s.url || ""} ${s.title || ""} ${String(s.text || "").slice(0, 2000)}`);
-  if (CHALLENGE.test(blob)) return true;
-  return /\/(?:captcha|challenge|sorry)(?:\/|\?|$)/i.test(String(s.url || ""));
-}
+// WHAT WAS HERE UNTIL 2026-09-05 (audit #71), and why it is gone.
+//
+//     const CHALLENGE = /\bare\s+you\s+a\s+robot\b|\bi'?m\s+not\s+a\s+robot\b|
+//                        verify\s+(?:that\s+)?you(?:'re|\s+are)\s+(?:a\s+)?human|
+//                        verify\s+you\s+are\s+human|checking\s+your\s+browser|
+//                        just\s+a\s+moment|unusual\s+traffic|
+//                        (?:complete|solve|pass)\s+the\s+(?:captcha|security\s+check|challenge)|
+//                        select\s+all\s+(?:images|squares)/i
+//     function stripBadge(text)          -> text minus "protected by recaptcha…",
+//                                           "recaptcha privacy/terms…", "privacy - terms"
+//     export function looksLikeChallenge(state)
+//       -> CHALLENGE over stripBadge(url + title + text[:2000]), or a
+//          /captcha|/challenge|/sorry URL path
+//
+// This was the default `isChallenge` of detectsLoginWall: a second English
+// phrase list deciding the same question agent_loop.js's looksLikeCaptcha
+// decided, with a DIFFERENT membership ("pass the security check" was here
+// and not there), and the loop called detectsLoginWall without injecting
+// anything — so the running system held two keyword verdicts on one
+// question, which the comment above this regex said must never exist. Law 1:
+// whether a page is asking a person to prove they are human is what the page
+// MEANS, and no list of phrases may decide it.
+//
+// Now there is exactly one judgement, and it is not in this file:
+// agent_loop.js's challengeVerdict — asked only when the page RENDERS a
+// challenge provider's frame or widget (challengeFurniture, a which-host
+// check on iframe origin), answered by a model in four states, compared by
+// the loop as a ceiling — is injected as deps.isChallenge. With nothing
+// injected this file has no verdict and raises no captcha fence: it judges
+// the page on its own structural evidence. stripBadge went with the regex —
+// the disclosure it stripped ("protected by reCAPTCHA and the Google Privacy
+// Policy and Terms of Service apply") matches none of the remaining money,
+// price or optional-account expressions, so nothing below changes.
 
 // ---------------------------------------------------------------------------
 // Reading the page map. state = { url, title, elements, text, fields, overlay }
@@ -299,8 +303,9 @@ const SURE = 6;      // at or above this, say it without hedging
  * @param {{url?:string,title?:string,elements?:string,text?:string,fields?:object[],overlay?:boolean}} state
  *        the page map from extension/page_map.js
  * @param {{isChallenge?:(state:object)=>boolean}} [deps] inject agent_loop's
- *        looksLikeCaptcha so there is exactly one challenge judgement in the
- *        running system.
+ *        challenge verdict (() => verdict === CHALLENGE_BLOCKED) so there is
+ *        exactly one challenge judgement in the running system. With nothing
+ *        injected there is no verdict, and no captcha is ever reported.
  * @returns {{kind:"password"|"sso"|"paywall"|"captcha", site:string,
  *            provider?:string, providers?:string[], hasSignIn?:boolean,
  *            sure:boolean, score:number, why:string} | null}
@@ -314,8 +319,9 @@ export function detectsLoginWall(state, deps = {}) {
 
   // 1. A challenge is agent_loop's, not ours. Checked first so a robot check
   //    that happens to sit in front of a login form can never be reported as
-  //    "sign in" — he would tap sign in and hit the same check.
-  const isChallenge = typeof deps.isChallenge === "function" ? deps.isChallenge : looksLikeChallenge;
+  //    "sign in" — he would tap sign in and hit the same check. No verdict
+  //    injected means no verdict: this file never guesses one (audit #71).
+  const isChallenge = typeof deps.isChallenge === "function" ? deps.isChallenge : () => false;
   if (isChallenge(s)) {
     return { kind: "captcha", site: here, sure: true, score: WALL,
              why: "the page is asking for a human check; the existing challenge path owns this" };
@@ -332,7 +338,7 @@ export function detectsLoginWall(state, deps = {}) {
   // Sign out in the header sits behind it.
   const vetoed = !!proof && !purpose.overlay;
 
-  const words = stripBadge(`${s.title || ""} ${s.text || ""}`);
+  const words = `${s.title || ""} ${s.text || ""}`;
 
   // ---- money first. A subscription wall that also offers a subscriber login
   // must not be reported as a login wall: signing in cannot buy a plan, and
