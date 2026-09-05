@@ -123,7 +123,7 @@ struct ListenTallyTests {
         // a microphone that heard nothing at all, from the outside.
         let posts: [(Date, ListenEvent)] = [
             (at(0), .sessionStarted),
-            (at(10), .posted(ok: true, detail: .sentFromQueue)),
+            (at(10), .posted(ok: true, detail: .sentFromQueue(from: .phoneMic))),
             (at(20), .posted(ok: false, detail: .shelved(again: true, failure: .system(domain: .url, code: -1009)))),
             (at(30), .posted(ok: false, detail: .shelved(again: true, failure: .system(domain: .url, code: -1009)))),
         ]
@@ -189,12 +189,12 @@ struct ListenTallyTests {
         let tieOne: [(Date, ListenEvent)] = [
             (at(0), .sessionStarted),
             (at(0), .sessionStopped(cause: .interruption)),
-            (at(43_200), .posted(ok: true, detail: .sentFromQueue)),
+            (at(43_200), .posted(ok: true, detail: .sentFromQueue(from: .phoneMic))),
         ]
         let tieOther: [(Date, ListenEvent)] = [
             (at(0), .sessionStopped(cause: .interruption)),
             (at(0), .sessionStarted),
-            (at(43_200), .posted(ok: true, detail: .sentFromQueue)),
+            (at(43_200), .posted(ok: true, detail: .sentFromQueue(from: .phoneMic))),
         ]
         check("two events stamped at the same instant fold the same way in either order",
               ListenTally.of(tieOne, now: at(43_200))
@@ -497,6 +497,32 @@ struct ListenTallyTests {
         let c = ListenTally.of(clean, now: at(10))
         check("a day the radio lost nothing reads as zero lost, not as unmeasured",
               c.airtimeLostMilliseconds == 0 && c.airtimeGaps == 0)
+
+        // ------------------------------------------------------- which ear
+        // The feed badges every line with the ear that caught it; the day's
+        // total lives here. Live and queued sends alike, keyed on the closed
+        // Origin spelling; a failed post names no ear and is not counted; a
+        // queued send from a build that did not write the ear down folds
+        // under "unrecognised" — reported, never guessed at.
+        let ears: [(Date, ListenEvent)] = [
+            (at(0), .sessionStarted),
+            (at(10), .posted(ok: true, detail: .sentLive(from: .phoneMic))),
+            (at(20), .posted(ok: true, detail: .sentLive(from: .pendant))),
+            (at(30), .posted(ok: false, detail: .shelved(again: false, failure: .http(status: 503)))),
+            (at(40), .posted(ok: true, detail: .sentFromQueue(from: .pendant))),
+            (at(50), .posted(ok: true, detail: .sentLive(from: .typed))),
+            (at(60), .posted(ok: true, detail: .sentFromQueue(from: .unrecognised))),
+        ]
+        let e = ListenTally.of(ears, now: at(60))
+        check("lines are counted by the ear that heard them, live and queued alike",
+              e.linesDeliveredByEar["phone_mic"] == 1 && e.linesDeliveredByEar["pendant"] == 2
+                  && e.linesDeliveredByEar["typed"] == 1)
+        check("a line whose ear was never written down is reported as such, not guessed",
+              e.linesDeliveredByEar["unrecognised"] == 1)
+        check("a failed post names no ear and is not counted",
+              e.linesDeliveredByEar.values.reduce(0, +) == 5 && e.postsFailed == 1)
+        check("a day with no delivered lines reports no ears rather than zeros",
+              ListenTally.of([(at(0), .sessionStarted)]).linesDeliveredByEar.isEmpty)
 
         // ------------------------------------------------------ speech dropped
         // The terminal loss, and the one number on this card that is a bug

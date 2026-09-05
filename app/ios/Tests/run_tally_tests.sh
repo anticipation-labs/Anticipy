@@ -100,6 +100,17 @@ if printf '%s\n' "$wording" \
 fi
 echo "the battery is reported with its window, and not graded"
 
+# WHICH EAR REACHES A PERSON. The fold keys the day's delivered lines by the
+# ear that heard them; a screen that does not draw the dictionary leaves the
+# card's "the feed showing which ear" answered only line by line, and the
+# number that says "the pendant heard 40, the phone 300" dies in a struct.
+if ! grep -vE '^[[:space:]]*//' "$view" | tr '\n' ' ' \
+    | grep -q 'tally\.linesDeliveredByEar'; then
+    echo "The Listening screen no longer shows the day's lines by ear."
+    exit 2
+fi
+echo "the day's lines are shown by the ear that heard them"
+
 swiftc -O \
     "$app/Audio/ListenJournal.swift" \
     "$app/Audio/ListenSessionFacts.swift" \

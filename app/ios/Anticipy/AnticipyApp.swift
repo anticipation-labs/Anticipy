@@ -1013,7 +1013,13 @@ final class AnticipySession: ObservableObject {
                 if !id.isEmpty { lastTranscriptEventID = id }
                 // An unreadable id is a broken link, not a guessable one.
                 previousInThisFlush = id
-                ListenJournal.shared.record(.posted(ok: true, detail: .sentFromQueue))
+                // WHICH EAR, carried through the queue: the buffered line kept
+                // its source on disk for the wire, and the journal now keeps
+                // it too, so the day's per-ear count survives an outage. A
+                // queue entry written before the source was stored has none,
+                // and `Origin(wireName: "")` is `.unrecognised` — reported as
+                // an ear nobody recorded, never guessed at.
+                ListenJournal.shared.record(.posted(ok: true, detail: .sentFromQueue(from: .init(wireName: line.source ?? ""))))
                 // CONFIRMED, so now it may leave the disk — and not one
                 // instant earlier.
                 dropDeliveredLine(line)

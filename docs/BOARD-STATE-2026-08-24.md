@@ -67,7 +67,7 @@ pass from a day of real wearing. Findings become fixes or precise bug rows."*
 | resume after calls/Siri | **DONE** — `a21bda71`. `resumeListeningIfWanted` was a total no-op |
 | background audio survival | **PARTIAL** — the assertion is ~30s, not a phone call. Long calls still suspend; the resume policy is what covers those |
 | battery sanity | **NOT STARTED** — nothing measures it anywhere |
-| the feed showing which ear | **NOT STARTED** — `capture_day.py` reports `sources` server-side; the in-app feed does not show it |
+| the feed showing which ear | **DONE** — the feed had it since `54157bba` (badge per line in `TranscriptRow`, per card in `ConversationCard`, `HeardGroup.ear` refuses a mixed conversation; see `research/2026-08-24-battery-and-ear.md` §2). 2026-09-05: the Listening screen adds the day's total by ear (`ListenTally.linesDeliveredByEar`), and a line sent from the queue now carries its ear into the journal so an outage day counts honestly |
 
 Not asked for but built first, because none of the above could be judged
 otherwise: the Stage 0 instrument (journal that survives a crash, tally,

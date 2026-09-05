@@ -81,6 +81,18 @@ struct ListeningDiagnosticsView: View {
                 }
             }
 
+            if !tally.linesDeliveredByEar.isEmpty {
+                // WHICH EAR, as a day's total. The feed already badges every
+                // line and every card with the ear that caught it; this is the
+                // same fact folded, on the screen a day of wearing is judged
+                // from. Delivered lines only, and the heading says so.
+                Section("Lines delivered, by ear") {
+                    ForEach(tally.linesDeliveredByEar.sorted(by: { $0.key < $1.key }), id: \.key) {
+                        row(earWording($0.key), "\($0.value)")
+                    }
+                }
+            }
+
             if !tally.stopsByCause.isEmpty || !tally.swapsByCause.isEmpty {
                 Section("Why it stopped or restarted") {
                     ForEach(tally.stopsByCause.sorted(by: { $0.key < $1.key }), id: \.key) {
@@ -202,6 +214,21 @@ struct ListeningDiagnosticsView: View {
         case "authorizationLost": return "Permission was taken away"
         case "unrecoveredFailure": return "It failed and could not recover"
         default: return "Stopped: \(cause)"
+        }
+    }
+
+    /// The ear, in words. Keyed on `ListenEvent.Origin`'s spellings — the
+    /// same three the wire carries and `CaptureSourcePolicy` badges — with
+    /// the fourth being the honest name for a line whose ear was never
+    /// written down. Nothing here decides what a line meant; it says where
+    /// it came from.
+    private func earWording(_ origin: String) -> String {
+        switch origin {
+        case "phone_mic": return "Heard by the phone"
+        case "pendant": return "Heard by the pendant"
+        case "typed": return "Typed"
+        case "unrecognised": return "Ear not recorded"
+        default: return "Heard by: \(origin)"
         }
     }
 

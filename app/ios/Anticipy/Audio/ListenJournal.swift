@@ -213,8 +213,13 @@ enum ListenEvent: Equatable {
     enum PostDetail: Equatable {
         /// It went up live, from this ear.
         case sentLive(from: Origin)
-        /// One that had been waiting on disk went up.
-        case sentFromQueue
+        /// One that had been waiting on disk went up — and from which ear it
+        /// was heard, because the queue kept that and the journal used to
+        /// drop it here. Without it, a per-ear count of the day's lines was
+        /// honest only on a day with no outage: every line delivered late
+        /// vanished from whichever ear had heard it, and a day the pendant
+        /// spent mostly offline read as a day the pendant barely spoke.
+        case sentFromQueue(from: Origin)
         /// A push failed and the line went to disk. `again` distinguishes a
         /// live push that got queued from a queued one that got requeued —
         /// the difference between "the network just went" and "it is still
@@ -260,14 +265,29 @@ extension ListenEvent.PostDetail {
     var text: String {
         switch self {
         case .sentLive(let from): return from.rawValue
-        case .sentFromQueue: return "queued line sent"
+        case .sentFromQueue(let from): return "queued line sent, from: \(from.rawValue)"
         case .shelved(let again, let failure):
             return (again ? "requeued, " : "queued, ") + failure.text
         }
     }
 
     init?(text: String) {
-        if text == "queued line sent" { self = .sentFromQueue; return }
+        // The line as builds before 2026-09-05 wrote it, with no ear on it.
+        // Read back as `.unrecognised` rather than refused: a journal full of
+        // last week's queued sends is still a journal of last week, and the
+        // per-ear fold reports those lines under "ear not recorded", which is
+        // the truth about them.
+        if text == "queued line sent" { self = .sentFromQueue(from: .unrecognised); return }
+        if text.hasPrefix("queued line sent, from: ") {
+            // `Origin(rawValue:)`, not `Origin(wireName:)`, for the reason
+            // `.sentLive` gives below: an unknown word must not parse as if
+            // `describe` had written it.
+            guard let origin = ListenEvent.Origin(
+                    rawValue: String(text.dropFirst("queued line sent, from: ".count)))
+            else { return nil }
+            self = .sentFromQueue(from: origin)
+            return
+        }
         for (prefix, again) in [("requeued, ", true), ("queued, ", false)]
         where text.hasPrefix(prefix) {
             guard let failure = ListenEvent.PostFailure(

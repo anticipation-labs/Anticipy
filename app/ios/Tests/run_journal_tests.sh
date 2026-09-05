@@ -56,6 +56,17 @@ if ! grep -q 'ListenJournal.shared.record(.posted(' "$session"; then
     echo "like a microphone that heard nothing at all."
     exit 2
 fi
+# And a line sent from the QUEUE names the ear that heard it. The buffered
+# line kept its source on disk for the wire; until 2026-09-05 the journal
+# dropped it here, so the per-ear count on the Listening screen was honest
+# only on a day with no outage. Folded first because the call wraps.
+if ! grep -vE '^[[:space:]]*//' "$session" | tr '\n' ' ' | tr -s ' ' \
+    | grep -q '\.sentFromQueue(from: \.init(wireName: line\.source'; then
+    echo "A queued line is sent without recording which ear heard it."
+    echo "Every line delivered late then vanishes from its ear's count, and a"
+    echo "day the pendant spent mostly offline reads as a day it barely spoke."
+    exit 2
+fi
 # The battery, and the guard that keeps it from destroying the record it lives
 # in. The thing that reads it is the 4-SECOND WATCHDOG, so an unguarded write
 # there is fifteen lines a minute — measured on this codebase three commits ago

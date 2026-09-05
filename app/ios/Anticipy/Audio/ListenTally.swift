@@ -125,6 +125,20 @@ struct ListenTally: Equatable {
     /// A day that heard everything and delivered nothing looks exactly like a
     /// microphone that heard nothing at all, from outside.
     var postsFailed = 0
+    /// WHICH EAR HEARD THE LINES THAT REACHED THE SERVER, keyed by
+    /// `ListenEvent.Origin.rawValue` — the same closed spellings the feed's
+    /// badge reads off the wire. The feed shows the ear per line and per
+    /// card; this is the day's total, on the screen a day of wearing is
+    /// judged from, so "the pendant heard 40 lines and the phone 300" is a
+    /// number rather than a scroll.
+    ///
+    /// Delivered lines, deliberately, and said so on the screen: a line
+    /// shelved and never sent carries no ear in the journal, and one dropped
+    /// from a full queue is counted by `linesDropped` instead. Lines a build
+    /// before 2026-09-05 sent from its queue fold under `unrecognised`,
+    /// because that build did not write the ear down — reported as such,
+    /// never guessed at.
+    var linesDeliveredByEar: [String: Int] = [:]
 
     /// AIRTIME THE PENDANT'S RADIO LOST, summed over the day, in milliseconds.
     ///
@@ -314,8 +328,15 @@ struct ListenTally: Equatable {
             case .buffersDropped(let count):
                 tally.notes.append("dropped \(count) buffers while swapping")
 
-            case .posted(let ok, _):
+            case .posted(let ok, let detail):
                 if ok { tally.postsAccepted += 1 } else { tally.postsFailed += 1 }
+                // A closed enum on both arms; a shelved line names no ear.
+                switch detail {
+                case .sentLive(let from), .sentFromQueue(let from):
+                    if ok { tally.linesDeliveredByEar[from.rawValue, default: 0] += 1 }
+                case .shelved:
+                    break
+                }
 
             // DELIBERATELY DOES NOT TOUCH `lastHeardAt`. A gap is the opposite
             // of hearing: it is the record of a stretch in which nothing was
