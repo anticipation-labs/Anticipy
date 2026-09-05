@@ -2,7 +2,7 @@ name: System invariants
 
 on:
   push:
-    branches: [jose_anticipy_system]
+    branches: [jose_anticipy_system, cloudflare-backend]
     paths:
       - 'brain/**'
       - 'backend/**'

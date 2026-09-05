@@ -131,8 +131,20 @@ class Client:
 
 
 def next_build_number(live_versions: list[str], source: int) -> int:
+    """The number the upload carries: the tree's own, unless Apple holds it.
+
+    ``source`` is CURRENT_PROJECT_VERSION as committed, and it is the number
+    the phone stamps on every row (``device_id`` is ``iphone-b<CFBundleVersion>``)
+    and the ledgers name. App Store Connect refuses only a number it already
+    holds, so the source is kept whenever it is above every live build, and
+    moved to one past the highest live build only on a collision. The rule
+    used to add one unconditionally, which labelled every CI upload one or two
+    above the tree that produced it (119 uploaded as 121, 121 as 122, then
+    121 as 123) so no TestFlight number matched its commit (audit F22,
+    2026-09-05).
+    """
     numeric = [int(version) for version in live_versions if version.isdigit()]
-    return max([source, *numeric]) + 1
+    return max([source, *(live + 1 for live in numeric)])
 
 
 def select_certificates_to_revoke(
@@ -167,7 +179,8 @@ def live_next_build(client: Client, bundle_id: str,
         "limit": 1,
     })["data"]
     if not releases:
-        return source + 1
+        # Nothing live under this marketing version: nothing to collide with.
+        return source
     builds = client.request("GET", "/v1/builds", {
         "filter[preReleaseVersion]": releases[0]["id"], "limit": 200})["data"]
     return next_build_number(

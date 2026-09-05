@@ -1,7 +1,12 @@
 name: iOS TestFlight
 on:
   push:
-    branches: [jose_anticipy_system]
+    # The iOS source of record is cloudflare-backend. This used to fire on
+    # jose_anticipy_system, a branch 165 commits behind, and uploaded the
+    # 121-era tree as TestFlight 122 and 123; one more push there after the
+    # Cloudflare build ships would have overtaken it on every tester's
+    # phone as 126+ (audit F38, 2026-09-05).
+    branches: [cloudflare-backend]
     paths: ['app/ios/**', '.github/workflows/ios-testflight.yml']
   workflow_dispatch:
 
@@ -21,6 +26,11 @@ jobs:
       ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The build-number leg below reads `git log -G` for the commit that
+          # last moved CURRENT_PROJECT_VERSION; on a shallow clone it finds
+          # nothing and exits 2 ("an empty search is not a pass").
+          fetch-depth: 0
       - name: Use Xcode 26 (Apple requires the iOS 26 SDK for uploads)
         run: |
           ls /Applications | grep -i xcode || true
@@ -28,6 +38,12 @@ jobs:
           echo "Selected: $X26"
           sudo xcode-select -s "$X26"
           xcodebuild -version
+      - name: iOS logic gate — the suites, and that the build number still names these bytes
+        # Nothing ran app/ios/Tests/run_all.sh before an upload: it was a
+        # hand step, and the tree carried its last leg red into a release
+        # (audit F21). Before xcodegen and before the bump, so the leg reads
+        # the committed pbxproj and the committed number.
+        run: sh app/ios/Tests/run_all.sh
       - name: Install xcodegen
         run: brew install xcodegen
       - name: Generate Xcode project
@@ -45,7 +61,7 @@ jobs:
           ASC_KEY_PATH: ${{ runner.temp }}/asc/AuthKey.p8
         run: |
           python3 app/ios/scripts/app_store_connect.py free-signing-slot
-      - name: Bump build number above Apple's latest
+      - name: Build number — the source's, unless Apple already holds it
         working-directory: app/ios
         env:
           ASC_KEY_PATH: ${{ runner.temp }}/asc/AuthKey.p8
@@ -53,9 +69,16 @@ jobs:
           source=$(xcrun agvtool what-version -terse | head -1)
           next=$(python3 scripts/app_store_connect.py next-build \
             --bundle ai.anticipy.app --marketing 1.1.0 --source "$source")
-          echo "Source build $source; App Store Connect requires $next"
           echo "ANTICIPY_UPLOAD_BUILD=$next" >> "$GITHUB_ENV"
-          xcrun agvtool new-version -all "$next"
+          # The tree's number is what device_id iphone-b<CFBundleVersion> and
+          # the ledgers name, so it is rewritten only on a collision (audit
+          # F22: the old unconditional +1 labelled 119→121, 121→122, 121→123).
+          if [ "$next" = "$source" ]; then
+            echo "Source build $source is above every build Apple holds; uploading as $source"
+          else
+            echo "Source build $source collides with App Store Connect; uploading as $next"
+            xcrun agvtool new-version -all "$next"
+          fi
       - name: Archive (cloud signing — Apple holds the key)
         working-directory: app/ios
         run: |
