@@ -76,7 +76,11 @@ export function projectFields(record: Record<string, unknown>, fieldsParam: stri
 // A skew between the map and the table is a 400 with the column's name, the
 // same shape create() and update() already give an unknown field.
 export function missingColumn(message: string): string | null {
-  const m = /no such column:\s*(?:[A-Za-z0-9_]+\.)?([A-Za-z0-9_]+)/i.exec(String(message || ""));
+  // Two spellings from SQLite: UPDATE/SELECT say "no such column: X",
+  // INSERT says "table T has no column named X". Both are the same fact.
+  const text = String(message || "");
+  const m = /no such column:\s*(?:[A-Za-z0-9_]+\.)?([A-Za-z0-9_]+)/i.exec(text)
+    || /has no column named\s+([A-Za-z0-9_]+)/i.exec(text);
   return m ? m[1] : null;
 }
 
@@ -92,14 +96,31 @@ export function missingColumn(message: string): string | null {
 // unheard for ten minutes; the same line with decision:"" was heard in 15 s.
 // The fix belongs here, not in a table rebuild: fill the empties the way the
 // backend this replaces did, for every mapped column the body omits.
-export function fillEmpties(def: CollectionDef, body: Record<string, unknown>): Record<string, unknown> {
+// `live` is the set of columns the table actually has (liveColumns below):
+// the map in schema.ts can be AHEAD of the live table — it was on
+// 2026-09-05, by heard_ms/heard_calls — and filling a column the table
+// lacks turns every create into a 1101, which is exactly what happened for
+// two minutes before this parameter existed. Only what both know gets filled.
+export function fillEmpties(def: CollectionDef, body: Record<string, unknown>, live?: Set<string>): Record<string, unknown> {
   const out: Record<string, unknown> = { ...body };
   for (const [name, spec] of Object.entries(def.columns)) {
     if (name === "id" || name === def.createdColumn || name === def.updatedColumn) continue;
     if (name in out) continue;
+    if (live && !live.has(name)) continue;
     out[name] = spec.type === "number" ? 0 : spec.type === "bool" ? false : "";
   }
   return out;
+}
+
+// The live table's columns, asked of SQLite once per isolate per table.
+const LIVE_COLUMNS = new Map<string, Set<string>>();
+export async function liveColumns(env: Env, table: string): Promise<Set<string>> {
+  const cached = LIVE_COLUMNS.get(table);
+  if (cached) return cached;
+  const res = await env.DB.prepare(`SELECT name FROM pragma_table_info(?1)`).bind(table).all<{ name: string }>();
+  const set = new Set((res.results ?? []).map((r) => String(r.name)));
+  if (set.size) LIVE_COLUMNS.set(table, set);
+  return set;
 }
 
 export function uniqueViolationColumn(message: string): string | null {
@@ -393,7 +414,7 @@ async function createOwner(env: Env, req: RecordsRequest): Promise<Response> {
 
 export async function create(env: Env, req: RecordsRequest): Promise<Response> {
   const def = req.collection;
-  const body = fillEmpties(def, req.body ?? {});
+  const body = fillEmpties(def, req.body ?? {}, await liveColumns(env, def.name));
 
   // owners is an AUTH collection and does not go through the generic writer.
   if (def.name === "owners") return createOwner(env, req);

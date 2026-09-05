@@ -41,6 +41,12 @@ check("a line posted the way the phone posts it gets decision \"\" — the brain
 });
 check("a value the client sent is never overwritten by the empty", () =>
   assert.equal(fillEmpties(eventsDef, { decision: "act" }).decision, "act"));
+check("a column the map knows but the live table lacks is never filled — that was a 1101 on every create", () => {
+  const row = fillEmpties(eventsDef, { kind: "transcript" }, new Set(["kind", "text", "decision"]));
+  assert.equal(row.decision, ""); assert.equal("goal" in row, false); assert.equal("seq" in row, false);
+});
+check("SQLite's INSERT wording names the missing column too", () =>
+  assert.equal(missingColumn("D1_ERROR: table events has no column named heard_ms: SQLITE_ERROR"), "heard_ms"));
 check("id, created and updated are the writer's, not filled here", () => {
   const row = fillEmpties(eventsDef, {}); assert.equal("id" in row, false); assert.equal("created" in row, false);
 });
