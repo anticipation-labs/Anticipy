@@ -163,7 +163,8 @@ export class BrainSupervisor extends DurableObject<BrainEnv> {
    * brain/supervisor.py discover_owners() + reconcile_children(), together.
    *
    * The two properties reconcile_children was extracted to protect, preserved:
-   *   - the cap TURNS OWNERS AWAY, never evicts. discover returns EVERY owner;
+   *   - the cap TURNS OWNERS AWAY and, since 2026-09-05, RETIRES the turned-away
+ *     (see the retire loop at the end of tick). discover returns EVERY owner;
    *     truncating discovery made the cap read "not in this set" as "deleted"
    *     and SIGTERM a live owner whose random id happened to sort low.
    *   - over-capacity PRINTS EVERY PASS, so going over the cap is visible.
@@ -238,6 +239,29 @@ export class BrainSupervisor extends DurableObject<BrainEnv> {
       // Over capacity — say so EVERY pass. Silent truncation is the bug.
       console.log(`brain fleet over capacity: ${unserved.length} owners unserved (cap ${cap})`);
     }
+
+    // RETIRE WHAT THE CAP TURNED AWAY. The rule above — the cap never evicts —
+    // was written for a cap that lowers by accident ("a live owner whose
+    // random id happened to sort low"). It is the wrong rule when the cap is
+    // lowered ON PURPOSE: 2026-09-05 16:58Z, cap 0 was deployed to leave
+    // Railway as the only brain for real owners until their phones post to
+    // Cloudflare, and five real owners' containers kept running here for as
+    // long as their 24h idle window, each holding the same texting
+    // credentials as its Railway twin. A brain that is not on this tick's
+    // serve list is not this fleet's to run. Only the discovered-and-unserved
+    // are retired; the allowlist is never touched by this, and an owner that
+    // is on the serve list next tick is simply ensured again (state lives in
+    // R2, not in the container). research/2026-09-05-brain-of-record.md.
+    let retired = 0;
+    for (const id of unserved) {
+      try {
+        await getContainer(this.env.OWNER_BRAIN, id).shutdown();
+        retired += 1;
+      } catch (err) {
+        console.log(`owner worker could not be retired · owner=${id} · ${err}`);
+      }
+    }
+    if (retired) console.log(`brain fleet retired ${retired} unserved owner(s) (cap ${cap})`);
     return { served, unserved };
   }
 }
