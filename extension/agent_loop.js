@@ -2317,9 +2317,45 @@ async function clearUnsupportedOptionalFields(tabId, unsupportedNames, currentSt
 // rejection in verbatim quotes. So the two measured shapes ride into its
 // prompt as teaching and nothing runs in front of it. Zero added model calls.
 
-export function outputOnlyCompletionGap(reason) {
-  return /\b(?:result|goal)\b[^.]{0,120}\b(?:contains|omits?|missing|fails? to (?:provide|include|list|report)|does not (?:provide|include|list|report))\b/i
-    .test(String(reason || ""));
+// WHAT KIND OF GAP THE VERIFIER FOUND, AS A TOKEN IT CHOOSES (F24).
+//
+// The recovery the loop takes after a rejected done claim used to be selected
+// by six regexes over the verifier's PROSE:
+//
+//     outputOnlyCompletionGap          /\b(result|goal)\b …(contains|omits|missing…)/
+//     missingCompletionEvidence        /not (present|found|shown…)|only shows|missing|unverified/
+//     nonAuthoritativeCompletionEvidence  /search[- ]result|snippet|third[- ]party|aggregator/
+//     /load|spinner|progress|wait/i    -> sleep 5s and re-audit
+//     /not (present|found|shown…)|only shows|missing|unverified/  -> press Escape on his live page
+//     /not observed|not opened|unvisited|never visited/           -> scroll vs research
+//
+// Some of those reasons are written by this file, where reading them back is
+// legal — a sense. But the SAME predicates ran over the model's own sentence,
+// and audit row #64 already classifies "word lists over the model's own
+// reason" as a law-1 violation. What it cost is small and real: one Escape
+// keypress inside a live modal whose rejection happened to use the word
+// "missing", five wasted seconds and an extra audit call on a reason
+// containing "waitlist", a scroll-or-research choice made by phrasing.
+//
+// So the verifier says which KIND of gap it found, in a closed set, and the
+// caller compares tokens. The deterministic gaps in verifyDone set their own —
+// they have always known their category — and the auditor is asked for one in
+// its JSON. Anything outside the set, or absent, is NO GAP: the generic
+// recovery path runs and none of the specific ones do. That polarity is
+// deliberate and it is a FLOOR — pressing Escape on the owner's live page and
+// sleeping five seconds are actions, and an action needs something to license
+// it, not merely the absence of an objection.
+export const COMPLETION_GAPS = new Set([
+  "still_loading",      // the page had not finished rendering
+  "missing_on_page",    // the evidence is not visible here (it may be below the fold)
+  "source_unvisited",   // the claim cites a page this run never opened
+  "non_authoritative",  // the evidence came from a snippet/aggregator, not the source
+  "result_omits",       // the RESULT is short of what the goal asked for
+  "contradiction",      // the live evidence says something different
+]);
+export function completionGap(value) {
+  const token = String(value ?? "").trim();
+  return COMPLETION_GAPS.has(token) ? token : "";
 }
 
 function resultUrls(result) {
@@ -2338,15 +2374,10 @@ export function completionRecoveryReversal(decision, currentUrl, scrollCount, re
     && evidenceUrlKey(decision.url || "") === evidenceUrlKey(currentUrl || "");
 }
 
-export function missingCompletionEvidence(reason) {
-  return /not (?:present|found|shown|displayed|supported|observed)|does not (?:appear|show|display|contain)|do not (?:appear|show|display|contain)|only shows|without any|missing|unverified|absent/i
-    .test(String(reason || ""));
-}
-
-export function nonAuthoritativeCompletionEvidence(reason) {
-  return /search[- ]result|snippet|not (?:an? )?(?:official|authoritative)|rather than (?:the )?(?:vendor(?:'s)? )?(?:official|authoritative)|third[- ]party|aggregator/i
-    .test(String(reason || ""));
-}
+// `missingCompletionEvidence` and `nonAuthoritativeCompletionEvidence` were
+// here until 2026-09-05 (F24). Their two alternations are written out in the
+// COMPLETION_GAPS record above; the categories they were guessing at are
+// `missing_on_page` and `non_authoritative`, which the verifier now names.
 
 export function replacementShapeCompatible(claimed, observed) {
   const claim = String(claimed || "");
@@ -2589,6 +2620,14 @@ function evidenceHasMonetaryValue(body, claimed) {
 // cited document must itself contain the plan and number. This remains
 // sector/site agnostic: it keys only on the owner's word "official", the
 // result's own field names, and live page snapshots from this run.
+// The one sentence this function writes for a cited page NOBODY OPENED. The
+// caller has to tell that finding apart from "opened, and the number is not
+// there", because only the first is fixed by opening the page. It used to tell
+// them apart with a regex over the sentence — legal, since this file wrote it,
+// but a guess all the same. Producer and classifier now share this constant,
+// so the two cannot drift apart. (F24)
+export const UNOPENED_SOURCE_GAP = "official result URL was not observed as a live page";
+
 export function officialRecordEvidenceGap(goal, result, state, journal = []) {
   // WHAT WAS HERE UNTIL 2026-09-05 (F06):
   //     if (!/\bofficial\b/i.test(String(goal || ""))) return "";
@@ -2620,7 +2659,7 @@ export function officialRecordEvidenceGap(goal, result, state, journal = []) {
     const body = matching.map((entry) =>
       `${entry?.title || ""}\n${entry?.text || ""}\n${entry?.elements || ""}`).join("\n");
     if (!matching.length) {
-      return `official result URL was not observed as a live page: ${url}`;
+      return `${UNOPENED_SOURCE_GAP}: ${url}`;
     }
     const planEntry = entries.find(([key, item]) =>
       /(?:^|_)(?:plan|tier)(?:_?name)?(?:$|_)/i.test(key)
@@ -2787,19 +2826,27 @@ export async function verifyDone(apiKey, model, goal, result, tabId,
   let state;
   try { state = await withTimeout(mapPage(tabId), 20000, "verify mapPage"); }
   catch { return { verified: false, reason: "page unreadable; completion is unverified", evidence: [] }; }
+  // EACH DETERMINISTIC GAP NAMES ITS OWN CATEGORY (F24). These functions have
+  // always known what kind of gap they found; the loop used to re-derive it by
+  // running regexes over the sentence they had just written.
   const evidenceGap = completionEvidenceGap(goal, result, state, evidenceJournal);
   if (evidenceGap) {
-    return { verified: false, reason: evidenceGap, evidence: [] };
+    return { verified: false, reason: evidenceGap, gap: "source_unvisited", evidence: [] };
   }
   const officialGap = officialRecordEvidenceGap(goal, result, state, evidenceJournal);
   if (officialGap) {
-    return { verified: false, reason: officialGap, evidence: [] };
+    return { verified: false, reason: officialGap, evidence: [],
+      // Two different findings share this function: a cited page that was
+      // never opened, and a cited page that was opened and does not carry the
+      // claimed number. The first is fixed by opening it, the second is not.
+      gap: officialGap.startsWith(UNOPENED_SOURCE_GAP)
+        ? "source_unvisited" : "non_authoritative" };
   }
   const unsupported = unsupportedApprovedFacts(facts, state, effectState);
   if (unsupported.length) {
     return { verified: false,
       reason: `approved facts are not evidenced: ${unsupported.join(", ")}`,
-      evidence: [] };
+      gap: "missing_on_page", evidence: [] };
   }
   // The same four-state reading the pre-submit gates took, from the same
   // memo, so post-commit cannot disagree with pre-commit about a value.
@@ -2812,12 +2859,12 @@ export async function verifyDone(apiKey, model, goal, result, tabId,
     const row = scopeVerdict.undecided[0];
     return { verified: false,
       reason: `could not confirm ${row.name}=${row.value} is what you asked for`,
-      evidence: [] };
+      gap: "contradiction", evidence: [] };
   }
   if (scopeVerdict.unsupported.length) {
     return { verified: false,
       reason: `submitted values are outside the approved scope: ${scopeVerdict.unsupported.join(", ")}`,
-      evidence: [] };
+      gap: "contradiction", evidence: [] };
   }
   // A RECEIPT-SHAPED PAGE IS EVIDENCE. IT IS NOT A VERDICT.
   //
@@ -2870,7 +2917,7 @@ export async function verifyDone(apiKey, model, goal, result, tabId,
     : (Array.isArray(evidenceJournal) ? evidenceJournal : []);
   const messages = [
     { role: "system", content: `Interpret the owner's grammar literally. "A, B, or C" permits any named alternative unless the goal explicitly says each/all. A range attached to "start" or "begin" does not constrain an end date. Different labels are not contradictions by themselves: reject only when their evidenced meanings or values materially conflict, not because the result normalized the source's label to the field name requested by the goal.` },
-    { role: "system", content: `You audit a browser agent's claim of task completion. Given the goal, exact approved scope and facts, the claimed result, the page immediately before the external effect, and the CURRENT page, decide if the claim is actually supported. THE GOAL IS THE COMPLETE REQUIREMENT: never add a currency, locale, vendor, field, record, or constraint that the goal does not contain. Every approved fact must agree with the evidence; a default, different option, amount, date, person, address, or resolution is a contradiction even when the page says success. Keep field identities exact: taxes are not association fees, a list price is not a monthly payment, and two similarly named plans/records are not interchangeable. When a requested field is qualified by "if displayed", absence of that exact field is not a contradiction and a result may say it was not displayed. For a mutable page such as a cart, form, or editor, the CURRENT page is authoritative over an older snapshot at that same URL because the agent may have repaired the state. For form/submission goals, the current page must also show terminal evidence (confirmation text or a post-submit page). For research goals, the CLAIMED RESULT itself must explicitly answer EVERY requested entity, field and quantity in the goal. If the goal names multiple products/vendors/places or asks for N records/options, count them and verify=false when any named item, requested field, or record is missing; a page for one item cannot prove the omitted items. Count what the result DELIVERS, not how it is laid out: prose, a numbered list and JSON are all acceptable layouts, and a record that is named but carries none of the details the goal asks for (a rent, a price, a URL) is a missing record. A number in the goal that is not a count of records to deliver — tabs to open, rows per page, forms of ID to bring — creates no record requirement. Judge a named item by WHICH THING IT IS, never by whether the goal's spelling of its name appears in the result: a source's own shorter or longer form of the same company, school, clinic or product — "Bell" for "Bell Canada", "UBC" for "the University of British Columbia" — is that item present, not an item missing, unless the evidence shows they are different things. When the goal asks for direct or source URLs, ask whether each requested figure is traceable to a page the result actually cites; one page that carries several of the named items can satisfy that for all of them, and the NUMBER of URLs is not the requirement — a result with fewer links than named items is incomplete only when some item's figure is left with no cited source at all. If the goal requires an OFFICIAL source, the evidence must show that the page is operated by the named organization, government, health authority, institution, vendor, organizer, or authorized ticketing service. A third-party finder, review site, generic directory, search engine, or aggregator is NOT official merely because it repeats the facts; ambiguity means verified=false. Treat each earlier evidence entry as belonging only to its own URL; never attach a fact from one entry to a different claimed URL or record. Search-result snippets, partial views, or a page consistent with an INCLUDED claim may support that included claim, but never fill an omission in the result. Also verify=false if ANY statement in the claimed result is contradicted by the authoritative evidence. The goal's TERMINAL state must actually be reached: a result saying an action "would lead to" or "is ready to" reach the goal page is NOT done. Likewise a research result that admits the requested information was NOT found is NOT done. A result whose own words say the action did NOT complete — "has not been submitted", "could not book", "the amounts were not correctly reflected" — is NOT done, and neither is a progress note such as "I will now try the other site". But a completed action with a negated SIDE-remark — "Booked. The confirmation email was not sent" — IS done when the evidence shows the booking; judge the action the goal asked for, not every clause. Reply EXACTLY {"verified":true} or, for false, {"verified":false,"reason":"under 120 words","goal_quote":"exact short quote from GOAL that creates the requirement","claimed_quote":"exact short quote from CLAIMED RESULT being rejected","evidence_quote":"exact short quote from the supplied live evidence","evidence_url":"the supplied URL containing that quote"}. Every false rejection must ground all three quotes verbatim; do not paraphrase or invent evidence.` },
+    { role: "system", content: `You audit a browser agent's claim of task completion. Given the goal, exact approved scope and facts, the claimed result, the page immediately before the external effect, and the CURRENT page, decide if the claim is actually supported. THE GOAL IS THE COMPLETE REQUIREMENT: never add a currency, locale, vendor, field, record, or constraint that the goal does not contain. Every approved fact must agree with the evidence; a default, different option, amount, date, person, address, or resolution is a contradiction even when the page says success. Keep field identities exact: taxes are not association fees, a list price is not a monthly payment, and two similarly named plans/records are not interchangeable. When a requested field is qualified by "if displayed", absence of that exact field is not a contradiction and a result may say it was not displayed. For a mutable page such as a cart, form, or editor, the CURRENT page is authoritative over an older snapshot at that same URL because the agent may have repaired the state. For form/submission goals, the current page must also show terminal evidence (confirmation text or a post-submit page). For research goals, the CLAIMED RESULT itself must explicitly answer EVERY requested entity, field and quantity in the goal. If the goal names multiple products/vendors/places or asks for N records/options, count them and verify=false when any named item, requested field, or record is missing; a page for one item cannot prove the omitted items. Count what the result DELIVERS, not how it is laid out: prose, a numbered list and JSON are all acceptable layouts, and a record that is named but carries none of the details the goal asks for (a rent, a price, a URL) is a missing record. A number in the goal that is not a count of records to deliver — tabs to open, rows per page, forms of ID to bring — creates no record requirement. Judge a named item by WHICH THING IT IS, never by whether the goal's spelling of its name appears in the result: a source's own shorter or longer form of the same company, school, clinic or product — "Bell" for "Bell Canada", "UBC" for "the University of British Columbia" — is that item present, not an item missing, unless the evidence shows they are different things. When the goal asks for direct or source URLs, ask whether each requested figure is traceable to a page the result actually cites; one page that carries several of the named items can satisfy that for all of them, and the NUMBER of URLs is not the requirement — a result with fewer links than named items is incomplete only when some item's figure is left with no cited source at all. If the goal requires an OFFICIAL source, the evidence must show that the page is operated by the named organization, government, health authority, institution, vendor, organizer, or authorized ticketing service. A third-party finder, review site, generic directory, search engine, or aggregator is NOT official merely because it repeats the facts; ambiguity means verified=false. Treat each earlier evidence entry as belonging only to its own URL; never attach a fact from one entry to a different claimed URL or record. Search-result snippets, partial views, or a page consistent with an INCLUDED claim may support that included claim, but never fill an omission in the result. Also verify=false if ANY statement in the claimed result is contradicted by the authoritative evidence. The goal's TERMINAL state must actually be reached: a result saying an action "would lead to" or "is ready to" reach the goal page is NOT done. Likewise a research result that admits the requested information was NOT found is NOT done. A result whose own words say the action did NOT complete — "has not been submitted", "could not book", "the amounts were not correctly reflected" — is NOT done, and neither is a progress note such as "I will now try the other site". But a completed action with a negated SIDE-remark — "Booked. The confirmation email was not sent" — IS done when the evidence shows the booking; judge the action the goal asked for, not every clause. Reply EXACTLY {"verified":true} or, for false, {"verified":false,"reason":"under 120 words","gap":"<one token, below>","goal_quote":"exact short quote from GOAL that creates the requirement","claimed_quote":"exact short quote from CLAIMED RESULT being rejected","evidence_quote":"exact short quote from the supplied live evidence","evidence_url":"the supplied URL containing that quote"}. Every false rejection must ground all three quotes verbatim; do not paraphrase or invent evidence. "gap" says WHAT KIND of gap you found, so the agent knows what to do next, and must be exactly one of: still_loading (the page had not finished rendering — spinners, skeletons, a pending state); missing_on_page (what the claim needs is not visible on the current page, and may be further down it or behind something); source_unvisited (the result cites a page that is not among the live pages supplied to you); non_authoritative (the evidence offered is a search snippet, aggregator or third party rather than the source the goal requires); result_omits (the live evidence is fine and the RESULT itself is short of what the goal asked for — the agent should correct its answer, not click anything); contradiction (the evidence says something materially different from the claim). Choose the one that best describes the fix; if none fits, omit the field entirely rather than guessing — a wrong token sends the agent down the wrong recovery.` },
     // The auditor is told to demand "correctly-filled fields" as evidence, so
     // it must actually SEE the fields: page text alone (capped at 1500 chars,
     // usually nav and menus) made it reject correct completions, the run
@@ -2953,6 +3000,11 @@ export async function verifyDone(apiKey, model, goal, result, tabId,
         return {
           verified: false,
           reason: reasonText.slice(0, 1000),
+          // The model's own word for what kind of gap it found (F24), checked
+          // against the closed set. Prose, a misspelling, an invented category
+          // or an absent field all come back "" — and "" licenses none of the
+          // specific recoveries, which is the floor this is supposed to be.
+          gap: completionGap(v.gap),
           evidence: [],
           // These are verbatim, mechanically-grounded quotes. They let the
           // planner repair a wrong output value without pretending that
@@ -6785,6 +6837,10 @@ export async function runAgentGoal(goal, opts) {
   let lastUrl = "";
   let lastDoneClaim = null;
   let lastDoneRejectionReason = "";
+  // The verifier's own word for what KIND of gap the last rejection was (F24).
+  // "" is a real state — the verifier did not say, or said something outside
+  // the closed set — and it licenses none of the specific recoveries.
+  let lastDoneGap = "";
   let lastDoneCorrection = null;
   let actionSinceDoneRejection = true;
   let duplicateDoneClaims = 0;
@@ -7046,15 +7102,19 @@ export async function runAgentGoal(goal, opts) {
     }
     return false;
   }
-  async function scrollForRejectedEvidence(reason, state = null) {
+  async function scrollForRejectedEvidence(reason, state = null, gap = "") {
     const compact = String(reason || "").replace(/\s+/g, " ").slice(0, 500);
     if (!compact) return false;
     // Missing evidence on a long live page usually means the needed section
     // is below the fold. Scroll the current page before abandoning it for a
     // search engine. This is DOM geometry + verifier state only—no domain,
     // selector, vendor, or task recipe.
+    //
+    // WHICH gap this is used to be a regex over the verifier's sentence
+    // (`missingCompletionEvidence`); it is the verifier's own token now (F24),
+    // and no token means no scroll.
     const currentKey = evidenceUrlKey(state?.url || "");
-    const missingOnPage = missingCompletionEvidence(compact);
+    const missingOnPage = gap === "missing_on_page";
     const scrollCount = completionScrolls.get(currentKey) || 0;
     if (currentKey && missingOnPage && scrollCount < 3) {
       completionScrolls.set(currentKey, scrollCount + 1);
@@ -7067,14 +7127,17 @@ export async function runAgentGoal(goal, opts) {
     }
     return false;
   }
-  async function researchCompletionGap(reason, state = null) {
+  async function researchCompletionGap(reason, state = null, gap = "") {
     const compact = String(reason || "").replace(/\s+/g, " ").slice(0, 500);
     if (!compact) return false;
-    if (await scrollForRejectedEvidence(compact, state)) return true;
+    if (await scrollForRejectedEvidence(compact, state, gap)) return true;
     if (completionResearchCount >= 4) return false;
     const cited = resultUrls(compact)[0] || "";
-    const directMissing = !!(cited
-      && /not observed|not opened|unvisited|never visited/i.test(compact));
+    // "The claim cites a page that was never opened" is the one recovery that
+    // navigates straight to a URL out of the model's own sentence, so what
+    // licenses it matters. It was four phrasings; it is the verifier's own
+    // `source_unvisited` token now (F24).
+    const directMissing = !!(cited && gap === "source_unvisited");
     const key = directMissing
       ? `missing:${evidenceUrlKey(cited)}`
       : evidenceToken(compact).slice(0, 180);
@@ -7776,8 +7839,8 @@ export async function runAgentGoal(goal, opts) {
       if (completionRecoveryReversal(decision, state.url, recoveryScrollCount,
                                      lastDoneRejectionReason)) {
         history.push(`step ${step}: BLOCKED RECOVERY REVERSAL — missing evidence was being inspected lower on this page; do not rewind or reload the same URL.`);
-        if (await scrollForRejectedEvidence(lastDoneRejectionReason, state)) continue;
-        if (await researchCompletionGap(lastDoneRejectionReason, state)) continue;
+        if (await scrollForRejectedEvidence(lastDoneRejectionReason, state, lastDoneGap)) continue;
+        if (await researchCompletionGap(lastDoneRejectionReason, state, lastDoneGap)) continue;
       }
 
       const calendarVerdict = await unapprovedCalendarClick(
@@ -7832,8 +7895,12 @@ export async function runAgentGoal(goal, opts) {
         // claim; otherwise the model can evade an equality check by tweaking
         // one price or sentence and spend the rest of the run arguing with
         // the verifier over the same unchanged evidence.
-        const outputOnlyRepair = outputOnlyCompletionGap(lastDoneRejectionReason)
-          || !!lastDoneCorrection;
+        // Whether the last rejection was about the ANSWER rather than the
+        // page — the one case where re-wording without acting is progress.
+        // This was a regex over the verifier's sentence (F24); it is the
+        // verifier's own `result_omits` token now, and no token means the
+        // stricter path: act before claiming again.
+        const outputOnlyRepair = lastDoneGap === "result_omits" || !!lastDoneCorrection;
         if (!actionSinceDoneRejection && lastDoneClaim && !outputOnlyRepair) {
           duplicateDoneClaims += 1;
           history.push(`step ${step}: BLOCKED NO-ACTION DONE — a completion was already rejected against this unchanged browser evidence (${lastDoneRejectionReason || "completion was unverified"}). Take a different reversible browser action that gathers the missing evidence before claiming done again.`);
@@ -7857,9 +7924,11 @@ export async function runAgentGoal(goal, opts) {
         // a mistyped form or an unsubmitted page must never report success.
         let verdict = await verifyDone(apiKey, model, goal, claimedResult, tab.id,
           { scope, facts, effectState, ownerProfile, evidenceJournal, temporalJudge, temporalMemo, nameJudge: names.judge, nameMemo: names.memo, boxes: effectBoxes, fieldKinds: effectKinds });
-        if (!verdict.verified && /load|spinner|progress|wait/i.test(verdict.reason || "")) {
+        if (!verdict.verified && verdict.gap === "still_loading") {
           // The page was mid-load, not wrong — give it a moment and re-check
-          // once before rejecting.
+          // once before rejecting. WHICH is the verifier's own token now
+          // (F24): the four words this used to look for cost five seconds and
+          // a second audit call on any rejection that said "waitlist".
           await new Promise((r) => setTimeout(r, 5000));
           verdict = await verifyDone(apiKey, model, goal, claimedResult, tab.id,
             { scope, facts, effectState, ownerProfile, evidenceJournal, temporalJudge, temporalMemo, nameJudge: names.judge, nameMemo: names.memo, boxes: effectBoxes, fieldKinds: effectKinds });
@@ -7893,10 +7962,13 @@ export async function runAgentGoal(goal, opts) {
         // A transient verifier formatting failure contains no diagnostic
         // information. Preserve the last grounded rejection so recovery does
         // not lose the missing entity/source and fall back to a giant query.
-        lastDoneRejectionReason = /unparseable verifier response/i.test(rawRejectionReason)
-            && lastDoneRejectionReason
-          ? lastDoneRejectionReason
-          : rawRejectionReason;
+        const keptEarlier = /unparseable verifier response/i.test(rawRejectionReason)
+          && !!lastDoneRejectionReason;
+        lastDoneRejectionReason = keptEarlier ? lastDoneRejectionReason : rawRejectionReason;
+        // The gap travels with the reason it belongs to, or the recovery would
+        // be chosen from one rejection's category and one earlier rejection's
+        // sentence (F24).
+        lastDoneGap = keptEarlier ? lastDoneGap : (verdict.gap || "");
         lastDoneCorrection = verdict.correction || null;
         actionSinceDoneRejection = false;
         duplicateDoneClaims = 0;
@@ -7913,25 +7985,29 @@ export async function runAgentGoal(goal, opts) {
         // real page. This is especially important for hover-opened mega menus
         // after navigation, but is deliberately based only on generic overlay
         // state plus the verifier's missing-evidence verdict.
+        // A KEYPRESS ON HIS LIVE PAGE NEEDS SOMETHING TO LICENSE IT (F24).
+        // This was a phrasing regex over the verifier's sentence, so a
+        // rejection that happened to say "missing" pressed Escape inside
+        // whatever modal was open. It is the verifier's own `missing_on_page`
+        // token now, and no token presses nothing.
         if (state.overlay && !dismissedRejectedOverlays.has(fingerprint)
-            && /not (?:present|found|shown|displayed|supported|observed)|does not (?:show|display|contain)|only shows|missing|unverified/i
-              .test(verdict.reason || "")) {
+            && verdict.gap === "missing_on_page") {
           dismissedRejectedOverlays.add(fingerprint);
           await pressKey(tab.id, "Escape", "Escape", 27);
           history.push(`step ${step}: dismissed an unrelated overlay after the verifier found missing evidence`);
           actionSinceDoneRejection = true;
           continue;
         }
-        if (await scrollForRejectedEvidence(verdict.reason, state)) continue;
-        if (/not observed|not opened|unvisited|never visited/i.test(verdict.reason || "")
-            && await researchCompletionGap(verdict.reason, state)) continue;
-        const missingEvidenceReason = missingCompletionEvidence(verdict.reason);
-        const wrongSourceReason = nonAuthoritativeCompletionEvidence(verdict.reason);
-        if ((missingEvidenceReason || wrongSourceReason || rejected >= 2)
-            && await researchCompletionGap(verdict.reason, state)) continue;
-        if (readOnly && !lastDoneCorrection
-            && !outputOnlyCompletionGap(lastDoneRejectionReason)
-            && await researchCompletionGap(lastDoneRejectionReason, state)) continue;
+        if (await scrollForRejectedEvidence(verdict.reason, state, verdict.gap)) continue;
+        if (verdict.gap === "source_unvisited"
+            && await researchCompletionGap(verdict.reason, state, verdict.gap)) continue;
+        if ((verdict.gap === "missing_on_page" || verdict.gap === "non_authoritative" || rejected >= 2)
+            && await researchCompletionGap(verdict.reason, state, verdict.gap)) continue;
+        // A read-only run has nothing to press, so a rejection it cannot
+        // repair by rewording should go and read another source. `result_omits`
+        // is the one gap where rewording IS the repair.
+        if (readOnly && !lastDoneCorrection && lastDoneGap !== "result_omits"
+            && await researchCompletionGap(lastDoneRejectionReason, state, lastDoneGap)) continue;
         // Improved wording is not new evidence. Give a source a small repair
         // budget, then change sources; keep one monotonic hard ceiling across
         // the whole run so a model cannot spend fifty calls rephrasing the

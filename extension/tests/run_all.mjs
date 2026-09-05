@@ -13,6 +13,7 @@ const suites = [
   "test_background_scheduling.mjs",
   "test_background_tab_fallback.mjs",
   "test_core_resilience.mjs",
+  "test_recovery_reads_a_gap_token.mjs",
   "test_model_fetch_retries_transients.mjs",
   "test_model_reply_floor.mjs",
   "test_planner.mjs",

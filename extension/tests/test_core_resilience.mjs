@@ -11,11 +11,10 @@ import {
   loopbackTarget,
   internalNetworkTarget,
   taskAllowsInternalNetwork,
-  missingCompletionEvidence,
-  nonAuthoritativeCompletionEvidence,
+  COMPLETION_GAPS,
+  completionGap,
   normalizedResult,
   officialRecordEvidenceGap,
-  outputOnlyCompletionGap,
   prioritizeClaimedEvidence,
   protectedInput,
   repeatedResearchHref,
@@ -51,9 +50,24 @@ assert.ok(!("completionShapeGap" in loopExports),
 assert.ok(!/function comparisonNames|completionShapeGap\(/.test(
   loopFile.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "")),
   "neither the comparison-name parse nor its caller survives in the code");
-assert.equal(outputOnlyCompletionGap("the goal requests 3 records but the result contains 1"), true);
-assert.equal(outputOnlyCompletionGap("The claimed result fails to provide the requested direct URLs"), true);
-assert.equal(outputOnlyCompletionGap("the live page does not support the claimed price"), false);
+// F24 (2026-09-05): which recovery a rejected done claim gets is chosen from a
+// token the verifier returns, not from regexes over its prose. These asserted
+// the three deleted predicates; they now assert the token reader, whose whole
+// job is to refuse anything outside the closed set — the floor that keeps a
+// mis-typed or invented category from pressing Escape on the owner's page.
+assert.equal(completionGap("result_omits"), "result_omits");
+assert.equal(completionGap("still_loading"), "still_loading");
+assert.equal(completionGap("missing_on_page"), "missing_on_page");
+assert.equal(completionGap("source_unvisited"), "source_unvisited");
+assert.equal(completionGap("non_authoritative"), "non_authoritative");
+assert.equal(completionGap("contradiction"), "contradiction");
+assert.equal(completionGap("the goal requests 3 records but the result contains 1"), "");
+assert.equal(completionGap("MISSING_ON_PAGE"), "", "the token is exact, not case-folded");
+assert.equal(completionGap("missing_on_page and still_loading"), "");
+assert.equal(completionGap(undefined), "");
+assert.equal(completionGap(null), "");
+assert.equal(completionGap(""), "");
+assert.equal(COMPLETION_GAPS.size, 6);
 assert.equal(completionRecoveryReversal(
   { action: "scroll", dy: -900 }, "https://vendor.test/pricing", 1, "price missing"), true);
 assert.equal(completionRecoveryReversal(
@@ -64,11 +78,12 @@ assert.equal(completionRecoveryReversal(
   "https://vendor.test/pricing", 2, "price missing"), false);
 assert.equal(completionRecoveryReversal(
   { action: "scroll", dy: -900 }, "https://vendor.test/pricing", 0, "price missing"), false);
-assert.equal(missingCompletionEvidence("the requested price does not appear in the evidence"), true);
-assert.equal(missingCompletionEvidence("all requested values are present"), false);
-assert.equal(nonAuthoritativeCompletionEvidence(
-  "the claim came from a search result snippet rather than the vendor's official page"), true);
-assert.equal(nonAuthoritativeCompletionEvidence("the official vendor page supports the claim"), false);
+// The two prose predicates these lines pinned are gone with F24; the same two
+// findings are `missing_on_page` and `non_authoritative`, and the sentence a
+// verifier happens to write about either decides nothing at all now.
+assert.equal(completionGap("missing_on_page"), "missing_on_page");
+assert.equal(completionGap("the requested price does not appear in the evidence"), "");
+assert.equal(completionGap("the claim came from a search result snippet"), "");
 assert.equal(repeatedResearchHref(
   "https://vendor.test/pricing", new Set(["https://vendor.test/pricing"]), 1,
   "price missing"), true);
