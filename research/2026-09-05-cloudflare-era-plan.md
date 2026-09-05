@@ -153,7 +153,7 @@ Free API Mode (10 contacts). The switch, in the order it has to happen:
 
 | step | where | state |
 |---|---|---|
-| 1. a Sendblue arm in the brain with the Twilio arm's exact contract (`text()` → `{sid,status,delivered}`, `SendFailed` on anything that did not go out, the rig guard that keeps a laptop from texting a real phone), provider selection `ANTICIPY_SMS_PROVIDER`, the Twilio-only startup checks skipped for it, a loopback outbound proof | `brain/sendblue_arm.py`, `brain/worker.py`, `proof/sendblue_outbound_proof.py` | building |
+| 1. a Sendblue arm in the brain with the Twilio arm's exact contract (`text()` → `{sid,status,delivered}`, `SendFailed` on anything that did not go out, the rig guard that keeps a laptop from texting a real phone), provider selection `ANTICIPY_SMS_PROVIDER`, the Twilio-only startup checks skipped for it, a loopback outbound proof | `brain/sendblue_arm.py`, `brain/worker.py`, `proof/sendblue_outbound_proof.py` | done `a905225a`; proof 32/32 on a loopback fake, 0 real sends |
 | 2. `POST /sms/sendblue` on the Worker: `sb-signing-secret` compared in constant time, status callbacks ignored, groups ignored, sender resolved to exactly one owner as the PocketBase hook did, dedupe on `message_handle`, the same `sms_reply` row the brain already polls — and the Twilio inbound route finished with the same code (it had been a 503 stub since the migration) | `migration/workers/src/routes/sendblue.ts`, `src/pb/sender.ts` | building |
 | 3. the brain container is handed the Sendblue names | `migration/workers/brain/src/index.ts` FORWARD_KEYS | done `ad759c3c` |
 | 4. the local rig strips `SENDBLUE_*` as it strips `TWILIO_*` and sets `ANTICIPY_SMS_MOCK=1` | `proof/local_rig.sh` | done (this commit) |
