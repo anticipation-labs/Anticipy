@@ -18,6 +18,15 @@ import uuid
 import requests
 
 
+# 2026-09-05: this file died on os.environ["ANTICIPY_SERVICE_TOKEN"] before it
+# checked anything, because nothing loaded .env.local — the defect
+# capture_day.py had, in the one script that is supposed to run right after a
+# deploy. Explicit environment still wins over the file.
+import sys  # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "overnight"))
+import _env  # noqa: E402
+
+_env.load_and_announce(str(Path(__file__).resolve().parents[1]))
 BASE = os.getenv(
     "ANTICIPY_PRODUCTION_URL",
     "https://backend-production-61e0a.up.railway.app",
@@ -48,10 +57,13 @@ def main() -> None:
 
     require(requests.get(f"{BASE}/api/health", timeout=20), 200, "PocketBase health")
     setup = require(requests.get(f"{BASE}/setup.html", timeout=20), 200, "browser setup")
-    expected_download = "/anticipy-codex-version-extension.zip"
+    # The name the setup page and is_it_live.py agree on; the two other zips
+    # are aliases of the same bytes. Until 2026-09-05 this pinned the old
+    # "Codex" branding and could not pass against any page since the rename.
+    expected_download = "/anticipy-claude-version-extension.zip"
     if not re.search(
         r'href=["\']' + re.escape(expected_download) + r'["\']', setup.text
-    ) or "Download Anticipy Codex Version for Chrome" not in setup.text:
+    ) or "Download Anticipy" not in setup.text:
         raise RuntimeError("browser setup: branded download action missing")
 
     privacy = require(requests.get(f"{BASE}/privacy.html", timeout=20), 200, "privacy policy")
@@ -63,7 +75,7 @@ def main() -> None:
         requests.get(f"{BASE}{expected_download}", timeout=30),
         200, "extension package")
     local_digest = hashlib.sha256(
-        (ROOT / "backend/pb_public/anticipy-codex-version-extension.zip").read_bytes()).hexdigest()
+        (ROOT / "backend/pb_public/anticipy-claude-version-extension.zip").read_bytes()).hexdigest()
     remote_digest = hashlib.sha256(package.content).hexdigest()
     if remote_digest != local_digest:
         raise RuntimeError(

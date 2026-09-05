@@ -53,3 +53,24 @@ error in a hook takes the route down, not the process.
     python3 overnight/are_the_ears_live.py     # speech still arriving after the hook changes
 
 Law 3: until `is_it_live` says 0.12.0, nothing in the browser region is done.
+
+## What happened when it ran — 2026-09-05 04:15Z
+
+`fd538eaf` SUCCESS. Live checks after: owner_profile still 6 rows (054
+deleted nothing, as measured); jobs readable (055 applied); `is_it_live.py`
+green on the served extension (0.12.0, byte-identical, every packaged file);
+`are_the_ears_live.py` PASS (82 lines / 24h, both halves quiet together since
+00:00Z). The five backup envs were confirmed SET on the service before the
+deploy, so 053 did not throw at boot.
+
+What the readiness audit could not see and the deploy exposed: the `agents`
+table was already malformed ("database disk image is malformed (11)") and the
+rewritten hooks are the first code that says so instead of falling through.
+That is a separate incident with its own page,
+`research/2026-09-05-agents-table-malformed.md`; it predates this deploy (the
+newest jobs, minted the day before, were never claimed) and the repair is
+built, proven, and waiting for a hand.
+
+`proof/postdeploy_production.py` did not run: it read
+`os.environ["ANTICIPY_SERVICE_TOKEN"]` without loading `.env.local` and died
+on the KeyError — the same defect `capture_day.py` had. Fixed alongside.

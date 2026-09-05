@@ -160,7 +160,13 @@ Ranked by blast radius, which is what should order the work:
 - No live browser run. Every change is repo-green. The extension has a
   `hostile_checkout.html` fixture and a manual proof for never-foreground; a
   real errand on a real site with these changes has not been run.
-- **Production serves extension 0.8.4.** `is_it_live.py` was run after the six
+- **Deployed 2026-09-05 04:15Z (`fd538eaf`)**: `is_it_live.py` now says "served
+  0.12.0, source 0.12.0 … identical … all packaged files identical". The
+  paragraph below is the state BEFORE that deploy, kept as written. What the
+  deploy then exposed — the `agents` table malformed since before the 4th, so
+  no browser install can authenticate until it is repaired — is in
+  `research/2026-09-05-agents-table-malformed.md`.
+- **Production served extension 0.8.4 until the deploy above.** `is_it_live.py` was run after the six
   commits and the number is not "six commits behind" — it is three minor
   versions behind, and `stranger_gate` leg 1 had been saying so in its own
   words: *the banner tells the stranger to press Reload to get 0.11.2; the only

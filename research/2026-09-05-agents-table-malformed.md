@@ -115,7 +115,9 @@ the pages under one table, and runs the very script `start.sh` runs; each of
 its four guarantees was mutation-checked (copy skipped, marker skipped,
 healthy guard removed, swap-on-not-ok) and each went red.
 
-It runs only when told to. **To run it:** on the Railway service, set
+It runs only when told to, and it is live on the service as of `ff72ad8e`
+(04:49Z; that boot logged the same integrity lines and no repair, because the
+variable is unset). **To run it:** on the Railway service, set
 
     ANTICIPY_REPAIR_DATA_DB=2026-09-05-agents
 
