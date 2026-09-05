@@ -1,4 +1,4 @@
-"""THE HANDS, WATCHED. The real extension, in a real Chromium, on the real
+"""THE HANDS, WATCHED. The real extension, in a real Chrome, on the real
 production model, driving pages built to reproduce Omar's ACTUAL failures.
 
 Not a unit test. Every scenario here is a live failure he watched happen:
@@ -22,21 +22,57 @@ Each scenario asserts on the SITE's own final state (what actually happened
 in the page), never on the agent's self-report — an agent that says "done"
 proves nothing.
 
-Run:  OPENROUTER_API_KEY=... python3 proof/hands_battery.py [name ...]
+TWO WAYS TO RUN IT, and only one of them measures anything today.
+
+  --rig   (the default whenever PocketBase answers on 127.0.0.1:8090)
+          The jobs go to the LOCAL RIG — the repo's own PocketBase with this
+          tree's hooks (sh proof/local_rig.sh up) — and are run by the arm
+          proof/chrome_arm.mjs stood up: a Chrome for Testing that registered
+          through the real hooks, was paired to the rig's owner, and is handed
+          the real browser model through the real /agent/llm proxy. Nothing in
+          that chain is a mock; proof/extension_smoke.mjs proves it end to end
+          in two minutes and this file queues rows the way that smoke does.
+          The fixture site below still runs here on :8792, on loopback, where
+          the arm's Chrome can reach it.
+
+              sh proof/local_rig.sh up
+              node proof/chrome_arm.mjs up
+              python3 proof/hands_battery.py [--rig] [name ...]
+
+  --fake  The ORIGINAL harness: a stand-in backend on :8791 (class BackendH)
+          and Playwright's Chromium. It is DEAD against extension 0.13.0 and
+          has been since the workflow law landed: it mints rows without
+          `workflow_id` and the embedded `params._workflow` plan, so
+          claimJob's `isWorkflowJob` refuses every one of them and every
+          scenario sits `status=queued` for its whole 300s. It also imitates
+          PocketBase's filter/PATCH semantics loosely and serves no
+          /api/health (harmless — only onboarding.js and popup.js probe that,
+          the worker never gates on it). Kept reachable so nothing is lost,
+          and so the two can be diffed; do not extend it.
+
+              OPENROUTER_API_KEY=... python3 proof/hands_battery.py --fake [name ...]
+
+Flags: --rig --fake --base=URL --owner-ref=ID --owner=ID --arm-port=N
+       --wait=SECONDS (per-scenario watch, default 300)
 """
 from __future__ import annotations
 
+import hashlib
 import http.server
 import json
 import os
 import queue
+import re
 import socketserver
+import subprocess
 import sys
 import threading
 import time
+import urllib.error
 import urllib.parse
-
-from playwright.sync_api import sync_playwright
+import urllib.request
+import uuid
+from datetime import datetime, timezone
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
@@ -50,6 +86,30 @@ SITE = f"http://127.0.0.1:{SITE_PORT}"
 MODEL = os.environ.get("ANTICIPY_MODEL", "google/gemini-2.5-flash")
 VISION_MODEL = os.environ.get("ANTICIPY_VISION_MODEL", "google/gemini-2.5-flash")
 OWNER = "battery-owner"
+
+# ---------------------------------------------------------------- flags
+# A misspelled flag must not read as a default (proof/extension_smoke.mjs:61).
+KNOWN_FLAGS = ("rig", "fake", "base", "owner-ref", "owner", "arm-port", "wait")
+
+
+def _arg(name, fallback=None):
+    for a in sys.argv[1:]:
+        if a.startswith(f"--{name}="):
+            return a[len(name) + 3:]
+    return fallback
+
+
+def _flag(name):
+    return f"--{name}" in sys.argv[1:]
+
+
+for _a in sys.argv[1:]:
+    if _a.startswith("--") and _a[2:].split("=")[0] not in KNOWN_FLAGS:
+        sys.exit(f"unknown flag {_a}. Known: {' '.join('--' + k for k in KNOWN_FLAGS)}")
+
+# "rig" or "fake"; decided in main() once the rig has (or has not) answered.
+MODE = [None]
+WATCH_S = int(_arg("wait", "300"))
 
 # ---------------------------------------------------------------- the site
 # Server-side state, so a scenario can assert what the SITE believes happened
@@ -340,9 +400,10 @@ class SiteH(http.server.BaseHTTPRequestHandler):
         pass
 
 
-# --------------------------------------------------------------- backend
-# A faithful-enough stand-in for the production PocketBase: exactly the
-# endpoints extension/background.js calls, with the same shapes.
+# --------------------------------------------------------------- the fake
+# The original stand-in for production PocketBase. DEAD against 0.13.0 — see
+# the header — and reachable only with --fake. Exactly the endpoints
+# extension/background.js used to call, with roughly the same shapes.
 JOBS = {}
 AGENTS = {}
 DB_LOCK = threading.Lock()
@@ -350,7 +411,7 @@ JOB_SEQ = [0]
 EVENTS = queue.Queue()
 
 
-def make_job(goal, params, owner=OWNER, lane=""):
+def _fake_make_job(goal, params, owner=OWNER, lane=""):
     with DB_LOCK:
         JOB_SEQ[0] += 1
         jid = f"job{JOB_SEQ[0]:04d}"
@@ -466,18 +527,487 @@ class Threaded(socketserver.ThreadingMixIn, http.server.HTTPServer):
 
 
 # Owner profile the backend hands the extension. Mutated per scenario: the
-# invented-identity test needs a profile with NO name on it.
-OWNER_PROFILE = [{
+# invented-identity test needs a profile with NO name on it. In rig mode the
+# same values are written onto the rig's own owner_profile row (that is what
+# /agent/key reads, at the start of every run) and the row is restored after.
+FULL_PROFILE = {
     "first_name": "Omar", "last_name": "Ebrahim",
     "email": "omar@anticipy.ai", "phone": "+16047245161", "facts": "{}",
-}]
+}
+OWNER_PROFILE = [dict(FULL_PROFILE)]
 NO_NAME_PROFILE = {
     "first_name": "", "last_name": "",
     "email": "omar@anticipy.ai", "phone": "+16047245161", "facts": "{}",
 }
+PROFILE_FIELDS = ("first_name", "last_name", "email", "phone")
 
 
-def watch(jid, seconds=300):
+# ---------------------------------------------------------------- the rig
+# Everything below talks to the real PocketBase the way the brain and
+# proof/extension_smoke.mjs do. No auth header beyond the one smoke sends:
+# the rig runs with no ANTICIPY_SERVICE_TOKEN (guard.pb.js falls through), so
+# the token — if the environment happens to carry one — is sent and ignored.
+#
+# LOOPBACK ONLY. `.env.local` carries ANTICIPY_PB pointing at PRODUCTION, and
+# the documented way to run this sources that file. So the base is never read
+# from the environment, and a --base that is not loopback is a refusal: this
+# file queues approved, world-touching work and lets a browser act on it.
+RIG = {
+    "base": (_arg("base", "http://127.0.0.1:8090") or "").rstrip("/"),
+    "owner_ref": "",
+    "owner": _arg("owner", "local-dev"),
+    "arm_port": int(_arg("arm-port", "29344")),
+    "profile_id": "",
+    "profile_original": None,
+    "ext_id": "",
+}
+ARM = lambda: f"http://127.0.0.1:{RIG['arm_port']}"  # noqa: E731
+# Job ids this scenario minted, so tidy and the trace dump know what is ours.
+SCENARIO_JOBS = []
+TERMINAL = ("done", "failed", "needs_user", "awaiting_confirm", "cancelled")
+SETTLED = ("done", "failed", "cancelled")
+
+
+def _http(method, url, body=None, timeout=15, token=False):
+    data = None if body is None else json.dumps(body).encode()
+    headers = {"Content-Type": "application/json"}
+    # Only ever to the rig. The devtools port is not a place a service token
+    # should be seen, even on loopback.
+    tok = os.environ.get("ANTICIPY_SERVICE_TOKEN") if token else ""
+    if tok:
+        headers["X-Anticipy-Token"] = tok
+    req = urllib.request.Request(url, data=data, method=method, headers=headers)
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            text = r.read().decode("utf-8", "replace")
+            status = r.status
+    except urllib.error.HTTPError as e:
+        text = e.read().decode("utf-8", "replace")
+        status = e.code
+    except (urllib.error.URLError, OSError) as e:
+        return 0, None, str(e)
+    try:
+        js = json.loads(text) if text else None
+    except Exception:
+        js = None
+    return status, js, text
+
+
+def rig(method, path, body=None):
+    return _http(method, RIG["base"] + path, body, token=True)
+
+
+def rig_row(jid):
+    st, js, text = rig("GET", f"/api/collections/jobs/records/{jid}")
+    if st != 200 or not isinstance(js, dict):
+        raise RuntimeError(f"GET job {jid} -> {st} {text[:160]}")
+    return js
+
+
+def _canonical(value):
+    # brain/workflow.py:_canonical, byte for byte.
+    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+
+
+def _digest(value):
+    return hashlib.sha256(_canonical(value).encode("utf-8")).hexdigest()
+
+
+def stamp():
+    # Python's datetime.isoformat(), which is what brain/workflow.py writes.
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _plan_digests(plan):
+    """Plan.scope_digest / Plan.effect_key from brain/workflow.py."""
+    scope = {
+        "plan_id": plan["plan_id"], "version": plan["version"],
+        "goal": plan["goal"], "facts": dict(plan["facts"]),
+        "consequence": plan["consequence"],
+    }
+    if plan.get("authority_text"):
+        scope["authority_text"] = plan["authority_text"]
+    return _digest(scope), _digest({"owner_ref": plan["owner_ref"], **scope})
+
+
+def _approval(plan, owner_words):
+    """brain/workflow.py:approve — bound to THIS plan id, version and scope."""
+    return {
+        "plan_id": plan["plan_id"],
+        "plan_version": plan["version"],
+        "scope_digest": plan["scope_digest"],
+        "owner_words": owner_words,
+        "approved_at": stamp(),
+        "gesture": None,
+    }
+
+
+def _job_fields(plan):
+    """Plan.job_fields(): the PocketBase columns that mirror the embedded plan."""
+    lease = plan.get("lease") or {}
+    return {
+        "workflow_id": plan["plan_id"],
+        "workflow_version": plan["version"],
+        "workflow_state": plan["state"],
+        "consequence": plan["consequence"],
+        "lineage_key": plan["lineage_key"],
+        "effect_key": plan["effect_key"],
+        "scope_digest": plan["scope_digest"],
+        "approval": _canonical(plan["approval"]) if plan.get("approval") else "",
+        "receipt": _canonical(plan["receipt"]) if plan.get("receipt") else "",
+        "lease_token": lease.get("token", ""),
+        "lease_until": lease.get("expires_at", ""),
+        "source_event_ids": _canonical(list(plan["source_event_ids"])),
+        "attempts": plan["attempts"],
+        "status": {"queued": "queued", "cancelled": "cancelled"}.get(plan["state"], plan["state"]),
+    }
+
+
+# The scenario keys that are the job's own plumbing, not facts about the
+# errand. Everything else a scenario passes (date, time, party_size, order
+# number, category) is a FACT the brain would have put on the plan — and once a
+# row carries _workflow, `ownerFactsFromParams` reads ONLY the plan's facts, so
+# they have to live there or the hands never see them.
+NOT_FACTS = ("task", "authorized", "approved_scope", "start_url")
+
+
+def _rig_make_job(goal, params):
+    task = str(params["task"])
+    # The owner's words are the authority. In the fake, the hands measured every
+    # action against approved_scope alone (there was no plan); here the same
+    # string is the plan's authority_text, so what they measure against is
+    # unchanged — and it is also the words the approval retains.
+    authority = str(params.get("approved_scope") or task)
+    facts = {k: str(v) for k, v in params.items() if k not in NOT_FACTS}
+    plan_id = str(uuid.uuid4())
+    lineage = f"hands-{plan_id[:8]}"
+    now = stamp()
+    plan = {
+        "plan_id": plan_id,
+        "owner_ref": RIG["owner_ref"],
+        "lineage_key": lineage,
+        "version": 1,
+        "goal": task,
+        "authority_text": authority,
+        # World-touching: every scenario books, submits or picks. The extension
+        # reads `params.authorized === true || consequence === "read_only"` for
+        # its authority and `consequence === "read_only"` for its read-only
+        # fence (background.js:1655-1656), so the approved booking needs
+        # consequential + a version-bound approval, never read_only.
+        "consequence": "consequential",
+        "state": "queued",
+        "facts": facts,
+        "required": [],
+        "source_event_ids": [lineage],
+        "approval": None,
+        "lease": None,
+        "receipt": None,
+        "attempts": 0,
+        "reason": "approved by owner",
+        "created_at": now,
+        "updated_at": now,
+    }
+    plan["scope_digest"], plan["effect_key"] = _plan_digests(plan)
+    plan["approval"] = _approval(plan, authority)
+    body = {
+        "goal": task,
+        # A TEXT column: a nested object is stored as "" (smoke, step 6).
+        "params": json.dumps({
+            **params,
+            "source": f"proof/hands_battery.py at {datetime.now(timezone.utc).isoformat()}",
+            "_workflow": plan,
+        }),
+        "device_id": "anticipy",
+        "owner": RIG["owner"],
+        "owner_ref": RIG["owner_ref"],
+        # NOT "research": that lane is hidden from the extension's poll.
+        "lane": "",
+        **_job_fields(plan),
+    }
+    st, js, text = rig("POST", "/api/collections/jobs/records", body)
+    if st != 200 or not isinstance(js, dict) or not js.get("id"):
+        hint = " (workflow_guard.pb.js refused the row)" if st == 409 else ""
+        raise RuntimeError(f"POST job -> {st}{hint}: {text[:300]}")
+    jid = js["id"]
+    SCENARIO_JOBS.append(jid)
+    print(f"       {_clock()}  {jid}  queued  goal={task[:70]!r}", flush=True)
+    return jid
+
+
+def _clock():
+    return datetime.now(timezone.utc).strftime("%H:%M:%S")
+
+
+def _rig_watch(jid, seconds):
+    """Poll the row and say every status change out loud, with the clock, so a
+    stall is readable: which state it sat in, for how long, and what the row
+    said when it moved."""
+    t0 = time.time()
+    deadline = t0 + seconds
+    # make_job already said "queued"; only CHANGES are news from here.
+    last = ("queued", "")
+    nudged = False
+    row = rig_row(jid)
+    while True:
+        key = (row.get("status"), row.get("claimed_by") or "")
+        if key != last:
+            last = key
+            extra = ""
+            if row.get("status") == "running":
+                extra = f"  claimed_by={str(row.get('claimed_by') or '')[:12]} attempt={row.get('attempts')}"
+            if row.get("result"):
+                extra += f"  result={str(row['result'])[:110]!r}"
+            print(f"       {_clock()}  {jid}  {row.get('status')}{extra}  [+{int(time.time() - t0)}s]",
+                  flush=True)
+        if row.get("status") in TERMINAL:
+            return row
+        if time.time() >= deadline:
+            print(f"       {_clock()}  {jid}  still {row.get('status')} after {seconds}s — giving up on it",
+                  flush=True)
+            return row
+        # THE 30s ALARM FLOOR, and the arm that stops beating. chrome.alarms
+        # will not repeat faster than every half minute, so 30s of `queued` is
+        # normal. Past 45s it is not — and this headless arm has been seen to
+        # stop heartbeating altogether after ~9 idle minutes. One nudge, the
+        # same one a person gives by opening the setup page (chrome_arm.mjs
+        # `up`), and it is SAID, so a claim time in the log is never mistaken
+        # for one the alarm produced.
+        if (not nudged and row.get("status") == "queued" and not row.get("claimed_by")
+                and time.time() - t0 > 45):
+            nudged = True
+            why = arm_nudge()
+            print(f"       {_clock()}  {jid}  not claimed after 45s — nudged the arm ({why})", flush=True)
+        time.sleep(2)
+        row = rig_row(jid)
+
+
+def _rig_cancel(jid, why):
+    """Cancel the way every other client must — columns and embedded plan move
+    together — or workflow_guard.pb.js refuses it. Falls back to DELETE. This is
+    smoke's tidy(). A queued browser job left behind is not litter; it fires
+    later in a real Chrome."""
+    row = rig_row(jid)
+    if row.get("status") in SETTLED:
+        return f"left as {row['status']} (it is the evidence)"
+    try:
+        params = json.loads(row.get("params") or "{}")
+    except Exception:
+        params = {}
+    plan = {**(params.get("_workflow") or {}), "state": "cancelled", "lease": None,
+            "attempts": int(row.get("attempts") or 0), "reason": why,
+            "updated_at": stamp()}
+    st, _, text = rig("PATCH", f"/api/collections/jobs/records/{jid}", {
+        "status": "cancelled",
+        "workflow_state": "cancelled",
+        "workflow_version": int(row.get("workflow_version") or 1),
+        "lease_token": "",
+        "lease_until": "",
+        "params": json.dumps({**params, "_workflow": plan}),
+        "result": row.get("result") or why,
+    })
+    if st == 200:
+        return f"cancelled (was {row['status']})"
+    d, _, dtext = rig("DELETE", f"/api/collections/jobs/records/{jid}")
+    if d in (200, 204):
+        return f"deleted (cancel refused {st}: {text[:100]}; was {row['status']})"
+    return (f"COULD NOT CLEAR — still {row['status']}; cancel {st}: {text[:100]}; "
+            f"delete {d}: {dtext[:60]}. Clear it by hand at {RIG['base']}/_/")
+
+
+def _rig_resume(jid, changes, owner_text):
+    """The brain's resume of a parked run, from brain/conversation.py:_amend
+    for a needs_user row: the answer lands in params, `needed` records what
+    was asked, approved_scope grows the Q/A tail the hands read, and the plan
+    is re-approved with the answer as a fact — brain/workflow.py:approve with
+    `changes`: version+1, digests recomputed, approval re-bound to the new
+    version and scope, attempts back to 0, state queued."""
+    row = rig_row(jid)
+    try:
+        params = json.loads(row.get("params") or "{}")
+    except Exception:
+        params = {}
+    plan = dict(params.get("_workflow") or {})
+    if not plan:
+        raise RuntimeError(f"resume: job {jid} carries no _workflow plan")
+    need = (row.get("result") or params.get("needed") or "").strip()
+    params.update(changes)
+    if need and not params.get("needed"):
+        params["needed"] = need[:300]
+    if params.get("approved_scope"):
+        params["approved_scope"] += (
+            f' You stopped and asked: "{need}". '
+            f'They answered: "{owner_text}" — that answer is final; act on it.')
+    facts = dict(plan.get("facts") or {})
+    facts.update({k: str(v) for k, v in changes.items()})
+    plan.update({
+        "version": int(plan.get("version") or 1) + 1,
+        "facts": facts,
+        "state": "queued",
+        "attempts": 0,
+        "lease": None,
+        "receipt": None,
+        "reason": "approved by owner",
+        "updated_at": stamp(),
+    })
+    plan["scope_digest"], plan["effect_key"] = _plan_digests(plan)
+    plan["approval"] = _approval(plan, owner_text)
+    params["_workflow"] = plan
+    body = {"status": "queued", "params": json.dumps(params), **_job_fields(plan)}
+    st, _, text = rig("PATCH", f"/api/collections/jobs/records/{jid}", body)
+    if st != 200:
+        hint = " (workflow_guard.pb.js refused the resume)" if st == 409 else ""
+        raise RuntimeError(f"resume PATCH -> {st}{hint}: {text[:300]}")
+    print(f"       {_clock()}  {jid}  resumed as version {plan['version']} with the answer", flush=True)
+
+
+def _rig_set_profile(profile):
+    body = {k: profile.get(k, "") for k in PROFILE_FIELDS}
+    st, _, text = rig("PATCH", f"/api/collections/owner_profile/records/{RIG['profile_id']}", body)
+    if st != 200:
+        raise RuntimeError(f"owner_profile PATCH -> {st}: {text[:200]}")
+
+
+# ---------------------------------------------------------------- the arm
+def arm_version():
+    st, js, _ = _http("GET", f"{ARM()}/json/version", timeout=3)
+    return js if st == 200 and isinstance(js, dict) else None
+
+
+def arm_extension_id():
+    """The arm's extension id. Asked of the browser first (a listed worker
+    carries it in its URL); when the worker is asleep nothing is listed, so it
+    is derived the way chrome_arm.mjs derives it — from the --load-extension
+    path on the browser's own command line, which is the only thing that
+    decides an unpacked extension's id."""
+    if RIG["ext_id"]:
+        return RIG["ext_id"]
+    st, js, _ = _http("GET", f"{ARM()}/json/list", timeout=3)
+    for t in (js or []) if st == 200 else []:
+        m = re.match(r"chrome-extension://([a-p]{32})/", str(t.get("url", "")))
+        if m and t.get("type") == "service_worker":
+            RIG["ext_id"] = m.group(1)
+            return RIG["ext_id"]
+    try:
+        out = subprocess.run(["ps", "-axo", "command"], capture_output=True, text=True).stdout
+    except Exception:
+        out = ""
+    for line in out.splitlines():
+        if f"--remote-debugging-port={RIG['arm_port']}" not in line:
+            continue
+        m = re.search(r"--load-extension=(\S+)", line)
+        if not m:
+            continue
+        hexid = hashlib.sha256(m.group(1).encode("utf-8")).hexdigest()[:32]
+        RIG["ext_id"] = "".join(chr(97 + int(c, 16)) for c in hexid)
+        return RIG["ext_id"]
+    return ""
+
+
+def arm_nudge():
+    """Open one of the extension's own pages for a moment and close it again:
+    onboarding.js sends `anticipy-ping`, and the worker polls on the spot.
+    The same nudge chrome_arm.mjs `up` gives; a person gives it by opening the
+    popup."""
+    ext = arm_extension_id()
+    if not ext:
+        return "could not find the arm's extension id, so no nudge was possible"
+    st, js, _ = _http("PUT", f"{ARM()}/json/new?chrome-extension://{ext}/onboarding.html", timeout=5)
+    if st != 200 or not isinstance(js, dict) or not js.get("id"):
+        return f"opening the setup page failed ({st})"
+    time.sleep(1.5)
+    _http("GET", f"{ARM()}/json/close/{js['id']}", timeout=5)
+    return "opened its setup page for 1.5s"
+
+
+def _age_s(iso):
+    try:
+        t = datetime.fromisoformat(str(iso).replace(" ", "T").replace("Z", "+00:00"))
+    except Exception:
+        return None
+    return (datetime.now(timezone.utc) - t).total_seconds()
+
+
+def rig_preflight():
+    """Exit 2 with the exact command to run when a leg of the rig is missing.
+    Nothing is queued until the backend, the owner, the profile row and a
+    beating, paired arm have all been seen."""
+    host = urllib.parse.urlparse(RIG["base"]).hostname
+    if host not in ("127.0.0.1", "localhost", "::1"):
+        sys.exit(f"refusing to queue approved browser work against {host}: this harness is loopback-only")
+    st, _, text = rig("GET", "/api/health")
+    if st != 200:
+        sys.exit(f"the rig at {RIG['base']} is not answering ({st} {text[:80]}).\n"
+                 f"  sh proof/local_rig.sh up")
+    RIG["owner_ref"] = _arg("owner-ref", "") or os.environ.get("ANTICIPY_OWNER_REF", "")
+    ref_file = os.path.join(os.environ.get("ANTICIPY_RIG_DIR") or os.path.expanduser("~/.anticipy-rig"),
+                            "state", "owner_ref")
+    if not RIG["owner_ref"]:
+        try:
+            with open(ref_file) as f:
+                RIG["owner_ref"] = f.read().strip()
+        except OSError:
+            pass
+    if not RIG["owner_ref"]:
+        sys.exit(f"no owner_ref: {ref_file} is missing and --owner-ref was not given.\n"
+                 f"  sh proof/local_rig.sh up")
+    print(f"rig       {RIG['base']}  owner_ref {RIG['owner_ref']}")
+
+    st, js, text = rig("GET", "/api/collections/owner_profile/records?perPage=1&filter="
+                       + urllib.parse.quote(f'owner_ref="{RIG["owner_ref"]}"'))
+    row = ((js or {}).get("items") or [None])[0] if st == 200 else None
+    if not row:
+        sys.exit(f"the rig has no owner_profile row for {RIG['owner_ref']} ({st} {text[:80]}); "
+                 "/agent/key would hand the hands no name to type.\n  sh proof/local_rig.sh up")
+    RIG["profile_id"] = row["id"]
+    RIG["profile_original"] = {k: row.get(k, "") for k in PROFILE_FIELDS}
+    print(f"profile   {row['id']}  (restored at the end; the battery writes its own card onto it)")
+
+    if not arm_version():
+        sys.exit(f"no browser arm on :{RIG['arm_port']}. Stand one up and pair it:\n"
+                 f"  node proof/chrome_arm.mjs up\n"
+                 f"(that launches Chrome for Testing with production blackholed, registers "
+                 f"against the rig and pairs it to owner_ref {RIG['owner_ref']})")
+    st, js, _ = rig("GET", "/api/collections/agents/records?perPage=20&sort=-last_seen&filter="
+                    + urllib.parse.quote(f'owner_ref="{RIG["owner_ref"]}" && paired=true'))
+    agents = (js or {}).get("items", []) if st == 200 else []
+    if not agents:
+        sys.exit(f"a browser is on :{RIG['arm_port']} but nothing is PAIRED to {RIG['owner_ref']}.\n"
+                 f"  node proof/chrome_arm.mjs up")
+    beating = [a for a in agents if (_age_s(a.get("last_seen")) or 1e9) < 120]
+    for a in agents:
+        age = _age_s(a.get("last_seen"))
+        print(f"arm       {a.get('browser')}  heartbeat "
+              f"{'never' if age is None else f'{int(age)}s ago'}"
+              f"{'' if a in beating else '  <-- not beating'}")
+    if not beating:
+        why = arm_nudge()
+        print(f"          no arm has beaten for 2 minutes — nudged it ({why}); "
+              f"the first scenario's claim time will say whether it woke")
+
+    # Leftovers from an earlier run are claimed FIRST (claimJob takes the oldest
+    # queued row), and a running one holds the arm. Fail them closed and say so.
+    # The lane is the extension's own (background.js BROWSER_LANE): rows the arm
+    # could claim, and nothing the worker runs for itself.
+    st, js, _ = rig("GET", "/api/collections/jobs/records?perPage=50&sort=created&filter="
+                    + urllib.parse.quote(f'owner_ref="{RIG["owner_ref"]}" && (status="queued" || status="running")'
+                                         ' && workflow_id!="" && lane!="research"'))
+    for j in (js or {}).get("items", []) if st == 200 else []:
+        out = _rig_cancel(j["id"], "cleared by proof/hands_battery.py before a battery run")
+        print(f"leftover  {j['id']} {j.get('status')} {str(j.get('goal') or '')[:50]!r} -> {out}")
+    print()
+
+
+# ------------------------------------------------- the seams the scenarios use
+def make_job(goal, params, owner=OWNER, lane=""):
+    if MODE[0] == "rig":
+        return _rig_make_job(goal, params)
+    return _fake_make_job(goal, params, owner, lane)
+
+
+def watch(jid, seconds=None):
+    seconds = WATCH_S if seconds is None else seconds
+    if MODE[0] == "rig":
+        return _rig_watch(jid, seconds)
     deadline = time.time() + seconds
     while time.time() < deadline:
         time.sleep(2)
@@ -488,6 +1018,37 @@ def watch(jid, seconds=300):
             return j
     with DB_LOCK:
         return dict(JOBS[jid])
+
+
+def job_params(jid):
+    if MODE[0] == "rig":
+        try:
+            return json.loads(rig_row(jid).get("params") or "{}")
+        except Exception:
+            return {}
+    with DB_LOCK:
+        return json.loads(JOBS[jid]["params"])
+
+
+def resume_job(jid, changes, owner_text):
+    """The brain's resume: the answer lands on the job and it goes back to work."""
+    if MODE[0] == "rig":
+        return _rig_resume(jid, changes, owner_text)
+    params = job_params(jid)
+    params.update(changes)
+    params["answer"] = owner_text
+    with DB_LOCK:
+        JOBS[jid].update({
+            "status": "queued", "claimed_by": "", "claimed_at": None,
+            "params": json.dumps(params),
+        })
+    EVENTS.put(jid)
+
+
+def set_owner_profile(profile):
+    if MODE[0] == "rig":
+        return _rig_set_profile(profile)
+    OWNER_PROFILE[0] = dict(profile)
 
 
 # -------------------------------------------------------------- scenarios
@@ -535,7 +1096,7 @@ def sc_site_defaults(_ctx):
 def sc_no_identity(_ctx):
     """No name on file. The ONLY right answer is to stop and ask for it.
     Booking under an invented name is the failure Omar watched."""
-    OWNER_PROFILE[0] = dict(NO_NAME_PROFILE)
+    set_owner_profile(NO_NAME_PROFILE)
     try:
         jid = make_job("agent_goal", {
             "task": "Confirm the held reservation at Demo Bistro under my name",
@@ -545,9 +1106,7 @@ def sc_no_identity(_ctx):
         })
         j = watch(jid)
     finally:
-        OWNER_PROFILE[0] = {
-            "first_name": "Omar", "last_name": "Ebrahim",
-            "email": "omar@anticipy.ai", "phone": "+16047245161", "facts": "{}"}
+        set_owner_profile(FULL_PROFILE)
     with SITE_LOCK:
         b = SITE_STATE.get("booking")
     invented = bool(b) and bool(b.get("last"))
@@ -588,20 +1147,12 @@ def sc_otp_resume(_ctx):
     })
     j1 = watch(jid)
     parked = j1["status"] == "needs_user"
-    with DB_LOCK:
-        params = json.loads(JOBS[jid]["params"])
+    params = job_params(jid)
     resume_tab = params.get("resume_tab")
     if not parked:
         return False, f"phase1 did not park: status={j1['status']} result={(j1['result'] or '')[:110]!r}"
     # The brain's resume: the answer lands on the job and it goes back to work.
-    params["verification_code"] = "482913"
-    params["answer"] = "the code is 482913"
-    with DB_LOCK:
-        JOBS[jid].update({
-            "status": "queued", "claimed_by": "", "claimed_at": None,
-            "params": json.dumps(params),
-        })
-    EVENTS.put(jid)
+    resume_job(jid, {"verification_code": "482913"}, "the code is 482913")
     j2 = watch(jid)
     with SITE_LOCK:
         verified = SITE_STATE.get("otp_verified")
@@ -676,54 +1227,40 @@ SCENARIOS = {
 }
 
 
-def main():
-    assert os.environ.get("OPENROUTER_API_KEY"), "need OPENROUTER_API_KEY"
-    want = [a for a in sys.argv[1:] if not a.startswith("-")] or list(SCENARIOS)
-    site = Threaded(("127.0.0.1", SITE_PORT), SiteH)
-    back = Threaded(("127.0.0.1", BACKEND_PORT), BackendH)
-    threading.Thread(target=site.serve_forever, daemon=True).start()
-    threading.Thread(target=back.serve_forever, daemon=True).start()
-
+# -------------------------------------------------------------------- run
+def run_scenarios(want, ctx):
+    """One loop for both modes. `ctx` is Playwright's context in fake mode and
+    None in rig mode: no scenario reads it (each takes `_ctx`), so nothing here
+    needs a page handle — the graders read the SITE, never the browser."""
     results = []
     traces = {}
-    with sync_playwright() as p:
-        ctx = p.chromium.launch_persistent_context(
-            f"/tmp/anticipy_hands_{os.getpid()}", headless=False,
-            args=[f"--disable-extensions-except={EXT}", f"--load-extension={EXT}"],
-        )
-        # An MV3 service worker is LAZY: it does not start until the browser
-        # has something to do. Opening a page is what wakes it — waiting on an
-        # empty browser waits forever.
-        ctx.new_page().goto("about:blank")
-        sw = None
-        for _ in range(30):
-            if ctx.service_workers:
-                sw = ctx.service_workers[0]
-                break
-            time.sleep(1)
-        assert sw, "extension service worker never started"
-        sw.evaluate(
-            """([base, key, model, vision, owner]) => chrome.storage.local.set({
-                 backendUrl: base, openrouterKey: key, agentModel: model,
-                 visionModel: vision, keyFetchedAt: Date.now(),
-                 owner: owner, paired: true })""",
-            [BACKEND, os.environ["OPENROUTER_API_KEY"], MODEL, VISION_MODEL, OWNER])
-        time.sleep(3)
-
-        for name in want:
-            if name not in SCENARIOS:
-                print(f"  ??   unknown scenario {name}")
-                continue
-            reset_site()
-            print(f"  ..   {name}", flush=True)
-            t0 = time.time()
-            try:
-                ok, note = SCENARIOS[name](ctx)
-            except Exception as e:
-                ok, note = False, f"harness error: {e!r}"
-            secs = int(time.time() - t0)
-            results.append((name, ok, f"{note} [{secs}s]"))
-            print(f"  {'ok  ' if ok else 'FAIL'} {name} — {note} [{secs}s]", flush=True)
+    for name in want:
+        if name not in SCENARIOS:
+            print(f"  ??   unknown scenario {name}")
+            continue
+        reset_site()
+        SCENARIO_JOBS.clear()
+        print(f"  ..   {name}", flush=True)
+        t0 = time.time()
+        try:
+            ok, note = SCENARIOS[name](ctx)
+        except Exception as e:
+            ok, note = False, f"harness error: {e!r}"
+        secs = int(time.time() - t0)
+        results.append((name, ok, f"{note} [{secs}s]"))
+        print(f"  {'ok  ' if ok else 'FAIL'} {name} — {note} [{secs}s]", flush=True)
+        if MODE[0] == "rig":
+            for jid in list(SCENARIO_JOBS):
+                try:
+                    row = rig_row(jid)
+                    traces.setdefault(name, []).append(
+                        {"id": jid, "goal": row.get("goal"), "status": row.get("status"),
+                         "result": row.get("result"), "trace": row.get("trace") or ""})
+                    out = _rig_cancel(jid, "hands battery finished with this scenario")
+                except Exception as e:
+                    out = f"tidy failed: {e!r}"
+                print(f"       tidy  {jid}: {out}", flush=True)
+        else:
             with DB_LOCK:
                 for j in JOBS.values():
                     if j.get("trace"):
@@ -731,15 +1268,91 @@ def main():
                             {"goal": j["goal"], "status": j["status"],
                              "result": j["result"], "trace": j["trace"]})
                 JOBS.clear()
-        ctx.close()
+    return results, traces
 
-    site.shutdown()
-    back.shutdown()
+
+def run_fake(want):
+    assert os.environ.get("OPENROUTER_API_KEY"), "need OPENROUTER_API_KEY"
+    from playwright.sync_api import sync_playwright  # only the fake needs it
+    back = Threaded(("127.0.0.1", BACKEND_PORT), BackendH)
+    threading.Thread(target=back.serve_forever, daemon=True).start()
+    try:
+        with sync_playwright() as p:
+            ctx = p.chromium.launch_persistent_context(
+                f"/tmp/anticipy_hands_{os.getpid()}", headless=False,
+                args=[f"--disable-extensions-except={EXT}", f"--load-extension={EXT}"],
+            )
+            # An MV3 service worker is LAZY: it does not start until the browser
+            # has something to do. Opening a page is what wakes it — waiting on an
+            # empty browser waits forever.
+            ctx.new_page().goto("about:blank")
+            sw = None
+            for _ in range(30):
+                if ctx.service_workers:
+                    sw = ctx.service_workers[0]
+                    break
+                time.sleep(1)
+            assert sw, "extension service worker never started"
+            sw.evaluate(
+                """([base, key, model, vision, owner]) => chrome.storage.local.set({
+                     backendUrl: base, openrouterKey: key, agentModel: model,
+                     visionModel: vision, keyFetchedAt: Date.now(),
+                     owner: owner, paired: true })""",
+                [BACKEND, os.environ["OPENROUTER_API_KEY"], MODEL, VISION_MODEL, OWNER])
+            time.sleep(3)
+            out = run_scenarios(want, ctx)
+            ctx.close()
+    finally:
+        back.shutdown()
+    return out
+
+
+def run_rig(want):
+    rig_preflight()
+    # The battery's owner card, so every scenario but no_identity has a full
+    # name to type — the condition the fake served. Put back whatever the rig
+    # had, whatever happens in between.
+    _rig_set_profile(FULL_PROFILE)
+    try:
+        return run_scenarios(want, None)
+    finally:
+        try:
+            _rig_set_profile(RIG["profile_original"])
+            print(f"\nprofile   {RIG['profile_id']} restored")
+        except Exception as e:
+            print(f"\nprofile   COULD NOT restore {RIG['profile_id']}: {e!r} — "
+                  f"it still carries the battery's card; fix it at {RIG['base']}/_/")
+
+
+def main():
+    want = [a for a in sys.argv[1:] if not a.startswith("-")] or list(SCENARIOS)
+    if _flag("rig") and _flag("fake"):
+        sys.exit("--rig and --fake are exclusive")
+    if _flag("fake"):
+        MODE[0] = "fake"
+    elif _flag("rig"):
+        MODE[0] = "rig"
+    else:
+        st, _, _ = rig("GET", "/api/health")
+        MODE[0] = "rig" if st == 200 else "fake"
+        print(f"mode      {MODE[0]}  ({'the rig answered /api/health' if st == 200 else 'no rig on ' + RIG['base'] + '; --rig to insist'})")
+    site = Threaded(("127.0.0.1", SITE_PORT), SiteH)
+    threading.Thread(target=site.serve_forever, daemon=True).start()
+    print(f"site      {SITE}  (loopback; the arm reaches it because start_url names it)")
+    print(f"model     {MODEL}" + ("  (requested; in rig mode the backend's ANTICIPY_BROWSER_MODEL decides)"
+                                  if MODE[0] == "rig" else ""))
+    print(f"watch     {WATCH_S}s per scenario\n")
+    try:
+        results, traces = run_rig(want) if MODE[0] == "rig" else run_fake(want)
+    finally:
+        site.shutdown()
     out = os.path.join(HERE, "hands_battery_traces.json")
     with open(out, "w") as f:
         json.dump(traces, f, indent=1)
     failed = [r for r in results if not r[1]]
-    print(f"\nhands battery on {MODEL}: {len(results) - len(failed)}/{len(results)}")
+    print(f"\nhands battery ({MODE[0]}) on {MODEL}: {len(results) - len(failed)}/{len(results)}")
+    for name, ok, note in results:
+        print(f"  {'ok  ' if ok else 'FAIL'} {name} — {note}")
     print(f"traces -> {out}")
     sys.exit(1 if failed else 0)
 

@@ -1,10 +1,74 @@
 {
+ "native_date": [
+  {
+   "id": "nmx8o9h4uepey5k",
+   "goal": "Book a Demo Clinic appointment for 2026-08-12 at 2:00 PM",
+   "status": "done",
+   "result": "Booked 2026-08-12 at 2:00 PM. #CLINIC-12",
+   "trace": "=== attempt 1 | engine 0.13.0 ===\nstep 0: {\"action\":\"select\",\"index\":0,\"option\":\"2026-08-12\"} @ http://127.0.0.1:8792/native-date\nstep 0: select 0 \"2026-08-12\" -> refused: this field is readonly \u2014 the site sets it from its own picker widget. Click the field to open the picker, then click the value you want in what appears.\nstep 1: looking at the page as well as reading it \u2014 the last step got nowhere\nstep 1: {\"action\":\"click\",\"index\":0} @ http://127.0.0.1:8792/native-date\nstep 2: {\"action\":\"click\",\"index\":4} @ http://127.0.0.1:8792/native-date\nstep 3: {\"action\":\"select\",\"index\":1,\"option\":\"2:00 PM\"} @ http://127.0.0.1:8792/native-date\nstep 3: select 1 \"2:00 PM\" -> selected \"2:00 PM\"\nstep 4: {\"action\":\"click\",\"index\":3} @ http://127.0.0.1:8792/native-date\nstep 4: PRE-SUBMIT BLOCK \u2014 these approved facts are not set: date. Correct the fields before pressing the final control.\nstep 5: looking at the page as well as reading it \u2014 the last step got nowhere\nstep 5: {\"action\":\"click\",\"index\":2} @ http://127.0.0.1:8792/native-date\nstep 6: {\"action\":\"click\",\"index\":6} @ http://127.0.0.1:8792/native-date\nstep 7: {\"action\":\"done\",\"result\":\"Booked 2026-08-12 at 2:00 PM. #CLINIC-12\"} @ http://127.0.0.1:8792/native-date"
+  }
+ ],
+ "readonly_date": [
+  {
+   "id": "v4p5n8ylzsrfq4f",
+   "goal": "Book a table at Demo Bistro for Tuesday Aug 11 at 1:30 PM for 3 people",
+   "status": "done",
+   "result": "Confirmed: 3 people on Tue Aug 11 at 1:30 PM. Confirmation #DEMO-77.",
+   "trace": "=== attempt 1 | engine 0.13.0 ===\nstep 0: {\"action\":\"click\",\"index\":0} @ http://127.0.0.1:8792/readonly-date\nstep 1: {\"action\":\"click\",\"index\":5} @ http://127.0.0.1:8792/readonly-date\nstep 2: {\"action\":\"select\",\"index\":1,\"option\":\"1:30 PM\"} @ http://127.0.0.1:8792/readonly-date\nstep 2: select 1 \"1:30 PM\" -> selected \"1:30 PM\"\nstep 3: {\"action\":\"select\",\"index\":2,\"option\":\"3 people\"} @ http://127.0.0.1:8792/readonly-date\nstep 3: select 2 \"3 people\" -> selected \"3 people\"\nstep 4: {\"action\":\"click\",\"index\":3} @ http://127.0.0.1:8792/readonly-date\nstep 5: {\"action\":\"done\",\"result\":\"Confirmed: 3 people on Tue Aug 11 at 1:30 PM. Confirmation #DEMO-77.\"} @ http://127.0.0.1:8792/readonly-date"
+  }
+ ],
+ "site_defaults": [
+  {
+   "id": "mibr82ifu2dr4wx",
+   "goal": "Book Demo Bistro for Wednesday Aug 12 at 12:00 PM for 4 people",
+   "status": "done",
+   "result": "Confirmed: 4 people on Wed Aug 12 at 12:00 PM. Confirmation #DEMO-77.",
+   "trace": "=== attempt 1 | engine 0.13.0 ===\nstep 0: {\"action\":\"click\",\"index\":0} @ http://127.0.0.1:8792/readonly-date\nstep 1: {\"action\":\"click\",\"index\":6} @ http://127.0.0.1:8792/readonly-date\nstep 2: {\"action\":\"select\",\"index\":1,\"option\":\"12:00 PM\"} @ http://127.0.0.1:8792/readonly-date\nstep 2: select 1 \"12:00 PM\" -> selected \"12:00 PM\"\nstep 3: {\"action\":\"select\",\"index\":2,\"option\":\"4 people\"} @ http://127.0.0.1:8792/readonly-date\nstep 3: select 2 \"4 people\" -> selected \"4 people\"\nstep 4: {\"action\":\"click\",\"index\":3} @ http://127.0.0.1:8792/readonly-date\nstep 5: {\"action\":\"done\",\"result\":\"Confirmed: 4 people on Wed Aug 12 at 12:00 PM. Confirmation #DEMO-77.\"} @ http://127.0.0.1:8792/readonly-date"
+  }
+ ],
+ "no_identity": [
+  {
+   "id": "gcdszga2dq49hy2",
+   "goal": "Confirm the held reservation at Demo Bistro under my name",
+   "status": "needs_user",
+   "result": "I need your first and last name to finish the reservation.",
+   "trace": "=== attempt 1 | engine 0.13.0 ===\nstep 0: {\"action\":\"needs_user\",\"reason\":\"I need your first and last name to finish the reservation.\"} @ http://127.0.0.1:8792/identity"
+  }
+ ],
  "unnamed_branch": [
   {
-   "goal": "agent_goal",
+   "id": "n89bmsvkjx6mvnm",
+   "goal": "Book a table at Demo Bistro for tomorrow evening for 2",
    "status": "needs_user",
-   "result": "The task is to book a table at \"Demo Bistro\". The current page shows 6 locations for \"Demo Bistro\". The task does not specify which location to choose. Please specify which location you would like to book at.",
-   "trace": "step 0: {\"action\":\"needs_user\",\"reason\":\"The task is to book a table at \\\"Demo Bistro\\\". The current page shows 6 locations for \\\"Demo Bistro\\\". The task does not speci @ http://127.0.0.1:8792/branches"
+   "result": "Which location would you like to book? The options are Winnipeg, Calgary, Toronto, West Vancouver, Vancouver, or Halifax.",
+   "trace": "=== attempt 1 | engine 0.13.0 ===\nstep 0: {\"action\":\"needs_user\",\"reason\":\"Which location would you like to book? The options are Winnipeg, Calgary, Toronto, West Vancouver, Vancouver, or Halifax.\"} @ http://127.0.0.1:8792/branches"
+  }
+ ],
+ "otp_resume": [
+  {
+   "id": "vfuqxsjyl6yrioq",
+   "goal": "Confirm the Demo Bistro reservation for Tue Aug 11, 1:30 PM, 3 people",
+   "status": "done",
+   "result": "Reservation confirmed. Confirmation #DEMO-OTP-55.",
+   "trace": "=== attempt 1 | engine 0.13.0 ===\nstep 0: {\"action\":\"type\",\"index\":0,\"text\":\"Omar Ebrahim\",\"enter\":false} @ http://127.0.0.1:8792/otp\nstep 1: {\"action\":\"click\",\"index\":1} @ http://127.0.0.1:8792/otp\nstep 2: {\"action\":\"needs_user\",\"reason\":\"A 6-digit code just went to your phone to finish this \u2014 will you paste it?\"} @ http://127.0.0.1:8792/otp\n=== attempt 1 | engine 0.13.0 ===\nstep 0: {\"action\":\"type\",\"index\":2,\"text\":\"482913\",\"enter\":false} @ http://127.0.0.1:8792/otp\nstep 1: {\"action\":\"click\",\"index\":3} @ http://127.0.0.1:8792/otp\nstep 2: {\"action\":\"done\",\"result\":\"Reservation confirmed. Confirmation #DEMO-OTP-55.\"} @ http://127.0.0.1:8792/otp"
+  }
+ ],
+ "autocomplete": [
+  {
+   "id": "lsirisggma9i4ke",
+   "goal": "On Demo Travel, set the destination to Vancouver (YVR)",
+   "status": "done",
+   "result": "Destination set to Vancouver (YVR)",
+   "trace": "=== attempt 1 | engine 0.13.0 ===\nstep 0: {\"action\":\"type\",\"index\":0,\"text\":\"Vancouver\",\"enter\":false} @ http://127.0.0.1:8792/autocomplete\nstep 1: {\"action\":\"click\",\"index\":1} @ http://127.0.0.1:8792/autocomplete\nstep 2: {\"action\":\"done\",\"result\":\"Destination set to Vancouver (YVR)\"} @ http://127.0.0.1:8792/autocomplete"
+  }
+ ],
+ "general_form": [
+  {
+   "id": "a42rq2umc2d043r",
+   "goal": "Open an Acme support ticket about billing for order A-7741 saying I was charged twice for the same order",
+   "status": "needs_user",
+   "result": "I am about to submit the ticket with the message: 'I was charged twice for order A-7741.' Is this okay?",
+   "trace": "=== attempt 1 | engine 0.13.0 ===\nstep 0: {\"action\":\"type\",\"index\":0,\"text\":\"omar@anticipy.ai\",\"enter\":false} @ http://127.0.0.1:8792/support\nstep 1: {\"action\":\"select\",\"index\":1,\"option\":\"Billing\"} @ http://127.0.0.1:8792/support\nstep 1: select 1 \"Billing\" -> selected \"Billing\"\nstep 2: {\"action\":\"type\",\"index\":2,\"text\":\"A-7741\",\"enter\":false} @ http://127.0.0.1:8792/support\nstep 3: {\"action\":\"needs_user\",\"reason\":\"I am about to submit the ticket with the message: 'I was charged twice for order A-7741.' Is this okay?\"} @ http://127.0.0.1:8792/support"
   }
  ]
 }
