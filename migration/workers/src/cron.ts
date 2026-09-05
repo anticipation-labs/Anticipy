@@ -21,14 +21,20 @@
  *    live in D1 or a DO. (The sweep as written keeps nothing; verified by
  *    reading internal_hq.pb.js:2139-2636 — every piece of state is a row.)
  *
- * 3. WALL-CLOCK AND SUBREQUEST BUDGET. The sweep sends Twilio messages in a
- *    loop (`sendSMS`, internal_hq.pb.js:2165-2181). Each send is one
- *    subrequest. A tick that has 200 reminders due makes 200 of them.
+ * 3. WALL-CLOCK AND SUBREQUEST BUDGET. The sweep sends texts in a loop
+ *    (`sendSMS`, internal_hq.pb.js:2165-2181). Each send is one subrequest.
+ *    A tick that has 200 reminders due makes 200 of them.
  *    See ARCHITECTURE.md §7 for the limit and the batching this needs.
  */
 import { newRecordId, pbNow } from "./pb/wire.ts";
+import { sendText, type MessagingEnv } from "./messaging.ts";
 
-export interface CronEnv {
+/**
+ * The Twilio names stay required here because index.ts Env extends this and
+ * routes/sms.ts's HMAC reads TWILIO_AUTH_TOKEN; the Sendblue names and the
+ * provider switch arrive through MessagingEnv.
+ */
+export interface CronEnv extends MessagingEnv {
   DB: D1Database;
   TWILIO_ACCOUNT_SID: string;
   TWILIO_AUTH_TOKEN: string;
@@ -656,36 +662,15 @@ async function sendEmail(
 }
 
 /**
- * internal_hq.pb.js:2164-2190, ported. The hand-rolled base64 there
- * (`b64`, :2150-2162) exists because the JSVM has no btoa; Workers do, so it
- * is dropped — that is a deletion of 14 lines, not a behaviour change.
+ * internal_hq.pb.js:2164-2190, ported. The request itself now lives in
+ * src/messaging.ts, which chooses Sendblue or Twilio; what this keeps is the
+ * contract every pass above relies on: `true` only when the provider took the
+ * message, `false` for every other outcome, and never a throw — a throw here
+ * would skip the give-up accounting and leave the claim stamped with nothing
+ * sent. (The hand-rolled base64 in the source, `b64` :2150-2162, existed
+ * because the JSVM has no btoa; Workers do.)
  */
 async function sendSMS(env: CronEnv, to: string, text: string): Promise<boolean> {
-  const sid = env.TWILIO_ACCOUNT_SID;
-  const auth = env.TWILIO_AUTH_TOKEN;
-  // TWILIO_PHONE_NUMBER *or* TWILIO_FROM, as the source has it
-  // (internal_hq.pb.js:2167). Reading only the first means a deployment that
-  // sets the second sends nothing at all and reports no error -- the same
-  // silent-no-op shape this file was just rescued from.
-  const from = env.TWILIO_PHONE_NUMBER || env.TWILIO_FROM || "";
-  if (!sid || !auth || !from || !to) return false;
-  try {
-    const res = await fetch(
-      `https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: "Basic " + btoa(`${sid}:${auth}`),
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
-        body: new URLSearchParams({ From: from, To: to, Body: text }),
-        // CHANGE 2 — the original passes `timeout: 15`. fetch() has no timeout
-        // option; AbortSignal.timeout is the equivalent and MUST be supplied,
-        // or a hung Twilio connection holds the whole tick open.
-        signal: AbortSignal.timeout(15_000),
-      });
-    return res.ok;
-  } catch {
-    return false;
-  }
+  if (!to) return false;
+  return (await sendText(env, to, text, { tag: "internal_hq" })).ok;
 }

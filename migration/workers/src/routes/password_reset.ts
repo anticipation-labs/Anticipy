@@ -15,6 +15,7 @@
  * The contract suite compares whole bodies for exactly that reason.
  */
 import bcrypt from "bcryptjs";
+import { sendText, type MessagingEnv } from "../messaging.ts";
 
 const SAME =
   "If that account exists and has a phone number, a code is on its way by text.";
@@ -26,15 +27,9 @@ const MAX_PER_HOUR = 5;
 const MAX_ATTEMPTS = 5;         // guesses per code
 const MIN_PASSWORD = 8;
 
-export interface ResetEnv {
+/** The provider names (SENDBLUE_*, TWILIO_*, ANTICIPY_SMS_PROVIDER) come from MessagingEnv. */
+export interface ResetEnv extends MessagingEnv {
   DB: D1Database;
-  TWILIO_ACCOUNT_SID?: string;
-  TWILIO_PHONE_NUMBER?: string;
-  TWILIO_FROM?: string;
-  TWILIO_API_KEY_SID?: string;
-  TWILIO_API_KEY_SECRET?: string;
-  TWILIO_AUTH_TOKEN?: string;
-  TWILIO_API_BASE?: string;
 }
 
 const json = (status: number, body: unknown) =>
@@ -98,33 +93,18 @@ async function phoneFor(db: D1Database, ownerId: string, ownerPhone: string) {
   return String(ownerPhone ?? "").trim();
 }
 
+/**
+ * The code leaves through src/messaging.ts (Sendblue, else Twilio). `true`
+ * only when the provider took it: a code the owner never receives must not
+ * be left live in the table, and resetRequest below relies on exactly that.
+ * sendText never throws, so a hung or refused provider is a `false` here and
+ * the same 200 to the caller — an exception would have been a 500, and a 500
+ * only for addresses that exist is the tell this route must never give.
+ */
 async function sendCode(env: ResetEnv, to: string, code: string): Promise<boolean> {
-  const sid = env.TWILIO_ACCOUNT_SID;
-  const from = env.TWILIO_PHONE_NUMBER || env.TWILIO_FROM;
-  // Same preference as brain/voice_arm.py: a scoped, revocable API key over the
-  // full-access auth token. Both key names or neither -- one alone falls back.
-  const keySid = env.TWILIO_API_KEY_SID;
-  const keySecret = env.TWILIO_API_KEY_SECRET;
-  const user = keySid && keySecret ? keySid : sid;
-  const secret = keySid && keySecret ? keySecret : env.TWILIO_AUTH_TOKEN;
-  if (!sid || !from || !user || !secret) {
-    console.log("password reset: Twilio is not configured — no code sent");
-    return false;
-  }
-  const base = env.TWILIO_API_BASE || "https://api.twilio.com";
-  const res = await fetch(`${base}/2010-04-01/Accounts/${sid}/Messages.json`, {
-    method: "POST",
-    headers: {
-      Authorization: "Basic " + btoa(`${user}:${secret}`),
-      "content-type": "application/x-www-form-urlencoded",
-    },
-    body: new URLSearchParams({
-      To: to, From: from,
-      Body: `Your Anticipy code is ${code}. It expires in 10 minutes.`,
-    }),
-  });
-  if (!res.ok) console.log("password reset: Twilio refused the send:", res.status);
-  return res.ok;
+  const r = await sendText(env, to,
+    `Your Anticipy code is ${code}. It expires in 10 minutes.`, { tag: "password reset" });
+  return r.ok;
 }
 
 export async function resetRequest(req: Request, env: ResetEnv): Promise<Response> {
