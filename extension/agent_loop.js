@@ -35,6 +35,58 @@ const BACKEND_LLM = "backend-proxy";
 // second copy costs: an independent literal meant a dev override applied to job
 // polling and not to the model proxy, and the extension claimed from a local rig
 // while sending its reasoning to production.
+// ---------------------------------------------------- transient-failure retry
+// A 503 USED TO END THE ERRAND.
+//
+// Fifteen call sites reach the model through this one function and none of
+// them retried anything. On the step call — the one that decides every
+// action — a transport blip surfaced as `throw new Error("model unavailable
+// (503)")`, which propagates out of runAgentGoal and fails the whole job:
+// the tab is abandoned mid-form and the owner is told the browser could not
+// do it. brain/llm.py had the identical hole, fixed 2026-09-04, and this is
+// the same shape ported: retry ONLY what is worth retrying, bounded, jittered,
+// and inside the caller's own deadline.
+//
+// WHAT IS NOT RETRIED is the whole design. 400/401/403/404 mean the request
+// is wrong or the key is; llmStep already refreshes the key on 401/403 and
+// must see the real status to do it. And the backend proxy's OWN 429 is a
+// wallet ceiling, not a transient: /agent/llm answers 429 with "too many
+// model calls in the last hour" when a browser passes 400 calls, and it
+// resumes at the top of the hour. Retrying that spends three more calls
+// against a limit that has already tripped — the 402 mistake brain/llm.py's
+// fix names — so a 429 whose body says so is passed through untouched.
+// A bare 429 from OpenRouter, with no such body, is the provider saying slow
+// down, and that one is retried.
+//
+// The caller's AbortSignal is checked between attempts: a retry must never
+// outlive the deadline the caller set, or withTimeout's rejection races a
+// fetch nobody is waiting for.
+export const MODEL_RETRY_STATUS = new Set([429, 500, 502, 503, 504]);
+export const MODEL_RETRY_ATTEMPTS = 3;          // the first try plus two retries          // the first try plus two retries
+const MODEL_RETRY_BASE_MS = 500;
+const CEILING_429_MARK = "too many model calls in the last hour";
+
+function retryDelayMs(attempt) {
+  return MODEL_RETRY_BASE_MS * (2 ** attempt) * (0.75 + Math.random() * 0.5);
+}
+
+// Can this 429 be retried, or is it the hourly ceiling? Reads the body once
+// and hands back a response whose .text()/.json() still work, because the
+// original body stream is consumed by the check.
+async function retryableFailure(r) {
+  if (!r || !MODEL_RETRY_STATUS.has(Number(r.status))) return { retry: false, r };
+  if (Number(r.status) !== 429) return { retry: true, r };
+  let body = "";
+  try { body = await r.text(); } catch (_) { body = ""; }
+  const ceiling = body.includes(CEILING_429_MARK);
+  const replay = {
+    ok: false, status: r.status, headers: r.headers,
+    text: async () => body,
+    json: async () => { try { return JSON.parse(body); } catch (_) { return {}; } },
+  };
+  return { retry: !ceiling, r: replay };
+}
+
 export async function modelFetch(apiKey, payload, signal = undefined) {
   // Every browser response is a tiny JSON decision.  Without an explicit
   // cap, OpenRouter prices/checks the request against the model's full
@@ -47,23 +99,41 @@ export async function modelFetch(apiKey, payload, signal = undefined) {
     max_tokens: Math.min(4096, Math.max(64,
       Number.isFinite(requested) ? Math.floor(requested) : 512)),
   };
+  let url, headers;
   if (apiKey !== BACKEND_LLM) {
-    return fetch(OPENROUTER_URL, {
-      signal, method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json",
-                 "HTTP-Referer": "https://anticipy.ai", "X-Title": "Anticipy" },
-      body: JSON.stringify(boundedPayload),
-    });
+    url = OPENROUTER_URL;
+    headers = { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json",
+                "HTTP-Referer": "https://anticipy.ai", "X-Title": "Anticipy" };
+  } else {
+    const { agentId, agentToken } = await chrome.storage.local.get(["agentId", "agentToken"]);
+    if (!agentId || !agentToken) throw new Error("paired agent credentials are missing");
+    url = `${await backendBase()}/agent/llm`;
+    headers = { "Content-Type": "application/json", "X-Anticipy-Agent-ID": agentId,
+                "X-Anticipy-Agent-Token": agentToken };
   }
-  const { agentId, agentToken } = await chrome.storage.local.get(["agentId", "agentToken"]);
-  if (!agentId || !agentToken) throw new Error("paired agent credentials are missing");
-  const base = await backendBase();
-  return fetch(`${base}/agent/llm`, {
-    signal, method: "POST",
-    headers: { "Content-Type": "application/json", "X-Anticipy-Agent-ID": agentId,
-               "X-Anticipy-Agent-Token": agentToken },
-    body: JSON.stringify(boundedPayload),
-  });
+  const body = JSON.stringify(boundedPayload);
+  let last;
+  for (let attempt = 0; attempt < MODEL_RETRY_ATTEMPTS; attempt++) {
+    if (signal && signal.aborted) throw last || new Error("model call aborted");
+    let r;
+    try {
+      r = await fetch(url, { signal, method: "POST", headers, body });
+    } catch (err) {
+      // A transport error — connection refused, DNS, reset. Not an abort: an
+      // abort is the caller's deadline and is never retried.
+      if (signal && signal.aborted) throw err;
+      last = err;
+      if (attempt + 1 >= MODEL_RETRY_ATTEMPTS) throw err;
+      console.log(`model: ${err && err.name || "fetch error"}, retry ${attempt + 1}/${MODEL_RETRY_ATTEMPTS - 1}`);
+      await new Promise((res) => setTimeout(res, retryDelayMs(attempt)));
+      continue;
+    }
+    const verdict = await retryableFailure(r);
+    if (!verdict.retry || attempt + 1 >= MODEL_RETRY_ATTEMPTS) return verdict.r;
+    console.log(`model: provider returned ${r.status}, retry ${attempt + 1}/${MODEL_RETRY_ATTEMPTS - 1}`);
+    await new Promise((res) => setTimeout(res, retryDelayMs(attempt)));
+  }
+  throw last || new Error("model call exhausted its retries");
 }
 
 // Grounded per-run: a model with no clock hallucinated "this coming Sunday,
