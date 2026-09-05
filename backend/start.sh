@@ -30,6 +30,30 @@ if [ -d "$BACKUPS_DIR" ]; then
   echo "boot: kept newest backup, freed older snapshots"
 fi
 echo "boot: /pb_data free after backup trim $(df -Pk /pb_data | awk 'NR==2 {print $4}')KB"
+# 2026-09-05: after a deploy the `agents` collection answered every read with
+# "database disk image is malformed (11)" and NOTHING on the host could say how
+# far the rot went — the image had no sqlite3, the logs had no integrity line,
+# and the last successful agent row was dated 2026-08-14, the day before the
+# full-disk incident above. Ask SQLite itself, every boot, before PocketBase
+# opens the file. Read-only: integrity_check writes nothing, the forced table
+# scan proves whether the ROWS are still readable when the index is not, and
+# index_list names what a REINDEX would rebuild. This is the sense that was
+# missing; a repair is a separate, deliberate act and does not live here.
+if [ -f /pb_data/data.db ] && command -v sqlite3 >/dev/null 2>&1; then
+  echo "boot: integrity_check begins $(date -u +%H:%M:%SZ)"
+  sqlite3 /pb_data/data.db 'PRAGMA integrity_check;' 2>&1 | head -40 | sed 's/^/boot: integrity /'
+  sqlite3 /pb_data/data.db "SELECT 'agents rows by table scan: ' || count(*) FROM agents NOT INDEXED;" 2>&1 | sed 's/^/boot: integrity /'
+  sqlite3 /pb_data/data.db "SELECT 'agents index: ' || name FROM pragma_index_list('agents');" 2>&1 | sed 's/^/boot: integrity /'
+  echo "boot: integrity_check ends $(date -u +%H:%M:%SZ)"
+fi
+# The repair is a hand-thrown switch, never automatic: set
+# ANTICIPY_REPAIR_DATA_DB=<tag> on the service and this boot rebuilds data.db
+# from what SQLite can still read, keeping the original beside it, once per
+# tag. repair_data_db.sh explains itself; tests/test_repair_data_db.py proves it.
+if [ -n "${ANTICIPY_REPAIR_DATA_DB:-}" ] && [ -f /app/repair_data_db.sh ]; then
+  sh /app/repair_data_db.sh /pb_data "$ANTICIPY_REPAIR_DATA_DB" 2>&1 | sed 's/^/boot: /'
+  echo "boot: integrity after repair: $(sqlite3 /pb_data/data.db 'PRAGMA integrity_check;' 2>&1 | head -3 | tr '\n' ' ')"
+fi
 exec ./pocketbase serve --http 0.0.0.0:${PORT:-8090} --dir /pb_data \
   --migrationsDir /app/pb_migrations --publicDir /app/pb_public --hooksDir /app/pb_hooks \
   --encryptionEnv=PB_SETTINGS_ENCRYPTION_KEY
