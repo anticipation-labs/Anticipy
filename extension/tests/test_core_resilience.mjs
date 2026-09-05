@@ -30,11 +30,16 @@ import {
 assert.equal(normalizedResult({ named: { fee: "$350" }, numbered: { fee: "$350" } }),
   '{"named":{"fee":"$350"},"numbered":{"fee":"$350"}}');
 assert.equal(normalizedResult("  finished  "), "finished");
-assert.equal(completionShapeGap("Find three active listings.", JSON.stringify([{ id: 1 }])),
-  "the goal requests 3 records but the result contains 1");
+// AUDIT #74 (2026-09-05): how many records the goal asks for, and how many the
+// result delivers, is the auditor's question and is no longer read here. Until
+// then the first of these returned "the goal requests 3 records but the result
+// contains 1", and prose passed only when it happened to be numbered. The
+// behavioural pins — the auditor is asked, in both directions, and the run
+// finishes — are test_record_count_is_not_a_regex_match.mjs.
+assert.equal(completionShapeGap("Find three active listings.", JSON.stringify([{ id: 1 }])), "");
 assert.equal(completionShapeGap("Find three active listings.", JSON.stringify([{ id: 1 }, { id: 2 }, { id: 3 }])), "");
-assert.equal(completionShapeGap("Find three active listings.", "OPTION 1: A\nOPTION 2: B\nOPTION 3: C"), "");
-assert.equal(completionShapeGap("Find three active listings.", "Option 1: A. Option 2: B. Option 3: C."), "");
+assert.equal(completionShapeGap("Find three active listings.",
+  "1848 E 3rd Ave rents for $2,150, 2211 Grant St for $2,300 and 1020 Victoria Dr for $1,975."), "");
 assert.match(completionShapeGap(
   "Compare plans for Alpha, Beta, and Gamma. Provide direct URLs.",
   "Alpha https://alpha.test Beta https://beta.test Gamma"), /3 direct URLs.*2/);
@@ -343,7 +348,9 @@ assert.match(loopSource, /words in a guessed URL are not proof/);
 assert.match(loopSource, /response_format:\s*\{\s*type:\s*"json_object"\s*\}/);
 assert.doesNotMatch(loopSource, /doneRejections\.clear\(\);\s*totalDoneRejections = 0/);
 assert.match(loopSource, /RESEARCH after rejected completion/);
-assert.match(loopSource, /coverage > bestCompletionCoverage/);
+// The names survive in the WHAT-WAS-HERE record; what must stay gone is the code.
+assert.doesNotMatch(loopSource, /let bestCompletionCoverage|completionCoverageScore\(/,
+  "audit #74: the coverage score was written on every done claim and read nowhere; dead state stays gone");
 assert.match(loopSource, /DOM scrolled \$\{scrolled\.target\}/);
 assert.doesNotMatch(loopSource, /type: "mouseWheel", x: 400, y: 300/);
 assert.match(loopSource, /targetKind\?\.tag/);
