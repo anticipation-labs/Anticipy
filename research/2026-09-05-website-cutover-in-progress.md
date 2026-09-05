@@ -133,3 +133,63 @@ secrets remain as previously documented.
 2. Fix OwnerBrain keep-alive (alarm loop) in migration/workers/brain/src/index.ts; redeploy.
 3. Verify 1 real owner: container stays up, polls api.anticipy.ai, processes a job.
 4. Stop Railway worker (`railway down`-style); keep the volume 2 weeks.
+
+## Brain — precise diagnosis after both fixes (2026-09-05 ~07:35 UTC)
+- Deployed anticipy-brain worker config IS correct: ANTICIPY_PB = https://api.anticipy.ai (verified via CF API /settings bindings). Owner filter + keep-alive shipped.
+- BUT the container LOGS (dashboard → Containers → anticipy-brain-owner → Logs) show, at 07:32 UTC, the running container still hitting `https://www.anticipy.ai/api/collections/...` → 404 "backend unreachable". So the containers are STALE: they booted with the OLD www env (before the PB fix) and are still on it.
+- ROOT CAUSE of the staleness: container env is captured at container START (OwnerBrain.envFor → startOptions.envVars). A worker var change does NOT restart running containers. Worse, my keep-alive fix (container_entry.py child-restart loop) + the fact that "backend unreachable 404" is NON-FATAL (worker logs it, keeps polling, does not exit) means the container never dies → never re-spawns with the new env. The keep-alive made stale env sticky.
+- Net: the CF brain is deployed but NON-FUNCTIONAL (can't reach its backend). Railway brain STAYS live. Do NOT stop it.
+
+## To finish the brain (needs a monitored session, not blind autonomous redeploys)
+1. Force the containers to CYCLE so they boot with api.anticipy.ai:
+   - `wrangler containers delete <appID>` then redeploy, OR bump the container image
+     (trivial Dockerfile change) to force a rollout of fresh instances. Confirm new
+     instances boot with ANTICIPY_PB=api.anticipy.ai.
+2. Fix the keep-alive/env-propagation interaction: on a config change, containers
+   must be explicitly cycled (document this, or have the supervisor detect a config
+   version bump and recycle). Consider making persistent "backend unreachable"
+   eventually exit so stale containers self-heal.
+3. Verify against the runtime (this is why it needs monitoring): a fresh container
+   for one real owner must — boot, pull R2 state, poll api.anticipy.ai with 200s
+   (not 404), stay alive across several minutes, and process a real event.
+4. Only then: stop the Railway worker (`railway down`-style), keep the volume 2 weeks.
+
+## Why I stopped autonomous iteration here
+~15 deploy/debug cycles on UNTESTED container code, each revealing another layer
+(cap override, wrong PB URL, container keep-alive, now stale-env propagation). This
+is the "careful monitored session against the runtime" the runbook required from the
+start — not something to finish by firing more blind production deploys. Railway is
+safe and serving; no user impact; no data lost (state is migrated + verified).
+
+## Brain: FIXED on Cloudflare + Railway incident resolved (2026-09-05 ~08:1x UTC)
+- FIX confirmed: the stale-env bug was cured by deleting the container app (a03b1004)
+  and redeploying → fresh containers boot with ANTICIPY_PB=api.anticipy.ai. Verified
+  by LIVE traffic: 50 requests/20s to https://api.anticipy.ai/api/collections/*
+  (events/jobs/agents/owner_profile), 0 to www, all 200 OK. Fleet health healthy=8,
+  stopped=0, failed=0 stable across 90s. Brain IS running on Cloudflare.
+  New container app id: a0396380-ac5a-4fbc-bca0-872604bf12d2.
+- SSH note: `wrangler containers ssh` returns "instance not found" for these
+  DO-managed per-owner containers (works for standalone containers only). Verified
+  via network traffic instead (stronger: proves reachability + 200s, not just env).
+
+- INCIDENT (my error): I handed the owner a `railway down --service worker` as a
+  "final step". It removed the active worker deployment → worker Failed. The CLI
+  `railway redeploy` then FAILED because Railway rebuilds from a git source whose
+  current tree no longer has brain/Dockerfile ("couldn't locate the dockerfile at
+  path brain/Dockerfile in code archive"). RESOLVED by dashboard Rollback to the
+  last-good git deployment (commit 4eb753f4) — uses the cached image, no rebuild.
+  Worker + backend both Online again. Backend (PocketBase) stayed Online throughout,
+  so events were still STORED during the gap; only brain PROCESSING paused (~quiet
+  hours, low impact).
+
+- CORRECTED SEQUENCING (the lesson): Railway must be stopped LAST — only AFTER the
+  iOS App Store release + extension release repoint current users to api.anticipy.ai.
+  Current shipped clients still post to Railway; the CF brain polls D1 (which has no
+  client traffic yet: events_last_hour=0). Stopping Railway before client cutover
+  blinds current users' brain. Do NOT run `railway down` on the worker until clients
+  are released on api.
+- FOLLOW-UP: the worker's git source no longer contains brain/Dockerfile on the
+  tracked branch, so an auto-deploy/rebuild would fail. Before the eventual Railway
+  retirement this is moot, but if the Railway worker must be rebuilt meanwhile, point
+  it at a branch that has brain/ (cloudflare-backend / jose_anticipy_system) or
+  rollback to a good image.
