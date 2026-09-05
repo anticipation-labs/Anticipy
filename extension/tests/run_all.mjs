@@ -73,7 +73,7 @@ const suites = [
   "test_vision_cost.mjs",
   "test_walled_source.mjs",
   "test_carried_values.mjs",
-  "test_login_wall.mjs",
+  "test_wall_is_not_a_word_match.mjs",
   "test_recipes.mjs",
   "test_claim_evidence.mjs",
   "test_agent_integration.mjs",

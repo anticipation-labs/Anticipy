@@ -185,6 +185,18 @@ const NAMED = [
 // bug for a dead end on a large share of all errands, which is the trade this
 // whole exercise exists to avoid making. Stated here so the omission reads as
 // a decision rather than an oversight.
+//
+// WHAT "OWNS THAT MOMENT" RESTS ON, since 2026-09-05 (Audit #70): login_wall's
+// verdict is ONE model question, and it is a CEILING — only an explicit WALL
+// parks the run. A no-verdict (a timeout, a 500, prose) lets the step model
+// carry on, and because these hosts are ungated and "continue" is a
+// reversible control, that step model can click "Continue with Google" and
+// the account-chooser tile behind it with no seatbelt in this file, in
+// protectedInput, or in the stall catching it. The mitigation is that the
+// wall judge and the step model share one transport (/agent/llm via
+// modelFetch): a judge that cannot answer is a step model that cannot act.
+// A which-host seatbelt on the OAuth click — legal under Law 1, it checks
+// what a plan TOUCHES — is a separate item and has not been built.
 
 function hostOf(url) {
   try {

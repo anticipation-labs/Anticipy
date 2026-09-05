@@ -42,7 +42,11 @@ function fresh() {
 
 // One scripted model. Records every prompt so the assertions can count calls —
 // the whole point of a recipe is that the call does not happen.
-function scripted(actions, { onPrompt } = {}) {
+// `wall` is what the wall judge answers (Audit #70: the wall is one model
+// question now, asked when a page carries a sensitive-marked control or has
+// not moved for two steps). NONE by default, so a static fixture read three
+// times is not mistaken for a wall; section 1 sets PASSWORD.
+function scripted(actions, { onPrompt, wall = "NONE" } = {}) {
   const a = [...actions];
   const seen = [];
   globalThis.fetch = async (url, opts = {}) => {
@@ -60,6 +64,7 @@ function scripted(actions, { onPrompt } = {}) {
     else if (/You audit a browser agent's claim/.test(joined)) kind = "verify";
     else if (/pre-submit form auditor/.test(joined)) kind = "form-audit";
     else if (/would following the remembered procedure/.test(joined)) kind = "recall";
+    else if (/ONE question about the page's PURPOSE/.test(joined)) kind = "wall";
     seen.push({ kind, user: all[all.length - 1], hasImage: /\[image\]/.test(joined) });
     if (onPrompt) onPrompt(kind, all[all.length - 1]);
     let content;
@@ -69,6 +74,8 @@ function scripted(actions, { onPrompt } = {}) {
       content = JSON.stringify({ verified: true, evidence: ["happy hour 3-6pm"] });
     } else if (kind === "recall") {
       content = "YES";
+    } else if (kind === "wall") {
+      content = wall;
     } else {
       content = JSON.stringify(a.shift() || { action: "wait" });
     }
@@ -96,6 +103,7 @@ function reactive(answer) {
     else if (/You audit a browser agent's claim/.test(joined)) kind = "verify";
     else if (/pre-submit form auditor/.test(joined)) kind = "form-audit";
     else if (/would following the remembered procedure/.test(joined)) kind = "recall";
+    else if (/ONE question about the page's PURPOSE/.test(joined)) kind = "wall";
     const prompt = all[all.length - 1];
     seen.push({ kind, user: prompt, hasImage: /\[image\]/.test(joined) });
     let content;
@@ -105,6 +113,8 @@ function reactive(answer) {
       content = JSON.stringify({ verified: true, evidence: ["happy hour 3-6pm"] });
     } else if (kind === "recall") {
       content = "YES";
+    } else if (kind === "wall") {
+      content = "NONE";
     } else {
       content = JSON.stringify(answer(prompt));
     }
@@ -136,7 +146,8 @@ const plainPage = (tabId) => ({
     text: "Sign in to your account to continue.",
     fields: [{ index: 0, label: "Email", value: "" }],
   });
-  const seen = scripted([{ action: "done", result: "should never get here" }]);
+  // The wall is one model question now (Audit #70); here it answers PASSWORD.
+  const seen = scripted([{ action: "done", result: "should never get here" }], { wall: "PASSWORD" });
   const out = await runAgentGoal("download my latest BC Hydro bill", {
     apiKey: "test-key", scope: "get my latest hydro bill", authorized: true,
     ownerProfile: { first_name: "Jose", email: "jose@example.test" },
