@@ -285,7 +285,14 @@ export const workflowGuard: Policy = async (ctx: Ctx): Promise<Response | null> 
   if (!workflow) return null;
 
   const oldStatus = String(old?.status ?? "");
-  const nextStatus = String(body.status ?? oldStatus ?? "");
+  // `||`, NOT `??`, and the difference is a refusal. workflow_guard.pb.js:28 is
+  // `String(body.status || oldStatus || "")`: an EXPLICIT EMPTY STRING falls
+  // back to the stored row on the oracle, and `??` takes it literally. A PATCH
+  // carrying `status: ""` was therefore judged against the empty status here
+  // and against the row's status there — `status  disagrees with state queued`
+  // on one backend, admitted on the other. WHAT WAS HERE UNTIL 2026-09-05:
+  // `String(body.status ?? oldStatus ?? "")`. F13/F15/F27/F39/F42 audit, F42.
+  const nextStatus = String(body.status || oldStatus || "");
   const oldVersion = Number(old?.workflow_version ?? 0);
   const nextVersion = Number(body.workflow_version ?? oldVersion);
   const oldState = String(old?.workflow_state ?? "");
@@ -357,8 +364,13 @@ export const workflowGuard: Policy = async (ctx: Ctx): Promise<Response | null> 
   if (!STATE_FOR_STATUS[nextStatus] || !STATE_FOR_STATUS[nextStatus].includes(nextState)) {
     return reject(`status ${nextStatus} disagrees with state ${nextState}`);
   }
+  // Same `||`-not-`??` rule as nextStatus above; the oracle is
+  // workflow_guard.pb.js:113 `body.lineage_key || old.getString("lineage_key")`.
+  // WHAT WAS HERE UNTIL 2026-09-05: `body.lineage_key ?? old?.lineage_key ?? ""`,
+  // which read an explicit "" as "this row has no lineage" and refused a job
+  // whose stored lineage was intact.
   if (!workflow || nextVersion < 1
-      || !String(body.lineage_key ?? old?.lineage_key ?? "")) {
+      || !String(body.lineage_key || old?.lineage_key || "")) {
     return reject("workflow id, version, and lineage are required");
   }
   if (!String(body.owner_ref ?? old?.owner_ref ?? "")) {
@@ -448,7 +460,16 @@ export const workflowGuard: Policy = async (ctx: Ctx): Promise<Response | null> 
   const approvalRefusal = (): string => {
     let approval: Record<string, unknown>;
     try {
-      approval = JSON.parse(String(rowValue("approval", "") ?? "")) as Record<string, unknown>;
+      // `body.approval || old.approval`, the oracle's own expression
+      // (workflow_guard.pb.js:541). WHAT WAS HERE UNTIL 2026-09-05:
+      // `rowValue("approval", "") ?? ""`, whose `!= null` test hands back an
+      // explicit "" — JSON.parse("") throws, so a write that re-sent an empty
+      // approval string was refused as unparseable while the stored approval
+      // sat right there. NOTE the redundancy check at :318 keeps rowValue on
+      // purpose: the oracle (:63) uses the `!= null` form on BOTH sides there,
+      // so "" and absent are one thing to it, and changing that half would be
+      // the redesign this file's header forbids.
+      approval = JSON.parse(String(body.approval || old?.approval || "")) as Record<string, unknown>;
     } catch { return "consequential work needs parseable approval"; }
     const scope = String(rowValue("scope_digest", "") ?? "");
     const words = String(approval.owner_words ?? "").trim();

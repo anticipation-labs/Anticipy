@@ -1322,6 +1322,58 @@ class TestWorkflowGuard(object):
             "done needs a parseable receipt",
             "done needs verified evidence for this exact effect"), repr(resp)
 
+    # ----------------------------------------------------------------------
+    # §1.9 — AN EXPLICIT "" IS NOT AN ABSENT FIELD, AND THE ORACLE SAYS SO
+    # WITH `||`.  workflow_guard.pb.js:28, :113, :541 all fall back to the
+    # stored row when the body carries an empty string; the Worker used `??`,
+    # which stops at "" and judges the job against a status, lineage or
+    # approval that is sitting right there in the row it read (audit F42).
+    #
+    # DESTRUCTIVE because the leg needs a STORED row to fall back TO: the
+    # divergence is invisible on a create, where neither backend has an old
+    # row to consult.  The row is created under the OWNER_UNDER_TEST sentinel
+    # and deleted in the same test.  On PocketBase the create is refused by
+    # its relation check (the sentinel is not a real owner), so this skips
+    # there and runs on the backend that can store it.
+    # ----------------------------------------------------------------------
+
+    @pytest.mark.destructive
+    @pytest.mark.needs_service_token
+    def test_a_blank_field_falls_back_to_the_stored_row(
+            self, service_token, guard_on):
+        row = workflow_job(status="queued", state="queued",
+                           consequence="read_only")
+        plan = json.loads(row["params"])["_workflow"]
+        created = call("POST", "/api/collections/jobs/records",
+                       headers=svc(), json_body=row)
+        if created.status != 200 or not (created.json or {}).get("id"):
+            pytest.skip("this backend did not store the probe row (%s); the "
+                        "fallback leg needs an old row to fall back to"
+                        % created.status)
+        job = created.json["id"]
+        try:
+            for field in ("status", "lineage_key"):
+                body = {field: "", "params": row["params"]}
+                if field == "lineage_key":
+                    # rowValue's `!= null` reading of the embedded copy is the
+                    # same on BOTH backends, so a blank in the body forces a
+                    # blank in the mirror or the redundancy check fires first
+                    # and this test would pin the wrong rule.
+                    body["params"] = json.dumps(
+                        {"_workflow": dict(plan, lineage_key="")})
+                resp = call("PATCH", "/api/collections/jobs/records/" + job,
+                            headers=svc(), json_body=body)
+                assert guard_admitted(resp) and resp.status == 200, (
+                    "§1.9: a blank %s must fall back to the stored row, not be "
+                    "read as 'this row has no %s'. Got %r" % (field, field, resp))
+            still = call("GET", "/api/collections/jobs/records/" + job,
+                         headers=svc())
+            assert (still.json or {}).get("status") == "queued", (
+                "§1.9: the blank status must leave the stored status alone. "
+                "Got %r" % still)
+        finally:
+            call("DELETE", "/api/collections/jobs/records/" + job, headers=svc())
+
 
 # ==========================================================================
 # §2  guard.pb.js — the production lock on the data API
