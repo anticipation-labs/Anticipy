@@ -437,7 +437,11 @@ function regexLiterals(text) {
       && /export function unsupportedScopeFields\(scope, currentState, ownerProfile = null, facts = "", kinds = null, boxes = null\)/.test(code)
       && /async function auditFormAlignment\(apiKey, model, goal, scope, state, kinds = null\)/.test(code)
       && /async function clearUnsupportedOptionalFields\(tabId, unsupportedNames, currentState\)/.test(code)
-      && (code.match(/unsupportedScopeVerdict\(\s*scope \|\| goal, \w+State, ownerProfile, facts, kinds, boxes, temporalJudge, temporalMemo\)/g) || []).length === 4
+      // 2026-09-05 (F10): the same four sites, now also carrying the name-part
+      // judge and its run memo. The pin counts sites, not argument lists, so it
+      // is widened rather than softened — a site that forgot either judge still
+      // fails it.
+      && (code.match(/unsupportedScopeVerdict\(\s*scope \|\| goal, \w+State, ownerProfile, facts, kinds, boxes, temporalJudge, temporalMemo, FORM_AUDIT_TIMEOUT_MS, names\)/g) || []).length === 4
       && /fieldKinds = null \} = \{\}\) \{/.test(code));
   check("both submit sites compute the kinds once, before the alignment audit",
     (code.match(/const kinds = await fieldKindsFor\(apiKey, model,/g) || []).length === 2
