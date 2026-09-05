@@ -55,15 +55,33 @@ jobs:
           npm i -g wrangler@4 >/dev/null 2>&1
           wrangler --version
 
-      - name: Pre-flight — confirm owner state is in R2 (container aborts without it)
+      - name: Pre-flight — every owner this deploy will serve has state in R2 (the container aborts without it)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           set -euo pipefail
-          # count objects under owners/ ; must be >= number of owners in D1
-          n=$(wrangler r2 object get anticipy-owner-state/owners --remote 2>/dev/null | wc -l || true)
-          echo "Reminder: brain-state-to-r2.yml must have run and verified first."
-          echo "The container's container_entry.py aborts the boot loudly on any"
-          echo "non-404 R2 GET, and starts empty only on a genuine 404 (new owner)."
-
+          # Audit F46 (2026-09-05): this step used to `wc -l` a single object
+          # that does not exist and passed on 0. The container refuses to boot
+          # for an owner whose memory.db is not in R2 (brain/container_entry.py),
+          # so the check is per owner: everyone the allowlist names must have
+          # owners/<id>/memory.db, or this deploy is refused here, not in a
+          # crash loop. Discovery-served owners are checked when the cap allows any.
+          allow=$(grep -oE '"ANTICIPY_SERVE_OWNERS": *"[^"]*"' migration/config/wrangler.brain.jsonc | sed -E 's/.*: *"([^"]*)"/\1/' | tr ',' ' ')
+          cap='${{ github.event.inputs.cap }}'
+          missing=0; checked=0
+          for ref in $allow; do
+            ref=$(echo "$ref" | tr -d ' '); [ -n "$ref" ] || continue
+            checked=$((checked+1))
+            if wrangler r2 object get "anticipy-owner-state/owners/$ref/memory.db" --remote --pipe >/dev/null 2>&1; then
+              echo "owner $ref: memory.db present in R2"
+            else
+              echo "owner $ref: NO memory.db in R2 — the container would abort at boot"; missing=$((missing+1))
+            fi
+          done
+          echo "allowlist owners checked: $checked, missing: $missing, cap: $cap"
+          if [ "$missing" -gt 0 ]; then echo "REFUSING: run brain-state-to-r2.yml for the missing owner(s) first"; exit 1; fi
+          if [ "$cap" != "0" ]; then echo "cap $cap > 0: discovery-served owners are NOT pre-checked here; research/2026-09-05-brain-of-record.md says the allowlist, not the cap, chooses who moves"; fi
       - name: Deploy brain (remote container build — no local Docker)
         run: |
           set -euo pipefail
