@@ -41,6 +41,12 @@ export interface CronEnv extends MessagingEnv {
   TWILIO_PHONE_NUMBER: string;
   TWILIO_FROM?: string;
   RESEND_API_KEY?: string;
+  /**
+   * The evidence bucket. OPTIONAL here and required in index.ts's Env: the
+   * prune must run on a rig that has no bucket bound rather than throw and
+   * leave the audit ledger unswept beside it.
+   */
+  EVIDENCE?: R2Bucket;
 }
 
 export async function scheduled(
@@ -113,6 +119,128 @@ async function prune(env: CronEnv): Promise<void> {
     await env.DB.batch(statements);
   } catch (err) {
     console.log(`internal_hq: prune failed: ${String(err)}`);
+  }
+
+  // The two RECORD-LEVEL sweeps PocketBase ran on every write and Cloudflare
+  // ran nowhere. They are here rather than on the write path because a Worker
+  // has no onRecordAfterCreateSuccess: this cron is the only thing that runs on
+  // its own. See auditLedgerCap and evidenceCap.
+  await auditLedgerCap(env);
+  await evidenceCap(env);
+}
+
+// ---------------------------------------------------------------------------
+// audit_retention.pb.js:71-83 — THE STANDING CAP ON THE AUDIT LEDGER.
+//
+// That table filled the 5 GB production volume on 2026-08-15 and SQLite could
+// not write ANY row: crash loop, hard outage, and the visible symptom was cruel
+// — a password-reset text went out (the send happens first) whose code could
+// then never be stored, so the correct code was rejected every time. The hook
+// answered it with a sweep on every audit write, so the ledger could never
+// again exceed KEEP.
+//
+// On Cloudflare llm.ts:311 says "KEEP audit_retention's sweep" and nothing did:
+// auditBegin is a bare INSERT, the only DELETE is behind a manual POST
+// /admin/purge-audit that nothing calls, and cron.ts dispatched two jobs
+// neither of which touched the table. Measured 2026-09-05 (audit F27): 102 rows
+// holding 12.4 MB of request/response JSON, ~72% of the whole D1 database, and
+// rows still arriving after the cutover.
+//
+// PER-WRITE vs DAILY: the hook trimmed continuously; this trims once a day. The
+// difference is a day's worth of tagged certification calls, which is bounded
+// and operator-visible, against one extra DELETE on every model call, which is
+// not free on the hottest proxy path. D1's ceiling is 10 GB and the daily cap
+// keeps the table three orders of magnitude below it.
+//
+// KEEP is 300, the same number audit_retention.pb.js:28 and routes/service.ts's
+// purgeAudit use. It is deliberately not lifted into a shared constant: that
+// file belongs to another change in flight, and two literals that agree are
+// better than a merge conflict in the middle of a retention sweep. If they ever
+// disagree, this comment is where to start.
+// ---------------------------------------------------------------------------
+
+const AUDIT_KEEP = 300;
+
+async function auditLedgerCap(env: CronEnv): Promise<void> {
+  try {
+    const res = await env.DB.prepare(
+      `DELETE FROM "agent_llm_audit" WHERE "id" NOT IN (
+         SELECT "id" FROM "agent_llm_audit" ORDER BY "created" DESC LIMIT ?1)`,
+    ).bind(AUDIT_KEEP).run();
+    const gone = Number(res.meta?.changes ?? 0);
+    if (gone) console.log(`audit_retention: trimmed ${gone} audit row(s), keeping ${AUDIT_KEEP}`);
+  } catch (err) {
+    // Never let housekeeping be the thing that breaks the tick.
+    console.log(`audit_retention: sweep failed: ${String(err)}`);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// evidence.pb.js:244-269 — TWO CEILINGS, BECAUSE ONE WAS NOT ENOUGH LAST TIME.
+//
+// KEEP_TOTAL is the disk half; KEEP_PER_OWNER is the privacy half — "nobody's
+// screenshots accumulate indefinitely just because they were the quiet
+// account". Both are the hook's own numbers.
+//
+// WHAT IS NEW HERE AND WAS NOT IN THE HOOK: the bytes. On PocketBase the image
+// lived beside the row and was deleted with it. On Cloudflare the row is in D1
+// and the bytes are in R2, so deleting the row alone leaves a paid-for object
+// no row can ever name again. The keys are read BEFORE the delete and the
+// objects go after it — that order on purpose: a row without its bytes answers
+// `that evidence is not available` (assets.ts), which is the designed absence;
+// bytes without their row are unreachable and merely cost money. Losing the
+// second half is a bill, losing the first is a broken door.
+// ---------------------------------------------------------------------------
+
+const EVIDENCE_KEEP_PER_OWNER = 20;
+const EVIDENCE_KEEP_TOTAL = 60;
+/** Bounds one tick, the way the original's SWEEP_BATCH did. */
+const EVIDENCE_SWEEP_BATCH = 200;
+
+async function evidenceCap(env: CronEnv): Promise<void> {
+  let surplus: { id: string; image: string }[] = [];
+  try {
+    // ONE read for both ceilings. `rn` counts each owner's rows newest-first,
+    // so `rn > 20` is the per-owner cap; the NOT IN is the global one.
+    const res = await env.DB.prepare(
+      `SELECT "id", "image" FROM (
+         SELECT "id", "image",
+                ROW_NUMBER() OVER (PARTITION BY "owner_ref" ORDER BY "created" DESC) AS rn
+           FROM "evidence")
+        WHERE rn > ?1
+           OR "id" NOT IN (SELECT "id" FROM "evidence" ORDER BY "created" DESC LIMIT ?2)
+        LIMIT ?3`,
+    ).bind(EVIDENCE_KEEP_PER_OWNER, EVIDENCE_KEEP_TOTAL, EVIDENCE_SWEEP_BATCH)
+      .all<{ id: string; image: string }>();
+    surplus = res.results ?? [];
+  } catch (err) {
+    console.log(`evidence: retention read failed: ${String(err)}`);
+    return;
+  }
+  if (!surplus.length) return;
+
+  try {
+    await env.DB.batch(surplus.map((row) =>
+      env.DB.prepare(`DELETE FROM "evidence" WHERE "id" = ?1`).bind(row.id)));
+  } catch (err) {
+    // The rows are still there, so the bytes must stay too — deleting objects
+    // for rows that survived is how a live evidence row starts 404ing.
+    console.log(`evidence: retention delete failed, bytes left alone: ${String(err)}`);
+    return;
+  }
+
+  if (!env.EVIDENCE) {
+    console.log(`evidence: ${surplus.length} row(s) pruned but no bucket is bound; `
+      + `their objects are orphaned in R2`);
+    return;
+  }
+  const keys = surplus.filter((r) => r.image).map((r) => `evidence/${r.id}/${r.image}`);
+  if (!keys.length) return;
+  try {
+    await env.EVIDENCE.delete(keys);
+    console.log(`evidence: pruned ${surplus.length} row(s) and ${keys.length} object(s)`);
+  } catch (err) {
+    console.log(`evidence: rows pruned but ${keys.length} object(s) remain in R2: ${String(err)}`);
   }
 }
 

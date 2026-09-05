@@ -2072,6 +2072,27 @@ class TestEvidenceDoor(object):
         assert error_of(resp) == "forbidden", repr(resp)
 
     @pytest.mark.needs_service_token
+    def test_no_owner_is_hoarding_receipt_photos(self, service_token):
+        """evidence.pb.js:244-269 — TWO CEILINGS, and the per-owner one is the
+        privacy half: "nobody's screenshots accumulate indefinitely just
+        because they were the quiet account."  PocketBase enforced it on every
+        write; on Cloudflare nothing did until the daily prune took it over
+        (audit F27).  Read-only, and it goes red on the rows a missing sweep
+        has already left behind — which is the Law-3 half a repo-green port
+        does not have."""
+        total = call("GET", "/api/collections/evidence/records", headers=svc(),
+                     query={"perPage": "1", "fields": "id"})
+        if total.status != 200:
+            pytest.skip("could not list evidence on this backend (%s)" % total.status)
+        n = (total.json or {}).get("totalItems") or 0
+        # KEEP_TOTAL is 60; the sweep is bounded per tick, so allow a day's
+        # worth of arrivals above it rather than pretending the cap is exact.
+        assert n <= 260, (
+            "§6.7: %d evidence rows — the retention sweep is not running here. "
+            "On the volume that filled in 2026-08 this table's bytes were the "
+            "worst filler, and the backup keeps two copies of them." % n)
+
+    @pytest.mark.needs_service_token
     def test_an_absent_picture_is_an_answer_not_an_error(self, service_token):
         """§6.7 — a MediaUrl that 404s makes Twilio fail the WHOLE message, so
         a caller that cannot be given a URL must be told so in a form it will
@@ -3120,6 +3141,34 @@ class TestAgentLlmProxy(object):
 
 
 @pytest.mark.offline
+class TestTheAuditLedgerIsCapped(object):
+    """audit_retention.pb.js:3-21 — THE TABLE THAT TOOK PRODUCTION DOWN.
+
+    Uncapped it grew to 3,639 rows of full request/response JSON and filled
+    the 5 GB volume; SQLite could then write NO row at all, and the visible
+    symptom was a password-reset text going out whose code could never be
+    stored.  The hook trimmed on every write.  On Cloudflare llm.ts:311 says
+    "KEEP audit_retention's sweep" and nothing did — the only DELETE sat
+    behind a manual /admin/purge-audit that no cron, workflow or gate ever
+    called (audit F27).
+
+    Read-only, through wrangler's own CLI, so it runs on the local wire rig
+    and skips elsewhere naming the variable.  The table is not on the records
+    API — deliberately, it is certification evidence and not customer data —
+    so there is no HTTP way to ask."""
+
+    @pytest.mark.needs_service_token
+    def test_the_ledger_is_not_growing_without_a_ceiling(self, service_token):
+        rows = local_d1("SELECT count(*) AS n FROM agent_llm_audit")
+        n = int(rows[0]["n"])
+        # KEEP is 300 and the sweep runs daily, so the honest bound is "the cap
+        # plus what one day can add", not the cap itself.
+        assert n <= 1000, (
+            "§6.4: %d audit rows. The retention sweep is not running on this "
+            "backend; at ~120 KB a row this table is what filled the volume "
+            "in 2026-08." % n)
+
+
 class TestAgentLlmLiteralsAgree(object):
     """The three sources that must carry the same bytes, read rather than
     typed: a test that typed the values would pass while the files disagreed."""

@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --experimental-strip-types test/filter-dsl.test.ts && node --experimental-strip-types test/hq-booleans.test.ts && node --experimental-strip-types test/records-parity.test.ts && node --experimental-strip-types test/llm-proxy.test.ts && node --experimental-strip-types test/messaging.test.ts && node --experimental-strip-types test/sender.test.ts && node --experimental-strip-types test/service-routes.test.ts && node --experimental-strip-types test/workflow-guard-empties.test.ts && node --experimental-strip-types test/password-reset-wording.test.ts && node --experimental-strip-types test/records-commitment.test.ts",
+    "test": "node --experimental-strip-types test/filter-dsl.test.ts && node --experimental-strip-types test/hq-booleans.test.ts && node --experimental-strip-types test/records-parity.test.ts && node --experimental-strip-types test/llm-proxy.test.ts && node --experimental-strip-types test/messaging.test.ts && node --experimental-strip-types test/sender.test.ts && node --experimental-strip-types test/service-routes.test.ts && node --experimental-strip-types test/workflow-guard-empties.test.ts && node --experimental-strip-types test/password-reset-wording.test.ts && node --experimental-strip-types test/records-commitment.test.ts && node --experimental-strip-types test/cron-retention.test.ts",
     "test:llm-wire": "sh scripts/llm_contract_local.sh",
     "test:sms-wire": "sh scripts/sms_contract_local.sh",
     "test:service-wire": "sh scripts/service_contract_local.sh",
