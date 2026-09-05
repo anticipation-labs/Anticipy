@@ -77,13 +77,21 @@ function job(state = "queued") {
     doing: "Clicking Book table on fixture.test", url: "https://fixture.test/book",
     sig: "https://fixture.test/book|click|button|Book table|||book|3",
     digest: "d1gest", at: "2026-09-05T00:00:00.000Z",
+    step: 4, tab: 17, session: "sess-1",
+    // A caller cannot smuggle anything else in: only the named keys are copied.
+    fields: [{ label: "Name", value: "Alex Reyes" }],
   });
   assert.equal(patch.effect_uncertain, true);
   const written = parseJobParams(patch)._effect_intent;
-  assert.deepEqual(Object.keys(written).sort(), ["at", "digest", "doing", "sig", "url"],
+  assert.deepEqual(Object.keys(written).sort(),
+    ["at", "digest", "doing", "session", "sig", "step", "tab", "url"],
     "exactly these keys and no other — no form value may ever ride here");
+  assert.ok(!JSON.stringify(written).includes("Alex Reyes"), "a value handed in is not copied");
   assert.equal(written.sig, "https://fixture.test/book|click|button|Book table|||book|3");
   assert.equal(written.digest, "d1gest");
+  assert.equal(written.step, 4);
+  assert.equal(written.tab, 17);
+  assert.equal(written.session, "sess-1");
   // The PocketBase guard compares _workflow's fields against the row; this
   // write must leave every one of them untouched.
   assert.equal(JSON.stringify(parseJobParams(patch)._workflow), before,

@@ -4,17 +4,24 @@
 // no service APIs. Irreversible steps stop at a prefilled page for the user
 // (or the phone app) to confirm.
 
-import { createBackgroundTab, modelFetch, runAgentGoal } from "./agent_loop.js";
+import {
+  PAGE_READ_TIMEOUT_MS, createBackgroundTab, modelFetch, readPageForRecovery,
+  reconcileJudge, runAgentGoal, withTimeout,
+} from "./agent_loop.js";
 import {
   MAX_STEPS as READ_MAX_STEPS, leaseLapsed, runSupervisedRead,
 } from "./supervised_read.js";
 import { backendBase } from "./config.js";
 import {
+  effectIntentAfter,
   heartbeatPatch,
   isWorkflowJob,
   markEffectUncertainPatch,
   parseJobParams,
-  workflowPatch, uncertainEffectMessage } from "./workflow_state.js";
+  workflowPatch } from "./workflow_state.js";
+import {
+  reconcileUncertainEffect, reconciledMessage, reconciliationParams, recoveryFor,
+} from "./reconcile.js";
 
 // Keep an engine marker in the service-worker entry file itself. Updating an
 // imported module alone can leave Chrome running a cached worker graph for an
@@ -380,10 +387,22 @@ async function requeueStaleJobs() {
     if (expires ? now <= expires : now - claimed <= STALE_JOB_MS) continue;
     const tries = Number(j.attempts) || 0;
     if (isWorkflowJob(j) && j.effect_uncertain) {
-      await updateJob(j.id, workflowPatch(j, "needs_user", {
-        reason: uncertainEffectMessage(j),
-        effectUncertain: true,
-      }), j.lease_token);
+      // WHAT WAS HERE UNTIL 2026-09-05, Audit #90: the constant sentence.
+      // This site, the failed-with-uncertain branch and the catch in
+      // runJobInner each wrote "I may have already sent that before I lost
+      // the page — I could not confirm either way" (uncertainEffectMessage)
+      // and nothing looked. The phone then turned the owner's Try again into
+      // a constant reconciliation — conclusion not_applied, evidence "owner
+      // explicitly checked the destination before retry" — which is exactly
+      // what the DB guard's retry leg checks, so a crash plus a tap re-sent
+      // the submission. Measured shape: a worker reclaimed mid-booking, the
+      // Set the at-most-once gate keys on created empty, the same digest
+      // dispatched again. Now the surviving tab is read once (the intent's
+      // tab, this session only, on the intent's host only) and ONE model
+      // question yields a four-state verdict written beside the intent. The
+      // row still parks: the tap stays his, and it is still the only thing
+      // that can release this row.
+      await updateJob(j.id, recoveryFor(j, await recoverUncertainEffect(j)), j.lease_token);
       continue;
     }
     if (tries >= MAX_ATTEMPTS) {
@@ -1389,6 +1408,160 @@ export function handBackParamsPatch(out, parkedSession) {
   return patch;
 }
 
+// ------------------------------------------- the two writers of a live run
+//
+// While the loop runs, two callbacks write to its job row: the throttled
+// trace writer and the pre-click intent writer. They share ONE view of the
+// row and ONE view of `params`, and that sharing is the whole point of this
+// factory. Until 2026-09-05 the intent hook called updateJob bare and left
+// the trace writer's closure `params` untouched — so the next throttled
+// trace write, which serialises that closure, silently ERASED the intent it
+// had just written (audit #90, attack finding D). A crash after that write
+// left a row with the flag and no intent, which is the exact state the
+// intent was added to end.
+//
+// `job()` / `params()` read the caller's current values; `commit(job,
+// params)` writes both back. Every write goes through withJobWrite, whose
+// patch is built inside the chain from what the previous write committed.
+// `write`, `now` and `session` are injectable so the offline suite can run
+// these exact functions against a fake row and a fake clock.
+export function rowWriters({ job, params, commit, write = updateJob, now = Date.now,
+                             session = browserSessionId }) {
+  const adopt = (row) => {
+    const active = activeJobs.get(row.id);
+    if (active) active.job = row;
+  };
+  // The step-by-step trace lands on the job row as the agent works, so a run
+  // is auditable after the fact. Throttled: at most one write every few
+  // seconds, always carrying the latest tail — with ONE exception below.
+  const onTrace = (() => {
+    let last = 0;
+    const first = job();
+    const priorTrace = String(first.trace || "").trim();
+    const attemptHeader = `=== attempt ${Number(first.attempts) || 1} | engine ${ENGINE_BUILD} ===`;
+    return async (history, final = false, checkpoint = {}) => {
+      const at = now();
+      let current = params();
+      // THE `after` HALF OF THE INTENT is written the first time a checkpoint
+      // past the click's step arrives, and it does not wait for the throttle:
+      // the worker can be reclaimed within those four seconds, and a row
+      // whose intent has no `after` sends the recovery model "(none — the
+      // page was lost before it was read)". Once written it is never
+      // rewritten (effectIntentAfter returns null after that).
+      const after = effectIntentAfter(current._effect_intent, checkpoint);
+      if (!final && at - last < 4000 && !after) return;
+      last = at;
+      const currentTrace = history.slice(-160).join("\n");
+      const trace = [priorTrace, attemptHeader, currentTrace]
+        .filter(Boolean).join("\n").slice(-90000);
+      const journal = (Array.isArray(checkpoint?.evidenceJournal)
+        ? checkpoint.evidenceJournal : []).slice(-18).map((entry) => ({
+          fingerprint: String(entry?.fingerprint || "").slice(0, 200),
+          url: String(entry?.url || "").slice(0, 500),
+          title: String(entry?.title || "").slice(0, 200),
+          text: String(entry?.text || "").slice(0, 2500),
+          elements: String(entry?.elements || "").slice(0, 1000),
+        }));
+      if (journal.length) current = { ...current, _execution_journal: journal };
+      // THE ONE LINE HE ACTUALLY SEES.
+      //
+      // The trace beside it is for whoever debugs this later: it is written
+      // for engineers ("step 12: llm error", raw JSON) and the phone has
+      // never read it. This is the same moment in his own words, and it rides
+      // a write that was already happening every four seconds — so telling
+      // him what is going on costs nothing.
+      //
+      // Without it, a forty-minute run shows the words "On it" and nothing
+      // else, and a run working perfectly is indistinguishable from one that
+      // died twenty minutes ago.
+      const doing = String(checkpoint?.doing || "").slice(0, 120);
+      const doingChanged = !!doing && doing !== current._doing;
+      if (doingChanged) current = { ...current, _doing: doing };
+      if (after) current = { ...current, _effect_intent: { ...current._effect_intent, after } };
+      const id = job().id;
+      const next = await withJobWrite(id, () => write(id,
+        { trace, ...(journal.length || doingChanged || after ? {
+          params: JSON.stringify(current),
+        } : {}) }, job().lease_token));
+      commit(next, current);
+      adopt(next);
+    };
+  })();
+  // The loop hands over (decision, state, intent) before every consequential
+  // click and Enter. The intent goes to disk beside the flag, stamped with
+  // this browser session so a recovery can tell whether the tab id it names
+  // is still the same tab — and the closure `params` learns what was written,
+  // or the next trace write erases it (see the factory header).
+  const onBeforeExternalEffect = async (_decision, _state, intent) => {
+    const stamp = await session();
+    let written = null;
+    const id = job().id;
+    const next = await withJobWrite(id, () => {
+      const row = job();
+      written = markEffectUncertainPatch(row, { ...intent, session: stamp });
+      return write(row.id, written, row.lease_token);
+    });
+    const { _reconciliation: _dropped, ...rest } = params();
+    const recorded = written && written.params ? parseJobParams(written)._effect_intent : null;
+    commit(next, recorded ? { ...rest, _effect_intent: recorded } : rest);
+    adopt(next);
+  };
+  return { onTrace, onBeforeExternalEffect };
+}
+
+// ------------------------------------------ after a crash: did it go through?
+//
+// Audit #90. For a row whose worker died between a consequential click and
+// its receipt: find the SURVIVING tab, read it once, ask one four-state
+// question, and hand back `{ verdict, evidence, why }` for recoveryFor to
+// write. Never writes, never throws, never navigates, clicks or types.
+//
+// Which tab: the one the caller names (an in-run path that still holds it),
+// else the intent's own tab id — and that only while the intent's browser
+// session stamp matches this one, the resumableTabId rule: a tab id is
+// unique inside ONE browser session and is handed out again after a restart,
+// so an unprovable id is a stranger's tab and is not read.
+//
+// Which host: reconcile.js checks the tab's URL against the intent's before
+// the page is read, and the read page's URL again before anything is sent
+// to the model. What the model is sent, and what the row records, are both
+// stated in reconcile.js's header.
+//
+// The read is readPageForRecovery — chrome.scripting only, no debugger, no
+// spawner rewrite (its comment in agent_loop.js says what it does not do).
+// The model call is reconcileJudge, the #64 shape through the /agent/llm
+// proxy; no key, no verdict on a failed call.
+export async function recoverUncertainEffect(job, tabId = null, deps = {}) {
+  try {
+    const raw = parseJobParams(job)._effect_intent;
+    const intent = raw && typeof raw === "object" ? raw : null;
+    let id = tabId != null && Number.isFinite(Number(tabId)) ? Number(tabId) : null;
+    if (id == null && intent && intent.tab != null && Number.isFinite(Number(intent.tab))) {
+      const stamp = await (deps.session || browserSessionId)();
+      if (stamp && intent.session === stamp) id = Number(intent.tab);
+    }
+    let tabUrl = "";
+    if (id != null) {
+      try { tabUrl = String((await chrome.tabs.get(id)).url || ""); }
+      catch (_) { tabUrl = ""; }
+    }
+    const readPage = deps.readPage
+      || ((tab) => withTimeout(readPageForRecovery(tab), PAGE_READ_TIMEOUT_MS, "recovery read"));
+    const askModel = deps.askModel || (async (system, user) => {
+      const apiKey = await ensureLLMKey();
+      if (!apiKey) throw new Error("no model key");
+      const { agentModel } = await chrome.storage.local.get(["agentModel"]);
+      return reconcileJudge(apiKey, agentModel || undefined)(system, user);
+    });
+    return await reconcileUncertainEffect({
+      intent, tabUrl, readPage: () => readPage(id), askModel,
+    });
+  } catch (e) {
+    return { verdict: "no_verdict", why: "nobody could answer",
+             evidence: [`why:nobody could answer (${String(e).slice(0, 80)})`] };
+  }
+}
+
 async function runJobInner(job, params) {
   // THE FIRST BRANCH, ABOVE EVERYTHING. A supervised read may never fall
   // through into the executor below: the rewrite three lines down turns any
@@ -1441,6 +1614,12 @@ async function runJobInner(job, params) {
       // A resumed job goes back to its own parked tab — session, filled form
       // and all — but only while that id still means the tab we parked.
       const resumeTabId = await resumableTabId(params);
+      // The two row writers share `job` and `params` through these three
+      // closures; see rowWriters for why that sharing is load-bearing.
+      const writers = rowWriters({
+        job: () => job, params: () => params,
+        commit: (nextJob, nextParams) => { job = nextJob; params = nextParams; },
+      });
       const out = await runAgentGoal(params.task, {
         apiKey: openrouterKey,
         // WHICH QUESTION THIS JOB IS PARKED ON, if it is parked on one of our
@@ -1544,58 +1723,10 @@ async function runJobInner(job, params) {
         // refuses to re-send what may already have gone out.
         initialEffectIntent: params._effect_intent && typeof params._effect_intent === "object"
           ? params._effect_intent : null,
-        // The step-by-step trace lands on the job row as the agent works, so
-        // a run is auditable after the fact. Throttled: at most one write
-        // every few seconds, always carrying the latest tail.
-        onTrace: (() => {
-          let last = 0;
-          const priorTrace = String(job.trace || "").trim();
-          const attemptHeader = `=== attempt ${Number(job.attempts) || 1} | engine ${ENGINE_BUILD} ===`;
-          return async (history, final = false, checkpoint = {}) => {
-            const now = Date.now();
-            if (!final && now - last < 4000) return;
-            last = now;
-            const currentTrace = history.slice(-160).join("\n");
-            const trace = [priorTrace, attemptHeader, currentTrace]
-              .filter(Boolean).join("\n").slice(-90000);
-            const journal = (Array.isArray(checkpoint?.evidenceJournal)
-              ? checkpoint.evidenceJournal : []).slice(-18).map((entry) => ({
-                fingerprint: String(entry?.fingerprint || "").slice(0, 200),
-                url: String(entry?.url || "").slice(0, 500),
-                title: String(entry?.title || "").slice(0, 200),
-                text: String(entry?.text || "").slice(0, 2500),
-                elements: String(entry?.elements || "").slice(0, 1000),
-              }));
-            if (journal.length) params = { ...params, _execution_journal: journal };
-            // THE ONE LINE HE ACTUALLY SEES.
-            //
-            // The trace beside it is for whoever debugs this later: it is
-            // written for engineers ("step 12: llm error", raw JSON) and the
-            // phone has never read it. This is the same moment in his own
-            // words, and it rides a write that was already happening every
-            // four seconds — so telling him what is going on costs nothing.
-            //
-            // Without it, a forty-minute run shows the words "On it" and
-            // nothing else, and a run working perfectly is indistinguishable
-            // from one that died twenty minutes ago.
-            const doing = String(checkpoint?.doing || "").slice(0, 120);
-            const doingChanged = !!doing && doing !== params._doing;
-            if (doingChanged) params = { ...params, _doing: doing };
-            job = await withJobWrite(job.id, () => updateJob(job.id,
-              { trace, ...(journal.length || doingChanged ? {
-                params: JSON.stringify(params),
-              } : {}) }, job.lease_token));
-            const active = activeJobs.get(job.id);
-            if (active) active.job = job;
-          };
-        })(),
-        // The loop hands over (decision, state, intent); until 2026-09-05 this
-        // wrapper was `async () => {…}` and dropped all three on the floor.
-        onBeforeExternalEffect: isWorkflowJob(job) ? async (_decision, _state, intent) => {
-          job = await updateJob(job.id, markEffectUncertainPatch(job, intent), job.lease_token);
-          const active = activeJobs.get(job.id);
-          if (active) active.job = job;
-        } : null,
+        // The step-by-step trace and the pre-click intent, both onto the job
+        // row as the agent works — one factory, one shared view of the row.
+        onTrace: writers.onTrace,
+        onBeforeExternalEffect: isWorkflowJob(job) ? writers.onBeforeExternalEffect : null,
       });
       // A job the owner called off mid-run keeps their decision — writing
       // done/failed over a cancellation resurrects work they stopped.
@@ -1627,8 +1758,13 @@ async function runJobInner(job, params) {
         : out.status === "needs_user" ? "needs_user" : "failed";
       const canonicalState = status === "done" ? "succeeded"
         : status === "needs_user" || job.effect_uncertain ? "needs_user" : "failed";
-      const result = status === "failed" && job.effect_uncertain
-        ? uncertainEffectMessage(job)
+      // A run that ended failed with an effect outstanding is the in-run
+      // twin of the crash the sweep recovers: look at the tab it still holds
+      // (if any) and answer the question instead of reciting the sentence.
+      const reconciled = status === "failed" && job.effect_uncertain
+        ? await recoverUncertainEffect(job, out.tabId ?? null) : null;
+      const result = reconciled
+        ? reconciledMessage(job, reconciled)
         : (out.result || "");
       // §9: a kept-back tab never surfaces itself — badge + notification, and
       // the owner's click is what focuses it (openHandBack). Surfaced before
@@ -1665,7 +1801,10 @@ async function runJobInner(job, params) {
             // leave a stale ref alive on any tabless park, and a stale live ref
             // is one the step model can quote back out of the approved scope.
             ...(canonicalState === "needs_user"
-              ? { paramsPatch: handBackParamsPatch(out, parkedSession) } : {}),
+              ? { paramsPatch: {
+                  ...handBackParamsPatch(out, parkedSession),
+                  ...(reconciled ? reconciliationParams(reconciled) : {}),
+                } } : {}),
             ...(canonicalState === "succeeded" ? {
               summary: result || "completed",
               verified: out.receipt?.verified === true,
@@ -1693,15 +1832,18 @@ async function runJobInner(job, params) {
       });
     } catch (e) {
       if (String(e).includes("job gone")) throw e;
-      const uncertain = !!job.effect_uncertain;
-      const result = uncertain
-        ? uncertainEffectMessage(job)
-        : String(e);
-      const patch = isWorkflowJob(job)
-        ? { ...workflowPatch(job, uncertain ? "needs_user" : "failed", {
-            reason: result, effectUncertain: uncertain,
-          }), result }
-        : { status: "failed", result };
+      const uncertain = isWorkflowJob(job) && !!job.effect_uncertain;
+      // The third of the three sites (see requeueStaleJobs): a run that threw
+      // after its click. The loop's teardown has closed the tab by now unless
+      // it parked, so this usually reads as "the page it was on is gone" —
+      // said as such, rather than as the old constant.
+      const patch = uncertain
+        ? recoveryFor(job, await recoverUncertainEffect(job))
+        : isWorkflowJob(job)
+          ? { ...workflowPatch(job, "failed", { reason: String(e), effectUncertain: false }),
+              result: String(e) }
+          : { status: "failed", result: String(e) };
+      const result = patch.result;
       await updateJob(job.id, patch, job.lease_token);
       await setCurrentJob({ status: uncertain ? "needs_user" : "failed", result });
     }

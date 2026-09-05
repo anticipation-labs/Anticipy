@@ -69,16 +69,47 @@ and the wrapper in `background.js` was `async () => {…}`. Now the intent
 `{doing, url, sig, digest, at}` — never a form value — goes to disk beside the
 flag, seeds the Set on resume, and the owner's card says what to look for.
 
-What #90 still lacks, and deliberately: the reviewed design also proposed a
-post-crash *reconciliation* — read the surviving tab, ask a model whether the
-effect landed, and self-close the row as done on APPLIED. The attacker's
-verdict is recorded here so it is not re-proposed: APPLIED with a live lease
-would self-close on ONE 8-token call, below the bar the normal done path holds
-(the step model's claim PLUS `verifyDone`), and a wrong APPLIED tells the owner
-the table is booked when it is not — a new world-reaching write where today
-every crash path parks and the owner looks. The Brief asks that the question be
-ANSWERABLE, not self-acted. If a self-close is wanted later it must route
-APPLIED through `verifyDone` as the second opinion.
+**The reconciliation half of #90, built as the attack corrected it** (same
+day, `extension/reconcile.js`). After a crash with an intent outstanding the
+surviving tab is read once and ONE question is asked of a model on its own —
+the #64 shape through `reconcileJudge` — in four states: APPLIED, NOT_APPLIED,
+UNCLEAR, and NO_VERDICT for "nobody answered" (no intent, no tab, a tab on the
+wrong host, an unreadable page, a model down, or any reply that is not exactly
+one of the three tokens). The answer is written as `params._reconciliation =
+{verdict, evidence, at}` — host, the intent's sentence, the page's url/title/
+fingerprint, the token; never page text, never a field — beside a `needs_user`
+row whose reason says what was found. Nothing in this path writes `done`,
+`succeeded` or `queued`, for every verdict and both lease states: the attacker's
+verdict stands, recorded here so it is not re-proposed — APPLIED with a live
+lease would self-close on ONE 8-token call, below the bar the normal done path
+holds (the step model's claim PLUS `verifyDone`), and a wrong APPLIED tells the
+owner the table is booked when it is not. The Brief asks that the question be
+ANSWERABLE, not self-acted; if a self-close is wanted later it must route
+APPLIED through `verifyDone` as the second opinion. What stays deterministic is
+seatbelt: the intent's tab is read only while its browser-session stamp matches
+(the `resume_tab` rule), and only while that tab's host is the intent page's or
+the first-after page's — a tab the owner moved to his bank is neither read nor
+shipped. The intent record gained `step`, `tab`, `session` and an `after` half
+(`{url, title, fingerprint, step, at}` of the first page read after the click,
+written once, unthrottled, from the step's own checkpoint and never from the
+journal tail). **The mutation testing found the erasure the attack predicted was
+real**: the intent hook called `updateJob` bare and never told the trace
+writer's closure `params`, so the next throttled trace write serialised a
+`params` without `_effect_intent` — the row kept the flag and lost the intent.
+Both writers now come from one `rowWriters` factory sharing one view of the
+row; the pre-fix hook shape turns leg D red ("the last serialised params still
+carry the intent" → `null`). Five mutations in `test_reconcile_after_crash.mjs`
+(117 checks): unreadable reply → NOT_APPLIED (8 red), the model never asked (12
+red), no-verdict written `queued` (6 red), the bare-write hook (10 red), the
+host check removed (4 red). Still owed, and blocking a DONE on HANDS 1: the
+phone (`app/ios/Anticipy/AnticipyApp.swift` `approvalFields`, the `ownerWords`
+constant and the constant `reconciliation` dictionary) must cite
+`_reconciliation.verdict === "not_applied"` and its evidence instead of its
+constants, or the guard's retry leg is still satisfied by a string literal —
+that is a control-flow change in Swift, not a constant swap, and was not made
+here. Also not made: the in-run throw path still closes the tab in the loop's
+teardown, so that site can only answer "the page it was on is gone"; the sweep
+(a reclaimed worker, the tab still open) is the path that now reads.
 
 ## The three Law-1 fixes, and what the mutation testing found
 
