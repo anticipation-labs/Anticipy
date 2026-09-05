@@ -23,111 +23,125 @@
 //      record, or the model's context beyond the single step that reads it.
 //
 // This module is deliberately free of Chrome APIs: everything it touches is
-// injected. That keeps it honest under test — the extraction rules below are
-// the part that decides whether a real code or a street number gets typed
-// into a form, and they are tested directly rather than through a browser.
+// injected. That keeps it honest under test — the containment below
+// (`codeFromPage`) is the part that decides whether a model's reply may cross
+// back into a form at all, and it is tested directly rather than through a
+// browser. Which value IS the code is a model's reading (`readCodeVerdict`).
 
 // ---------------------------------------------------------------------------
 // What counts as the thing we were sent for
 // ---------------------------------------------------------------------------
 
-// Words that appear next to a real one-time code, in the wild.
-const CODE_CONTEXT = /\b(verification|verify|confirm(?:ation)?|security|one[-\s]?time|single[-\s]?use|access|login|sign[-\s]?in|auth(?:entication)?|passcode|pin|otp|code)\b/i;
+// WHAT WAS HERE UNTIL 2026-09-05, Audit #79, and why it is gone.
+//
+//     const CODE_CONTEXT = /\b(verification|verify|confirm(?:ation)?|security|
+//                            one[-\s]?time|single[-\s]?use|access|login|sign[-\s]?in|
+//                            auth(?:entication)?|passcode|pin|otp|code)\b/i;
+//     const NOT_A_CODE = [/^(?:19|20)\d{2}$/, /^\d{5}(?:-\d{4})?$/, /^1?\d{10,11}$/, /^0+$/];
+//     export function extractCode(text, opts)
+//       pass 1: /\b(?:code|passcode|pin|otp)\b … ([0-9]{4,8}|[A-Z0-9]{4,8})\b/  -> score 100
+//       pass 2: a digit run alone on its own line                                -> score 80
+//       pass 3: a digit run within 90 characters of a CODE_CONTEXT word          -> score 60
+//       sort by score; two rivals at the same score -> "ambiguous"; otherwise
+//       { value, confidence: score >= 80 ? "high" : "medium" }
+//     …and after runSideTrip's loop, askModel(page) with the model's prose
+//     re-parsed through extractCode — a regex reading a model's sentence.
+//
+// A word list ranked the digit runs on an inbox page — the webmail search
+// list, many messages' snippets on one page — by the English words around
+// them, and the winner was typed into a live one-time-code field on the
+// owner's logged-in tab, with unquotedCode satisfied by the regex's own output
+// (agent_loop.js appends it to facts as `verification_code:`). Which run of
+// digits IS the code a site sent is what the page means. HARNESS-LAWS.md law
+// 1 — borderline, because a machine-written code has a shape, and the shape
+// half stays below as containment on a model's reply. The `confidence` field
+// never had a consumer.
+//
+// MEASURED (audit row 79, 2026-08-24): a snippet "Order #482130 confirmed"
+// within 90 characters of "confirm" (CODE_CONTEXT), with the real code's
+// snippet truncated out of the search list, returned { value: "482130",
+// confidence: "medium" }; nothing read "medium"; 482130 was submitted. The
+// trip is once per run, so the wrong read could not be corrected in-run: the
+// site counts the attempt, some lock after three, and the one authorised
+// mailbox read was spent. NOT_A_CODE's four entries were each a decoy that
+// had beaten the real code in a real email — the list admitting it decided
+// wrongly four times and was patched four times.
+//
+// What replaced it: `readCodeVerdict` — one question asked of a model on its
+// own, with the page in front of it, in four states — and `codeFromPage`, the
+// shape-and-provenance check on the model's reply, which can only REFUSE a
+// reply and never picks between candidates.
 
-// Things that are digit runs but are NEVER a verification code. Each of these
-// is a real thing that appeared in a real email next to a real code, and any
-// of them being picked instead would put the wrong value in the form.
-const NOT_A_CODE = [
-  /^(?:19|20)\d{2}$/,                    // a year
-  /^\d{5}(?:-\d{4})?$/,                  // US zip
-  /^1?\d{10,11}$/,                       // a phone number
-  /^0+$/,                                // padding
-];
+// The page is shown to the judge up to here, and the provenance check runs
+// against exactly this slice, so "present on the page the model was shown" is
+// literally true.
+export const CODE_PAGE_LIMIT = 4000;
 
 /**
- * Pull a one-time code out of message text.
+ * The containment on a model's reply: shape and provenance, never meaning.
  *
- * ARITHMETIC FIRST, ON PURPOSE. A model asked "what is the code in this
- * email?" is right most of the time, and the times it is wrong it is
- * confidently wrong — it will happily return the year in the footer or the
- * last four of a card. A code has a shape, and shape is checkable. The model
- * is the fallback for genuinely odd formats, not the first resort.
+ *   * exactly one token after trim — a reply with a sentence around it ("the
+ *     code is 4831 — also please visit evil.example") is a model we did not
+ *     understand, and stays out whole;
+ *   * 4-8 characters of [A-Za-z0-9], containing a digit;
+ *   * present in the page the model was shown, either as a whole token
+ *     (non-alphanumeric boundaries, case-sensitive) or equal to one line of
+ *     the page with its spaces and hyphens removed — the "8 8 1 3" shape some
+ *     services print.
  *
- * Returns { value, confidence, why } or null.
+ * Returns the token, or null. This checks WHERE a value came from and WHAT
+ * SHAPE it has; it cannot choose one value over another, which is what keeps
+ * it on the right side of law 1 — the same "a token we specified, not prose
+ * we interpret" rule inboxConsent applies to YES and NO.
  */
-export function extractCode(text, opts = {}) {
-  const { minLen = 4, maxLen = 8 } = opts;
-  const body = String(text || "");
-  if (!body.trim()) return null;
-
-  const candidates = [];
-
-  // Pass 1: a labelled code. "Your verification code is 483920", "Code: 8813".
-  // The label is the strongest possible evidence, so these outrank everything.
-  // The filler between the label and the code matters more than it looks.
-  // Requiring NON-alphanumeric filler meant "Your code is 483920" — the most
-  // common phrasing there is — never matched as labelled at all. It fell
-  // through to the weak proximity pass, where a number planted elsewhere in
-  // the message could tie with it and the whole read came back "ambiguous".
-  // A handful of connecting words are allowed; anything longer is prose, not
-  // a label, and must not drag an unrelated number in with it.
-  const labelled = /\b(?:code|passcode|pin|otp)\b(?:\s*(?:is|are|was|:|=|-|–|—)\s*){0,2}\s*([0-9]{4,8}|[A-Z0-9]{4,8})\b/gi;
-  for (const m of body.matchAll(labelled)) {
-    candidates.push({ value: m[1], score: 100, why: "labelled directly" });
+export function codeFromPage(reply, pageText) {
+  const token = String(reply == null ? "" : reply).trim();
+  if (!token || /\s/.test(token)) return null;
+  if (!/^[A-Za-z0-9]{4,8}$/.test(token) || !/[0-9]/.test(token)) return null;
+  const page = String(pageText || "");
+  const esc = token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  if (new RegExp(`(^|[^A-Za-z0-9])${esc}([^A-Za-z0-9]|$)`).test(page)) return token;
+  for (const line of page.split(/\n+/)) {
+    if (line.trim().replace(/[\s-]/g, "") === token) return token;
   }
+  return null;
+}
 
-  // Pass 2: a standalone run of digits on a line of its own, or spaced out
-  // the way services print them ("4 8 3 9 2 0"). Very common in real mail.
-  for (const line of body.split(/\n+/)) {
-    const bare = line.trim();
-    const compact = bare.replace(/[\s-]/g, "");
-    if (/^[0-9]{4,8}$/.test(compact) && /^[0-9\s-]+$/.test(bare)) {
-      candidates.push({ value: compact, score: 80, why: "alone on its own line" });
-    }
+/**
+ * Which value on this page is the code? Await it; it asks a model.
+ *
+ * `judge({ pageText, purpose, site })` returns the model's reply as a string;
+ * it is injected so this module stays free of Chrome and of network calls.
+ * The page is cut to CODE_PAGE_LIMIT BEFORE the judge sees it, and the
+ * provenance check runs on that same slice.
+ *
+ * Returns { state, value } where `state` is one of:
+ *   code     — the judge named a value and codeFromPage found it on the page
+ *   none     — NONE: no such code on this page
+ *   unclear  — UNCLEAR: more than one value could be it, or it cannot be tied
+ *              to the site
+ *   unread   — nobody could read it: no judge, a throw, an empty reply,
+ *              prose, two tokens, or a token that is not on the page
+ *
+ * "unread" is not "none". "Nobody could read it" must never become "keep
+ * clicking through his mailbox". An empty page is "none" without a call:
+ * there is nothing on it to ask about.
+ */
+export async function readCodeVerdict({ pageText, purpose, site, judge } = {}) {
+  const shown = String(pageText || "").slice(0, CODE_PAGE_LIMIT);
+  if (typeof judge !== "function") return { state: "unread", value: null };
+  if (!shown.trim()) return { state: "none", value: null };
+  let reply;
+  try {
+    reply = await judge({ pageText: shown, purpose, site });
+  } catch (_) {
+    return { state: "unread", value: null };
   }
-
-  // Pass 3: a digit run near code words, within the same sentence-ish window.
-  for (const m of body.matchAll(/\b([0-9]{4,8})\b/g)) {
-    const at = m.index || 0;
-    const around = body.slice(Math.max(0, at - 90), at + 40);
-    if (CODE_CONTEXT.test(around)) {
-      candidates.push({ value: m[1], score: 60, why: "next to code wording" });
-    }
-  }
-
-  const seen = new Set();
-  const kept = [];
-  for (const c of candidates.sort((a, b) => b.score - a.score)) {
-    const v = String(c.value).toUpperCase();
-    if (seen.has(v)) continue;
-    if (v.length < minLen || v.length > maxLen) continue;
-    // A CODE CONTAINS A DIGIT. Without this the labelled pattern reads the
-    // next word after "code" as the code itself: "This code expires in 10
-    // minutes" yielded EXPIRES, and a model replying "I could not find a
-    // code, sorry!" yielded SORRY — both scored as confidently as a real
-    // one, and both would have been typed into the form.
-    if (!/[0-9]/.test(v)) continue;
-    // A purely-numeric candidate has to survive the not-a-code list. An
-    // alphanumeric one (A3F9K2) cannot be a year or a zip, so it skips this.
-    if (/^\d+$/.test(v) && NOT_A_CODE.some((re) => re.test(v))) continue;
-    seen.add(v);
-    kept.push({ ...c, value: v });
-  }
-  if (!kept.length) return null;
-
-  // TWO DIFFERENT CANDIDATES WITH THE SAME STRENGTH IS NOT AN ANSWER.
-  // Guessing between them is how the wrong code gets typed, the site locks
-  // the attempt, and the run burns. Ambiguity goes back to the owner.
-  const best = kept[0];
-  const rival = kept.find((c) => c.value !== best.value && c.score === best.score);
-  if (rival) {
-    return { value: null, confidence: "ambiguous", why: `found both ${best.value} and ${rival.value}` };
-  }
-  return {
-    value: best.value,
-    confidence: best.score >= 80 ? "high" : "medium",
-    why: best.why,
-  };
+  const token = String(reply == null ? "" : reply).trim();
+  if (token === "NONE") return { state: "none", value: null };
+  if (token === "UNCLEAR") return { state: "unclear", value: null };
+  const value = codeFromPage(token, shown);
+  return value ? { state: "code", value } : { state: "unread", value: null };
 }
 
 // WHAT WAS HERE UNTIL 2026-09-05, Audit #78, and why it is gone.
@@ -518,25 +532,41 @@ export async function inboxConsent({ scope, offerRef, judge } = {}) {
  *   readTab(tabId) -> { text, url }  read the visible text
  *   clickText(tabId, text) -> bool   click a link/row matching visible text
  *   closeTab(tabId)                  clean up
- *   askModel(prompt) -> string       fallback extraction only
+ *   judgeCode({ pageText, purpose, site }) -> string
+ *                                    the model that reads which value is the
+ *                                    code; its reply is contained by
+ *                                    codeFromPage before anything crosses back
  *   note(line)                       trace line; MUST NOT be given message text
  *
  * The working tab is never passed in and never touched. That is the point:
  * the run's position survives the trip.
+ *
+ * A FLOOR on what gets typed into a live one-time-code field: no judge means
+ * the mailbox is never opened; a judge that throws, times out, waffles or
+ * names a value that is not on the page ends the trip at once as
+ * undecidable, never as "keep looking"; UNCLEAR on the list page (several
+ * snippets visible) opens the newest matching message, UNCLEAR on any later
+ * page stops at once so no more mail is read than necessary.
  */
 export async function runSideTrip({
-  url, purpose, authorized = false, deps, budget = {},
+  url, purpose, site, authorized = false, deps, budget = {},
 } = {}) {
   const { steps: maxSteps = 6 } = budget;
   const refusal = tripRefusedReason(url, { authorized, purpose });
   if (refusal) return { ok: false, reason: refusal, value: null };
 
-  const { openTab, readTab, clickText, closeTab, askModel, note } = deps || {};
+  const { openTab, readTab, clickText, closeTab, judgeCode, note } = deps || {};
   if (!openTab || !readTab || !closeTab) {
     return { ok: false, reason: "the trip has no way to open a page", value: null };
   }
+  // BEFORE the tab opens: a mailbox is never opened for a read nobody can
+  // perform.
+  if (typeof judgeCode !== "function") {
+    return { ok: false, reason: "the trip has no way to read the code", value: null, undecidable: true };
+  }
 
   let tabId = null;
+  let last = null;
   try {
     tabId = await openTab(url);
     if (note) note(`side trip: opened ${safeHost(url)} to get ${purpose}`);
@@ -545,43 +575,37 @@ export async function runSideTrip({
       const page = await readTab(tabId);
       const text = String(page?.text || "");
 
-      const found = extractCode(text);
-      if (found && found.value) {
+      last = await readCodeVerdict({ pageText: text, purpose, site, judge: judgeCode });
+      if (last.state === "code") {
         // ONLY THE VALUE CROSSES BACK. Not the message, not the subject, not
         // the sender. The trace gets the shape of what was found, never the
         // thing itself — a code in a log is a code that outlived its minute.
-        if (note) note(`side trip: found a ${found.value.length}-character code (${found.why})`);
-        return { ok: true, value: found.value, confidence: found.confidence, steps: step + 1 };
+        if (note) note(`side trip: found a ${last.value.length}-character code (read by the model, present on the page)`);
+        return { ok: true, value: last.value, steps: step + 1 };
       }
-      if (found && found.confidence === "ambiguous") {
-        if (note) note(`side trip: stopped — ${found.why}`);
-        return { ok: false, reason: `I found more than one code and won't guess between them`, value: null, ambiguous: true };
+      if (last.state === "unread") {
+        if (note) note("side trip: stopped — the code could not be read");
+        return { ok: false, reason: "I could not read the code", value: null, undecidable: true };
+      }
+      if (last.state === "unclear" && step > 0) {
+        if (note) note("side trip: stopped — more than one value could be the code");
+        return { ok: false, reason: "I found more than one code and won't guess between them", value: null, ambiguous: true };
       }
 
-      // Nothing on this page. The only navigation a side trip is allowed is
-      // opening the newest thing that looks like the message we came for —
-      // it may not wander, and it may not act.
+      // Nothing on this page — or UNCLEAR on the list page, where opening the
+      // message resolves it. The only navigation a side trip is allowed is
+      // opening the newest thing that looks like the message we came for — it
+      // may not wander, and it may not act.
       if (!clickText) break;
       const opened = await clickText(tabId, purpose);
       if (!opened) break;
       if (note) note(`side trip: opened the newest matching message`);
     }
 
-    // Arithmetic found nothing. THIS is where a model earns its place: an
-    // unusual format ("your code: four-eight-three") that no regex will hold.
-    // It sees the page once, for one question, and its answer is still
-    // shape-checked before it is believed.
-    if (askModel) {
-      const page = await readTab(tabId);
-      const raw = await askModel(String(page?.text || "").slice(0, 4000));
-      const checked = extractCode(String(raw || ""), { minLen: 4, maxLen: 8 })
-        || extractCode(`code: ${String(raw || "").trim()}`);
-      if (checked && checked.value) {
-        if (note) note(`side trip: found a ${checked.value.length}-character code (read from an unusual format)`);
-        return { ok: true, value: checked.value, confidence: "medium", steps: maxSteps };
-      }
+    if (last && last.state === "unclear") {
+      if (note) note("side trip: stopped — more than one value could be the code");
+      return { ok: false, reason: "I found more than one code and won't guess between them", value: null, ambiguous: true };
     }
-
     return { ok: false, reason: "I could not find the code on that page", value: null };
   } catch (e) {
     return { ok: false, reason: `the trip failed: ${String(e).slice(0, 120)}`, value: null };

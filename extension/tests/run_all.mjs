@@ -59,6 +59,7 @@ const suites = [
   "test_otp_wall.mjs",
   "test_inbox_consent.mjs",
   "test_code_sent_is_not_a_word_match.mjs",
+  "test_code_read_is_not_a_word_match.mjs",
   "test_private_places.mjs",
   "test_authored_draft.mjs",
   "test_question_reaches_him.mjs",

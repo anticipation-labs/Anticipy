@@ -127,7 +127,8 @@ const ALWAYS_YES = async () => "YES";
         content = JSON.stringify({ start_url: "https://shop.example.com/verify", why: "the site", steps: [], unfamiliar: false });
       } else if (/You audit a browser agent's claim/.test(joined)) {
         content = JSON.stringify({ verified: true });
-      } else if (/find ONE verification code/.test(joined)) {
+      } else if (/ONE page from a person's mailbox/.test(joined)) {
+        // The code judge (Audit #79): the value it names must be on the page.
         content = "483920";
       } else if (/JUST BEEN SENT to this person/.test(joined)) {
         // The code-sent judge (Audit #78), answered from the page it was
@@ -519,7 +520,7 @@ const ALWAYS_YES = async () => "YES";
       content = JSON.stringify({ start_url: "https://shop.example.com/verify", why: "site", steps: [], unfamiliar: false });
     } else if (/You audit a browser agent's claim/.test(joined)) {
       content = JSON.stringify({ verified: true });
-    } else if (/find ONE verification code/.test(joined)) {
+    } else if (/ONE page from a person's mailbox/.test(joined)) {
       content = "483920";
     } else if (/JUST BEEN SENT to this person/.test(joined)) {
       const page = (joined.match(/<PAGE [^>]+>\n([\s\S]*?)\n<\/PAGE /) || [])[1] || "";
