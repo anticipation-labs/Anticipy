@@ -36,12 +36,20 @@ const WALL = "https://fastbite.example.com/browse";
 const SEARCH = "https://search.test/";
 const OPEN = "https://eater.example.com/vancouver/kid-friendly-delivery";
 
+// Audit #71: the wall's WORDS decide nothing any more. What makes this page
+// a wall is the Turnstile frame it renders (the sift) and the model's
+// BLOCKED to the one challenge question (below, in model()).
+const TURNSTILE_FRAME = {
+  src: "https://challenges.cloudflare.com/cdn-cgi/challenge-platform/h/b/turnstile/if/ov2/av0/rcv/x/0x4AAAA/light/normal/",
+  x: 380, y: 420, w: 300, h: 65, hidden: false, inViewport: true,
+};
 function pageFor(url) {
   if (url.startsWith(WALL)) {
     return {
       url, title: "Just a moment...",
       text: "Verify you are human by completing the challenge below.",
       elements: '[0] <button> Verify you are human',
+      frames: [TURNSTILE_FRAME], widgets: [],
     };
   }
   if (url.startsWith(SEARCH)) {
@@ -88,6 +96,15 @@ function model() {
     // contract; answering it with an action verb yields "unparseable verifier
     // response" and the run ends needs_user for a reason that has nothing to do
     // with walls. Its prompt is identifiable by CLAIMED RESULT.
+    // The challenge question (audit #71) is its own call with its own
+    // contract: a bare token. This wall IS a wall.
+    if (seen.includes("standing between the assistant")) {
+      return {
+        ok: true, status: 200,
+        json: async () => ({ choices: [{ message: { content: "BLOCKED" } }] }),
+        text: async () => "",
+      };
+    }
     if (seen.includes("CLAIMED RESULT")) {
       const verdict = { verified: /Superbaba/.test(seen),
         reason: "the page names the restaurants claimed",

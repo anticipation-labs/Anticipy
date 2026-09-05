@@ -13,7 +13,7 @@
 //
 // Run: node extension/tests/test_login_wall.mjs
 import {
-  detectsLoginWall, handBackSentence, canContinueAfterOwner, looksLikeChallenge,
+  detectsLoginWall, handBackSentence, canContinueAfterOwner,
 } from "../login_wall.js";
 
 let failures = 0;
@@ -250,12 +250,19 @@ const LOGIN_MODAL_WITH_RECAPTCHA_BADGE = {
     JSON.stringify(d));
   check("and it records that a subscriber login exists", d && d.hasSignIn === true);
 
-  const e = detectsLoginWall(CHALLENGE_PAGE);
-  check("a human check defers to the existing challenge path", e && e.kind === "captcha",
+  // Audit #71: this file holds no challenge judgement of its own. The loop
+  // injects agent_loop's verdict (a model's BLOCKED, gated on rendered
+  // provider furniture); with nothing injected a robot-check page is not a
+  // wall of any kind — never guessed from its words, never fenced.
+  const e = detectsLoginWall(CHALLENGE_PAGE, { isChallenge: () => true });
+  check("an injected BLOCKED verdict defers to the existing challenge path", e && e.kind === "captcha",
     JSON.stringify(e));
+  const unjudged = detectsLoginWall(CHALLENGE_PAGE);
+  check("without a verdict this file never calls a page a challenge", unjudged === null,
+    JSON.stringify(unjudged));
 
-  // The caller may inject agent_loop's looksLikeCaptcha so the running system
-  // has exactly one challenge judgement. When it says no, we carry on reading.
+  // The injected verdict is what decides, in both directions: when it says
+  // no, we carry on reading the page's own structure.
   const injected = detectsLoginWall({ ...CHALLENGE_PAGE, text: "Email Password Sign in",
     elements: map(() => [
       el("textbox", "Email"),
@@ -286,8 +293,7 @@ const LOGIN_MODAL_WITH_RECAPTCHA_BADGE = {
     JSON.stringify(landing));
 
   const badge = detectsLoginWall(LOGIN_MODAL_WITH_RECAPTCHA_BADGE);
-  check("the reCAPTCHA badge is not a challenge", !looksLikeChallenge(LOGIN_MODAL_WITH_RECAPTCHA_BADGE));
-  check("so the badge page is read as the password wall it is",
+  check("the badge page is read as the password wall it is",
     badge && badge.kind === "password", JSON.stringify(badge));
 
   check("an empty state is not a wall", detectsLoginWall({}) === null);
@@ -565,9 +571,12 @@ const LOGIN_MODAL_WITH_RECAPTCHA_BADGE = {
     text: "Verify you are human before signing in. Email Password Sign in",
     fields: [field(0, "Email", "email")],
   };
-  const over = detectsLoginWall(challengeOverLogin);
-  check("a challenge in front of a login form defers to the challenge path",
+  const over = detectsLoginWall(challengeOverLogin, { isChallenge: () => true });
+  check("a challenge verdict in front of a login form defers to the challenge path",
     over && over.kind === "captcha", JSON.stringify(over));
+  const unjudgedOver = detectsLoginWall(challengeOverLogin);
+  check("without a verdict the same page is the login form it structurally is",
+    unjudgedOver && unjudgedOver.kind === "password", JSON.stringify(unjudgedOver));
 }
 
 // ==========================================================================
@@ -599,7 +608,7 @@ const LOGIN_MODAL_WITH_RECAPTCHA_BADGE = {
   check("and is honest that it may be unfinishable",
     /can't be finished without buying one/.test(pay));
 
-  const cap = handBackSentence(detectsLoginWall(CHALLENGE_PAGE), owner);
+  const cap = handBackSentence(detectsLoginWall(CHALLENGE_PAGE, { isChallenge: () => true }), owner);
   console.log(`  captcha  -> ${cap}`);
   check("the challenge sentence matches the words agent_loop already uses",
     /prove you're human/.test(cap) && /clear the check/.test(cap));

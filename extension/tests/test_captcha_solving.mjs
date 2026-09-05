@@ -43,7 +43,9 @@ assert.ok(/handing it to the owner/.test(fn),
 // it abandons that host and answers from somewhere else. The failure that
 // prompted it: "I forgot to cook for my kids this afternoon" reached doordash,
 // met a human check, and asked HIM to tick a box so she could read a menu.
-const site = loop.slice(loop.indexOf('if (looksLikeCaptcha(state))'));
+// Audit #71: the block is entered on a model's BLOCKED verdict, never on a
+// phrase; what it does once entered is unchanged and pinned below.
+const site = loop.slice(loop.indexOf('if (verdict === CHALLENGE_BLOCKED)'));
 const block = site.slice(0, site.indexOf('\n      // A WALL IS NOT A STALL'));
 assert.ok(/trySolveChallenge/.test(block), "solving is still attempted first");
 assert.ok(/needs_user/.test(block),

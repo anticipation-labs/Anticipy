@@ -75,10 +75,14 @@ Requires the Anticipy iPhone app and an Anticipy account.
   standing `Rules:` line and again in the owner-profile block. See the honest
   caveat under Permissions, and the `form_submit_demo` note in the test
   instructions.
-- **"hands the task back at logins and CAPTCHAs"** — `looksLikeCaptcha()` in
-  `agent_loop.js` detects a challenge page and the loop returns
-  `stopped at a CAPTCHA/robot check on … — needs a human`. A login wall is one
-  of only two permitted `needs_user` reasons in the prompt.
+- **"hands the task back at logins and CAPTCHAs"** — in `agent_loop.js`,
+  `challengeFurniture()` lists the challenge-provider frames and widgets the
+  page renders (by origin — never by its words), `challengeVerdict()` asks a
+  model whether that check is blocking the errand right now, and only a
+  BLOCKED verdict parks the run with `… is asking for a "prove you're human"
+  check, which I'm not allowed to click through`. A click aimed inside a
+  provider's frame is refused by the executor regardless of verdict. A login
+  wall is one of only two permitted `needs_user` reasons in the prompt.
 - **"refuses banking and brokerage sites"** — `BLOCKED_DOMAINS` in
   `agent_loop.js`, a hard-coded list outside the model, checked by
   `blockedDomain()` against the current page and again before every
