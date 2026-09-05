@@ -394,10 +394,22 @@ def leg_6_speaker_linked() -> str:
         raise LegFailed("no packageProductDependencies section found in the project")
     body = m.group(1).strip().rstrip(",").strip()
     if not body:
-        raise LegFailed("packageProductDependencies is an EMPTY LIST: the speaker "
-                        "engine is not linked, while the 25MB model still ships in "
-                        "every build. speaker stays empty on every event until "
-                        "somebody adds the package product to the target (build 76)")
+        # RED BY DESIGN (audit F30, 2026-09-05). The remedy this leg used to
+        # prescribe — "add the package product to the target" — is the one
+        # action app/ios/project.yml:683-731, docs/BRIEF.html and
+        # research/2026-09-04-omi-port-coverage.md:82-91 record as fatal:
+        # builds 46/47 and 76-80 carried that binary xcframework and vanished
+        # in App Store Connect processing. The predicate is NOT softened (Law
+        # 3); the text now agrees with the ledger so nobody follows the gate
+        # into the next lost TestFlight upload.
+        raise LegFailed("packageProductDependencies is EMPTY: the speaker engine "
+                        "is unlinked and speaker stays empty on every event. RED "
+                        "BY DESIGN — do NOT re-link sherpa-onnx/onnxruntime-libs: "
+                        "builds 46/47/76 carrying that binary xcframework vanished "
+                        "in App Store Connect processing (app/ios/project.yml:"
+                        "683-731, research/2026-09-04-omi-port-coverage.md:82). "
+                        "Precondition to go green: read the ASC processing "
+                        "rejection for those builds first, then re-add the package")
     if "sherpa" not in pbx.lower():
         raise LegFailed("a package product is linked but it is not the speech/"
                         "speaker engine")
@@ -447,6 +459,13 @@ def leg_8_eval_intact() -> str:
     return "137 lines, 6 acts, 54% shards — the baseline is intact"
 
 
+# Legs that are red on purpose and must NOT be read as "the next thing to
+# fix" (audit F30). tape_gate.py labels its leg 2 the same way. The exit code
+# stays 1 — a red leg is red — but the summary names the design so the
+# instruction CLAUDE.md gives ("run them, believe them") does not send an
+# agent to re-link a package that kills TestFlight distribution.
+RED_BY_DESIGN = {6}
+
 LEGS = [
     (1, "A MEETING IS A POSTURE", leg_1_meeting_posture),
     (2, "A SHARD CANNOT MINT A MEETING", leg_2_shard_floor),
@@ -472,7 +491,8 @@ def main() -> int:
             print(f"        {detail}")
         except LegFailed as e:
             mark = "FAIL" if first is None else "fail"
-            print(f"  [{num}] {mark}  {name}")
+            design = "  (red by design)" if num in RED_BY_DESIGN else ""
+            print(f"  [{num}] {mark}  {name}{design}")
             print(f"        {e}")
             if first is None:
                 first = (num, name, str(e))
@@ -487,7 +507,8 @@ def main() -> int:
         print()
         return 0
     num, name, why = first
-    print(f"  NOT DONE - first failing leg: {num} ({name})")
+    design = " — red by design, not the next thing to fix" if num in RED_BY_DESIGN else ""
+    print(f"  NOT DONE - first failing leg: {num} ({name}){design}")
     print(f"  {why}")
     print()
     return 1
