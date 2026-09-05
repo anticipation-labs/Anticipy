@@ -328,6 +328,19 @@ ADDRESSEES = ("assistant", "person", "dictation", "self")
 # not her hands.
 AMBIENT_ADDRESSEES = ("person", "dictation", "self")
 
+# THE VOICE FLOOR (Omi port 10a, 2026-09-05). The one addressee that
+# AUTHORIZES an interruption: the model positively said he was talking
+# to her. anticipy_core's lane gate compares against THIS set, not the
+# ambient one, so a line whose addressee is absent or unreadable (None)
+# takes the governed lane — one held card, one text under quiet hours
+# and the meeting posture, the parked-ask valve — never the direct
+# lane's immediate text. Law 1: a FLOOR must refuse without a verdict
+# or it lifts itself. It used to lift itself: "None (field missing or
+# invalid) fails open to the behaviour she had before this field
+# existed" was the direct lane, and on 2026-08-23 attribution was the
+# field that was absent on all 137 lines.
+DIRECT_ADDRESSEES = ("assistant",)
+
 # The one lane where the words are not his own intentions. When he dictates,
 # he is AUTHORING text — voice-typing a message, instructing another AI — so
 # "book us a table" inside it is a sentence he is composing, not a plan he is
@@ -510,18 +523,56 @@ Reply ONLY with compact JSON: {"owner_committed": true|false}"""
         # keyless rig's heuristic can never quietly overrule a real model.
         if ((decision in ("act", "ask") or bool(goal)) and self.strong
                 and getattr(self.strong, "live", False)):
+            # THIS IS A FLOOR (Omi port 10a). The operator configured a
+            # frontier re-judgement as the authorization an action needs
+            # before it leaves the cheap model's hands. A re-judgement
+            # that raised, or came back without a readable decision,
+            # authorized nothing — so a NON-explicit cheap act/ask/quiet-
+            # goal is demoted to plain ignore: remembered, re-triaged if
+            # he says it again, never acted on off the cheap verdict
+            # alone. The Tejas call's five wrong acts were all cheap
+            # verdicts nobody re-examined; a strong model that is DOWN
+            # must not quietly hand the day back to them. An explicit
+            # line keeps the cheap verdict: a reply to him costs no
+            # interruption, and the seatbelt still holds every
+            # consequential goal. Inert while ANTICIPY_STRONG_MODEL is
+            # unset. The reason begins "no verdict" so the record can
+            # count how often the strong look was silent.
+            #
+            # WHAT WAS HERE UNTIL 2026-09-05, Omi port 10a:
+            #   except Exception:
+            #       pass  # the cheap verdict stands; never fail the line
+            # — an unanswered strong look left the cheap "act" standing,
+            # which is a floor lifting itself.
+            re_raw = None
             try:
                 second = self.strong.chat(TRIAGE_SYSTEM, transcript_line,
                                           temperature=0.0)
                 re_raw = json.loads(_extract_json(second.text))
-                if re_raw.get("decision") in ("act", "ask", "ignore"):
-                    raw = re_raw
-                    decision = raw.get("decision", "ignore")
-                    goal = raw.get("goal")
-                    if goal in ("null", ""):
-                        goal = None
-            except Exception:
-                pass       # the cheap verdict stands; never fail the line
+            except Exception as exc:
+                print("triage: the strong second opinion went unanswered "
+                      f"— {exc!r}")
+            readable = (isinstance(re_raw, dict)
+                        and re_raw.get("decision") in ("act", "ask", "ignore"))
+            if readable:
+                raw = re_raw
+                decision = raw.get("decision", "ignore")
+                goal = raw.get("goal")
+                if goal in ("null", ""):
+                    goal = None
+            elif not explicit:
+                if re_raw is not None:
+                    print("triage: unreadable strong second opinion -> "
+                          f"{re_raw!r}")
+                print("triage: no verdict from the strong second opinion "
+                      f"— not acting on the cheap {decision!r} alone")
+                raw = {**raw, "decision": "ignore", "goal": None,
+                       "missing": [], "assumption": None,
+                       "reason": ("no verdict from the strong second "
+                                  "opinion — not acting on the cheap "
+                                  "verdict alone")}
+                decision = "ignore"
+                goal = None
         # A syntactically valid model reply can still miss an unmistakable
         # request.  That is especially costly on a direct channel: the owner
         # deliberately sent the line to this assistant, yet a single semantic
@@ -562,7 +613,11 @@ Reply ONLY with compact JSON: {"owner_committed": true|false}"""
             addressee = None
         owes = raw.get("owes")
         if owes not in OWES:
-            owes = None       # no answer changes nothing: the honesty wall
+            # No answer withholds her HANDS, never her voice on a line
+            # positively aimed at her — the hands floor in anticipy_core
+            # (Omi port 10a). Stored as None so the event row reads ""
+            # and the unclassified bucket stays honest.
+            owes = None
         touches = raw.get("touches")
         if touches not in TOUCHES:
             touches = None    # same wall — an invalid channel is no channel

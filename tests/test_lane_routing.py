@@ -4,12 +4,20 @@ gate. No Brave key -> everything stays in the browser lane."""
 import json
 
 import brain.anticipy_core as core
-from brain.anticipy_core import Anticipy, job_lane
+from brain.anticipy_core import Anticipy, Decision, job_lane
 from brain.memory import Memory
 
 from llm_fakes import FakeExtractor
 
 PITCH_LINE = "I'll send you the pitch deck after this call."
+
+# The verdict the two channel legs stand on: his own errand, aimed at her,
+# so it takes the direct lane where `channel` rides on the job. Scripted
+# since Omi port 10a; see _offline_anticipy.
+_PITCH_VERDICT = Decision(
+    decision="act", goal="send you the pitch deck after this call",
+    reason="scripted", addressee="assistant", owes="owner",
+    needs_confirmation=True)
 
 
 def _offline_anticipy(**kw):
@@ -29,6 +37,13 @@ def _offline_anticipy(**kw):
     commitment is always None. The spec says delete it
     (docs/superpowers/specs/2026-08-25-library-law-clean.md 4.2a); this file
     only keeps the tests honest until someone does.
+
+    Since 2026-09-05 (Omi port 10a) the arm's verdict — act with NO
+    addressee and NO owes — is below both floors: it takes the nobody
+    treatment and queues nothing. That is correct for a keyword engine (a
+    heuristic handing out addressee="assistant" would be a word list
+    deciding meaning), so the two channel legs below script the verdict
+    they were always really standing on instead of riding the arm.
     """
     kw.setdefault("memory", Memory(":memory:", llm=FakeExtractor(
         topics=["pitch deck"],
@@ -141,7 +156,7 @@ def test_an_sms_ask_is_marked_on_the_job(monkeypatch):
                                            R())[1])
     a = _offline_anticipy(owner_id="own1")
     monkeypatch.setattr(a, "_same_pending", lambda goal, **_k: None)
-    # No LLM: the deterministic path acts on a fresh commitment.
+    monkeypatch.setattr(a, "_decide", lambda *a_, **k_: _PITCH_VERDICT)
     out = a.hear(PITCH_LINE, channel="sms")
     assert out["decision"].decision == "act"
     assert json.loads(posted["params"])["channel"] == "sms"
@@ -163,5 +178,6 @@ def test_a_pendant_line_carries_no_channel(monkeypatch):
                                            R())[1])
     a = _offline_anticipy(owner_id="own1")
     monkeypatch.setattr(a, "_same_pending", lambda goal, **_k: None)
+    monkeypatch.setattr(a, "_decide", lambda *a_, **k_: _PITCH_VERDICT)
     a.hear(PITCH_LINE)
     assert "channel" not in json.loads(posted["params"])

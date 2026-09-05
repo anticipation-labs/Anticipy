@@ -39,6 +39,7 @@ from .workflow import (ActDeclaration, Consequence, UndoInput, UndoPlan,
                        merge as merge_plan, new_plan, put_in_params)
 from .orchestrator import (Brain, Decision, IRREVERSIBLE, ADDRESSEES,
                            AMBIENT_ADDRESSEES, AUTHORED_ADDRESSEES,
+                           DIRECT_ADDRESSEES,
                            NOT_HIS, check_sufficiency, fill_gaps_from_memory,
                            party_verdict, PARTY_YES, PARTY_UNASKED,
                            PARTY_UNANSWERED, ends_in_the_world,
@@ -2046,8 +2047,17 @@ class Anticipy:
         # explicit line (he texted/typed it AT her) is assistant by
         # definition; unmistakable dictation is decided outside the model;
         # otherwise the model's classification stands. None (field missing
-        # or invalid) fails open to the behaviour she had before this field
-        # existed — a misbehaving model must not change her.
+        # or invalid) is stored as None — the row reads "", the record
+        # stays honest — and the lane gate below treats it as NOT aimed
+        # at her: the governed lane, never the texting one (Omi port 10a).
+        #
+        # WHAT WAS HERE UNTIL 2026-09-05, Omi port 10a: "None (field
+        # missing or invalid) fails open to the behaviour she had before
+        # this field existed — a misbehaving model must not change her."
+        # That behaviour was the direct lane: an uninvited text with no
+        # quiet hours, no meeting posture and no shard floor, reached by a
+        # model DROPPING a field. A floor that lifts itself on silence is
+        # not a floor.
         if explicit:
             addressee = "assistant"
         elif dictated:
@@ -2070,8 +2080,6 @@ class Anticipy:
         #
         # An EXPLICIT line is exempt: if he typed it at her or texted her, he
         # is the one asking, and no second opinion overrides him.
-        # No verdict at all (older model, unparseable reply) changes nothing:
-        # the honesty wall, same as every other judgement she makes.
         # The price of being wrong is not the same in both directions, so the
         # bar is not either. Looking something up is silent, free and
         # reversible — being generous there costs him nothing. Booking,
@@ -2084,10 +2092,34 @@ class Anticipy:
         #               read-only lookup may still run quietly. "Let's go out
         #               tomorrow" carries no firm obligation yet, and going
         #               silent on it is how she went deaf last time.
-        if (decision.owes in NOT_HIS and not explicit
+        #   None     -> THE HANDS FLOOR (Omi port 10a). No verdict on whose
+        #               errand this is takes the nobody treatment — quiet
+        #               lookup at most, nothing prepared, nothing texted —
+        #               UNLESS the addressee verdict positively says he was
+        #               talking to her, in which case her voice is
+        #               authorized by THAT verdict and the line falls
+        #               through to the direct lane exactly as before: an
+        #               ask is asked, a consequential act is a held card
+        #               his tap releases. Each floor refuses only what it
+        #               authorizes — `owes` authorizes consequential
+        #               hands, `addressee` authorizes voice. A dropped card
+        #               is recoverable (the line is in memory, the next
+        #               fragment re-triages, the clock can raise it
+        #               through work_is_licensed); a held card on an
+        #               unowned obligation is a wrong tap that spends
+        #               money or sends mail in his name.
+        #
+        # WHAT WAS HERE UNTIL 2026-09-05, Omi port 10a: "No verdict at all
+        # (older model, unparseable reply) changes nothing: the honesty
+        # wall, same as every other judgement she makes." — `owes=None`
+        # passed this fence and the "other" fence below, and reached the
+        # act lane as if he had said the errand was his.
+        no_owes = decision.owes is None and addressee not in DIRECT_ADDRESSEES
+        if ((decision.owes in NOT_HIS or no_owes) and not explicit
                 and decision.decision in ("act", "ask")):
             goal = decision.goal
-            may_look = (decision.owes == "nobody" and decision.decision == "act"
+            may_look = (decision.owes in ("nobody", None)
+                        and decision.decision == "act"
                         and goal and not decision.missing
                         and not is_consequential(goal))
             # "nobody" is right about musing and wrong about a plan the
@@ -2097,15 +2129,28 @@ class Anticipy:
             # (seen live, 2026-08-12). A settled consequential plan falls
             # through to the ambient lane below — prepared, held, one text —
             # never into this hole. "machine" keeps its silence.
-            settled = (decision.owes == "nobody" and goal
-                       and addressee in AMBIENT_ADDRESSEES
+            # `addressee not in DIRECT_ADDRESSEES`, not `in
+            # AMBIENT_ADDRESSEES`: a None addressee must reach this one
+            # positive tiebreaker too, or a settled overheard plan with
+            # both fields blank dies unasked (Omi port 10a).
+            settled = (decision.owes in ("nobody", None) and goal
+                       and addressee not in DIRECT_ADDRESSEES
                        and (is_consequential(goal)
                             or ends_in_the_world(self.llm, line, goal))
                        and plan_is_settled(self.llm, line, goal))
             if not may_look and not settled:
-                reason = ("operating a machine by voice — it is already doing it"
-                          if decision.owes == "machine"
-                          else "no obligation to anyone")
+                if decision.owes is None:
+                    # Never the word "nobody": no verdict is not a
+                    # verdict, and the reason must not read like a
+                    # classification. It begins "no verdict" so the
+                    # record can count it.
+                    reason = ("no verdict on whose errand this is — looked "
+                              f"up quietly at most, nothing prepared: {goal!r}")
+                else:
+                    what = ("operating a machine by voice — it is already "
+                            "doing it" if decision.owes == "machine"
+                            else "no obligation to anyone")
+                    reason = f"not his to do: {what} — {goal!r}"
                 self._prev = (line, time.time())
                 # goal="" is deliberate: ignore + a goal is the feed's
                 # "Looking into it — I'll text you what I find" card, and
@@ -2114,8 +2159,7 @@ class Anticipy:
                 # watched four of them in a row and reasonably concluded
                 # every plan "gets stuck there".
                 return {"memory": mem, "decision": Decision(
-                    decision="ignore", goal="",
-                    reason=f"not his to do: {reason} — {goal!r}",
+                    decision="ignore", goal="", reason=reason,
                     addressee=addressee, owes=decision.owes),
                     "anticipy_says": None}
             if not settled:
@@ -2134,7 +2178,7 @@ class Anticipy:
                         reason=("nothing queued for the quiet lookup "
                                 f"{goal!r} — no card exists, so nothing is "
                                 "claimed"),
-                        addressee=addressee, owes="nobody"),
+                        addressee=addressee, owes=decision.owes),
                         "anticipy_says": None}
                 self.loops.append(LoopRecord(
                     commitment_id=mem.get("commitment_id") or -1,
@@ -2142,8 +2186,12 @@ class Anticipy:
                 self._prev = None
                 return {"memory": mem, "decision": Decision(
                     decision="ignore", goal=goal,
-                    reason="no firm obligation yet — looking quietly, saying nothing",
-                    addressee=addressee, owes="nobody"),
+                    reason=("no verdict on whose errand this is — looking "
+                            "quietly, saying nothing"
+                            if decision.owes is None else
+                            "no firm obligation yet — looking quietly, "
+                            "saying nothing"),
+                    addressee=addressee, owes=decision.owes),
                     "anticipy_says": None}
             # A SETTLED overheard plan reaches here only by falling through:
             # the ambient lane below prepares it, holds it, and spends the
@@ -2198,7 +2246,27 @@ class Anticipy:
         # "Noted — nothing needed", which is the truth of this lane; the
         # addressee logged beside it says why, and any quiet job carries
         # lane=ambient so the whole story is auditable.
-        if addressee in AMBIENT_ADDRESSEES and decision.decision in ("act", "ask"):
+        #
+        # THE VOICE FLOOR (Omi port 10a). The gate compares against the one
+        # addressee that AUTHORIZES an interruption, not against the set
+        # that forbids one: a line whose addressee is None — the field
+        # absent or unreadable, which is what 2026-08-23 looked like on all
+        # 137 lines — is NOT positively aimed at her, so it takes this
+        # lane: the shard floor, ends_in_the_world, quiet research, one
+        # held card with ONE text under quiet hours and the meeting
+        # posture, the parked-ask valve. The direct lane's immediate text
+        # and "Quick question" are unreachable without a verdict. An
+        # explicit line was forced to "assistant" above, so the typed and
+        # texted channels are unchanged. `who` keeps the record honest: an
+        # unattributed line is never written up as "person-directed" or
+        # "self-directed".
+        #
+        # WHAT WAS HERE UNTIL 2026-09-05, Omi port 10a:
+        #   if addressee in AMBIENT_ADDRESSEES and decision.decision in ("act", "ask"):
+        # — None was in neither set, so it skipped this lane and took the
+        # direct one.
+        if addressee not in DIRECT_ADDRESSEES and decision.decision in ("act", "ask"):
+            who = addressee or "unattributed"
             # A shard cannot mint a meeting. Remembered above like every
             # line; acted on, never. See shard_too_thin's docstring for the
             # recorded failure and this tape's expiry.
@@ -2206,7 +2274,7 @@ class Anticipy:
                 self._prev = (line, time.time())
                 return {"memory": mem, "decision": Decision(
                     decision="ignore", goal="",
-                    reason=(f"{addressee}-directed: a shard with no thread "
+                    reason=(f"{who}-directed: a shard with no thread "
                             f"to continue — remembered, not acted on: "
                             f"{decision.goal!r}"),
                     addressee=addressee), "anticipy_says": None}
@@ -2263,7 +2331,7 @@ class Anticipy:
                     handled = computed
                 decision = Decision(
                     decision="ignore", goal=goal,
-                    reason=(f"{addressee}-directed: computed the answer "
+                    reason=(f"{who}-directed: computed the answer "
                             "directly — nothing to research"),
                     addressee=addressee)
             elif quiet_research:
@@ -2279,7 +2347,7 @@ class Anticipy:
                         what=goal, status="handling", job_id=job_id))
                     decision = Decision(
                         decision="ignore", goal=goal,
-                        reason=f"{addressee}-directed: quiet research, saying nothing",
+                        reason=f"{who}-directed: quiet research, saying nothing",
                         addressee=addressee)
                 else:
                     # She is not looking after all, so this is not the quiet
@@ -2289,7 +2357,7 @@ class Anticipy:
                     quiet_research = False
                     decision = Decision(
                         decision="ignore", goal="",
-                        reason=(f"{addressee}-directed: nothing queued for "
+                        reason=(f"{who}-directed: nothing queued for "
                                 f"{goal!r}, so no quiet work to claim"),
                         addressee=addressee)
             elif goal and consequential and addressee not in AUTHORED_ADDRESSEES \
@@ -2377,15 +2445,15 @@ class Anticipy:
                     # ever told the second one to shut up about it.
                     decision = Decision(
                         decision="ignore", goal="",
-                        reason=(f"{addressee}-directed: nothing queued for "
+                        reason=(f"{who}-directed: nothing queued for "
                                 f"{goal!r} — there is no card to wait on"),
                         addressee=addressee)
                 else:
                     decision = Decision(
                         decision="act" if fresh else "ignore", goal=goal,
-                        reason=(f"{addressee}-directed: prepared, waiting on his OK"
+                        reason=(f"{who}-directed: prepared, waiting on his OK"
                                 if fresh else
-                                f"{addressee}-directed: already on her desk"),
+                                f"{who}-directed: already on her desk"),
                         needs_confirmation=True, addressee=addressee)
                 handled = None
                 if fresh and in_meeting:
@@ -2402,7 +2470,7 @@ class Anticipy:
                     self._meeting_held.append((job_id, goal))
                     decision = Decision(
                         decision="act", goal=goal,
-                        reason=(f"{addressee}-directed: held for the digest "
+                        reason=(f"{who}-directed: held for the digest "
                                 "after his conversation"),
                         needs_confirmation=True, addressee=addressee)
                 elif fresh:
@@ -2456,7 +2524,7 @@ class Anticipy:
                         handled = None
                         decision = Decision(
                             decision="act", goal=goal,
-                            reason=(f"{addressee}-directed: held quietly "
+                            reason=(f"{who}-directed: held quietly "
                                     "overnight; raised in the morning"),
                             needs_confirmation=True, addressee=addressee)
                     elif not verdict:
@@ -2498,7 +2566,7 @@ class Anticipy:
                                 l.status = "cancelled"
                         decision = Decision(
                             decision="ignore", goal="",
-                            reason=(f"{addressee}-directed: could not raise "
+                            reason=(f"{who}-directed: could not raise "
                                     f"{goal!r}, so it was cancelled rather "
                                     "than left waiting on him"),
                             addressee=addressee)
@@ -2536,13 +2604,13 @@ class Anticipy:
                     self._pending_ask = (question, time.time(), 0.0)
                     decision = Decision(
                         decision="ask", goal="",
-                        reason=(f"{addressee}-directed: one question parked "
+                        reason=(f"{who}-directed: one question parked "
                                 f"for the next quiet moment"),
                         addressee=addressee, missing=list(decision.missing))
                 else:
                     decision = Decision(
                         decision="ignore", goal="",
-                        reason=(f"{addressee}-directed: nothing speakable "
+                        reason=(f"{who}-directed: nothing speakable "
                                 "to ask — remembered instead"),
                         addressee=addressee)
             else:
@@ -2556,7 +2624,7 @@ class Anticipy:
                 # gets to say so.
                 decision = Decision(
                     decision="ignore", goal="",
-                    reason=f"{addressee}-directed: stays ambient — {goal!r}",
+                    reason=f"{who}-directed: stays ambient — {goal!r}",
                     addressee=addressee)
             acted = decision.decision == "act" or quiet_research
             self._prev = None if acted else (line, time.time())
@@ -2858,8 +2926,9 @@ class Anticipy:
             # minutes, because each goalless self-talk ask dodged the
             # goal-keyed dedupe. Self-talk still gets her help — acts queue,
             # plans firm up through the open-plan carry — she just doesn't
-            # tug his sleeve about it. (No classification at all keeps the
-            # old texting behaviour: the honesty wall cuts both ways.)
+            # tug his sleeve about it. No classification at all no longer
+            # reaches this branch: the lane gate above sends an
+            # unattributed ask to the parked-ask valve (Omi port 10a).
             # TRIED AND REVERTED, 2026-08-07 — do not narrow this to goalless
             # asks. The reasoning looked airtight: the incident above was about
             # GOALLESS asks dodging the goal-keyed dedupe, so with a goal
@@ -4380,9 +4449,32 @@ class Anticipy:
             raw = json.loads(res.text[res.text.find("{"): res.text.rfind("}") + 1])
         except Exception:
             return None
-        if not raw.get("initiate") or not raw.get("say"):
+        # THE CLOCK'S FLOOR (Omi port 10a): a text from a timer is
+        # authorized by a JSON `true` on `initiate` and a non-empty string
+        # on `say` — the transport contract calendar_plan_verdict already
+        # enforces. An honest `false` is a readable "not now" and stays
+        # silent as before; anything else — the key absent, the STRING
+        # "false"/"no"/"true", a number, a `say` that is not a string —
+        # is no verdict, and no verdict raises nothing this tick. The
+        # loop is reviewed again next tick; nothing is marked reached.
+        #
+        # WHAT WAS HERE UNTIL 2026-09-05, Omi port 10a:
+        #   if not raw.get("initiate") or not raw.get("say"): return None
+        # — truthiness, so a malformed `"initiate": "false"` passed and
+        # the `say` beside it was texted about an old loop.
+        if not isinstance(raw, dict):
+            print(f"clock: unreadable reply ({type(raw).__name__}) — "
+                  "nothing raised this tick")
             return None
-        say = str(raw["say"]).strip()
+        initiate = raw.get("initiate")
+        if initiate is False:
+            return None
+        say = raw.get("say")
+        if initiate is not True or not isinstance(say, str) or not say.strip():
+            print(f"clock: no readable initiate/say (initiate={initiate!r}, "
+                  f"say={type(say).__name__}) — nothing raised this tick")
+            return None
+        say = say.strip()
         goal = raw.get("goal")
         if goal in ("", "null"):
             goal = None

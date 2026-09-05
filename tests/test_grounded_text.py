@@ -81,9 +81,11 @@ def _anticipy(monkeypatch, voice):
     monkeypatch.setattr(pb, "post", fake.post)
     monkeypatch.setattr(pb, "patch", fake.patch)
     a = Anticipy(memory=DeadMemory(), owner_id="grounded")
+    # owes="owner" stated since 2026-09-05 (Omi port 10a): the ambient
+    # held-card path these legs pin is the path of a plan that is HIS.
     monkeypatch.setattr(a, "_decide", lambda *args, **kw: Decision(
         decision="act", goal=GOAL, reason="a real plan",
-        addressee="person", needs_confirmation=True))
+        addressee="person", owes="owner", needs_confirmation=True))
     monkeypatch.setattr(a, "_voice", lambda *a_, **k_: voice)
     sent = []
     a.notify_owner = lambda m, channel="sms": (sent.append(m), True)[1]
@@ -113,7 +115,8 @@ def test_a_number_from_the_goal_is_allowed(monkeypatch):
         monkeypatch, "holding dinner for 4 at Earls at 7 — say go")
     monkeypatch.setattr(a, "_decide", lambda *args, **kw: Decision(
         decision="act", goal="Book dinner at Earls for 4 people at 7 PM",
-        reason="a real plan", addressee="person", needs_confirmation=True))
+        reason="a real plan", addressee="person", owes="owner",
+        needs_confirmation=True))
     a.hear("dinner at Earls, seven works, all four of us",
            may_say=lambda *a_, **k_: True)
     assert len(sent) == 1

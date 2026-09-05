@@ -150,17 +150,46 @@ def test_when_he_asks_her_directly_nothing_overrides_him():
     assert len(a.queued) == 1, a.queued
 
 
-def test_a_missing_verdict_changes_nothing():
-    """Old model, unparseable reply: behave exactly as before the field."""
+def test_a_missing_verdict_withholds_her_hands():
+    """REVERSED 2026-09-05, Omi port 10a. Until then this test read:
+
+        def test_a_missing_verdict_changes_nothing():
+            # "Old model, unparseable reply: behave exactly as before
+            # the field."
+            ...
+            assert len(a.queued) == 1, "no verdict must not silence her"
+
+    That ruling put an ABSENT hands verdict on the act side: a triage
+    reply that said "act" and dropped `owes` was routed as if he had said
+    the errand was his, and on 2026-08-23 attribution was precisely the
+    field absent on every line. HARNESS-LAWS Law 1: a floor must refuse
+    without a verdict or it lifts itself. Now an absent owes on a line
+    NOT positively aimed at her (addressee "person" here) takes the
+    nobody treatment — nothing queued, nothing texted — and the reason
+    says "no verdict", never "nobody": the record must not read a
+    silence as a classification. Her voice on a line the model says was
+    aimed at her is a different floor and is untouched (see
+    tests/test_no_verdict_is_below_the_floor.py)."""
     a = build({k: v for k, v in BOOK.items()})       # no "owes" at all
-    a.hear("seven at Cactus tomorrow, just the two of us")
-    assert len(a.queued) == 1, "no verdict must not silence her"
+    out = a.hear("seven at Cactus tomorrow, just the two of us")
+    assert a.queued == [], "no verdict must withhold her hands"
+    assert a.texts == []
+    assert out["decision"].decision == "ignore"
+    assert out["decision"].owes is None, "a silence is not a verdict"
+    assert "no verdict" in out["decision"].reason
+    assert "nobody" not in out["decision"].reason
 
 
-def test_a_garbage_verdict_changes_nothing():
+def test_a_garbage_verdict_withholds_her_hands():
+    """REVERSED 2026-09-05, Omi port 10a — it used to be
+    `test_a_garbage_verdict_changes_nothing` asserting `len(a.queued) == 1`
+    under the same ruling. A value outside OWES is no verdict, and no
+    verdict withholds her hands."""
     a = build({**BOOK, "owes": "banana"})
-    a.hear("seven at Cactus tomorrow, just the two of us")
-    assert len(a.queued) == 1
+    out = a.hear("seven at Cactus tomorrow, just the two of us")
+    assert a.queued == [] and a.texts == []
+    assert out["decision"].owes is None
+    assert "no verdict" in out["decision"].reason
 
 
 def test_the_model_is_actually_asked_the_question():
