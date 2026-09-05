@@ -77,6 +77,7 @@ object is not the source of truth for scheduling; D1 is.
 | register returned no `id` | found by the smoke's leg 3 on Cloudflare; a 0.13.0 install minted a junk agents row per poll and never paired; fixed `640e8bc8`, deployed `f3d9da08`, contract pinned |
 | **hands proven on Cloudflare** | `extension_smoke.mjs` unmodified, 10/10 against api.anticipy.ai with a disposable owner; two proxy audit rows on OpenRouter, claim in 4 s, done with a verified receipt |
 | the instruments | fifteen defaults moved to api.anticipy.ai; `_env.py` sends a gate User-Agent because the firewall blocks `Python-urllib` (`9e53051c`); is_it_live and stranger 1/9 green against Cloudflare |
+| **extension 0.14.0** | `5f4ccec6`: DEFAULT_BASE → api.anticipy.ai, four pins bumped, zip rebuilt; Worker `3b62abf2` serves it byte-identical; the served zip's own config.js reads `DEFAULT_BASE = "https://api.anticipy.ai"`; stranger legs 1 and 2 PASS |
 | the ears on Cloudflare, measured | `are_the_ears_live.py` against api.anticipy.ai now RUNS (it needed `fields=`) and says **DEAF**: newest speech 2026-09-01 05:02Z (iphone-b113), newest server row 2026-09-02 04:58Z. Not a defect of the ears — no phone posts to Cloudflare until the api-pointed build is on one |
 
 **Which owner the one brain serves — read from D1, masked.** The supervisor
@@ -96,20 +97,17 @@ Open question on the brain: `wrangler containers instances` lists only two INACT
 
 ## The sequence from here
 
-1. **Worker parity** — port `/agent/llm` (building), copy the 0.13.0 zips into
+1. ~~**Worker parity**~~ DONE (`557e1227`, `47c6f8d5`, `640e8bc8`; deployed `f3d9da08`). Was: port `/agent/llm` (building), copy the 0.13.0 zips into
    `migration/workers/public/`, add a gate leg that says the Worker's public
    folder equals `backend/pb_public`; `tsc`, dry-run, contract tests; then
    `wrangler deploy` from `migration/workers/`. Verify: `/agent/llm` answers a
    paired agent; `is_it_live.py` with `ANTICIPY_BACKEND_URL=https://api.anticipy.ai`.
-2. **Hands on Cloudflare, proven** — `extension_smoke.mjs --base=https://api.anticipy.ai`
+2. ~~**Hands on Cloudflare, proven**~~ DONE 10/10 (hands-live-run.md). Was: `extension_smoke.mjs --base=https://api.anticipy.ai`
    with a test owner (creates one probe agent row and one read-only job on D1;
    the smoke tidies the agent and leaves the job as evidence). Then the same
    battery shape against the Worker if the rig can be pointed at it.
-3. **Extension 0.14.0** — `DEFAULT_BASE` → `https://api.anticipy.ai` so a fresh
-   install pairs with a phone that is itself api-pointed (pairing needs both
-   halves on one backend). Rebuild into BOTH public folders; deploy the Worker.
-   Railway keeps 0.13.0 for old installs.
-4. **Brain deploy** — merge 06 and 10b, `gh workflow run brain-deploy.yml --ref cloudflare-backend`,
+3. ~~**Extension 0.14.0**~~ DONE `5f4ccec6` / Worker `3b62abf2`.
+4. ~~**Brain deploy**~~ DONE (run 33966119164, cap 1) — but see the served-owner finding: the cap serves the wrong Omar; the live legs wait for speech. Was: merge 06 and 10b, `gh workflow run brain-deploy.yml --ref cloudflare-backend`,
    then the live legs adapted to `wrangler tail`: gateway tally, decision
    bounds, unattributed lane, reserved budget.
 5. **End-to-end, on Cloudflare, one test owner** (design below).
