@@ -24,8 +24,65 @@ def _certificate(kind: str, name: str, expires: str, identifier: str):
 
 
 def test_next_build_uses_apple_not_the_stale_repo_number():
+    # The tree says 113 while Apple already holds 114: the upload cannot be
+    # 113 or 114, so it is one past Apple's highest.
     assert asc.next_build_number(["112", "113", "114"], source=113) == 115
-    assert asc.next_build_number(["112"], source=114) == 115
+
+
+def test_a_source_above_every_live_build_uploads_as_itself():
+    # Audit F22 (2026-09-05): every CI upload had been labelled one or two
+    # above the tree that produced it, because the rule added one whether or
+    # not Apple held the number. The phone stamps device_id
+    # iphone-b<CFBundleVersion> and the ledgers name the committed number, so
+    # 124 in the tree against Apple's 123 must upload as 124, not 125.
+    assert asc.next_build_number(["122", "123"], source=124) == 124
+    assert asc.next_build_number(["112"], source=114) == 114
+    assert asc.next_build_number([], source=124) == 124
+
+
+def test_only_a_collision_moves_the_number_and_only_to_one_past_apple():
+    assert asc.next_build_number(["124"], source=124) == 125
+    assert asc.next_build_number(["124", "125"], source=124) == 126
+    # A tree BEHIND Apple (a stale branch) still cannot reuse a live number.
+    assert asc.next_build_number(["124", "125"], source=110) == 126
+    # Non-numeric versions (Apple lets a build be "1.0.3") do not count.
+    assert asc.next_build_number(["1.0.3", "124"], source=124) == 125
+
+
+class _Client:
+    """Just enough of app_store_connect.Client to answer the three GETs."""
+
+    def __init__(self, responses):
+        self.responses = responses
+
+    def request(self, method, path, params=None):
+        return self.responses[path]
+
+
+def _live(prerelease_versions, builds):
+    return _Client({
+        "/v1/apps": {"data": [{"id": "app-1"}]},
+        "/v1/preReleaseVersions": {"data": prerelease_versions},
+        "/v1/builds": {"data": builds},
+    })
+
+
+def test_no_prerelease_version_yet_keeps_the_source_number():
+    # live_next_build used to answer source + 1 here too, so even a first
+    # upload under a new marketing version could not carry its own number.
+    client = _live([], [])
+    assert asc.live_next_build(client, "ai.anticipy.app", "1.1.0",
+                               source=124) == 124
+
+
+def test_live_builds_decide_the_collision():
+    client = _live([{"id": "rel-1"}],
+                   [_build("123", "VALID"), _build("124", "VALID")])
+    assert asc.live_next_build(client, "ai.anticipy.app", "1.1.0",
+                               source=124) == 125
+    client = _live([{"id": "rel-1"}], [_build("123", "VALID")])
+    assert asc.live_next_build(client, "ai.anticipy.app", "1.1.0",
+                               source=124) == 124
 
 
 def _build(version: str, state: str):
