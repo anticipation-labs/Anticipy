@@ -278,15 +278,19 @@ start_brain() {
     # destroyed by the act of fixing the thing.
     #
     # Appending means old banners are still in the file, so readiness and the
-    # sms=live assertion MUST read only this generation's output. `grep -m1`
+    # sms=mock assertion MUST read only this generation's output. `grep -m1`
     # over the whole file would match a previous boot and report a worker that
     # never started as up.
     local boot; boot=$(tail -40 "$RIG/brain.log" 2>/dev/null)
     printf '%s\n' "$boot" | grep -m1 'worker up' || { tail -20 "$RIG/brain.log"; exit 1; }
-    # sms=mock is the safety assertion, not a nicety. Fail loudly if it is live.
-    if printf '%s\n' "$boot" | grep -q 'sms=live'; then
-        echo "REFUSING TO CONTINUE: this worker has live Twilio credentials and"
-        echo "could text a real person and repoint a real phone number."
+    # sms=mock is the safety assertion, not a nicety. Fail loudly UNLESS the
+    # banner says mock: the field now names the vendor (`sms=twilio`,
+    # `sms=sendblue:…1234`) and a grep for one vendor's word would go blind
+    # the day the other one is configured. Only the mock reading is safe.
+    if ! printf '%s\n' "$boot" | grep -m1 'worker up' | grep -q 'sms=mock'; then
+        echo "REFUSING TO CONTINUE: this worker has live message credentials"
+        echo "(Twilio or Sendblue) and could text a real person or repoint a"
+        echo "real phone number."
         pkill -f 'brain.worker' || true
         exit 1
     fi

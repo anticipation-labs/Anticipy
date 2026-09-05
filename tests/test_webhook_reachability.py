@@ -53,6 +53,14 @@ def _run(target_url, monkeypatch, current="https://real.example.com/sms/inbound"
     rec = _Recorder(current)
     monkeypatch.setattr(worker, "requests", rec)
     monkeypatch.setattr(worker, "PB", "http://unused.invalid")
+    # The ear check is Twilio's and runs only for the Twilio provider. An
+    # inherited SENDBLUE_* export would make the worker's provider Sendblue
+    # and turn every assertion below into a silent skip, so the choice is
+    # pinned to Twilio here rather than left to whose laptop this runs on.
+    for name in ("SENDBLUE_API_KEY_ID", "SENDBLUE_API_SECRET_KEY",
+                 "SENDBLUE_FROM_NUMBER", "ANTICIPY_SMS_PROVIDER",
+                 "ANTICIPY_SMS_MOCK", "TWILIO_MOCK"):
+        monkeypatch.delenv(name, raising=False)
     for k, v in (("TWILIO_ACCOUNT_SID", "AC1"),
                  ("TWILIO_AUTH_TOKEN", "tok"),
                  ("TWILIO_PHONE_NUMBER", "+15550001111"),

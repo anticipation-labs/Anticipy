@@ -235,6 +235,14 @@ Not yet in that file, and read by `brain/`: `ANTICIPY_AUX_MODEL`,
 values off the Railway dashboard before assuming the defaults are what production
 runs.
 
+Added 2026-09-05 with the Sendblue arm (`brain/sendblue_arm.py`,
+`research/2026-09-05-sendblue-outbound-arm.md`), all forwarded by
+`OwnerBrain.FORWARD_KEYS`: `ANTICIPY_SMS_PROVIDER` (names the vendor;
+unset = Sendblue when its three variables are set, else Twilio, else mock),
+`ANTICIPY_SMS_MOCK` (muzzles BOTH arms; `TWILIO_MOCK` still does too),
+`SENDBLUE_API_BASE` (proof mode only), `SENDBLUE_STATUS_CALLBACK`,
+`SENDBLUE_FROM_NUMBER` (E.164, one of the account's Sendblue numbers).
+
 ### 4.2 Per-owner, computed at spawn — never configured
 
 `ANTICIPY_OWNER_REF`, `ANTICIPY_OWNER_ID`, `ANTICIPY_MEMORY_DB`,
@@ -252,6 +260,7 @@ ANTICIPY_SERVICE_TOKEN        OPENROUTER_API_KEY        GEMINI_API_KEY
 BRAVE_API_KEY                 TAVILY_API_KEY
 TWILIO_ACCOUNT_SID            TWILIO_AUTH_TOKEN         TWILIO_PHONE_NUMBER
 TWILIO_FROM                   TWILIO_API_KEY_SID        TWILIO_API_KEY_SECRET
+SENDBLUE_API_KEY_ID           SENDBLUE_API_SECRET_KEY
 ANTICIPY_BACKUP_S3_BUCKET     ANTICIPY_BACKUP_S3_ENDPOINT
 ANTICIPY_BACKUP_S3_ACCESS_KEY ANTICIPY_BACKUP_S3_SECRET
 ```

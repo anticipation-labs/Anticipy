@@ -40,13 +40,23 @@ import urllib.request
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, HERE)
+sys.path.insert(0, ROOT)
 import _env  # noqa: E402  sibling module; gates are run as scripts
 _ENV_LOADED = _env.load_and_announce(ROOT)
+# The one provider rule the worker texts by, so this gate can never measure a
+# vendor the worker is not using (brain/sendblue_arm.py `choose_provider`).
+from brain import sendblue_arm as _sendblue  # noqa: E402
 
-# Twilio's own vocabulary. Not ours, and not interpreted.
-DELIVERED = {"delivered", "received"}
-PENDING = {"queued", "accepted", "scheduled", "sending", "sent"}
-FAILED = {"undelivered", "failed"}
+# The vendors' own vocabularies, unioned and not interpreted. Twilio: queued,
+# accepted, scheduled, sending, sent, delivered, received, undelivered, failed.
+# Sendblue (docs.sendblue.com, 2026-09-05): REGISTERED, PENDING, QUEUED,
+# ACCEPTED, SENT, DELIVERED, READ on the way; ERROR ("failed to send") and
+# DECLINED ("rejected") are the two ways it does not go. Sendblue answers in
+# capitals; `_sendblue_rows` lowercases before anything here compares.
+DELIVERED = {"delivered", "received", "read"}
+PENDING = {"queued", "accepted", "scheduled", "sending", "sent",
+           "registered", "pending"}
+FAILED = {"undelivered", "failed", "error", "declined"}
 
 # How many messages must pile up unheard before silence is a finding rather
 # than an evening. Three is the smallest number that cannot be one bad night:
@@ -80,6 +90,89 @@ def fetch_outbound(limit: int = WINDOW) -> list:
     req = urllib.request.Request(url, headers={"Authorization": _auth_header()})
     with urllib.request.urlopen(req, timeout=25) as r:
         return json.load(r).get("messages", []) or []
+
+
+# ------------------------------------------------------------------ Sendblue
+
+SENDBLUE_PAGE = 100     # the API's ceiling per page (docs: limit 1-100)
+
+
+def sendblue_rows(data: list) -> list:
+    """Sendblue's message objects, reshaped to the receipt `unreachable` reads.
+
+    Pure, so the reshaping can be tested without a network. Field names come
+    off docs.sendblue.com's GET /api/v2/messages: `to_number`, `status`,
+    `error_code`, `is_outbound`, `date_sent`. Status is lowercased here and
+    nowhere else; direction is spelled the way Twilio spells it so ONE
+    `unreachable` serves both vendors and the threshold is applied once.
+    """
+    out = []
+    for m in data or []:
+        out.append({
+            "to": m.get("to_number") or m.get("number") or "",
+            "status": str(m.get("status") or "").lower(),
+            "error_code": m.get("error_code"),
+            "direction": "outbound-api" if m.get("is_outbound", True) else "inbound",
+            "date_sent": m.get("date_sent") or m.get("date_updated"),
+        })
+    return out
+
+
+def fetch_outbound_sendblue(limit: int = WINDOW) -> list:
+    """Read recent outbound messages from Sendblue. GET only — never sends.
+
+    Authenticates with the same two headers the arm sends with, read from
+    the same variables; the secret goes in a header and nowhere else, so a
+    pasted gate log cannot carry it.
+    """
+    key_id = (os.environ.get("SENDBLUE_API_KEY_ID") or "").strip()
+    secret = (os.environ.get("SENDBLUE_API_SECRET_KEY") or "").strip()
+    if not (key_id and secret):
+        raise RuntimeError(
+            "cannot verify: no Sendblue credentials. Set SENDBLUE_API_KEY_ID "
+            "and SENDBLUE_API_SECRET_KEY. A leg that cannot be tested does not pass")
+    base = _sendblue.api_base()
+    rows: list = []
+    offset = 0
+    while len(rows) < limit:
+        q = {"is_outbound": "true", "limit": str(min(SENDBLUE_PAGE, limit - len(rows))),
+             "offset": str(offset), "order_direction": "desc"}
+        frm = (os.environ.get("SENDBLUE_FROM_NUMBER") or "").strip()
+        if frm:
+            q["from_number"] = frm
+        req = urllib.request.Request(
+            f"{base}/api/v2/messages?" + urllib.parse.urlencode(q),
+            headers={"sb-api-key-id": key_id, "sb-api-secret-key": secret})
+        with urllib.request.urlopen(req, timeout=25) as r:
+            page = json.load(r)
+        data = page.get("data") if isinstance(page, dict) else None
+        if not data:
+            break
+        rows.extend(sendblue_rows(data))
+        if len(data) < SENDBLUE_PAGE:
+            break
+        offset += len(data)
+    return rows
+
+
+def twilio_configured() -> bool:
+    return bool(os.environ.get("TWILIO_ACCOUNT_SID")
+                and os.environ.get("TWILIO_AUTH_TOKEN"))
+
+
+def sendblue_configured() -> bool:
+    return bool((os.environ.get("SENDBLUE_API_KEY_ID") or "").strip()
+                and (os.environ.get("SENDBLUE_API_SECRET_KEY") or "").strip())
+
+
+# Every vendor whose receipts this gate can read. A leg runs for EACH one
+# that is configured, not only the one the worker texts through: a number
+# the previous vendor could not reach is still a person who heard nothing,
+# and the switch does not settle the question of whether anything landed.
+PROVIDERS = (
+    ("twilio", twilio_configured, fetch_outbound),
+    ("sendblue", sendblue_configured, fetch_outbound_sendblue),
+)
 
 
 def unreachable(messages: list, min_messages: int = MIN_MESSAGES) -> list:
@@ -124,43 +217,72 @@ def unreachable(messages: list, min_messages: int = MIN_MESSAGES) -> list:
     return out
 
 
-def main() -> int:
-    print()
-    print("  ARE HER TEXTS ARRIVING?")
-    print("  " + "-" * 62)
+def leg(n: int, name: str, fetch) -> int:
+    """One vendor's receipts, read and judged. 0 pass, 1 fail, 2 unproven."""
     try:
-        msgs = fetch_outbound()
+        msgs = fetch()
     except Exception as e:
-        print(f"  [1] fail  SHE CAN BE HEARD AT ALL")
+        print(f"  [{n}] fail  SHE CAN BE HEARD AT ALL ({name})")
         print(f"        {e}")
-        print("  " + "-" * 62)
-        print("  UNPROVEN — a leg that cannot be tested does not pass")
         return 2
 
     bad = unreachable(msgs)
     total_out = sum(1 for m in msgs if not (m.get("direction") or "").startswith("inbound"))
-    print(f"  [....] outbound messages read              {total_out}")
-    print(f"  [....] numbers that never receive anything  {len(bad)}")
+    print(f"  [....] {name}: outbound messages read              {total_out}")
+    print(f"  [....] {name}: numbers that never receive anything  {len(bad)}")
     if not bad:
-        print("  [1] PASS  EVERY NUMBER SHE WRITES TO RECEIVES SOMETHING")
-        print("  " + "-" * 62)
+        print(f"  [{n}] PASS  EVERY NUMBER SHE WRITES TO ON {name.upper()} RECEIVES SOMETHING")
         return 0
 
-    print("  [1] FAIL  SOMEBODY CANNOT HEAR HER AT ALL")
+    print(f"  [{n}] FAIL  SOMEBODY CANNOT HEAR HER AT ALL ({name})")
     for b in bad:
-        codes = ", ".join(f"{c} x{n}" for c, n in sorted(b["errors"].items()))
+        codes = ", ".join(f"{c} x{n_}" for c, n_ in sorted(b["errors"].items()))
         print(f"        {b['to']}: {b['total']} sent, {b['delivered']} delivered, "
-              f"{b['failed']} failed" + (f" — Twilio error {codes}" if codes else ""))
-        if "30034" in b["errors"]:
+              f"{b['failed']} failed" + (f" — {name} error {codes}" if codes else ""))
+        if name == "twilio" and "30034" in b["errors"]:
             print("          30034 = the sending number is not registered for A2P "
                   "10DLC. This is a Twilio console + business-identity task, not a "
                   "code change, and no deploy fixes it.")
         print("          This person cannot reply, cannot approve a held job, and "
               "cannot answer a question — the question never arrived. Their day "
               "reads as quiet from every other scoreboard we own.")
-    print("  " + "-" * 62)
-    print("  NOT REACHING THEM — fix this before spending anybody's week")
     return 1
+
+
+def main() -> int:
+    print()
+    print("  ARE HER TEXTS ARRIVING?")
+    print("  " + "-" * 62)
+    texting_through = _sendblue.choose_provider()
+    print(f"  [....] the worker texts through               {texting_through}")
+    legs = [(name, fetch) for name, configured, fetch in PROVIDERS if configured()]
+    if not legs:
+        print("  [1] fail  SHE CAN BE HEARD AT ALL")
+        print("        cannot verify: no Twilio and no Sendblue credentials. Set "
+              "TWILIO_ACCOUNT_SID + TWILIO_AUTH_TOKEN, or SENDBLUE_API_KEY_ID + "
+              "SENDBLUE_API_SECRET_KEY. A leg that cannot be tested does not pass")
+        print("  " + "-" * 62)
+        print("  UNPROVEN — a leg that cannot be tested does not pass")
+        return 2
+    if texting_through not in {name for name, _ in legs} and texting_through != "mock":
+        # The worker texts through a vendor this gate cannot read: nothing
+        # below can speak for the messages that are actually going out.
+        print(f"  [1] fail  SHE CAN BE HEARD AT ALL")
+        print(f"        the worker texts through {texting_through} and this gate "
+              f"has no credentials for it")
+        print("  " + "-" * 62)
+        print("  UNPROVEN — a leg that cannot be tested does not pass")
+        return 2
+
+    worst = 0
+    for n, (name, fetch) in enumerate(legs, 1):
+        worst = max(worst, leg(n, name, fetch))
+    print("  " + "-" * 62)
+    if worst == 1:
+        print("  NOT REACHING THEM — fix this before spending anybody's week")
+    elif worst == 2:
+        print("  UNPROVEN — a leg that cannot be tested does not pass")
+    return worst
 
 
 if __name__ == "__main__":

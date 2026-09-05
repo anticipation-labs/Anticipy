@@ -228,11 +228,12 @@ class TwilioTransport:
     def __init__(self, voice_arm,
                  before_send: Optional[Callable[[str], bool]] = None):
         if voice_arm is None:
-            # Worker construction is `TwilioTransport(voice) if voice else
+            # Worker construction is `MessageTransport(arm) if arm else
             # MockTransport()`. A None arm would have made every send raise
             # AttributeError — safe, but unreadable at 3am.
-            raise ValueError("TwilioTransport needs a VoiceArm; use MockTransport "
-                             "when Twilio is not configured")
+            raise ValueError("TwilioTransport needs a sending arm (VoiceArm or "
+                             "SendblueArm); use MockTransport when no message "
+                             "provider is configured")
         self.voice = voice_arm
         # The destination is authorization, not merely an address. Production
         # supplies a callback that re-reads the signed-in owner's canonical
@@ -258,6 +259,15 @@ class TwilioTransport:
         if media:
             return self.voice.text(to, body, media=media)
         return self.voice.text(to, body)
+
+
+# THE CLASS IS PROVIDER-NEUTRAL AND ALWAYS WAS: it calls `arm.text(to, body,
+# media)` and propagates whatever the arm raises. brain/sendblue_arm.py gives
+# the same contract, so the worker builds this one transport over whichever
+# arm the deployment chose. The alias is the name for that reading; the class
+# keeps its old name so nothing else in the tree — tests, proofs, gates that
+# read this file by name — has to rename to keep meaning what it means.
+MessageTransport = TwilioTransport
 
 
 @dataclass
