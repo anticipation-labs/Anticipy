@@ -84,7 +84,23 @@ enum BatteryReadingPolicy {
     /// phone spending a point every ten minutes is six lines an hour. The power
     /// state counts as a change even at the same percentage: plugging in alters
     /// nothing about the number and everything about what may be done with it.
-    static func shouldRecord(_ reading: Reading, lastRecorded: Reading?) -> Bool {
-        reading != lastRecorded
+    ///
+    /// `atBoundary` IS THE ONE EXCEPTION, AND IT IS THE FOLD'S. `ListenTally`
+    /// measures drain only between two readings inside one unbroken session,
+    /// so the window a session's cost is spent over runs from its first
+    /// reading to its last — and with readings written only on change, the
+    /// last one was the last CHANGE, not the stop. The stretch after it was
+    /// never measured: up to ten minutes of every session on a phone spending
+    /// a point every ten, and the whole of a five-minute test, which folded to
+    /// "Nothing to compare yet". That undercounts the window in the one
+    /// direction that makes listening look costly. A reading stamped with the
+    /// start opens the window and one stamped with the stop closes it, and
+    /// both are written whether or not anything changed. Boundaries are rare —
+    /// one per start, one per stop — so the churn rule has nothing to protect
+    /// there, and `run_journal_tests.sh` still fails the build if the 4-second
+    /// tick ever passes `true`.
+    static func shouldRecord(_ reading: Reading, lastRecorded: Reading?,
+                             atBoundary: Bool = false) -> Bool {
+        atBoundary || reading != lastRecorded
     }
 }

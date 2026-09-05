@@ -63,6 +63,12 @@ struct ListeningDiagnosticsView: View {
                 // say what the phone was doing while it spent this; a person
                 // reads the two together and judges.
                 row("Battery used while listening", batteryWording)
+                if let rate = tally.batteryPointsPerHour {
+                    // The row above, divided — and only ever beside it, so the
+                    // window the rate rests on stays in view. Still no verdict:
+                    // a number to put against tomorrow's, not a grade.
+                    row("Battery an hour, while listening", batteryRateWording(rate))
+                }
                 if tally.batteryOnPowerSeconds > 0 {
                     // Said out loud rather than silently excluded. A day spent
                     // plugged in otherwise reports a triumphantly small drain
@@ -176,6 +182,14 @@ struct ListeningDiagnosticsView: View {
         if tally.batteryReadings == 0 { return "Not recorded" }
         if tally.batteryMeasuredSeconds == 0 { return "Nothing to compare yet" }
         return "\(tally.batterySpentPoints)% over \(duration(tally.batteryMeasuredSeconds))"
+    }
+
+    /// The rate with its window in the same breath. One decimal, because a
+    /// point an hour and a point every forty minutes are different phones and
+    /// an integer would call them the same; "about", because a reading is a
+    /// whole point and the division is not more precise than that.
+    private func batteryRateWording(_ rate: Double) -> String {
+        return "about \(String(format: "%.1f", rate))% an hour, over \(duration(tally.batteryMeasuredSeconds))"
     }
 
     private func row(_ name: String, _ value: String) -> some View {

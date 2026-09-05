@@ -97,20 +97,74 @@ if [ -z "$dog" ]; then
     echo "4s tick that would otherwise write fifteen battery lines a minute."
     exit 2
 fi
-if printf '%s\n' "$dog" | grep -q 'batteryRead'; then
-    guard=$(printf '%s\n' "$dog" | grep -n 'shouldRecord' | head -1 | cut -d: -f1)
-    write=$(printf '%s\n' "$dog" | grep -n 'batteryRead' | head -1 | cut -d: -f1)
-    if [ -z "$guard" ] || [ "$guard" -gt "$write" ]; then
-        echo "The watchdog records a battery reading without first asking whether"
-        echo "it has already said this."
-        echo "That tick runs every four seconds for as long as listening is on, so"
-        echo "an unguarded write is fifteen identical lines a minute and the whole"
-        echo "ring gone in twenty-seven — including the line that says a call took"
-        echo "the microphone. Go through BatteryReadingPolicy.shouldRecord."
-        exit 2
-    fi
+# THE TICK GOES THROUGH ONE READER, WITH THE CHURN RULE ON. Since 2026-09-05
+# the watchdog and the session boundaries share `recordBatteryReading`; the
+# tick must pass `boundary: false` (the churn rule) and never `true`, and the
+# reader itself must ask `shouldRecord` before it writes. Three legs, each red
+# on emptiness rather than on absence.
+if ! printf '%s\n' "$dog" | grep -q 'recordBatteryReading(boundary: false)'; then
+    echo "The watchdog no longer reads the battery through recordBatteryReading"
+    echo "with the churn rule on."
+    echo "That tick runs every four seconds for as long as listening is on, so"
+    echo "an unguarded write is fifteen identical lines a minute and the whole"
+    echo "ring gone in twenty-seven — including the line that says a call took"
+    echo "the microphone."
+    exit 2
+fi
+if printf '%s\n' "$dog" | grep -q 'recordBatteryReading(boundary: true)'; then
+    echo "The watchdog passes boundary: true, which switches the churn rule off"
+    echo "on a 4-second tick. That is fifteen identical lines a minute."
+    exit 2
+fi
+reader=$(awk '/private func recordBatteryReading\(boundary: Bool\)/,/^    }$/' "$listener" \
+    | sed '/^[[:space:]]*\/\//d')
+if [ -z "$reader" ]; then
+    echo "This gate can no longer find recordBatteryReading's body."
+    echo "If it was renamed, rename it here too; what is protected is that the"
+    echo "one reader asks shouldRecord before it writes."
+    exit 2
+fi
+guard=$(printf '%s\n' "$reader" | grep -n 'shouldRecord' | head -1 | cut -d: -f1)
+write=$(printf '%s\n' "$reader" | grep -n '\.batteryRead(' | head -1 | cut -d: -f1)
+if [ -z "$guard" ] || [ -z "$write" ] || [ "$guard" -gt "$write" ]; then
+    echo "recordBatteryReading writes a reading without first asking whether"
+    echo "it has already said this. Go through BatteryReadingPolicy.shouldRecord."
+    exit 2
 fi
 echo "the battery is recorded when it changes, not once per watchdog tick"
+
+# AND AT THE BOUNDARIES, where the churn rule is off on purpose: the reading
+# stamped with a start opens the window the tally measures drain over, and
+# the one stamped with a stop closes it. Without the stop reading the stretch
+# after the last CHANGE is never measured and a five-minute test folds to
+# "Nothing to compare yet". The start line is followed by one, and the owner's
+# stop is preceded by one, in that order.
+started=$(printf '%s\n' "$(awk '/private func begin\(\)/,/^    }$/' "$listener" | sed '/^[[:space:]]*\/\//d')")
+if [ -z "$started" ]; then
+    echo "This gate can no longer find begin()."; exit 2
+fi
+s_line=$(printf '%s\n' "$started" | grep -n 'record(.sessionStarted)' | head -1 | cut -d: -f1)
+s_read=$(printf '%s\n' "$started" | grep -n 'recordBatteryReading(boundary: true)' | head -1 | cut -d: -f1)
+if [ -z "$s_line" ] || [ -z "$s_read" ] || [ "$s_read" -lt "$s_line" ]; then
+    echo "Listening starts without a battery reading stamped with the start."
+    echo "The window the tally measures drain over then opens at the first"
+    echo "CHANGE, not at the start, and a short session brackets nothing."
+    exit 2
+fi
+stopped=$(printf '%s\n' "$(awk '/^    func stop\(\)/,/watchdog\?\.invalidate\(\)/' "$listener" | sed '/^[[:space:]]*\/\//d')")
+if [ -z "$stopped" ]; then
+    echo "This gate can no longer find stop()."; exit 2
+fi
+e_line=$(printf '%s\n' "$stopped" | grep -n 'sessionStopped(cause: .owner)' | head -1 | cut -d: -f1)
+e_read=$(printf '%s\n' "$stopped" | grep -n 'recordBatteryReading(boundary: true)' | head -1 | cut -d: -f1)
+if [ -z "$e_line" ] || [ -z "$e_read" ] || [ "$e_read" -gt "$e_line" ]; then
+    echo "Listening stops without a battery reading stamped with the stop, before it."
+    echo "The last stretch of every session — from the last change to the stop —"
+    echo "is then never measured, in the direction that makes listening look"
+    echo "costly. A reading stamped with a stop sorts before it in the fold."
+    exit 2
+fi
+echo "the battery is read at the start and the stop, so the window is closed"
 
 # ---------------------------------------------------------------- privacy
 # THE JOURNAL IS EXPORTABLE FROM SETTINGS, so anything written into it leaves

@@ -93,8 +93,9 @@ struct ListenTally: Equatable {
     var notes: [String] = []
 
     /// WHAT LISTENING COST, and the window that cost was spent over. Both
-    /// halves, always: "4%" with no window is not a measurement, and a rate is
-    /// a division this screen has no business doing on the reader's behalf.
+    /// halves, always: "4%" with no window is not a measurement. The rate
+    /// (`batteryPointsPerHour`) is derived from these two and shown beside
+    /// them, never instead of them.
     ///
     /// Points the battery FELL while a session was open and the phone was off
     /// power. Signed deltas are summed, so a level that ticks up mid-stretch
@@ -120,6 +121,25 @@ struct ListenTally: Equatable {
     /// written by a build before this existed, and a phone where battery
     /// monitoring was never switched on.
     var batteryReadings = 0
+
+    /// DRAIN PER HOUR OF LISTENING: the two numbers above, divided. Derived
+    /// rather than stored, so it cannot drift from them, and shown on the
+    /// screen only beside them — a rate with its window out of sight invites
+    /// the reader to trust a five-minute sample as if it were a day's.
+    ///
+    /// Nil when nothing was measured, and that is the whole of the design:
+    /// a rate over no window is not zero, it is nothing, and "0% an hour" on
+    /// a simulator or a journal from a build before readings existed is the
+    /// reassuring lie this instrument refuses everywhere else. A measured
+    /// stretch that cost nothing DOES read as zero — that is a finding.
+    ///
+    /// No threshold, no verdict. There is still not one recorded day of
+    /// drain in this repo to draw a line from; the number exists so that
+    /// tomorrow's can be put against today's.
+    var batteryPointsPerHour: Double? {
+        guard batteryMeasuredSeconds > 0 else { return nil }
+        return Double(batterySpentPoints) * 3_600 / Double(batteryMeasuredSeconds)
+    }
 
     var postsAccepted = 0
     /// A day that heard everything and delivered nothing looks exactly like a

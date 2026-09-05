@@ -457,6 +457,56 @@ struct ListenTallyTests {
         check("a battery reading is not evidence that anybody spoke",
               q.longestSilenceSeconds == 3_600 && q.wordsFlushed == 0)
 
+        // ------------------------------------------------- drain per hour
+        // The two battery numbers divided, and shown only beside them. Nil
+        // over no window — "0% an hour" on a simulator is the reassuring lie
+        // this instrument refuses — and a real zero over a measured stretch
+        // that cost nothing, which is a finding.
+        check("an hour that cost four points reads as four an hour",
+              spent.batteryPointsPerHour == 4.0)
+        check("a day with no readings has no rate rather than a zero rate",
+              noBattery.batteryPointsPerHour == nil)
+        check("a day whose readings bracket nothing has no rate",
+              night.batteryPointsPerHour == nil)
+
+        // THE BOUNDARY READINGS, which are what make short sessions measurable
+        // at all: the start's reading opens the window, the stop's closes it,
+        // and both are stamped with the line they belong to. Before them a
+        // session that changed level once or never folded to nothing.
+        let bracketed: [(Date, ListenEvent)] = [
+            (at(0), .sessionStarted),
+            (at(0), .batteryRead(percent: 90, onPower: false)),
+            (at(1_800), .batteryRead(percent: 89, onPower: false)),
+            (at(1_800), .sessionStopped(cause: .owner)),
+        ]
+        let b = ListenTally.of(bracketed, now: at(1_800))
+        check("a reading stamped with the stop closes the window, so a half-hour session is measured",
+              b.batterySpentPoints == 1 && b.batteryMeasuredSeconds == 1_800
+                  && b.batteryPointsPerHour == 2.0)
+        let flat: [(Date, ListenEvent)] = [
+            (at(0), .sessionStarted),
+            (at(0), .batteryRead(percent: 90, onPower: false)),
+            (at(600), .batteryRead(percent: 90, onPower: false)),
+            (at(600), .sessionStopped(cause: .owner)),
+        ]
+        let f = ListenTally.of(flat, now: at(600))
+        check("a measured stretch that cost nothing reads as zero an hour, not as unmeasured",
+              f.batteryMeasuredSeconds == 600 && f.batteryPointsPerHour == 0.0)
+        // The window closed by a stop the OWNER did not make, too: an
+        // interruption ends the span the same way, and the reading before it
+        // is the last one that span gets.
+        let cut: [(Date, ListenEvent)] = [
+            (at(0), .sessionStarted),
+            (at(0), .batteryRead(percent: 80, onPower: false)),
+            (at(3_600), .batteryRead(percent: 77, onPower: false)),
+            (at(3_600), .sessionStopped(cause: .interruption)),
+            (at(7_200), .batteryRead(percent: 70, onPower: false)),
+        ]
+        let ct = ListenTally.of(cut, now: at(7_200))
+        check("the window closes at an interruption and the deaf hour after it is not listening's cost",
+              ct.batterySpentPoints == 3 && ct.batteryMeasuredSeconds == 3_600
+                  && ct.batteryPointsPerHour == 3.0)
+
         // ------------------------------------------------------- airtime lost
         // The sum AND the count, because they answer different questions. One
         // long dropout and a hundred stutters can total the same milliseconds
