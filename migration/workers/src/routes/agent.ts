@@ -24,15 +24,16 @@
  * here that retrying cannot undo, because the code is already on somebody's
  * screen. So a lookup failure REFUSES the registration.
  */
+import { llmProxy, type LlmEnv } from "../llm.ts";
+
 const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), {
     status, headers: { "content-type": "application/json" },
   });
 
-export interface AgentEnv {
-  DB: D1Database;
+/** LlmEnv carries DB, the two provider keys and the two model names. */
+export interface AgentEnv extends LlmEnv {
   ANTICIPY_SERVICE_TOKEN?: string;
-  ANTICIPY_BROWSER_MODEL?: string;
   CAPSOLVER_API_KEY?: string;
 }
 
@@ -136,7 +137,12 @@ export async function agentKey(req: Request, env: AgentEnv): Promise<Response> {
   return json(200, { llm_proxy: true, model, owner_ref: ownerRef });
 }
 
+/**
+ * Rules 1 and 2 of CONTRACT.md §6.4 live here; everything after the paired
+ * lookup is src/llm.ts, which receives the row this found and never echoes it.
+ */
 export async function agentLlm(req: Request, env: AgentEnv): Promise<Response> {
+  const startedAt = Date.now();
   const agentId = (req.headers.get("X-Anticipy-Agent-ID") || "").trim();
   const token = (req.headers.get("X-Anticipy-Agent-Token") || "").trim();
   const p = await paired(env, agentId, token);
@@ -145,7 +151,7 @@ export async function agentLlm(req: Request, env: AgentEnv): Promise<Response> {
       ? json(400, { error: "agent credentials required" })
       : json(403, { error: "not a paired agent" });
   }
-  return json(503, { error: "llm proxy not yet ported" });
+  return llmProxy(req, env, p.row, startedAt);
 }
 
 /** Bounded by design: only for a paired agent, and only when configured. */

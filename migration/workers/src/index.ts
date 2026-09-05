@@ -70,6 +70,15 @@ export interface Env extends CronEnv {
   ANTICIPY_AUTH_SECRET: string;
   ANTICIPY_INTERNAL_KEY: string;
   ANTICIPY_VAULT_KEY_GCM: string;
+  // /agent/llm — src/llm.ts header lists what each one is. The keys are
+  // secrets; the two model names are plain vars; LLM_PROVIDER_BASE is a
+  // test-only loopback override that is never set on a deployed Worker.
+  GEMINI_API_KEY?: string;
+  GOOGLE_API_KEY?: string;
+  OPENROUTER_API_KEY?: string;
+  ANTICIPY_BROWSER_MODEL?: string;
+  ANTICIPY_VISION_MODEL?: string;
+  LLM_PROVIDER_BASE?: string;
 }
 
 /**

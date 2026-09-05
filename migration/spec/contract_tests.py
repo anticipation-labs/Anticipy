@@ -72,11 +72,14 @@ pytest.ini (that one sets `testpaths = tests` for the product suite).
 Run `-m anonymous` first against anything new: it carries the fail-open alarm.
 """
 
+import datetime
+import hashlib
 import json
 import os
 import random
 import re
 import string
+import subprocess
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -2353,6 +2356,586 @@ class TestAgentRoutes(object):
                     json_body={"record_id": rand(15), "agent_id": rand(24)})
         assert resp.status == 403, repr(resp)
         assert error_of(resp) == "upgrade not authorized", repr(resp)
+
+
+# --------------------------------------------------------------------------
+# §6.4 on the wire — POST /agent/llm past the credential gate
+# --------------------------------------------------------------------------
+
+LLM_FAKE_PROVIDER = os.environ.get("ANTICIPY_TEST_LLM_FAKE_PROVIDER") == "1"
+LLM_KEY_SMELLS = [s for s in (os.environ.get("ANTICIPY_TEST_LLM_KEY_SMELLS") or "").split(",") if s]
+LLM_VISION_MODEL = os.environ.get("ANTICIPY_TEST_VISION_MODEL") or "google/gemini-2.5-flash"
+LOCAL_WRANGLER_CONFIG = os.environ.get("ANTICIPY_LOCAL_WRANGLER_CONFIG") or ""
+
+# The strings and numbers three files must agree on.  extension/agent_loop.js
+# stops retrying a 429 ONLY when the body carries CEILING_429_ERROR, and floors
+# every request at REPLY_FLOOR; TestAgentLlmLiteralsAgree reads all three
+# sources and pins them to these literals.
+CEILING_429_ERROR = "too many model calls in the last hour"
+CEILING_429_DETAIL = "this browser hit its hourly limit; it resumes at the top of the hour"
+REPLY_FLOOR = 512
+HOURLY_CALL_CEILING = 400
+
+
+def local_d1(sql):
+    """One statement against the LOCAL D1 behind a `wrangler dev`, through
+    wrangler's own CLI -- the documented interface, not the sqlite file under
+    .wrangler/state -- returning the result rows.  Skips, naming the variable,
+    when the suite is not pointed at a local Worker.  Every caller is a test
+    that reads the meter or the ledger, which no HTTP route exposes."""
+    need(LOCAL_WRANGLER_CONFIG, "ANTICIPY_LOCAL_WRANGLER_CONFIG")
+    cmd = ["npx", "--no-install", "wrangler", "d1", "execute", "DB", "--local",
+           "--config", LOCAL_WRANGLER_CONFIG, "--json", "--command", sql]
+    env = dict(os.environ)
+    env["CI"] = "1"
+    proc = subprocess.run(cmd, cwd=os.path.dirname(LOCAL_WRANGLER_CONFIG),
+                          capture_output=True, text=True, timeout=120, env=env)
+    if proc.returncode != 0:
+        pytest.fail("local D1 statement failed: %s\n%s" % (sql, proc.stderr[-2000:]))
+    try:
+        out = json.loads(proc.stdout)
+    except ValueError:
+        pytest.fail("wrangler d1 execute --json did not return JSON:\n%s" % proc.stdout[-2000:])
+    return (out[0] or {}).get("results") or []
+
+
+def _utc_hour():
+    return datetime.datetime.utcnow().strftime("%Y-%m-%dT%H")
+
+
+def _pb_date(delta_hours=0):
+    at = datetime.datetime.utcnow() + datetime.timedelta(hours=delta_hours)
+    return at.strftime("%Y-%m-%d %H:%M:%S.000Z")
+
+
+@pytest.mark.needs_agent
+class TestAgentLlmProxy(object):
+    """§6.4 past the credential gate.  Three tiers, each unlocked by one
+    variable, so a partial run reads as "you did not give me X" and never as
+    "the proxy is broken":
+
+      needs_agent                        rules 6, 9, 10 -- refusals, any backend
+      ANTICIPY_TEST_LLM_FAKE_PROVIDER=1  what reaches the provider and what
+                                         comes back, against
+                                         migration/workers/scripts/fake_llm_provider.py
+      ANTICIPY_LOCAL_WRANGLER_CONFIG     the meter and the ledger, read out of
+                                         the local D1
+
+    migration/workers/scripts/llm_contract_local.sh sets all three against a
+    real workerd.  NEVER unlock the fake-provider tier against production: the
+    FAKE:* markers in these prompts would reach a real model, and every call
+    here spends the hourly meter.
+    """
+
+    @pytest.fixture(scope="class")
+    def browser_model(self, agent_headers):
+        """The one non-vision model /agent/key hands this agent."""
+        resp = call("GET", "/agent/key", query={"agent_id": AGENT_ID},
+                    headers={"X-Anticipy-Agent-Token": AGENT_TOKEN})
+        if resp.status != 200:
+            pytest.skip("/agent/key did not answer 200 for the test agent (%s: %s)"
+                        % (resp.status, error_of(resp)))
+        model = (resp.json or {}).get("model")
+        if not model:
+            pytest.skip("/agent/key named no model")
+        return model
+
+    @pytest.fixture(scope="class")
+    def fake_provider(self):
+        if not LLM_FAKE_PROVIDER:
+            pytest.skip("set ANTICIPY_TEST_LLM_FAKE_PROVIDER=1 only when BASE_URL is a "
+                        "Worker whose LLM_PROVIDER_BASE points at scripts/fake_llm_provider.py")
+        return True
+
+    # -- helpers ------------------------------------------------------------
+
+    @staticmethod
+    def _llm(headers, body=None, raw=None):
+        if raw is not None:
+            return call("POST", "/agent/llm", headers=headers, raw=raw)
+        return call("POST", "/agent/llm", headers=headers, json_body=body)
+
+    @staticmethod
+    def _user(text, model, **extra):
+        body = {"model": model, "messages": [{"role": "user", "content": text}]}
+        body.update(extra)
+        return body
+
+    @staticmethod
+    def _skip_if_not_live_here(resp):
+        """The refusals a backend gives BEFORE the rule under test, when the
+        test agent is not usable on it.  Each one is a reason the environment
+        is incomplete, not a verdict on the proxy."""
+        if resp.status == 403 and error_of(resp) == "not a paired agent":
+            pytest.skip("the test agent is not paired here")
+        if resp.status == 429 and error_of(resp) == CEILING_429_ERROR:
+            pytest.skip("the test agent has hit its hourly ceiling here")
+        if resp.status == 503 and error_of(resp) in (
+                "backend has no model configured",
+                "requested model provider is not configured"):
+            pytest.skip("no provider key is configured here (%s)" % error_of(resp))
+
+    @staticmethod
+    def _received(resp):
+        """What the fake provider saw.  OpenRouter's JSON comes back verbatim
+        with `_fake`; Google's is translated, and the fake put its record in
+        the one text part, which the proxy joined into message.content."""
+        body = resp.json or {}
+        if isinstance(body.get("_fake"), dict):
+            return body["_fake"]
+        content = (((body.get("choices") or [{}])[0] or {}).get("message") or {}).get("content")
+        try:
+            return json.loads(content)
+        except Exception:
+            pytest.fail("could not read the fake provider's record out of %r" % resp.text[:500])
+
+    @staticmethod
+    def _meter():
+        rows = local_d1("SELECT llm_hour, llm_calls FROM agents WHERE agent_id = '%s'" % AGENT_ID)
+        assert rows, "the test agent is not in the local D1"
+        return rows[0]
+
+    @staticmethod
+    def _ledger_rows(tag):
+        return local_d1("SELECT * FROM agent_llm_audit WHERE task_tag = '%s' ORDER BY created" % tag)
+
+    @staticmethod
+    def _ledger_count():
+        rows = local_d1("SELECT count(*) AS n FROM agent_llm_audit WHERE agent_id = '%s'" % AGENT_ID)
+        return int(rows[0]["n"])
+
+    # -- refusals, any backend --------------------------------------------
+
+    def test_agent_llm_requires_valid_json(self, agent_headers):
+        """§6.4 rule 6.  Spends one meter call, as it does on PocketBase --
+        the meter runs before the body is read."""
+        resp = self._llm(agent_headers, raw="{not json")
+        self._skip_if_not_live_here(resp)
+        assert resp.status == 400, repr(resp)
+        assert error_of(resp) == "valid JSON required", repr(resp)
+
+    def test_agent_llm_requires_one_to_forty_messages(self, agent_headers, browser_model):
+        """§6.4 rule 9."""
+        resp = self._llm(agent_headers, {"model": browser_model, "messages": []})
+        self._skip_if_not_live_here(resp)
+        assert resp.status == 400, repr(resp)
+        assert error_of(resp) == "messages must contain 1 to 40 items", repr(resp)
+        resp = self._llm(agent_headers, {"model": browser_model,
+                                         "messages": [{"role": "user", "content": "x"}] * 41})
+        assert resp.status == 400, repr(resp)
+        assert error_of(resp) == "messages must contain 1 to 40 items", repr(resp)
+
+    def test_agent_llm_refuses_an_unsupported_role(self, agent_headers, browser_model):
+        """§6.4 rule 10."""
+        resp = self._llm(agent_headers, {"model": browser_model,
+                                         "messages": [{"role": "tool", "content": "x"}]})
+        self._skip_if_not_live_here(resp)
+        assert resp.status == 400, repr(resp)
+        assert error_of(resp) == "unsupported message role", repr(resp)
+
+    # -- the wire, against the fake provider ------------------------------
+
+    def test_agent_llm_floors_max_tokens_at_512_on_the_wire(self, agent_headers, browser_model,
+                                                             fake_provider):
+        """§6.4 -- max_tokens is clamped to [512, 4096] BEFORE it reaches the
+        provider, default 512.  512 and not 64: the browser model is a
+        thinking model whose reasoning counts against max_tokens, and at 64
+        its one-token verdicts came back cut off mid-word on 15 of 22 measured
+        pages (research/evals/login-wall-2026-09-05/FINDINGS.md).  The
+        extension floors at the same number (agent_loop.js MODEL_REPLY_FLOOR);
+        this is the second lock, for any caller that is not the extension."""
+        for asked, expected in ((8, REPLY_FLOOR), (64, REPLY_FLOOR), (None, REPLY_FLOOR),
+                                (511, REPLY_FLOOR), (1000, 1000), (9000, 4096)):
+            body = self._user("floor", browser_model)
+            if asked is not None:
+                body["max_tokens"] = asked
+            resp = self._llm(agent_headers, body)
+            self._skip_if_not_live_here(resp)
+            assert resp.status == 200, repr(resp)
+            seen = self._received(resp)["received"]
+            assert seen.get("max_tokens") == expected, (
+                "§6.4: asked max_tokens=%r, the wire carried %r, expected %r"
+                % (asked, seen.get("max_tokens"), expected))
+            assert seen.get("temperature") == 0, (
+                "§6.4: temperature is forced to 0, the wire carried %r" % seen.get("temperature"))
+
+    def test_agent_llm_passes_json_object_response_format_through(self, agent_headers,
+                                                                   browser_model, fake_provider):
+        """§6.4 (:243-245) -- {"type":"json_object"} crosses, and ONLY the
+        type; anything else is dropped rather than forwarded."""
+        cases = (
+            ({"type": "json_object"}, {"type": "json_object"}),
+            ({"type": "json_object", "schema": {"x": 1}}, {"type": "json_object"}),
+            ({"type": "text"}, None),
+            ({"type": "json_schema"}, None),
+            (None, None),
+        )
+        for sent, expected in cases:
+            body = self._user("format", browser_model)
+            if sent is not None:
+                body["response_format"] = sent
+            resp = self._llm(agent_headers, body)
+            self._skip_if_not_live_here(resp)
+            assert resp.status == 200, repr(resp)
+            seen = self._received(resp)["received"]
+            assert seen.get("response_format") == expected, (
+                "§6.4: sent response_format=%r, the wire carried %r" % (sent, seen.get("response_format")))
+
+    def test_agent_llm_presents_openrouter_the_hooks_headers(self, agent_headers, browser_model,
+                                                             fake_provider):
+        """§6.4 (:383-392) -- a non-Google model goes to OpenRouter's
+        chat-completions path with a Bearer credential, the referer and the
+        title, and OpenRouter's JSON comes back verbatim."""
+        resp = self._llm(agent_headers, self._user("headers", browser_model))
+        self._skip_if_not_live_here(resp)
+        assert resp.status == 200, repr(resp)
+        rec = self._received(resp)
+        assert rec["path"] == "/api/v1/chat/completions", rec
+        seen = rec["headers"]
+        assert seen["authorization_present"] is True and seen["authorization_scheme"] == "Bearer", seen
+        assert seen["x_goog_api_key_present"] is False, "the Google key must not ride along to OpenRouter"
+        assert seen["http_referer"] == "https://anticipy.ai", seen
+        assert seen["x_title"] == "Anticipy", seen
+        assert rec["received"]["model"] == browser_model, rec
+        assert (resp.json or {}).get("model") == browser_model, "OpenRouter's body is passed through verbatim"
+        assert (resp.json or {}).get("choices", [{}])[0].get("message", {}).get("content") == "ok"
+
+    def test_agent_llm_routes_a_google_model_direct_and_translates(self, agent_headers, fake_provider):
+        """§6.4 model routing (:220-225, :277-380) -- a google/ model goes to
+        generateContent with the prefix stripped and the key in x-goog-api-key;
+        system text becomes systemInstruction; the answer comes back in
+        chat-completions shape with provider "google".  The Worker port adds
+        finish_reason and usage when Google reports them (CONTRACT.md §6.4)."""
+        if not LLM_VISION_MODEL.startswith("google/"):
+            pytest.skip("ANTICIPY_TEST_VISION_MODEL is not a google/ model")
+        bare = LLM_VISION_MODEL[len("google/"):]
+        body = {"model": LLM_VISION_MODEL, "max_tokens": 8,
+                "messages": [{"role": "system", "content": "sys"},
+                             {"role": "user", "content": "route"}]}
+        resp = self._llm(agent_headers, body)
+        self._skip_if_not_live_here(resp)
+        assert resp.status == 200, repr(resp)
+        out = resp.json or {}
+        assert out.get("provider") == "google", out
+        assert out.get("model") == bare, out
+        rec = self._received(resp)
+        assert rec["path"] == "/v1beta/models/%s:generateContent" % bare, rec["path"]
+        assert rec["headers"]["x_goog_api_key_present"] is True, rec["headers"]
+        assert rec["headers"]["authorization_present"] is False, "no Bearer header goes to Google"
+        seen = rec["received"]
+        assert seen["systemInstruction"] == {"parts": [{"text": "sys"}]}, seen
+        assert seen["contents"] == [{"role": "user", "parts": [{"text": "route"}]}], seen
+        cfg = seen["generationConfig"]
+        assert cfg["maxOutputTokens"] == REPLY_FLOOR, "§6.4: the floor applies on the Google path too (%r)" % cfg
+        if re.match(r"^gemini-3(?:\.|-)", bare, re.I):
+            assert cfg["thinkingConfig"] == {"thinkingLevel": "low"} and "temperature" not in cfg, cfg
+        else:
+            assert cfg["thinkingConfig"] == {"thinkingBudget": 0} and cfg["temperature"] == 0, cfg
+        assert "responseMimeType" not in cfg, cfg
+        choice = out["choices"][0]
+        assert isinstance(choice["message"]["content"], str)
+        assert choice.get("finish_reason") == "stop", choice
+        assert out.get("usage") == {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15}, out.get("usage")
+
+    def test_agent_llm_asks_google_for_json_when_json_object_is_requested(self, agent_headers,
+                                                                          fake_provider):
+        """§6.4 (:318-320)."""
+        if not LLM_VISION_MODEL.startswith("google/"):
+            pytest.skip("ANTICIPY_TEST_VISION_MODEL is not a google/ model")
+        resp = self._llm(agent_headers, self._user("json", LLM_VISION_MODEL,
+                                                   response_format={"type": "json_object"}))
+        self._skip_if_not_live_here(resp)
+        assert resp.status == 200, repr(resp)
+        cfg = self._received(resp)["received"]["generationConfig"]
+        assert cfg.get("responseMimeType") == "application/json", cfg
+
+    def test_agent_llm_maps_google_failures_the_hooks_way(self, agent_headers, fake_provider):
+        """§6.4 rules 13, 14, 15 on the Google path."""
+        if not LLM_VISION_MODEL.startswith("google/"):
+            pytest.skip("ANTICIPY_TEST_VISION_MODEL is not a google/ model")
+        resp = self._llm(agent_headers, self._user("FAKE:STATUS=402", LLM_VISION_MODEL))
+        self._skip_if_not_live_here(resp)
+        assert resp.status == 402, repr(resp)
+        assert error_of(resp) == "model provider rejected request", repr(resp)
+        resp = self._llm(agent_headers, self._user("FAKE:NOJSON", LLM_VISION_MODEL))
+        assert resp.status == 502, repr(resp)
+        assert error_of(resp) == "model returned no JSON", repr(resp)
+        resp = self._llm(agent_headers, self._user("FAKE:NOTEXT", LLM_VISION_MODEL))
+        assert resp.status == 502, repr(resp)
+        assert error_of(resp) == "model returned no text", repr(resp)
+
+    def test_agent_llm_passes_openrouter_failures_through_verbatim(self, agent_headers,
+                                                                   browser_model, fake_provider):
+        """§6.4 (:408) -- OpenRouter's status and JSON come back as they are,
+        which is why rule 14 has no OpenRouter twin; a body that is not JSON
+        is rule 13."""
+        resp = self._llm(agent_headers, self._user("FAKE:STATUS=402", browser_model))
+        self._skip_if_not_live_here(resp)
+        assert resp.status == 402, repr(resp)
+        assert ((resp.json or {}).get("error") or {}).get("message") == "fake provider refused", repr(resp)
+        resp = self._llm(agent_headers, self._user("FAKE:NOJSON", browser_model))
+        assert resp.status == 502, repr(resp)
+        assert error_of(resp) == "model returned no JSON", repr(resp)
+
+    def test_agent_llm_never_leaks_a_vendor_key(self, agent_headers, browser_model, fake_provider):
+        """§6.3, §6.4 -- the vendor key never leaves this backend.  The fake
+        keys are random strings the runner minted for this run; the fake
+        provider reports that it SAW a credential and never echoes the value,
+        so a key in any client body -- success or any refusal -- can only have
+        been put there by the proxy."""
+        if not LLM_KEY_SMELLS:
+            pytest.skip("set ANTICIPY_TEST_LLM_KEY_SMELLS to the fake keys the Worker holds")
+        probes = [
+            ("openrouter ok", self._user("leak", browser_model)),
+            ("google ok", self._user("leak", LLM_VISION_MODEL)),
+            ("openrouter refused", self._user("FAKE:STATUS=402", browser_model)),
+            ("google refused", self._user("FAKE:STATUS=402", LLM_VISION_MODEL)),
+            ("openrouter no json", self._user("FAKE:NOJSON", browser_model)),
+            ("google no text", self._user("FAKE:NOTEXT", LLM_VISION_MODEL)),
+            ("model not enabled", self._user("leak", "openai/gpt-4o")),
+            ("bad role", {"model": browser_model, "messages": [{"role": "tool", "content": "x"}]}),
+        ]
+        presented = 0
+        for label, body in probes:
+            resp = self._llm(agent_headers, body)
+            self._skip_if_not_live_here(resp)
+            for smell in LLM_KEY_SMELLS:
+                assert smell not in resp.text, (
+                    "§6.4: the %s response (%s) carried the vendor key" % (label, resp.status))
+            lowered = resp.text.lower()
+            for smell in ("sk-or-", "openrouter_api_key", "gemini_api_key", "google_api_key",
+                          "bearer "):
+                assert smell not in lowered, (
+                    "§6.4: the %s response (%s) smells of a credential: %r" % (label, resp.status, smell))
+            if resp.status == 200:
+                seen = self._received(resp)["headers"]
+                if seen.get("authorization_present") or seen.get("x_goog_api_key_present"):
+                    presented += 1
+        assert presented >= 2, (
+            "the proxy presented no credential to either provider, so the absence "
+            "above proves nothing (%d)" % presented)
+
+    # -- the meter and the ledger, read out of the local D1 ----------------
+
+    def test_agent_llm_counts_every_call_on_the_agent_row(self, agent_headers, browser_model,
+                                                           fake_provider):
+        """§6.4 the meter (:181-200): llm_hour is this UTC hour and llm_calls
+        steps by one per call -- including a call that is then refused for
+        its model, because the meter runs before the model check."""
+        before = self._meter()
+        hour = _utc_hour()
+        expected = int(before["llm_calls"] or 0) + 1 if before["llm_hour"] == hour else 1
+        resp = self._llm(agent_headers, self._user("count", browser_model))
+        self._skip_if_not_live_here(resp)
+        assert resp.status == 200, repr(resp)
+        after = self._meter()
+        if _utc_hour() != hour:
+            pytest.skip("the UTC hour rolled over during the test")
+        assert after["llm_hour"] == hour, after
+        assert int(after["llm_calls"]) == expected, (before, after)
+        refused = self._llm(agent_headers, self._user("count", "openai/gpt-4o"))
+        assert refused.status == 403, repr(refused)
+        assert int(self._meter()["llm_calls"]) == expected + 1, "a refused call is still a call"
+
+    def test_agent_llm_429_body_is_the_extensions_ceiling_marker(self, agent_headers, browser_model,
+                                                                  fake_provider):
+        """§6.4 rule 4 -- call 400 of the hour is allowed, call 401 is refused
+        with EXACTLY the text extension/agent_loop.js (CEILING_429_MARK) stops
+        retrying on; any other 429 is retried three times against a limit that
+        has already tripped.  A stored hour that is not this hour restarts the
+        count; a provider's own 429 carries no marker."""
+        hour = _utc_hour()
+        local_d1("UPDATE agents SET llm_hour = '%s', llm_calls = %d WHERE agent_id = '%s'"
+                 % (hour, HOURLY_CALL_CEILING - 1, AGENT_ID))
+        try:
+            last = self._llm(agent_headers, self._user("call 400", browser_model))
+            self._skip_if_not_live_here(last)
+            assert last.status == 200, "call %d of the hour is still allowed: %r" % (HOURLY_CALL_CEILING, last)
+            assert int(self._meter()["llm_calls"]) == HOURLY_CALL_CEILING
+
+            resp = self._llm(agent_headers, self._user("call 401", browser_model))
+            assert resp.status == 429, repr(resp)
+            body = resp.json or {}
+            assert body.get("error") == CEILING_429_ERROR, (
+                "§6.4 rule 4: the extension matches this text byte for byte; got %r" % body.get("error"))
+            assert body.get("detail") == CEILING_429_DETAIL, repr(resp)
+            assert CEILING_429_ERROR in resp.text
+            assert int(self._meter()["llm_calls"]) == HOURLY_CALL_CEILING, "a refused-at-ceiling call does not step the meter"
+
+            local_d1("UPDATE agents SET llm_hour = '2000-01-01T00', llm_calls = %d WHERE agent_id = '%s'"
+                     % (HOURLY_CALL_CEILING, AGENT_ID))
+            resp = self._llm(agent_headers, self._user("new hour", browser_model))
+            assert resp.status == 200, "a stored hour that is not this hour resets the count: %r" % resp
+            meter = self._meter()
+            assert meter["llm_hour"] == _utc_hour() and int(meter["llm_calls"]) == 1, meter
+
+            resp = self._llm(agent_headers, self._user("FAKE:STATUS=429", browser_model))
+            assert resp.status == 429, repr(resp)
+            assert CEILING_429_ERROR not in resp.text, (
+                "a provider's own 429 must not read as the ceiling, or the extension stops retrying it")
+        finally:
+            local_d1("UPDATE agents SET llm_calls = 0 WHERE agent_id = '%s'" % AGENT_ID)
+
+    def test_agent_llm_refuses_a_paired_agent_with_no_account(self, agent_headers, browser_model):
+        """§6.4 rule 3 -- a paired row with a blank owner_ref is refused
+        BEFORE the meter and the model.  Without it the endpoint was an open
+        LLM proxy billed to us: register, self-pair, loop forever."""
+        orphan_id = AGENT_ID + "-orphan"
+        token = rand(64)
+        local_d1("INSERT OR REPLACE INTO agents (id, created, updated, agent_id, agent_token, "
+                 "pair_code, paired, owner_ref) VALUES ('%s', '%s', '%s', '%s', '%s', '000001', 1, '')"
+                 % (rand(15), _pb_date(), _pb_date(), orphan_id, token))
+        try:
+            resp = call("POST", "/agent/llm",
+                        headers={"X-Anticipy-Agent-ID": orphan_id, "X-Anticipy-Agent-Token": token},
+                        json_body=self._user("orphan", browser_model))
+            assert resp.status == 403, repr(resp)
+            assert error_of(resp) == "this agent is not attached to an account", repr(resp)
+        finally:
+            local_d1("DELETE FROM agents WHERE agent_id = '%s'" % orphan_id)
+
+    def test_agent_llm_writes_the_ledger_for_a_tagged_call_only(self, agent_headers, browser_model,
+                                                                 fake_provider):
+        """§6.4 the audit ledger (:113-146, :251-275, :340-411): one
+        agent_llm_audit row per TAGGED call, begun as "started" and finished
+        with the provider's verdict and both hashes; an untagged call writes
+        nothing -- ordinary customer calls are not retained."""
+        tag = "contract-suite:" + rand(10)
+        before = self._ledger_count()
+        try:
+            resp = self._llm(agent_headers, self._user("untagged", browser_model))
+            self._skip_if_not_live_here(resp)
+            assert resp.status == 200, repr(resp)
+            assert self._ledger_count() == before, "an untagged call must not be retained"
+
+            resp = self._llm(agent_headers, self._user("[AUDIT:%s] tagged" % tag, browser_model,
+                                                       max_tokens=8, response_format={"type": "json_object"}))
+            assert resp.status == 200, repr(resp)
+            rows = self._ledger_rows(tag)
+            assert len(rows) == 1, rows
+            row = rows[0]
+            assert row["agent_id"] == AGENT_ID and row["owner_ref"], row
+            assert row["model"] == browser_model, row
+            assert row["provider"] == "openrouter" and row["provider_model"] == browser_model, row
+            assert row["status"] == "ok" and int(row["http_status"]) == 200, row
+            assert float(row["duration_ms"]) >= 0, row
+            assert row["proxy_version"], row
+            assert re.match(r"^[0-9a-f]{64}$", row["request_sha256"] or ""), row
+            assert re.match(r"^[0-9a-f]{64}$", row["response_sha256"] or ""), row
+            assert hashlib.sha256(row["client_request_json"].encode("utf-8")).hexdigest() == row["request_sha256"]
+            assert hashlib.sha256(row["client_response_json"].encode("utf-8")).hexdigest() == row["response_sha256"]
+            req = json.loads(row["client_request_json"])
+            assert req["max_tokens"] == REPLY_FLOOR and req["temperature"] == 0, req
+            assert req["response_format"] == {"type": "json_object"}, req
+            assert tag in req["messages"][0]["content"], req
+            assert json.loads(row["provider_request_json"])["max_tokens"] == REPLY_FLOOR
+            assert json.loads(row["client_response_json"]) == resp.json, "the ledger holds what the client got"
+
+            tag2 = tag + ":g"
+            resp = self._llm(agent_headers, self._user("[AUDIT:%s] FAKE:STATUS=402" % tag2, LLM_VISION_MODEL))
+            assert resp.status == 402, repr(resp)
+            rows = self._ledger_rows(tag2)
+            assert len(rows) == 1, rows
+            row = rows[0]
+            assert row["provider"] == "google" and row["status"] == "error", row
+            assert int(row["http_status"]) == 402, row
+            assert row["error"] == "model provider rejected request", row
+            assert json.loads(row["client_response_json"]) == {"error": "model provider rejected request"}
+            assert json.loads(row["provider_response_json"])["error"]["message"] == "fake provider refused"
+        finally:
+            local_d1("DELETE FROM agent_llm_audit WHERE task_tag LIKE '%s%%'" % tag)
+
+    def test_agent_llm_redacts_image_bytes_from_the_ledger(self, agent_headers, fake_provider):
+        """§6.4 (:69-112) -- the PROVIDER gets the bytes; the ledger gets
+        "<meta>,[IMAGE_BYTES_REDACTED]" plus sha256, encoded_chars and
+        approximate_bytes, in both the client and the provider request."""
+        if not LLM_VISION_MODEL.startswith("google/"):
+            pytest.skip("ANTICIPY_TEST_VISION_MODEL is not a google/ model")
+        tag = "contract-suite:" + rand(10)
+        pixels = "Q" * 600
+        body = {"model": LLM_VISION_MODEL, "messages": [{"role": "user", "content": [
+            {"type": "text", "text": "[AUDIT:%s] look" % tag},
+            {"type": "image_url", "image_url": {"url": "data:image/png;base64," + pixels}},
+        ]}]}
+        try:
+            resp = self._llm(agent_headers, body)
+            self._skip_if_not_live_here(resp)
+            assert resp.status == 200, repr(resp)
+            seen = self._received(resp)["received"]
+            assert seen["contents"][0]["parts"][1] == {"inlineData": {"mimeType": "image/png", "data": pixels}}, (
+                "the provider must receive the image bytes")
+            rows = self._ledger_rows(tag)
+            assert len(rows) == 1, rows
+            row = rows[0]
+            for column in ("client_request_json", "provider_request_json"):
+                assert pixels[:64] not in row[column], "%s retained image bytes" % column
+                assert "[IMAGE_BYTES_REDACTED]" in row[column], column
+            part = json.loads(row["client_request_json"])["messages"][0]["content"][1]["image_url"]
+            assert part["url"] == "data:image/png;base64,[IMAGE_BYTES_REDACTED]", part
+            assert part["encoded_chars"] == 600 and part["approximate_bytes"] == 450, part
+            assert re.match(r"^[0-9a-f]{64}$", part["sha256"]), part
+            inline = json.loads(row["provider_request_json"])["contents"][0]["parts"][1]["inlineData"]
+            assert inline["data"] == "[IMAGE_BYTES_REDACTED]" and inline["encoded_chars"] == 600, inline
+        finally:
+            local_d1("DELETE FROM agent_llm_audit WHERE task_tag = '%s'" % tag)
+
+    def test_agent_llm_takes_the_tag_from_an_active_audit_session(self, agent_headers, browser_model,
+                                                                  fake_provider):
+        """§6.4 (:255-262) -- with no [AUDIT:] in the prompt, an active,
+        unexpired agent_audit_sessions row for this agent supplies the tag;
+        an expired one supplies nothing."""
+        tag = "contract-session:" + rand(8)
+        local_d1("INSERT INTO agent_audit_sessions (id, created, updated, task_tag, agent_id, owner_ref, "
+                 "active, expires_at) VALUES ('%s', '%s', '%s', '%s', '%s', 'owner-contract-llm', 1, '%s')"
+                 % (rand(15), _pb_date(), _pb_date(), tag, AGENT_ID, _pb_date(1)))
+        try:
+            resp = self._llm(agent_headers, self._user("session", browser_model))
+            self._skip_if_not_live_here(resp)
+            assert resp.status == 200, repr(resp)
+            assert len(self._ledger_rows(tag)) == 1, "an active session tags the call"
+            local_d1("UPDATE agent_audit_sessions SET expires_at = '%s' WHERE task_tag = '%s'"
+                     % (_pb_date(-1), tag))
+            resp = self._llm(agent_headers, self._user("session", browser_model))
+            assert resp.status == 200, repr(resp)
+            assert len(self._ledger_rows(tag)) == 1, "an expired session tags nothing"
+        finally:
+            local_d1("DELETE FROM agent_audit_sessions WHERE task_tag = '%s'" % tag)
+            local_d1("DELETE FROM agent_llm_audit WHERE task_tag = '%s'" % tag)
+
+
+@pytest.mark.offline
+class TestAgentLlmLiteralsAgree(object):
+    """The three sources that must carry the same bytes, read rather than
+    typed: a test that typed the values would pass while the files disagreed."""
+
+    @staticmethod
+    def _source(rel):
+        here = os.path.dirname(os.path.abspath(__file__))
+        path = os.path.join(here, "..", "..", *rel.split("/"))
+        if not os.path.exists(path):
+            pytest.skip("%s not in this checkout" % rel)
+        with open(path, "r", encoding="utf-8") as handle:
+            return handle.read()
+
+    def test_the_ceiling_text_is_byte_identical_in_the_extension_the_hook_and_the_worker(self):
+        ext = re.search(r'const CEILING_429_MARK = "([^"]+)";', self._source("extension/agent_loop.js"))
+        assert ext and ext.group(1) == CEILING_429_ERROR, "extension/agent_loop.js CEILING_429_MARK"
+        hook = self._source("backend/pb_hooks/agent_key.pb.js")
+        assert ('error: "%s"' % CEILING_429_ERROR) in hook, "agent_key.pb.js 429 error"
+        assert CEILING_429_DETAIL in hook, "agent_key.pb.js 429 detail"
+        worker = self._source("migration/workers/src/llm.ts")
+        found = re.search(r'export const CEILING_429_ERROR = "([^"]+)";', worker)
+        assert found and found.group(1) == CEILING_429_ERROR, "migration/workers/src/llm.ts CEILING_429_ERROR"
+        assert ('"%s"' % CEILING_429_DETAIL) in worker, "migration/workers/src/llm.ts CEILING_429_DETAIL"
+
+    def test_the_reply_floor_is_the_same_number_in_the_extension_the_hook_and_the_worker(self):
+        ext = re.search(r"export const MODEL_REPLY_FLOOR = (\d+);", self._source("extension/agent_loop.js"))
+        hook = re.search(r"const REPLY_FLOOR = (\d+);", self._source("backend/pb_hooks/agent_key.pb.js"))
+        worker = re.search(r"export const REPLY_FLOOR = (\d+);", self._source("migration/workers/src/llm.ts"))
+        assert ext and int(ext.group(1)) == REPLY_FLOOR, "extension/agent_loop.js MODEL_REPLY_FLOOR"
+        assert hook and int(hook.group(1)) == REPLY_FLOOR, "agent_key.pb.js REPLY_FLOOR"
+        assert worker and int(worker.group(1)) == REPLY_FLOOR, "migration/workers/src/llm.ts REPLY_FLOOR"
+        assert REPLY_FLOOR == 512, "research/evals/login-wall-2026-09-05/FINDINGS.md measured 512"
 
 
 class TestServiceRoutes(object):
