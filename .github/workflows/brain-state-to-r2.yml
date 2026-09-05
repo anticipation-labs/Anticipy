@@ -1,0 +1,131 @@
+name: Brain state → R2 (Railway volume migration)
+
+# Copies every owner's brain state (memory.db + clock_state.json) off the
+# Railway `worker` volume into the R2 bucket anticipy-owner-state, with SHA-256
+# round-trip verification. This is the "one-way door" from
+# migration/BRAIN-ON-CONTAINERS.md §5.4 — done in CI so the customer memory
+# NEVER touches a laptop, only the ephemeral GitHub runner.
+#
+# SAFETY PROPERTIES (do not weaken):
+#   * READ-ONLY on Railway. It never deletes the volume. The runbook keeps the
+#     Railway volume in place, unmounted, for two weeks after cutover.
+#   * Verifies each upload by reading it back and comparing SHA-256. A mismatch
+#     FAILS the job loudly rather than continuing.
+#   * PRAGMA integrity_check on every memory.db before upload; a corrupt source
+#     is reported and skipped, never silently uploaded.
+#   * Idempotent: re-running overwrites the same keys with the same bytes.
+#
+# It does NOT stop the Railway supervisor and does NOT deploy the container.
+# Per the runbook, stopping the supervisor + the founder's manual copy + the
+# container deploy are LATER, supervised steps. This job is only the safe
+# copy+verify half, and it can be run repeatedly to keep R2 fresh until the
+# real cutover window.
+#
+# REQUIRED REPO SECRETS (add in GitHub → Settings → Secrets → Actions):
+#   RAILWAY_TOKEN                 - Railway project/account token (read the volume)
+#   CLOUDFLARE_API_TOKEN          - token with R2 edit on account 114587b715…
+#   CLOUDFLARE_ACCOUNT_ID         - 114587b715e702461766369b01d42fc7
+#   RAILWAY_WORKER_SERVICE_ID     - the `worker` service id (or name "worker")
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type MIGRATE to run the copy'
+        required: true
+        default: ''
+
+concurrency:
+  group: brain-state-to-r2
+  cancel-in-progress: false
+
+jobs:
+  copy:
+    if: ${{ github.event.inputs.confirm == 'MIGRATE' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      R2_BUCKET: anticipy-owner-state
+      R2_PREFIX: owners
+    steps:
+      - name: Tooling
+        run: |
+          npm i -g @railway/cli@latest wrangler@4 >/dev/null 2>&1
+          railway --version && wrangler --version
+
+      - name: Pull the brain state off the Railway worker volume (READ-ONLY)
+        run: |
+          set -euo pipefail
+          mkdir -p stage
+          # tar the whole owners tree over ssh stdout. Read-only: nothing on the
+          # volume is modified or deleted.
+          railway ssh -s "${{ secrets.RAILWAY_WORKER_SERVICE_ID || 'worker' }}" \
+            "cd /data && tar czf - owners" > stage/owners.tar.gz
+          tar xzf stage/owners.tar.gz -C stage
+          echo "Owners found:"; ls -1 stage/owners | sort
+          echo "count=$(ls -1 stage/owners | wc -l)"
+
+      - name: Integrity-check every memory.db, then upload + verify each file
+        run: |
+          set -euo pipefail
+          fail=0; uploaded=0
+          sha() { python3 - "$1" <<'PY'
+import hashlib,sys
+print(hashlib.sha256(open(sys.argv[1],'rb').read()).hexdigest())
+PY
+          }
+          for dir in stage/owners/*/; do
+            ref=$(basename "$dir")
+            # guard: owner refs are the D1 id shape; skip anything odd
+            if ! echo "$ref" | grep -qE '^[A-Za-z0-9_-]{8,64}$'; then
+              echo "::error::skipping suspicious owner ref '$ref'"; fail=1; continue
+            fi
+            for f in memory.db clock_state.json; do
+              src="$dir$f"
+              [ -f "$src" ] || continue
+              # SQLite integrity check for the DB
+              if [ "$f" = "memory.db" ]; then
+                res=$(python3 - "$src" <<'PY'
+import sqlite3,sys
+try:
+    c=sqlite3.connect(f"file:{sys.argv[1]}?mode=ro",uri=True)
+    print(c.execute("PRAGMA integrity_check").fetchone()[0]); c.close()
+except Exception as e:
+    print(f"ERROR:{e}")
+PY
+)
+                if [ "$res" != "ok" ]; then
+                  echo "::error::integrity_check FAILED for $ref/$f: $res"; fail=1; continue
+                fi
+              fi
+              key="$R2_PREFIX/$ref/$f"
+              local_sha=$(sha "$src")
+              # upload
+              wrangler r2 object put "$R2_BUCKET/$key" --file "$src" --remote >/dev/null
+              # read back to a temp file and compare
+              wrangler r2 object get "$R2_BUCKET/$key" --file "rb_$f" --remote >/dev/null
+              remote_sha=$(sha "rb_$f"); rm -f "rb_$f"
+              if [ "$local_sha" != "$remote_sha" ]; then
+                echo "::error::SHA MISMATCH for $key (local=$local_sha remote=$remote_sha)"; fail=1; continue
+              fi
+              echo "OK  $key  sha=${local_sha:0:12}…  ($(wc -c < "$src") bytes)"
+              uploaded=$((uploaded+1))
+            done
+          done
+          echo "----"
+          echo "uploaded+verified files: $uploaded"
+          if [ "$fail" -ne 0 ]; then
+            echo "::error::one or more files failed integrity or SHA verification — DO NOT treat this migration as complete"
+            exit 1
+          fi
+          echo "All owner state copied to R2 and verified. Railway volume left untouched."
+
+      - name: Report
+        if: always()
+        run: |
+          echo "Per the runbook (§10.9): keep the Railway volume in place, unmounted,"
+          echo "for two weeks. This job copies+verifies only; it does not stop the"
+          echo "supervisor or delete anything."
