@@ -60,8 +60,18 @@ fi
 # The pendant beat went in FRONT of the microphone on purpose: `heard` pushes
 # live before it queues, so the beat that asks iOS for the microphone may never
 # be moved forward.
-if ! grep -q 'static let pendant = 4' "$route" || ! grep -q 'static let mic = 5' "$route"; then
-    echo "The pendant beat is no longer directly in front of the microphone."
+#
+# THIS LEG USED TO READ "the pendant is DIRECTLY in front of the microphone"
+# (pendant = 4, mic = 5). It is not any more and it was never the rule: build
+# 139 put the setup step — "which apps do you live in?" — between them, in front
+# of the microphone for exactly the same reason the pendant went there. What
+# this leg is actually for is that the microphone stays LAST, so that is what it
+# now says: the pendant is behind it, and it is the final beat of the walk.
+if ! grep -q 'static let pendant = 4' "$route" \
+    || ! grep -qE '^[[:space:]]*static let mic = 6$' "$route" \
+    || ! grep -qE '^[[:space:]]*static let count = 7$' "$route"; then
+    echo "The pendant beat is no longer in front of the microphone, or the"
+    echo "microphone is no longer the last beat of first run."
     echo "Nothing may move the microphone beat forward — see the route header."
     exit 2
 fi

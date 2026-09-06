@@ -31,7 +31,7 @@ import Foundation
 /// runner can walk every one of them, exactly as `FirstRunOwnership` is
 /// walked by `run_first_run_tests.sh`.
 
-/// The five in-app beats, by absolute index. Moved out of `OnboardingView`'s
+/// The in-app beats, by absolute index. Moved out of `OnboardingView`'s
 /// private `Step`, which is now a typealias onto this — so every `Step.mic`,
 /// `.tag()` and `step += 1` in that file still means what it meant.
 ///
@@ -60,8 +60,167 @@ enum FirstRunBeat {
     /// so this reads as one extra screen with a plain "Continue without one" on
     /// it. See research/2026-09-06-pendant-onboarding-design.md.
     static let pendant = 4
-    static let mic = 5
-    static let count = 6
+    /// "Which apps do you live in?" — the Connections spec's STEP 2, page 45.
+    /// AFTER the number and the pendant, and BEFORE the microphone, exactly
+    /// where the spec puts it and for the same reason the pendant sits there:
+    /// the mic beat is the one that asks iOS for the microphone, `heard` pushes
+    /// live before it queues, and a beat added after it would run a microphone
+    /// while somebody was still being asked questions.
+    ///
+    /// THE FAILURE THIS INDEX CLOSES. `OnboardingConnectStep.swift` and every
+    /// decision it renders (`ConnectOnboardingPolicy`) were written on
+    /// 2026-09-05, compiled into the target, and had ZERO CALL SITES — this
+    /// enum was welcome/tour/name/computer/pendant/mic and none of them was it.
+    /// A screen nothing constructs is a screen no person has: the step existed
+    /// in the repository and did not exist in the product.
+    ///
+    /// It is the one beat that is not always walked; `ConnectBeat` below is the
+    /// question of whether it is, and `FirstRunSegment.pages(showingConnect:)`
+    /// is where the answer becomes a page list.
+    static let connect = 5
+    static let mic = 6
+    static let count = 7
+}
+
+/// WHETHER THE SETUP STEP "which apps do you live in?" IS WALKED AT ALL.
+///
+/// Foundation only, like everything else in this file, and for the same reason:
+/// the states that matter here are the ones nobody reaches by tapping — a
+/// second person on a handed-on phone, a list the server would not answer, a
+/// tour replayed from Settings three days after the card was shrugged at.
+///
+/// It decides WHEN, never WHAT. Every sentence on the step, every row on it,
+/// what a Skip costs and how long the quiet lasts are `ConnectOnboardingPolicy`
+/// and the contract behind it; this type cannot see that file and must not
+/// restate one number from it. `snoozeUntil(now:days:)` below is arithmetic
+/// over a count of days it is HANDED.
+enum ConnectBeat {
+
+    /// What is known about this owner's connections at the moment the beat
+    /// falls due.
+    ///
+    /// FIVE STATES, AND THE TWO THAT LOOK ALIKE ARE THE POINT. "this owner has
+    /// nothing connected" and "the list could not be read" are different facts,
+    /// and a Bool can carry only one of them. Folding them together is the
+    /// failure that deletes this feature silently: one refused request on a bad
+    /// connection would read as "already sorted", the step would be skipped,
+    /// and the only place in the whole product that ever ASKS would vanish for
+    /// that person with nothing on any screen to say so.
+    enum Audience: Equatable {
+        /// No owner ROW id on this phone. There is nobody to search a catalog
+        /// for, nobody to record a snooze against, and nothing a connection
+        /// could be bound to.
+        case noOwner
+        /// This owner already holds at least one live connection. The step's
+        /// own question has been answered.
+        case alreadyConnected
+        /// This owner walked past the card inside the quiet it earned.
+        case snoozed
+        /// Read, and this owner holds nothing.
+        case nothingConnected
+        /// The list could not be read at all.
+        case unknown
+    }
+
+    /// The audience, from the three facts the caller can actually establish.
+    ///
+    /// - Parameters:
+    ///   - ownerIsReal: the signed-in account carries an owner ROW id. Not a
+    ///     name, not an email, not this app's pre-accounts device UUID.
+    ///   - liveConnections: how many connections the server says this owner
+    ///     holds, or `nil` when the list could not be read. `nil` is NOT zero.
+    ///   - skipSnoozeUntil: the instant a previous skip's quiet runs out, in
+    ///     the same units as `now`, already scoped to this owner by
+    ///     `snoozeStanding` below.
+    ///
+    /// ORDER, STATED: a connection that exists outranks a snooze, because it
+    /// answers the question rather than postponing it; a snooze outranks an
+    /// unreadable list, because it is a durable fact this phone wrote itself
+    /// and a failed request is not evidence against it.
+    static func audience(ownerIsReal: Bool,
+                         liveConnections: Int?,
+                         skipSnoozeUntil: Double,
+                         now: Double) -> Audience {
+        guard ownerIsReal else { return .noOwner }
+        guard now.isFinite else { return .unknown }
+        if let held = liveConnections, held > 0 { return .alreadyConnected }
+        if skipSnoozeUntil.isFinite, now < skipSnoozeUntil { return .snoozed }
+        guard liveConnections != nil else { return .unknown }
+        return .nothingConnected
+    }
+
+    /// Is the beat one of the pages this launch walks?
+    ///
+    /// A CEILING, AND THE POLARITY IS THE DECISION. The question this asks is
+    /// "is showing the step positively unnecessary?" — so a missing verdict may
+    /// not fence, or the fence becomes a wall. `.unknown` therefore SHOWS the
+    /// step. The cost of getting that wrong in this direction is one optional
+    /// screen, with Skip on it, offered to somebody who did not need it. The
+    /// cost of the other direction is the spec's step 2 disappearing again,
+    /// which is the defect that was already shipped once.
+    static func isShown(to audience: Audience) -> Bool {
+        switch audience {
+        case .noOwner, .alreadyConnected, .snoozed:
+            return false
+        case .nothingConnected, .unknown:
+            return true
+        }
+    }
+
+    /// MAY A LATE ANSWER STILL CHANGE THE PAGE LIST?
+    ///
+    /// Only while the person is still in front of the beat. The connections
+    /// list is read over the network, so the answer can land at any moment; if
+    /// it landed while somebody was STANDING on the connect beat and said
+    /// "already connected", the page would be removed from under them and the
+    /// `ForEach` would render nothing — a blank screen, mid-setup, with no way
+    /// forward. That is the same dead end `segment.lastStep` was written for,
+    /// arriving from the other side, so the list is frozen the moment it is
+    /// reached.
+    static func mayAdoptAudience(standingOn step: Int) -> Bool {
+        step < FirstRunBeat.connect
+    }
+
+    /// The snooze this device is entitled to honour, or zero.
+    ///
+    /// A SNOOZE BELONGS TO A PERSON, NOT TO A HANDSET, and the durable store is
+    /// per device — the same shape as `hasSeenIntro`, with the same trap.
+    /// Without this, a second person signing in on a handed-on phone inherits
+    /// the first one's quiet and is never shown the step at all. So the owner
+    /// is stored beside the instant and compared exactly; anything else scores
+    /// zero, which SHOWS the step.
+    static func snoozeStanding(storedOwner: String,
+                               storedUntil: Double,
+                               owner: String) -> Double {
+        guard !owner.isEmpty, storedOwner == owner, storedUntil.isFinite else { return 0 }
+        return storedUntil
+    }
+
+    /// When a skip's quiet runs out.
+    ///
+    /// THE NUMBER OF DAYS IS NOT DECIDED HERE. It is the contract's
+    /// `ONBOARDING_SKIP_SNOOZE_DAYS`, mirrored in
+    /// `ConnectOnboardingPolicy.skipMeans.snoozeDays` and read back out of the
+    /// TypeScript by `run_connect_onboarding_tests.sh`. This file cannot see
+    /// that file — it is compiled on its own — so it takes the count and does
+    /// the arithmetic. Writing `7` here would be a second book, and the two
+    /// books would disagree the week somebody edited one.
+    ///
+    /// Seconds, because that is what `Date.timeIntervalSince1970` and
+    /// `@AppStorage` carry on this side. The policy keeps milliseconds. The
+    /// unit gap is exactly the one `ConnectOnboardingPolicy.agreesWithSkip` was
+    /// written to span, and it is spanned in the suite rather than papered over
+    /// by making one side lie about its clock.
+    static func snoozeUntil(now: Double, days: Int) -> Double {
+        now + Double(days) * 24 * 60 * 60
+    }
+
+    /// The two durable facts a skip writes, spelled ONCE. A second copy of
+    /// either string is how a rename leaves behind a write nothing reads —
+    /// the accident `FirstRunOwnership.introKey` exists to prevent, and the one
+    /// `run_first_run_route_tests.sh` greps for on the introduction flag.
+    static let snoozeKey = "connectStepSnoozeUntil"
+    static let snoozeOwnerKey = "connectStepSnoozeOwner"
 }
 
 /// The two public handoff pages, derived from the backend the app is actually
@@ -94,18 +253,37 @@ enum FirstRunSegment: Equatable {
     /// phone whose introduction was spent on somebody else.
     case whole
 
+    /// Every beat this segment CAN carry, in order. What one launch actually
+    /// walks is `pages(showingConnect:)` below — the connect beat is the one
+    /// page of first run that is not always due.
     var pages: [Int] {
         switch self {
         case .intro:
             return [FirstRunBeat.welcome, FirstRunBeat.tour]
         case .rest:
             return [FirstRunBeat.name, FirstRunBeat.computer,
-                    FirstRunBeat.pendant, FirstRunBeat.mic]
+                    FirstRunBeat.pendant, FirstRunBeat.connect, FirstRunBeat.mic]
         case .whole:
             return [FirstRunBeat.welcome, FirstRunBeat.tour,
                     FirstRunBeat.name, FirstRunBeat.computer,
-                    FirstRunBeat.pendant, FirstRunBeat.mic]
+                    FirstRunBeat.pendant, FirstRunBeat.connect, FirstRunBeat.mic]
         }
+    }
+
+    /// The pages this launch walks.
+    ///
+    /// DERIVED FROM `pages`, never written down twice — a second list is how
+    /// the `ForEach` and `nextPage` end up disagreeing about which page comes
+    /// after the pendant, which is a blank screen for whoever is standing
+    /// there. `ConnectBeat.isShown(to:)` is the decision; this only removes.
+    ///
+    /// The connect beat is never a segment's first or last page, in either
+    /// mode, so `firstStep` and `lastStep` do not move when it is dropped and
+    /// do not need a second spelling. That is checked rather than assumed
+    /// (`FirstRunRouteTests`), because if it ever stopped being true, `advance()`
+    /// would finish the walkthrough on a page in the middle of it.
+    func pages(showingConnect: Bool) -> [Int] {
+        showingConnect ? pages : pages.filter { $0 != FirstRunBeat.connect }
     }
 
     /// DERIVED FROM `pages`, never written down twice. `OnboardingView` seeds

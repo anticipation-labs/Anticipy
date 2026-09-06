@@ -194,7 +194,8 @@ check("3. and resumes AT the name beat, not before it",
       three.route.segment?.firstStep == FirstRunBeat.name)
 check("3. with no second trip through the door and no replayed introduction",
       three.route.segment?.pages == [FirstRunBeat.name, FirstRunBeat.computer,
-                                     FirstRunBeat.pendant, FirstRunBeat.mic])
+                                     FirstRunBeat.pendant, FirstRunBeat.connect,
+                                     FirstRunBeat.mic])
 
 // 4. Signed out, then reopened by the SAME person.
 var four = Phone()
@@ -220,10 +221,11 @@ five.signsOut()
 five.signsIn(personB)
 check("5. a second person on a handed-on phone gets the whole tour",
       five.route == .tour(.whole))
-check("5. all six in-app beats, in their true order",
+check("5. all seven in-app beats, in their true order",
       five.route.segment?.pages == [FirstRunBeat.welcome, FirstRunBeat.tour,
                                     FirstRunBeat.name, FirstRunBeat.computer,
-                                    FirstRunBeat.pendant, FirstRunBeat.mic])
+                                    FirstRunBeat.pendant, FirstRunBeat.connect,
+                                    FirstRunBeat.mic])
 check("5. and both flags were cleared together, so neither can drift",
       !five.hasSeenIntro == !five.hasOnboarded)
 
@@ -410,13 +412,21 @@ check("and the two that render no walkthrough report none",
 // ===================================================== WHAT THE TRACK COUNTS
 //
 // FirstRunTrack is LIFTED out of OnboardingView.swift by the runner, never
-// copied, so these read the shipped arithmetic. Six names, with the account
-// counted first and the optional handoff last, is what the UI renders.
-check("the track names seven beats, account first, microphone last",
+// copied, so these read the shipped arithmetic. Eight names, with the account
+// counted first and the microphone last, is what the UI renders.
+//
+// A BEAT ADDED WITHOUT A NAME IS THE FAILURE THIS PINS. `offset` is
+// `beatNames.count - pageCount`, so growing FirstRunBeat.count by one while
+// this list stands still shifts every name back one place: the name beat would
+// wear "How I work", and the setup step would wear "Your pendant". No crash,
+// no compile error, just the whole track lying.
+check("the track names eight beats, account first, microphone last",
       FirstRunTrack.beatNames == ["Your account", "Hello", "How I work",
                                   "Your name", "Your computer", "Your pendant",
-                                  "May I listen?"])
-check("and counts seven", FirstRunTrack.count == 7)
+                                  "Which apps?", "May I listen?"])
+check("and counts eight", FirstRunTrack.count == 8)
+check("one name for the door and one for every in-app beat",
+      FirstRunTrack.count == FirstRunBeat.count + 1)
 
 // THE INVARIANT. `step` is the absolute beat index in every segment and
 // `pageCount` is always FirstRunBeat.count, so the name beat reads "4 of 6"
@@ -426,16 +436,22 @@ check("and counts seven", FirstRunTrack.count == 7)
 // replayed has done Your account, Hello, How I work. Three each.
 let nameOrdinal = FirstRunTrack.ordinal(step: FirstRunBeat.name,
                                         pageCount: FirstRunBeat.count)
-check("the name beat is the fourth of six", nameOrdinal == 4)
+check("the name beat is the fourth of eight", nameOrdinal == 4)
 check("and it is named for what it asks",
       FirstRunTrack.name(step: FirstRunBeat.name,
                          pageCount: FirstRunBeat.count) == "Your name")
 check("the computer handoff is fifth",
       FirstRunTrack.ordinal(step: FirstRunBeat.computer,
                             pageCount: FirstRunBeat.count) == 5)
-check("the microphone closes the count at seven",
-      FirstRunTrack.ordinal(step: FirstRunBeat.mic,
+check("the setup step is seventh",
+      FirstRunTrack.ordinal(step: FirstRunBeat.connect,
                             pageCount: FirstRunBeat.count) == 7)
+check("and it is named for what it asks",
+      FirstRunTrack.name(step: FirstRunBeat.connect,
+                         pageCount: FirstRunBeat.count) == "Which apps?")
+check("the microphone closes the count at eight",
+      FirstRunTrack.ordinal(step: FirstRunBeat.mic,
+                            pageCount: FirstRunBeat.count) == 8)
 // THE TRAP THIS ARITHMETIC SETS, named so nobody walks into it. `pageCount` is
 // how many pages the TRACK is counting over, not how many the current segment
 // happens to carry. Handing it `segment.pages.count` looks like the obvious
@@ -471,14 +487,16 @@ for segment in [FirstRunSegment.rest, FirstRunSegment.whole] {
     check("the microphone is the last beat of \(segment)",
           segment.pages.last == FirstRunBeat.mic)
 }
-check("and the pendant sits directly in front of it",
-      FirstRunSegment.rest.pages.dropLast().last == FirstRunBeat.pendant)
+check("and the setup step sits directly in front of it",
+      FirstRunSegment.rest.pages.dropLast().last == FirstRunBeat.connect)
+check("with the pendant in front of that",
+      FirstRunSegment.rest.pages.dropLast(2).last == FirstRunBeat.pendant)
 
 // A beat added to the indices and not to OnboardingView's page builder
 // would render a blank page on somebody's first run. There is no way to see a
 // SwiftUI switch from here, so the tripwire is the count the switch was
 // written against.
-check("there are six in-app beats behind the seven names", FirstRunBeat.count == 6)
+check("there are seven in-app beats behind the eight names", FirstRunBeat.count == 7)
 check("and every page in every segment is one of them",
       [FirstRunSegment.intro, .rest, .whole].allSatisfy { segment in
           segment.pages.allSatisfy { (0 ..< FirstRunBeat.count).contains($0) }
@@ -490,6 +508,240 @@ check("browser handoff follows the configured backend",
 check("Mac handoff follows the configured backend without a double slash",
       ComputerSetupLinks.mac(baseURL: "https://example.test/")?.absoluteString
         == "https://example.test/mac.html")
+
+
+// ============================================ THE STEP THAT WAS NEVER SHOWN
+//
+// "Which apps do you live in?" — the Connections spec's STEP 2, page 45.
+//
+// THE DEFECT THESE CHECKS EXIST FOR, stated plainly: `OnboardingConnectStep`
+// and `ConnectOnboardingPolicy` were written on 2026-09-05, compiled into the
+// target, tested with 154 checks — and had ZERO CALL SITES. `FirstRunBeat` was
+// welcome/tour/name/computer/pendant/mic and none of them was it, so the step
+// existed in the repository and did not exist for a single person. Every check
+// below fails against that tree, which is the only reason to write them: a
+// suite that passes before the change measures nothing.
+
+// WHERE IT SITS. After the number and the pendant, before the microphone. The
+// microphone stays last for the reason the header of this file gives, so the
+// step goes in FRONT of it, exactly as the pendant beat did in build 137.
+check("the setup step is a beat at all", FirstRunBeat.connect < FirstRunBeat.count)
+check("it comes after the pendant", FirstRunBeat.connect > FirstRunBeat.pendant)
+check("and before the microphone", FirstRunBeat.connect < FirstRunBeat.mic)
+
+// EXACTLY ONCE, in every segment that carries it. A beat listed twice is a
+// screen somebody meets, answers, and then meets again — and `nextPage` walks
+// to the FIRST match, so the second copy is also a page with no way off it.
+for segment in [FirstRunSegment.rest, FirstRunSegment.whole] {
+    check("\(segment) carries the setup step exactly once",
+          segment.pages.filter { $0 == FirstRunBeat.connect }.count == 1)
+    check("\(segment) walks it directly after the pendant",
+          segment.pages.firstIndex(of: FirstRunBeat.connect)
+            == segment.pages.firstIndex(of: FirstRunBeat.pendant).map { $0 + 1 })
+    check("\(segment) walks the microphone directly after it",
+          segment.pages.firstIndex(of: FirstRunBeat.mic)
+            == segment.pages.firstIndex(of: FirstRunBeat.connect).map { $0 + 1 })
+}
+// AND NEVER IN FRONT OF THE DOOR. The step reaches the catalog with an owner
+// row id on every call; pre-auth there is no owner, and the whole feature is
+// per-owner. It is also one more thing asked of somebody who has not yet been
+// given anything, which is the failure the segment split exists to close.
+check("the pre-auth segment carries no setup step",
+      !FirstRunSegment.intro.pages.contains(FirstRunBeat.connect))
+for seen in [true, false] {
+    for onboarded in [true, false] {
+        let route = FirstRunRoute.decide(hasSeenIntro: seen, isSignedIn: false,
+                                         hasOnboarded: onboarded)
+        check("no signed-out route reaches the setup step (\(seen), \(onboarded))",
+              route.segment.map { !$0.pages.contains(FirstRunBeat.connect) } ?? true)
+    }
+}
+
+// IT IS NEVER A SEGMENT'S FIRST OR LAST PAGE, in either mode. This is what
+// lets `firstStep` and `lastStep` stay a plain function of `pages` while the
+// beat is dropped underneath them. If it ever became the last page, `advance()`
+// would compare `step < segment.lastStep` against a page that is not there and
+// finish the walkthrough in the middle of it.
+for segment in [FirstRunSegment.intro, .rest, .whole] {
+    for showing in [true, false] {
+        let walked = segment.pages(showingConnect: showing)
+        check("\(segment) does not open on the setup step (showing: \(showing))",
+              walked.first != FirstRunBeat.connect)
+        check("\(segment) does not end on the setup step (showing: \(showing))",
+              walked.last != FirstRunBeat.connect)
+        check("\(segment)'s first page is unmoved by dropping it (showing: \(showing))",
+              walked.first == segment.firstStep)
+        check("\(segment)'s last page is unmoved by dropping it (showing: \(showing))",
+              walked.last == segment.lastStep)
+    }
+}
+
+// DERIVED, NOT WRITTEN TWICE. Dropping the beat removes that one page and
+// nothing else, and leaves the order alone — the failure a second hand-written
+// list produces is a `ForEach` and a `nextPage` that disagree about which page
+// follows the pendant, which is a blank screen for whoever is standing there.
+for segment in [FirstRunSegment.intro, .rest, .whole] {
+    check("\(segment) shown is the whole list",
+          segment.pages(showingConnect: true) == segment.pages)
+    check("\(segment) hidden drops exactly the setup step",
+          segment.pages(showingConnect: false)
+            == segment.pages.filter { $0 != FirstRunBeat.connect })
+    check("\(segment) hidden loses at most one page",
+          segment.pages.count - segment.pages(showingConnect: false).count <= 1)
+}
+
+// ===================================================== WHO IS SHOWN IT
+//
+// The audience, over every combination of the three facts that decide it. The
+// pair this is really about is `nil` versus `0`: a refused request that read as
+// "already connected" would delete the spec's step 2 for that person with
+// nothing on any screen to say so.
+let day = 24.0 * 60 * 60
+let noon = 1_757_000_000.0
+
+check("nobody signed in: no owner to ask, and nothing to ask about",
+      ConnectBeat.audience(ownerIsReal: false, liveConnections: 0,
+                           skipSnoozeUntil: 0, now: noon) == .noOwner)
+check("an owner with one connection has answered the question",
+      ConnectBeat.audience(ownerIsReal: true, liveConnections: 1,
+                           skipSnoozeUntil: 0, now: noon) == .alreadyConnected)
+check("an owner with none has not",
+      ConnectBeat.audience(ownerIsReal: true, liveConnections: 0,
+                           skipSnoozeUntil: 0, now: noon) == .nothingConnected)
+// THE ONE THAT MATTERS. A list that could not be read is NOT an empty list.
+check("a list that could not be read is unknown, not empty",
+      ConnectBeat.audience(ownerIsReal: true, liveConnections: nil,
+                           skipSnoozeUntil: 0, now: noon) == .unknown)
+check("and unknown is not the same answer as nothing connected",
+      ConnectBeat.audience(ownerIsReal: true, liveConnections: nil,
+                           skipSnoozeUntil: 0, now: noon)
+        != ConnectBeat.audience(ownerIsReal: true, liveConnections: 0,
+                                skipSnoozeUntil: 0, now: noon))
+check("a live snooze is honoured",
+      ConnectBeat.audience(ownerIsReal: true, liveConnections: 0,
+                           skipSnoozeUntil: noon + day, now: noon) == .snoozed)
+check("a snooze that has run out is not",
+      ConnectBeat.audience(ownerIsReal: true, liveConnections: 0,
+                           skipSnoozeUntil: noon - day, now: noon) == .nothingConnected)
+// ORDER, STATED AS A TEST. A connection outranks a snooze; a snooze outranks an
+// unreadable list, because it is a fact this phone wrote itself and a failed
+// request is not evidence against it.
+check("a connection outranks a live snooze",
+      ConnectBeat.audience(ownerIsReal: true, liveConnections: 2,
+                           skipSnoozeUntil: noon + day, now: noon) == .alreadyConnected)
+check("a live snooze outranks an unreadable list",
+      ConnectBeat.audience(ownerIsReal: true, liveConnections: nil,
+                           skipSnoozeUntil: noon + day, now: noon) == .snoozed)
+check("no owner outranks everything",
+      ConnectBeat.audience(ownerIsReal: false, liveConnections: 3,
+                           skipSnoozeUntil: noon + day, now: noon) == .noOwner)
+check("an unreadable clock is unknown rather than a guess",
+      ConnectBeat.audience(ownerIsReal: true, liveConnections: 0,
+                           skipSnoozeUntil: 0, now: .nan) == .unknown)
+check("a stored snooze that is not a number is ignored, and the step shows",
+      ConnectBeat.audience(ownerIsReal: true, liveConnections: 0,
+                           skipSnoozeUntil: .nan, now: noon) == .nothingConnected)
+
+// THE STEP IS NOT SHOWN TO SOMEBODY WHO ALREADY CONNECTED SOMETHING.
+check("somebody who already connected something is not asked",
+      !ConnectBeat.isShown(to: .alreadyConnected))
+check("nor is somebody inside the quiet they earned", !ConnectBeat.isShown(to: .snoozed))
+check("nor is a phone with no owner on it", !ConnectBeat.isShown(to: .noOwner))
+// THE CONTROL, and the polarity. This is a CEILING — "is showing it positively
+// unnecessary?" — so a missing verdict may not fence, or the fence becomes a
+// wall and the step disappears again the first time a request fails.
+check("CONTROL: somebody with nothing connected IS asked",
+      ConnectBeat.isShown(to: .nothingConnected))
+check("CONTROL: and so is somebody whose list could not be read",
+      ConnectBeat.isShown(to: .unknown))
+// TOTALITY. Every audience lands on one side, so a sixth state added later
+// cannot arrive with no answer.
+for audience in [ConnectBeat.Audience.noOwner, .alreadyConnected, .snoozed,
+                 .nothingConnected, .unknown] {
+    let shown = ConnectBeat.isShown(to: audience)
+    check("\(audience) is decided one way or the other", shown || !shown)
+}
+
+// AND THE PAGE LIST FOLLOWS IT. The two halves joined up: an audience that is
+// not shown the step is an audience whose walk does not contain it, and the
+// walk is otherwise identical.
+for audience in [ConnectBeat.Audience.noOwner, .alreadyConnected, .snoozed,
+                 .nothingConnected, .unknown] {
+    let walked = FirstRunSegment.rest.pages(showingConnect: ConnectBeat.isShown(to: audience))
+    check("\(audience) sees the step exactly when it is shown to them",
+          walked.contains(FirstRunBeat.connect) == ConnectBeat.isShown(to: audience))
+    check("\(audience) still reaches the microphone", walked.last == FirstRunBeat.mic)
+    check("\(audience) still starts on the name beat", walked.first == FirstRunBeat.name)
+}
+
+// ===================================================== THE PAGE UNDER A THUMB
+//
+// The connections list is read over the network, so its answer can land at any
+// moment. Adopting one while somebody is STANDING on the beat removes the page
+// from under them: the `ForEach` renders nothing and there is no way forward.
+check("a late answer is adopted while the person is still ahead of the beat",
+      ConnectBeat.mayAdoptAudience(standingOn: FirstRunBeat.name)
+        && ConnectBeat.mayAdoptAudience(standingOn: FirstRunBeat.pendant))
+check("and refused the moment they are standing on it",
+      !ConnectBeat.mayAdoptAudience(standingOn: FirstRunBeat.connect))
+check("and refused after it",
+      !ConnectBeat.mayAdoptAudience(standingOn: FirstRunBeat.mic))
+check("every beat in front of it may still adopt one",
+      (0 ..< FirstRunBeat.connect).allSatisfy { ConnectBeat.mayAdoptAudience(standingOn: $0) })
+check("and no beat from it onward may",
+      (FirstRunBeat.connect ..< FirstRunBeat.count)
+        .allSatisfy { !ConnectBeat.mayAdoptAudience(standingOn: $0) })
+
+// ===================================================== WHOSE QUIET IT IS
+//
+// A snooze belongs to a PERSON and this store is per DEVICE — the same shape as
+// `hasSeenIntro`, with the same trap. Without the owner beside it, the second
+// person on a handed-on phone inherits the first one's quiet and is never shown
+// the step at all.
+let alice = "aaaaaaaaaaaaaaa"
+let bob = "bbbbbbbbbbbbbbb"
+check("this owner's own snooze stands",
+      ConnectBeat.snoozeStanding(storedOwner: alice, storedUntil: noon + day,
+                                 owner: alice) == noon + day)
+check("somebody else's does not",
+      ConnectBeat.snoozeStanding(storedOwner: alice, storedUntil: noon + day,
+                                 owner: bob) == 0)
+check("and a phone with nobody signed in honours none of it",
+      ConnectBeat.snoozeStanding(storedOwner: alice, storedUntil: noon + day,
+                                 owner: "") == 0)
+check("a stored instant that is not a number is not a snooze",
+      ConnectBeat.snoozeStanding(storedOwner: alice, storedUntil: .nan,
+                                 owner: alice) == 0)
+check("an untouched store is no snooze at all",
+      ConnectBeat.snoozeStanding(storedOwner: "", storedUntil: 0, owner: alice) == 0)
+// END TO END: the second person is shown the step the first one skipped.
+check("the second person on a handed-on phone is still asked",
+      ConnectBeat.isShown(to: ConnectBeat.audience(
+        ownerIsReal: true,
+        liveConnections: 0,
+        skipSnoozeUntil: ConnectBeat.snoozeStanding(storedOwner: alice,
+                                                    storedUntil: noon + day,
+                                                    owner: bob),
+        now: noon)))
+check("CONTROL: and the person who skipped it is not",
+      !ConnectBeat.isShown(to: ConnectBeat.audience(
+        ownerIsReal: true,
+        liveConnections: 0,
+        skipSnoozeUntil: ConnectBeat.snoozeStanding(storedOwner: alice,
+                                                    storedUntil: noon + day,
+                                                    owner: alice),
+        now: noon)))
+
+// THE ARITHMETIC, over a count of days it is HANDED. The number itself is the
+// contract's, mirrored in ConnectOnboardingPolicy.skipMeans and pinned against
+// it by ConnectOnboardingPolicyTests — this file cannot see that type and must
+// not restate its number.
+check("a snooze is that many days ahead of now",
+      ConnectBeat.snoozeUntil(now: noon, days: 7) == noon + 7 * day)
+check("zero days is no quiet at all",
+      ConnectBeat.snoozeUntil(now: noon, days: 0) == noon)
+check("and a fresh snooze always outlives the instant it was written",
+      ConnectBeat.snoozeUntil(now: noon, days: 1) > noon)
 
 print(failures == 0 ? "all first-run route checks passed" : "\(failures) FAILED")
 exit(failures == 0 ? 0 : 1)

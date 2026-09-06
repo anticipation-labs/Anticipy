@@ -20,6 +20,10 @@ import UIKit
 /// tour's three pages swipe, because they are three views of one idea.
 struct OnboardingView: View {
     @EnvironmentObject var session: AnticipySession
+    /// The only object in the app allowed to open a connect link. Onboarding's
+    /// step 2 hands over to it exactly as Settings does; nothing here opens a
+    /// URL itself, and nothing here holds a second copy of the allowlist.
+    @EnvironmentObject var connect: ConnectSession
     /// Called the instant the last step is cleared. The CALLER writes the
     /// durable "this person has onboarded" flag and then plays the celebration
     /// over Home — see AnticipyApp.
@@ -83,6 +87,36 @@ struct OnboardingView: View {
     // Settings; this beat only hands the setup pages to the right machine.
     @AppStorage("backendURL") private var backendURL = "https://api.anticipy.ai"
 
+    // ── Which apps do you live in? ───────────────────────────────────────
+    //
+    // The beat is not always due. `ConnectBeat.audience` decides, and it is
+    // read once, over the network, BEFORE the beat can be reached; after that
+    // the page list is frozen, because a late answer that removed the page
+    // somebody was standing on is a blank screen mid-setup.
+    @State private var connectAudience: ConnectBeat.Audience = .unknown
+    /// The instant a previous skip's quiet runs out, and WHOSE it is. A snooze
+    /// belongs to a person and the store is per device, so the owner is kept
+    /// beside it and compared — `ConnectBeat.snoozeStanding`. Without that, a
+    /// second person on a handed-on phone inherits the first one's quiet and is
+    /// never shown the step at all.
+    @AppStorage(ConnectBeat.snoozeKey) private var connectSnoozeUntil = 0.0
+    @AppStorage(ConnectBeat.snoozeOwnerKey) private var connectSnoozeOwner = ""
+    /// The catalog seam the search box crosses. A reference held in `@State` so
+    /// one object serves every keystroke; the credential inside it is read on
+    /// every call rather than captured, exactly as `ConnectedAppsClient` demands.
+    @State private var catalogSearch = OnboardingCatalogBridge()
+    /// The connect being asked about right now, if any, and the apps still
+    /// queued behind it. One handoff at a time: `ConnectSession` holds one
+    /// attempt, and two in flight is two consents that can be answered in the
+    /// wrong order.
+    @State private var connecting: ConnectFlow?
+    @State private var connectQueue: [ToolkitMeta] = []
+    /// Raised when the catalog could name none of the ticked apps, so nothing
+    /// could be asked for. It says the true and useful half — nothing happened,
+    /// try again — and it never says why, because every reason is a word this
+    /// product does not say out loud.
+    @State private var connectTrouble = false
+
     /// The voice invite, raised once the walkthrough is cleared. Raised only
     /// when `EnrollmentOfferPolicy` says it can work; on the shipping build
     /// sherpa-onnx is unlinked and this stays false forever.
@@ -113,7 +147,7 @@ struct OnboardingView: View {
                     // `micPrimer` rendered in `.intro` is not a cosmetic
                     // mistake — it is a microphone in front of an account,
                     // and `heard` pushes live before it queues.
-                    ForEach(segment.pages, id: \.self) { beat in
+                    ForEach(segment.pages(showingConnect: showsConnectBeat), id: \.self) { beat in
                         if beat == step {
                             page(beat)
                                 .transition(.asymmetric(
@@ -126,6 +160,28 @@ struct OnboardingView: View {
             }
         }
         .overlay(alignment: .bottom) { footer }
+        // WHETHER THE SETUP STEP IS DUE, asked once per account and asked EARLY
+        // — the beat behind the pendant is several taps away, and the answer
+        // may not arrive while somebody is standing on the page it removes.
+        .task(id: session.accountID) { await readConnectAudience() }
+        // The connect sheet, and the queue behind it. Both belong to the step
+        // and to nothing else; the sheet is raised from here rather than from
+        // inside `connectStep` so it survives the page turn that ends the beat.
+        .sheet(item: $connecting) { flow in connectSheet(flow) }
+        .sheet(isPresented: $connectTrouble) { connectTroubleSheet }
+        .onChange(of: connect.outcome) { outcome in
+            guard outcome != nil else { return }
+            // A HINT, NOT A RECORD — the same reading Settings takes. All it
+            // licenses is moving on to the next app the owner ticked.
+            connect.clearOutcome()
+            connecting = nil
+            connectStepMovesOn()
+        }
+        // An attempt that has gone — abandoned, expired, or taken away by a
+        // sign-out — leaves a sheet with a dead button on it.
+        .onChange(of: connect.prompt == nil) { gone in
+            if gone, connecting?.stage == .asking { connecting = nil }
+        }
         // Leaving the name beat by ANY route — the arrow, the opt-out — saves
         // what was typed on it.
         .onChange(of: step) { newStep in
@@ -194,6 +250,7 @@ struct OnboardingView: View {
         case Step.name:     yourName
         case Step.computer: computerSetup
         case Step.pendant:  pendantOffer
+        case Step.connect:  connectStep
         case Step.mic:      micPrimer
         default:            EmptyView()
         }
@@ -205,6 +262,296 @@ struct OnboardingView: View {
     /// the person is done either way, so this beat has no footer of its own.
     private var pendantOffer: some View {
         PendantOnboarding { Task { await advance() } }
+    }
+
+    // MARK: - Which apps do you live in?
+
+    /// THE CONNECTIONS SPEC'S STEP 2, page 45, and the call site it did not
+    /// have. `OnboardingConnectStep` draws the card and forwards two taps; the
+    /// four things it needs are decided out here, where they can be read.
+    ///
+    /// It has no footer of its own, exactly like the pendant beat: the step
+    /// carries Connect and Skip itself, and page 41's rule is that Skip is
+    /// always visible — a second control down here would be a second way out
+    /// with its own conditions.
+    private var connectStep: some View {
+        OnboardingConnectStep(detection: connectDetection,
+                              owner: ConnectOnboardingPolicy.OwnerID(session.accountID),
+                              catalog: catalogSearch,
+                              connectThese: { keys in startConnecting(keys) },
+                              skipForNow: { skipConnectStep() })
+    }
+
+    /// WHAT ARRIVES PRE-SELECTED, AND WHY IT IS EMPTY ON THIS BUILD.
+    ///
+    /// The spec pre-selects from the signals table — page 42's five signals,
+    /// the sign-up address' mail exchanger among them. `app_usage_signals` has
+    /// ZERO ROWS on production (measured 2026-09-06) and `ConnectedAppsClient`
+    /// serves no route that could read one: there is no `me/connections/signals`
+    /// in its `Route` enum, so this phone has no signal rows to rank and cannot
+    /// get any.
+    ///
+    /// So the ranking is run over what is honestly held — nothing — and the
+    /// card opens with no ticks and a search box. That is `.apps([])`, "we
+    /// looked and found none", which is TRUE. It is deliberately not
+    /// `.refused`, which would print "I could not work out which apps you use"
+    /// to every person forever over a table that is simply empty; and it is
+    /// deliberately not a guess assembled here from the owner's email domain,
+    /// because `CatalogEntry.mailHosts` is a declared contract gap
+    /// (`ToolkitMeta` has no such column) and a guess without it is a domain
+    /// literal in this source, which is the one thing this feature may not have.
+    ///
+    /// The owner still goes through the policy rather than round it: an id this
+    /// phone cannot vouch for produces a refusal on the card, not an empty list
+    /// that looks like an answer.
+    private var connectDetection: ConnectOnboardingPolicy.Detection {
+        ConnectOnboardingPolicy.detected(
+            from: [],
+            catalog: [],
+            signedInOwner: ConnectOnboardingPolicy.OwnerID(session.accountID),
+            at: Date().timeIntervalSince1970 * 1000)
+    }
+
+    /// Whether the beat is one of this launch's pages. The view asks; it does
+    /// not decide.
+    private var showsConnectBeat: Bool {
+        ConnectBeat.isShown(to: connectAudience)
+    }
+
+    /// Read this owner's connections ONCE, and turn the answer into an audience.
+    ///
+    /// A failure is `nil`, never zero. `ConnectBeat.audience` reads those as
+    /// different facts on purpose: a refused request that counted as "nothing
+    /// connected" would be harmless, but one that counted as "already
+    /// connected" would delete the spec's step 2 for that person with nothing
+    /// on any screen to say so.
+    @MainActor
+    private func readConnectAudience() async {
+        catalogSearch.credential = { [session] in
+            let backend = session.backend
+            return ConnectedAppsCredential(baseURL: backend.baseURL,
+                                           accountID: backend.accountID,
+                                           authToken: backend.authToken)
+        }
+        let now = Date().timeIntervalSince1970
+        let snoozed = ConnectBeat.snoozeStanding(storedOwner: connectSnoozeOwner,
+                                                 storedUntil: connectSnoozeUntil,
+                                                 owner: session.accountID)
+        guard let owner = OwnerId(session.accountID) else {
+            adopt(ConnectBeat.audience(ownerIsReal: false, liveConnections: nil,
+                                       skipSnoozeUntil: snoozed, now: now))
+            return
+        }
+        let held = try? await connectedAppsClient().connections(owner: owner)
+        adopt(ConnectBeat.audience(ownerIsReal: true,
+                                   liveConnections: held?.count,
+                                   skipSnoozeUntil: snoozed,
+                                   now: Date().timeIntervalSince1970))
+    }
+
+    /// The page list is frozen the moment the beat is reached. See
+    /// `ConnectBeat.mayAdoptAudience`.
+    @MainActor
+    private func adopt(_ audience: ConnectBeat.Audience) {
+        guard ConnectBeat.mayAdoptAudience(standingOn: step) else { return }
+        connectAudience = audience
+    }
+
+    /// SKIP IS A SEVEN-DAY SOFT SNOOZE, NOT A DECLINE — page 41, and the whole
+    /// of `ConnectOnboardingPolicy.skipMeans`'s reasoning.
+    ///
+    /// The transition is ASKED OF THE POLICY rather than performed here, and
+    /// the number of days comes back from it. Writing `7` on this line, or
+    /// calling `ConnectionsPolicy.recordDecline` — the other implementation of
+    /// this same event, which stamps `declined` at level 1 — would turn a shrug
+    /// at a setup card into permanent silence: level 1 raises the server's own
+    /// threshold to 0.8 against a strict comparison, which silences every
+    /// trigger that carries evidence for good.
+    ///
+    /// WHAT IS SNOOZED IS THE STEP. There are no `connect_nudges` rows on this
+    /// phone to pass in — no route serves them — so `offered` is empty and the
+    /// policy's answer is about the ask itself: seven days, level unmoved,
+    /// nothing left saying `declined`. The two facts written are this device's
+    /// own record of that, scoped to the owner who earned it.
+    @MainActor
+    private func skipConnectStep() {
+        Haptics.engage()
+        recordConnectSkip()
+        Task { await advance() }
+    }
+
+    @MainActor
+    private func recordConnectSkip() {
+        let now = Date().timeIntervalSince1970
+        guard let owner = ConnectOnboardingPolicy.OwnerID(session.accountID) else { return }
+        guard case .snoozed(let outcome) = ConnectOnboardingPolicy.skipOutcome(
+                offered: [], signedInOwner: owner, at: now * 1000) else { return }
+        connectSnoozeOwner = owner.raw
+        connectSnoozeUntil = ConnectBeat.snoozeUntil(now: now, days: outcome.snoozeDays)
+    }
+
+    /// The Connect button. One tap, every ticked app, asked about one at a time.
+    ///
+    /// The apps are named by the CATALOG — `describe` on the slugs the card
+    /// carried — because a slug is the vendor's own spelling and not a name. A
+    /// slug the catalog will not claim is dropped rather than shown raw.
+    @MainActor
+    private func startConnecting(_ keys: [ConnectOnboardingPolicy.AppKey]) {
+        Haptics.engage()
+        guard !keys.isEmpty else { return }
+        // No owner row id means nothing can be connected TO anybody, and a
+        // button that quietly does nothing is worse than one that says so.
+        guard let owner = OwnerId(session.accountID) else {
+            connectTrouble = true
+            return
+        }
+        Task {
+            let slugs = keys.map { $0.toolkit }
+            let named = (try? await connectedAppsClient().describe(toolkits: slugs,
+                                                                  owner: owner)) ?? []
+            let queue = slugs.compactMap { slug in named.first { $0.slug == slug } }
+            // NOT A SILENT ADVANCE. If the catalog could name none of them —
+            // the connection died between the search and the tap — then nothing
+            // has been asked for, and walking on to the next beat would read as
+            // "that worked". The person stays on the card, where Connect can be
+            // tapped again and Skip is still on screen.
+            guard !queue.isEmpty else {
+                connectTrouble = true
+                return
+            }
+            connectQueue = queue
+            connectStepMovesOn()
+        }
+    }
+
+    /// The next app in the queue, or the end of the beat.
+    ///
+    /// AN EMPTY QUEUE ENDS THE STEP, however it emptied — every app connected,
+    /// or a catalog that could name none of them. Nobody is left standing on a
+    /// card whose button has stopped doing anything.
+    @MainActor
+    private func connectStepMovesOn() {
+        guard step == Step.connect else { return }
+        guard let next = connectQueue.first else {
+            Task { await advance() }
+            return
+        }
+        connectQueue.removeFirst()
+        connecting = ConnectFlow(app: next, stage: .settingUp)
+        Task { await runConnect(next) }
+    }
+
+    /// The two server calls the handoff needs, in the order it needs them: the
+    /// app's own sentences first, our single-use link behind them. The same
+    /// order Settings uses, through the same session object, because there is
+    /// exactly one place in this app allowed to open a connect link.
+    @MainActor
+    private func runConnect(_ app: ToolkitMeta) async {
+        guard let owner = OwnerId(session.accountID) else { return }
+        let client = connectedAppsClient()
+        do {
+            let sentences = try await client.permissionSentences(toolkit: app.slug, owner: owner)
+            guard connecting?.app.slug == app.slug else { return }
+            guard let prompt = connect.begin(owner: owner.raw, toolkit: app.slug,
+                                             sentences: sentences) else {
+                connecting?.stage = .trouble
+                return
+            }
+            connecting?.stage = .asking
+            let link = try await client.connectLink(toolkit: app.slug, owner: owner,
+                                                    attemptID: prompt.attemptID)
+            guard connecting?.app.slug == app.slug else { return }
+            // A link the handoff will not adopt is a link nothing may open, and
+            // the attempt goes with it: one left in flight is one whose callback
+            // would be believed later.
+            guard connect.adopt(link: link) else {
+                connect.ownerChanged()
+                connecting?.stage = .trouble
+                return
+            }
+        } catch {
+            guard connecting?.app.slug == app.slug else { return }
+            connect.ownerChanged()
+            connecting?.stage = .trouble
+        }
+    }
+
+    /// The disclosure, drawn from the app's own sentences and nothing else.
+    private func connectSheet(_ flow: ConnectFlow) -> some View {
+        let name = ConnectionsPolicy.appName(flow.app, fallback: flow.app.slug)
+        return SheetChrome(title: ConnectedAppsModel.Copy.connectAction(app: name),
+                           leading: .close,
+                           onLeading: { connecting = nil }) {
+            switch flow.stage {
+            case .settingUp:
+                GroupedCard { InfoRow(ConnectStartCopy.settingUp, systemImage: "clock") }
+            case .trouble:
+                GroupedCard {
+                    InfoRow(ConnectStartCopy.couldNotStart, systemImage: "exclamationmark.circle")
+                }
+            case .asking:
+                if let prompt = connect.prompt {
+                    GroupedCard {
+                        for sentence in prompt.sentences {
+                            InfoRow(sentence, systemImage: "checkmark.circle")
+                        }
+                    }
+                    GroupedCard {
+                        ActionRow(ConnectedAppsModel.Copy.connectAction(app: name),
+                                  systemImage: "arrow.up.right.square",
+                                  isEnabled: prompt.linkReady) {
+                            handOver(prompt)
+                        }
+                    }
+                    FootnoteText(ConnectedAppsModel.Copy.optional)
+                } else {
+                    GroupedCard {
+                        InfoRow(ConnectStartCopy.couldNotStart,
+                                systemImage: "exclamationmark.circle")
+                    }
+                }
+            }
+        }
+    }
+
+    /// Nothing could be asked for. Two sentences, both borrowed: the step's own
+    /// title and the connect flow's own failure line. A third wording of either
+    /// would be a second book, and a sentence written here is a sentence the
+    /// forbidden-word gate cannot read.
+    private var connectTroubleSheet: some View {
+        SheetChrome(title: ConnectOnboardingPolicy.Copy.title,
+                    leading: .close,
+                    onLeading: { connectTrouble = false }) {
+            GroupedCard {
+                InfoRow(ConnectStartCopy.couldNotStart, systemImage: "exclamationmark.circle")
+            }
+        }
+    }
+
+    /// The affirmative, and the only place this view hands a consent back. The
+    /// signed-in owner is read again here rather than trusted from the tap that
+    /// started it: an attempt that outlived a sign-out is dead.
+    @MainActor
+    private func handOver(_ prompt: DisclosurePrompt) {
+        Haptics.engage()
+        switch connect.ownerTapped(prompt.consent, signedInOwner: session.accountID) {
+        case .openedInSignInSession, .openedInSystemBrowser:
+            connecting = nil
+        case .refused:
+            break
+        }
+    }
+
+    /// The store, built per access and credentialled per CALL — `session.backend`
+    /// read at the moment of each request rather than closed over, which is what
+    /// keeps a token from outliving the account that minted it.
+    private func connectedAppsClient() -> ConnectedAppsClient {
+        ConnectedAppsClient(credential: { [session] in
+            let backend = session.backend
+            return ConnectedAppsCredential(baseURL: backend.baseURL,
+                                           accountID: backend.accountID,
+                                           authToken: backend.authToken)
+        })
     }
 
     /// The last beat is cleared. Offer the voice invite if it can actually
@@ -232,10 +579,17 @@ struct OnboardingView: View {
         withAnimation(Theme.springSlow) { step = to }
     }
 
-    /// The page after this one in THIS segment.
+    /// The page after this one in THIS segment, on THIS launch.
+    ///
+    /// The same list the `ForEach` draws — `segment.pages(showingConnect:)`,
+    /// asked twice rather than copied once. A `nextPage` walking the full list
+    /// while the body draws the filtered one steps onto a page nothing renders:
+    /// a blank screen mid-setup, which is exactly the dead end
+    /// `segment.lastStep` was written for.
     private var nextPage: Int? {
-        guard let i = segment.pages.firstIndex(of: step), i + 1 < segment.pages.count else { return nil }
-        return segment.pages[i + 1]
+        let pages = segment.pages(showingConnect: showsConnectBeat)
+        guard let i = pages.firstIndex(of: step), i + 1 < pages.count else { return nil }
+        return pages[i + 1]
     }
 
     // MARK: - Footer
@@ -947,6 +1301,52 @@ struct OnboardingView: View {
     }
 }
 
+// MARK: - The setup step's one seam
+
+/// THE SEARCH BOX'S ROUTE TO THE CATALOG, and nothing else.
+///
+/// `OnboardingCatalogSearch` is the seam `ConnectOnboardingPolicy` declares so
+/// that "which app did they mean" is asked of something with the catalog in
+/// front of it. This is the shipping implementation: the letters somebody typed
+/// go into `me/connections/catalog?q=` exactly as they arrived, and what comes
+/// back is returned in the order it came back.
+///
+/// HARNESS-LAWS LAW 1 LIVES ON THESE FOUR LINES. Nothing here lower-cases,
+/// trims, prefixes, ranks, re-orders, de-duplicates or second-guesses either
+/// the query or the answer. A local `contains` here would be a string check
+/// deciding what a person's words MEAN, one layer up from the policy that just
+/// deleted exactly that, and in a file nobody greps for it. The one thing done
+/// to the query is percent-encoding it into a URL, which is transport.
+///
+/// It carries no credential of its own: `credential` is read ON EVERY CALL and
+/// re-read whenever the account changes, so a token cannot outlive the person
+/// who minted it — the same rule `ConnectedAppsClient` is built around.
+@MainActor
+final class OnboardingCatalogBridge: OnboardingCatalogSearch {
+
+    /// Set by the view on every account change. Nil means nobody is signed in,
+    /// and nothing is sent.
+    var credential: @MainActor () -> ConnectedAppsCredential? = { nil }
+
+    func catalog(matching query: String,
+                 owner: ConnectOnboardingPolicy.OwnerID)
+        async throws -> [ConnectOnboardingPolicy.CatalogEntry] {
+        guard let who = OwnerId(owner.raw) else {
+            throw ConnectedAppsRefusal(.notSignedIn)
+        }
+        let rows = try await ConnectedAppsClient(credential: credential)
+            .catalog(matching: query, owner: who)
+        return rows.map {
+            ConnectOnboardingPolicy.CatalogEntry(slug: $0.slug,
+                                                 name: $0.name,
+                                                 logo: $0.logo,
+                                                 blurb: $0.description,
+                                                 appURL: $0.appURL,
+                                                 scopes: $0.scopes)
+        }
+    }
+}
+
 // MARK: - The two decisions this walkthrough makes about words
 
 /// Which beat you are on, out of how many — counting the one that already
@@ -968,7 +1368,7 @@ struct OnboardingView: View {
 enum FirstRunTrack {
     static let beatNames = ["Your account", "Hello", "How I work",
                             "Your name", "Your computer", "Your pendant",
-                            "May I listen?"]
+                            "Which apps?", "May I listen?"]
 
     static var count: Int { beatNames.count }
 
