@@ -752,9 +752,10 @@ check("the global cap is seven days", P.Contract.globalAskIntervalDays == 7)
 check("silence becomes a soft no at seventy-two hours",
       P.Contract.silenceIsASoftNoHours == 72)
 check("our link lives ten minutes", P.Contract.linkTTLMilliseconds == 10 * 60 * 1000)
-check("the nudge states are the contract's five",
+check("the nudge states are the contract's six",
       P.NudgeState.allCases.map { $0.rawValue }.sorted()
-          == ["asked", "connected", "declined", "needs_reconnect", "never_asked"])
+          == ["asked", "connected", "declined", "declined_soft",
+              "needs_reconnect", "never_asked"])
 check("the triggers are the contract's five",
       P.Trigger.allCases.map { $0.rawValue }.sorted()
           == ["in_task", "laptop_closed", "onboarding", "repeated_use", "user_named_it"])

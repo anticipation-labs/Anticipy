@@ -30,7 +30,8 @@ func check(_ name: String, _ ok: Bool) {
 // goes stale in silence unless something outside it counts.
 // ---------------------------------------------------------------------------
 
-let CONTRACT_NUDGE_STATES = ["never_asked", "asked", "declined", "connected", "needs_reconnect"]
+let CONTRACT_NUDGE_STATES = ["never_asked", "asked", "declined_soft", "declined",
+                             "connected", "needs_reconnect"]
 let CONTRACT_STATUSES = ["connected", "needs_reconnect", "disconnected"]
 let CONTRACT_ALIASES = ["work", "personal"]
 let CONTRACT_TRIGGERS = ["in_task", "repeated_use", "laptop_closed", "user_named_it", "onboarding"]
@@ -514,6 +515,8 @@ print("── the nudge card ──")
 var rendered: [NudgeState: NudgeCard] = [:]
 rendered[.neverAsked] = card(nudge(state: .neverAsked, trigger: nil, sentAt: nil))
 rendered[.asked] = card(nudge(state: .asked))
+rendered[.declinedSoft] = card(nudge(state: .declinedSoft, level: 0,
+                                     snoozeUntil: NOW + 7 * DAY))
 rendered[.declined] = card(nudge(state: .declined, level: 1, snoozeUntil: NOW + 14 * DAY))
 rendered[.connected] = card(nudge(state: .connected, trigger: nil))
 rendered[.needsReconnect] = card(nudge(state: .needsReconnect))
@@ -522,6 +525,23 @@ check("every state in the contract has a rendering",
       NudgeState.allCases.allSatisfy { rendered[$0] != nil })
 check("the states are exactly the contract's, in order",
       NudgeState.allCases.map(\.rawValue) == CONTRACT_NUDGE_STATES)
+
+// ── THE SKIP IS NOT A NO ────────────────────────────────────────────────────
+// The server writes `declined_soft` when somebody walks past a setup card, and
+// until 2026-09-06 this enum had no such member: `ConnectNudge.parse` returned
+// nil, the row was dropped, and the card vanished with no error anywhere. These
+// four checks are what says the app can now READ what the server writes.
+check("a skipped row decodes at all rather than being dropped",
+      ConnectNudge(row: ["user_id": ME.raw, "toolkit": SLUG_A,
+                         "state": "declined_soft", "level": 0])?.state == .declinedSoft)
+let skippedCard = rendered[.declinedSoft]!
+check("a skipped card is quiet", !skippedCard.visible)
+check("and says nothing at all while it is quiet", skippedCard.lines.isEmpty)
+check("and never claims this person said no three times",
+      !skippedCard.hiddenBecause.contains("three times"))
+// The whole of what makes it different from a decline: the ladder did not move.
+check("a soft refusal is a level-0 state",
+      nudge(state: .declinedSoft, level: 0).level == 0)
 check("the statuses are exactly the contract's",
       ConnectionStatus.allCases.map(\.rawValue) == CONTRACT_STATUSES)
 check("the aliases are exactly the contract's",

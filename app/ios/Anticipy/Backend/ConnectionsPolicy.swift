@@ -192,6 +192,23 @@ enum ConnectionStatus: String, CaseIterable, Hashable {
 enum NudgeState: String, CaseIterable, Hashable {
     case neverAsked = "never_asked"
     case asked
+    /// THE SETUP CARD'S SKIP. A seven-day snooze at level 0, and NOT a decline.
+    ///
+    /// The spec asks for it by name twice, and the server writes it: see
+    /// `migration/workers/src/connections/nudge.ts`, which stamps
+    /// `state: "declined_soft"` when somebody walks past a card during setup.
+    ///
+    /// It was missing here until 2026-09-06, and the cost of that is the exact
+    /// failure `run_connections_policy_tests.sh` was written to catch: a state
+    /// the server writes and the app does not know does not fail to compile. It
+    /// decodes as nil in `ConnectNudge.parse`, the row is dropped, and the card
+    /// silently disappears for whoever is in it — with no error anywhere and
+    /// nothing on the phone able to tell that a row arrived at all.
+    ///
+    /// A soft refusal reads as a decline ON THIS SCREEN. The difference between
+    /// the two is not what the card shows; it is what the ask engine may do
+    /// afterwards, and that lives on the server.
+    case declinedSoft = "declined_soft"
     case declined
     case connected
     case needsReconnect = "needs_reconnect"
@@ -835,6 +852,13 @@ enum ConnectionsPolicy {
             // is `settingsCards`' job; duplicating it here would give one app
             // two rows that can disagree.
             return .hidden("this app is already connected")
+
+        case .declinedSoft:
+            // They walked past a setup card. Quiet, exactly like a decline —
+            // this screen is not where the two differ. `isStopped` is not
+            // consulted because a soft refusal never advances the ladder, so a
+            // row in this state cannot be at the end of one.
+            return .hidden("this owner skipped the card and the snooze is running")
 
         case .declined:
             if nudge.isStopped {

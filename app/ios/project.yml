@@ -702,7 +702,15 @@ settings:
     #      anything past the first. The one capsule also carries a count:
     #      "3 waiting on you" rather than "Waiting on you" with two hidden
     #      behind it.
-    CURRENT_PROJECT_VERSION: "146"
+    # 147: the app could not read `declined_soft`. The Worker has been writing
+    #      that state since the setup-card skip landed, and NudgeState had no
+    #      member for it — so `ConnectNudge(row:)` returned nil, the row was
+    #      dropped, and the card silently disappeared for anyone who skipped.
+    #      Both mirrors of the enum carry it now, both switches answer it, and
+    #      the census leg that caught this was itself repaired: it had been
+    #      harvesting quoted spec text out of a /** */ comment as though it
+    #      were a member of the union.
+    CURRENT_PROJECT_VERSION: "147"
     DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: NO
@@ -754,7 +762,7 @@ targets:
         # literal from a Mac one, and two products answering "which build
         # are you holding" with different numbers is the exact disease this
         # gate exists to prevent.
-        CURRENT_PROJECT_VERSION: "146"
+        CURRENT_PROJECT_VERSION: "147"
         DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_ENTITLEMENTS: ../macos/AnticipyMac/AnticipyMac.entitlements

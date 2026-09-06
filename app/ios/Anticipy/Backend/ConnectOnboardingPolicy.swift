@@ -172,6 +172,11 @@ enum ConnectOnboardingPolicy {
     enum NudgeState: String, CaseIterable {
         case neverAsked = "never_asked"
         case asked = "asked"
+        /// The setup card's skip — see the same member on the top-level
+        /// `NudgeState`. Mirrored here because this file carries its own copy
+        /// of the contract's closed sets, and a member on one copy and not the
+        /// other is the same silent drop in a second place.
+        case declinedSoft = "declined_soft"
         case declined = "declined"
         case connected = "connected"
         case needsReconnect = "needs_reconnect"
@@ -1059,6 +1064,14 @@ enum ConnectOnboardingPolicy {
             case .connected, .needsReconnect:
                 // Nothing to snooze. Skip is about the ASK; the connection is
                 // not an ask and is not undone by walking past a card.
+                out.append(next)
+                continue
+            case .declinedSoft:
+                // Already a soft refusal. Extend the quiet if ours is longer
+                // and change NOTHING else: the level stays 0, which is the
+                // whole of what makes this state different from a decline, and
+                // `actedAt` stays the moment they actually walked past.
+                next.snoozeUntil = max(record.snoozeUntil ?? -Double.greatestFiniteMagnitude, until)
                 out.append(next)
                 continue
             case .declined:
