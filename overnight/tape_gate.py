@@ -252,7 +252,7 @@ CODE_NAMES = frozenset({"Dockerfile", "Makefile", "makefile", "Kconfig",
 NOT_CODE_EXTS = (
     ".log", ".jsonl", ".ids", ".json", ".md", ".rst", ".txt", ".csv", ".tsv",
     ".yml", ".yaml", ".toml", ".ini", ".cfg", ".conf", ".env", ".lock",
-    ".png", ".jpg", ".jpeg", ".gif", ".svg", ".ico", ".pdf", ".wav", ".mp3",
+    ".png", ".jpg", ".jpeg", ".gif", ".svg", ".ico", ".pdf", ".wav", ".mp3", ".caf",
     ".mp4", ".mov", ".ttf", ".otf", ".woff", ".woff2", ".onnx", ".bin",
     ".hex", ".uf2", ".elf", ".map", ".a", ".o", ".d", ".zip", ".gz", ".tar",
     ".bak", ".orig", ".rej", ".patch", ".diff", ".overlay", ".dtsi", ".dts",
