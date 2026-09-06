@@ -265,6 +265,39 @@ def who_can_install(client: Client, bundle_id: str, version: str) -> int:
 
     # An external group sees nothing until review clears, and that state does
     # not live on the group.
+    # WHO IS IN THE GROUP, and what TestFlight thinks each of them has done.
+    #
+    # A build attached to a group still reaches nobody if the group is empty,
+    # or if the person is invited and never accepted. That is a different
+    # failure from an unassigned build and it looks identical from outside:
+    # TestFlight simply shows nothing.
+    #
+    # EMAILS ARE MASKED. This runs in CI and its log is readable by everyone
+    # with access to the repository. The question is "is this person in, and
+    # did they accept", which a masked address answers; a full contact list of
+    # everybody else is not part of the question.
+    def mask(address: str) -> str:
+        name, _, domain = address.partition("@")
+        if not domain:
+            return "?"
+        head = name[:2] if len(name) > 2 else name[:1]
+        return f"{head}***@{domain}"
+
+    for group in (groups or []):
+        gname = (group.get("attributes") or {}).get("name", "?")
+        testers, why3 = ask(f"/v1/betaGroups/{group['id']}/betaTesters",
+                            {"limit": 100})
+        if testers is None:
+            print(f"could not read testers of {gname}: {why3}")
+            continue
+        if not testers:
+            print(f"group {gname} has NO testers, so the build reaches nobody")
+            continue
+        print(f"group {gname}: {len(testers)} tester(s)")
+        for tester in testers:
+            t = tester.get("attributes") or {}
+            print(f"  - {mask(t.get('email', ''))}  state={t.get('state', '?')}")
+
     review, why = ask("/v1/buildBetaDetails",
                       {"filter[build]": build["id"], "limit": 1})
     if review is None:
