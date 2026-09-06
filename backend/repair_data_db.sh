@@ -73,12 +73,51 @@ if [ "$VERDICT" != "ok " ] && [ "$VERDICT" != "ok" ]; then
   exit 0
 fi
 
-# 5. Say what came back, table by table, before swapping anything.
+# 5. Count every table both sides, AND REFUSE THE SWAP IF READABLE ROWS WENT
+#    MISSING. This used to only print the counts, and that was the bug: an
+#    empty database passes `integrity_check` as "ok", so step 4 waves through a
+#    recovered file that lost a table `.recover` could not read but the ORIGINAL
+#    could. It happened -- on GitHub's runner, a file whose damage was confined
+#    to `agents` recovered without `owners` at all, and this script printed
+#    "rows owners: original=50 recovered=missing" and then swapped it in and
+#    said "done". The original is kept, so it was recoverable by hand; nothing
+#    about the output said anybody needed to.
+#
+#    The rule: what the ORIGINAL can still read, the recovered file must have,
+#    or nothing is swapped. A table unreadable on both sides is what `.recover`
+#    is for and does not stop anything -- those rows are in lost_and_found.
+LOSSES=""
 for T in _collections _params _migrations owners owner_profile jobs events segments agents; do
   OLD=$(sqlite3 "$DB" "SELECT count(*) FROM \"$T\" NOT INDEXED;" 2>/dev/null || echo "unreadable")
-  NEWC=$(sqlite3 "$NEW" "SELECT count(*) FROM \"$T\";" 2>/dev/null || echo "missing")
+  NEWC=$(sqlite3 "$NEW" "SELECT count(*) FROM \"$T\" NOT INDEXED;" 2>/dev/null || echo "missing")
   say "rows $T: original=$OLD recovered=$NEWC"
+  # WHAT STOPS THE SWAP, and what deliberately does not.
+  #
+  # A table the original can still count that is GONE from the recovered file
+  # stops everything. That is the failure this gate was added for: an empty
+  # database passes integrity_check as "ok", so step 4 cannot tell the
+  # difference between a repaired file and a file with nothing left in it.
+  #
+  # FEWER ROWS DOES NOT STOP IT, and must not. Losing rows out of the damaged
+  # table is precisely what `.recover` does -- the cells it cannot place land
+  # in lost_and_found, which is the next line of output and the reason this
+  # script is better than restoring a backup. A gate that refused on any
+  # shortfall would refuse every real repair it was written for. The count is
+  # printed above either way, and the shortfall is named below.
+  case "$OLD" in
+    ''|*[!0-9]*) continue ;;
+  esac
+  case "$NEWC" in
+    ''|*[!0-9]*) LOSSES="$LOSSES $T(original=$OLD recovered=$NEWC)"; continue ;;
+  esac
+  [ "$NEWC" -lt "$OLD" ] && say "  ...$T is short by $((OLD - NEWC)) row(s); they are in lost_and_found below"
 done
+if [ -n "$LOSSES" ]; then
+  say "STOPPING: the recovered file has LOST a table the ORIGINAL can still read:$LOSSES"
+  say "nothing was swapped; the original is untouched at $DB and copied at $KEEP"
+  say "the recovered file is left at $NEW for a person to look at"
+  exit 0
+fi
 LOST=$(sqlite3 "$NEW" "SELECT count(*) FROM lost_and_found;" 2>/dev/null || echo 0)
 say "lost_and_found rows (cells .recover could not place): $LOST"
 

@@ -58,7 +58,16 @@ HOLES_WANTED = 3
 
 
 def _reads_whole(db: pathlib.Path, table: str, rows: int) -> bool:
-    """Can every row of `table` still be read out of `db`?
+    """Can every row of `table` still be read out of `db`'s OWN PAGES?
+
+    `NOT INDEXED` is the whole point. `owners` is `id TEXT PRIMARY KEY`, so it
+    carries `sqlite_autoindex_owners_1`, and a bare `SELECT count(*)` is
+    answered by counting that index -- which stays perfectly readable while the
+    table's own b-tree is full of holes. The first version of this helper did
+    exactly that, pronounced `owners` intact, and let the fixture punch its
+    pages. `.recover` reads TABLE pages, so it then dropped the table, the
+    repair swapped the result in, and CI reported `no such table: owners`.
+    `repair_data_db.sh` step 5 already says `NOT INDEXED` for this reason.
 
     A fresh connection every time on purpose: SQLite caches pages, and a
     connection opened before the bytes changed will happily serve the old ones
@@ -66,7 +75,8 @@ def _reads_whole(db: pathlib.Path, table: str, rows: int) -> bool:
     """
     conn = sqlite3.connect(db)
     try:
-        return conn.execute(f"SELECT count(*) FROM {table}").fetchone()[0] == rows
+        n = conn.execute(f'SELECT count(*) FROM "{table}" NOT INDEXED').fetchone()[0]
+        return n == rows
     except sqlite3.DatabaseError:
         return False
     finally:
@@ -216,3 +226,62 @@ def test_a_dirty_recovery_is_never_swapped_in(tmp_path):
     assert not (tmp_path / "repair-t5.done").exists(), "a refused repair consumes no tag"
     assert any(p.name.startswith("data.db.recovered-t5-") for p in tmp_path.iterdir()), \
         "the refused file is left for a person to inspect"
+
+
+def test_a_recovery_that_lost_a_table_is_refused(tmp_path):
+    """The swap must not happen when `.recover` dropped a table the original had.
+
+    THIS IS A REAL FAILURE, not a hypothetical. On GitHub's runner, a file whose
+    damage was confined to `agents` recovered without `owners` at all --
+    `.recover` reads TABLE pages and those had holes in them, while the
+    autoindex that answers a bare `count(*)` did not. The recovered file passed
+    `PRAGMA integrity_check` as "ok", because an empty database is a perfectly
+    valid one, so step 4 waved it through. The script printed "rows owners:
+    original=50 recovered=missing" and then swapped it in and said "done".
+
+    The original is kept, so it was recoverable by hand. Nothing in the output
+    said anybody needed to.
+
+    Reproducing the SQLite-version behaviour that caused it is not possible on
+    every machine, so this drives the branch directly: a `sqlite3` shim on PATH
+    that is the real thing for every call EXCEPT counting `owners` in the
+    recovered file, where it fails the way the runner's did.
+    """
+    real = shutil.which("sqlite3")
+    assert real, "needs the sqlite3 CLI"
+
+    shim_dir = tmp_path / "bin"
+    shim_dir.mkdir()
+    shim = shim_dir / "sqlite3"
+    shim.write_text(
+        "#!/bin/sh\n"
+        "# Real sqlite3, except: counting `owners` in the RECOVERED file fails,\n"
+        "# which is what the runner's .recover left behind.\n"
+        'case "$*" in\n'
+        '  *.recovered-*owners*) exit 1 ;;\n'
+        "esac\n"
+        f'exec {real} "$@"\n'
+    )
+    shim.chmod(0o755)
+
+    db = build(tmp_path, corrupt=True)
+    before = sha(db)
+
+    env = dict(os.environ, PATH=f"{shim_dir}:{os.environ.get('PATH', '')}")
+    done = subprocess.run(["sh", str(SCRIPT), str(tmp_path), "t9"],
+                          capture_output=True, text=True, env=env)
+    out = done.stdout + done.stderr
+
+    assert done.returncode == 0, out
+    assert "STOPPING: the recovered file has LOST a table" in out, out
+    assert "owners(original=50 recovered=missing)" in out, out
+    assert "done: data.db is the recovered file" not in out, (
+        "the script announced a successful repair after losing a table:\n" + out
+    )
+
+    # THE CONTROL, and the point of keeping the original: nothing was swapped.
+    assert sha(db) == before, "data.db was replaced by a file missing `owners`"
+    assert not (tmp_path / "repair-t9.done").exists(), (
+        "a refused repair left its one-shot marker behind, so a retry after the "
+        "cause is fixed would be skipped:\n" + out
+    )
