@@ -31,6 +31,7 @@ import {
   ComposioConnections,
   MANAGE_CONNECTIONS_TOOL,
   MAX_CACHED_SESSIONS,
+  MAX_SEARCH_RESULTS,
   OWNER_ID_SHAPE,
   connectionsFromEnv,
   isRetryableStatus,
@@ -947,6 +948,243 @@ await check("a toolkit response that is not an object refuses", async () => {
   assert.equal((await refusalOf(() => provider(impl).toolkit("notion"))).name, "ConnectionsResponseShape");
 });
 
+
+// ===========================================================================
+// 6b. SEARCH — the only way to add an app the system never asked about.
+//
+// The finding this block closes: `GET /me/connections/catalog?q=` answered 503
+// unconditionally, because the adapter offered `toolkit(slug)` — a point lookup
+// on a vendor primary key — and nothing else. The agent that found it was right
+// not to fake it: treating a typed phrase as a primary key is the Worker
+// deciding what somebody's words MEANT.
+//
+// So every check here is about one of two things: the letters reaching the
+// VENDOR unchanged, and a failure never coming back as an empty list.
+// ===========================================================================
+
+/** A catalog row in the listing shape the vendor's own v3.1 reference gives:
+ *  `slug` and `name` at the root, everything else under `meta`. */
+function catalogListRow(slug: string, name: string, over: Record<string, unknown> = {}) {
+  return {
+    slug,
+    name,
+    meta: {
+      description: `Everything about ${name}.`,
+      logo: `https://cdn.example.invalid/${slug}.png`,
+      app_url: `https://${slug}.example.invalid`,
+    },
+    ...over,
+  };
+}
+
+await check("search puts the typed letters on the wire and nothing else", async () => {
+  // LAW 1. Spaces, capitals, punctuation and a non-ASCII character all survive
+  // the trip: the vendor is the thing entitled to interpret them, and every
+  // transform applied here would be a small decision about meaning taken by the
+  // wrong layer.
+  const typed = "  My Work Mail (2nd) — café ";
+  const { calls, impl } = fakeFetch(() => ({ status: 200, body: { items: [] } }));
+  await provider(impl).search(typed);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0]!.method, "GET");
+  const url = new URL("https://vendor.invalid" + calls[0]!.path);
+  assert.equal(url.pathname, "/toolkits");
+  assert.equal(url.searchParams.get("search"), typed,
+    "the letters reached the vendor altered; the rule is 'as typed'");
+  assert.equal(url.searchParams.get("limit"), String(MAX_SEARCH_RESULTS));
+  // CONTROL: the assertion above is only worth anything if a changed query
+  // would actually fail it.
+  assert.notEqual(url.searchParams.get("search"), typed.trim());
+});
+
+await check("search reads the listing row shape: slug, name, and meta for the rest", async () => {
+  const { impl } = fakeFetch(() => ({
+    status: 200,
+    body: { items: [catalogListRow("zellibrix", "Zellibrix")], next_cursor: "cursor-2", total_items: 1400 },
+  }));
+  const hits = await provider(impl).search("notes");
+  assert.equal(hits.length, 1);
+  assert.equal(hits[0]!.slug, "zellibrix");
+  assert.equal(hits[0]!.name, "Zellibrix");
+  assert.equal(hits[0]!.description, "Everything about Zellibrix.");
+  assert.equal(hits[0]!.logo, "https://cdn.example.invalid/zellibrix.png");
+  assert.equal(hits[0]!.appUrl, "https://zellibrix.example.invalid");
+  // The listing carries no auth_config_details, so scopes are UNKNOWN — and
+  // empty is how this file spells unknown. words.ts refuses to write permission
+  // sentences from nothing, so a search row can never produce consent copy.
+  assert.deepEqual(hits[0]!.scopes, []);
+});
+
+await check("search keeps the vendor's order and never re-sorts it", async () => {
+  // Re-ranking would be a local opinion about which app somebody meant, formed
+  // with no context at all. Reversed alphabetical on purpose: any local sort
+  // would move these.
+  const order = ["zellibrix", "quandle_mail", "aardvark_notes"];
+  const { impl } = fakeFetch(() => ({
+    status: 200,
+    body: { items: order.map((s) => catalogListRow(s, s.toUpperCase())) },
+  }));
+  const hits = await provider(impl).search("anything");
+  assert.deepEqual(hits.map((h) => h.slug), order);
+});
+
+await check("search caps the answer at MAX_SEARCH_RESULTS, asked for AND cut", async () => {
+  const many = Array.from({ length: MAX_SEARCH_RESULTS + 17 },
+    (_, i) => catalogListRow(`app${i}`, `App ${i}`));
+  const { calls, impl } = fakeFetch(() => ({ status: 200, body: { items: many } }));
+  const hits = await provider(impl).search("x");
+  assert.ok(calls[0]!.path.includes(`limit=${MAX_SEARCH_RESULTS}`), "the vendor was not asked for a limit");
+  assert.equal(hits.length, MAX_SEARCH_RESULTS,
+    "a vendor that ignores `limit` put the whole catalog on a phone");
+  assert.equal(hits[0]!.slug, "app0", "the cut took from the wrong end");
+});
+
+await check("a caller cannot raise the cap, and an unusable one falls back to it", async () => {
+  for (const [limit, wire] of [
+    [5, "5"], [1, "1"],
+    [MAX_SEARCH_RESULTS + 500, String(MAX_SEARCH_RESULTS)],
+    [0, String(MAX_SEARCH_RESULTS)],
+    [-3, String(MAX_SEARCH_RESULTS)],
+    [Number.NaN, String(MAX_SEARCH_RESULTS)],
+    [Number.POSITIVE_INFINITY, String(MAX_SEARCH_RESULTS)],
+  ] as [number, string][]) {
+    const { calls, impl } = fakeFetch(() => ({ status: 200, body: { items: [] } }));
+    await provider(impl).search("x", { limit });
+    assert.ok(calls[0]!.path.includes(`limit=${wire}`),
+      `limit ${String(limit)} reached the vendor as something other than ${wire}: ${calls[0]!.path}`);
+  }
+});
+
+await check("a caller asking for fewer than the cap gets fewer, not more", async () => {
+  const many = Array.from({ length: 30 }, (_, i) => catalogListRow(`app${i}`, `App ${i}`));
+  const { impl } = fakeFetch(() => ({ status: 200, body: { items: many } }));
+  assert.equal((await provider(impl).search("x", { limit: 4 })).length, 4,
+    "a vendor that ignored a small limit was not cut to it");
+});
+
+await check("the vendor's OWN empty list is an answer: nothing matched", async () => {
+  const { impl } = fakeFetch(() => ({ status: 200, body: { items: [], total_items: 0 } }));
+  assert.deepEqual(await provider(impl).search("qqqzzz"), []);
+});
+
+await check("a dead catalog is a named failure and NEVER an empty list", async () => {
+  // The whole reason this method throws rather than returning []: an empty
+  // search result tells a person the catalog holds nothing, and the catalog
+  // holds 1,400 apps.
+  for (const status of [400, 401, 403, 404, 429, 500, 502, 503]) {
+    const { impl } = fakeFetch(() => ({ status, body: { error: { code: "nope" } } }));
+    const err = await refusalOf(() => provider(impl).search("mail")) as Error & { status: number };
+    assert.equal(err.name, "ConnectionsRequestFailed", String(status));
+    assert.equal(err.status, status);
+  }
+  const dead = fakeFetch(() => ({ throws: new TypeError("network down") }));
+  const err = await refusalOf(() => provider(dead.impl).search("mail")) as Error & { status: number };
+  assert.equal(err.name, "ConnectionsRequestFailed");
+  assert.equal(err.status, 0);
+});
+
+await check("search with no API key refuses before a request is issued", async () => {
+  const { calls, impl } = fakeFetch(() => ({ status: 200, body: { items: [] } }));
+  const err = await refusalOf(() => provider(impl, "").search("mail"));
+  assert.equal(err.name, "ConnectionsUnconfigured");
+  assert.equal(calls.length, 0, "an unconfigured Worker still called the vendor");
+});
+
+await check("a body with no items array refuses instead of reading as nothing matched", async () => {
+  for (const body of [{}, { items: null }, { items: "gmail" }, { results: [] }, null, 7]) {
+    const { impl } = fakeFetch(() => ({ status: 200, body }));
+    const err = await refusalOf(() => provider(impl).search("mail"));
+    assert.equal(err.name, "ConnectionsResponseShape", inspect(body));
+    assert.match(err.message, /no items array/);
+  }
+});
+
+await check("a bare array of rows is read too", async () => {
+  const { impl } = fakeFetch(() => ({ status: 200, body: [catalogListRow("zellibrix", "Zellibrix")] }));
+  assert.deepEqual((await provider(impl).search("notes")).map((h) => h.slug), ["zellibrix"]);
+});
+
+await check("one unreadable row is dropped; the readable ones survive it", async () => {
+  // The opposite of what connections() does with an unreadable row, and on
+  // purpose: there a dropped row becomes "you have not connected Notion" and
+  // texts somebody about the app they connected last week. Here it is one line
+  // missing from a list of forty.
+  const { impl } = fakeFetch(() => ({
+    status: 200,
+    body: {
+      items: [
+        catalogListRow("zellibrix", "Zellibrix"),
+        { slug: "nameless" },                                  // no name
+        { name: "Slugless" },                                  // no slug
+        { slug: "  ", name: "Blank slug" },                    // slug is spaces
+        "not even an object",
+        null,
+        catalogListRow("quandle_mail", "Quandle Mail"),
+      ],
+    },
+  }));
+  assert.deepEqual((await provider(impl).search("x")).map((h) => h.slug),
+    ["zellibrix", "quandle_mail"]);
+});
+
+await check("a page where NOTHING is readable refuses; it is not an empty catalog", async () => {
+  const { impl } = fakeFetch(() => ({
+    status: 200,
+    body: { items: [{ slug: "nameless" }, { name: "Slugless" }, 42] },
+  }));
+  const err = await refusalOf(() => provider(impl).search("x"));
+  assert.equal(err.name, "ConnectionsResponseShape");
+  assert.match(err.message, /nothing here is an answer about what the catalog holds/);
+});
+
+await check("a search row's slug is case folded, like every other slug here", async () => {
+  const { impl } = fakeFetch(() => ({
+    status: 200,
+    body: { items: [catalogListRow("GoogleCalendar", "Google Calendar")] },
+  }));
+  const hits = await provider(impl).search("calendar");
+  assert.equal(hits[0]!.slug, "googlecalendar",
+    "two spellings of one toolkit is one app with two nudge rows");
+  assert.equal(hits[0]!.name, "Google Calendar", "the NAME is the vendor's, untouched");
+});
+
+await check("search reads a root-level logo/description/app_url too, not only meta", async () => {
+  const { impl } = fakeFetch(() => ({
+    status: 200,
+    body: { items: [{
+      slug: "zellibrix", name: "Zellibrix",
+      logo: "https://cdn.example.invalid/root.png",
+      description: "At the root.",
+      app_url: "https://root.example.invalid",
+    }] },
+  }));
+  const hit = (await provider(impl).search("x"))[0]!;
+  assert.equal(hit.logo, "https://cdn.example.invalid/root.png");
+  assert.equal(hit.description, "At the root.");
+  assert.equal(hit.appUrl, "https://root.example.invalid");
+});
+
+await check("the search and the detail endpoint read one row the same way", async () => {
+  // Two readers would be two answers to what an app is called, and the search
+  // list and the connect page would disagree about the same toolkit.
+  const row = catalogListRow("zellibrix", "Zellibrix");
+  const listed = await provider(fakeFetch(() => ({ status: 200, body: { items: [row] } })).impl)
+    .search("notes");
+  const fetched = await provider(fakeFetch(() => ({ status: 200, body: row })).impl)
+    .toolkit("zellibrix");
+  assert.deepEqual(listed[0], fetched);
+});
+
+await check("search carries the key in the header and never in the query", async () => {
+  const { calls, impl } = fakeFetch(() => ({ status: 200, body: { items: [] } }));
+  await provider(impl).search(KEY);
+  assert.equal(calls[0]!.headers["x-api-key"], KEY);
+  // The one place a query is echoed is the query string, so searching FOR the
+  // key is the sharpest version of this: it must appear because it was typed,
+  // and the header is where the credential lives.
+  assert.ok(!calls[0]!.path.includes("x-api-key"), "the key was put in the URL");
+});
+
 // ===========================================================================
 // 7. NOTHING LEAKS: no key, no token, no redirect_url, no log line.
 // ===========================================================================
@@ -1446,6 +1684,249 @@ await check("the register list still holds every term the spec forbids", () => {
   }
   assert.ok(STIFF_FORMS.includes("cannot"));
 });
+
+
+// ===========================================================================
+// LAW 1, READ OFF THE SHIPPED SOURCE.
+//
+// Every check above proves the adapter BEHAVES: the letters go out unchanged
+// and the vendor's order comes back. This block proves the source CANNOT do
+// otherwise — because the way a search box quietly acquires a local opinion is
+// one `if (slug === "gmail")` added in a hurry, and a behavioural test only
+// catches the cases somebody thought to write.
+//
+// The scan runs over EXECUTABLE code with comments removed, because both files
+// discuss real apps at length in prose ("you have not connected Notion",
+// "Connect your googlecalendar") and must go on being allowed to. A string
+// literal is NOT stripped: a name in a literal is exactly the violation.
+// ===========================================================================
+
+const PROVIDER_SOURCE = readFileSync(join(here, "..", "src", "connections", "provider.ts"), "utf8");
+const ROUTE_SOURCE = readFileSync(join(here, "..", "src", "routes", "connections_api.ts"), "utf8");
+
+/** Comments out, code and string literals in.
+ *
+ *  Hand-written rather than regexed because both files contain `"://"` inside a
+ *  string and `/\/\//`-shaped regex literals, and a line-based stripper cuts
+ *  those in half — which would let a violation hide in the half it deleted. The
+ *  three controls under `codeOnly` prove it removes what it should and keeps
+ *  what it should before anything is concluded from it. */
+function codeOnly(src: string): string {
+  const canStartRegex = /^$|[=(,:;[!&|?{}+\-*%~^<>]/;
+  let out = "";
+  let prev = "";
+  let i = 0;
+  while (i < src.length) {
+    const c = src[i]!;
+    const d = src[i + 1];
+    if (c === "/" && d === "/") {
+      while (i < src.length && src[i] !== "\n") i++;
+      continue;
+    }
+    if (c === "/" && d === "*") {
+      i += 2;
+      while (i < src.length && !(src[i] === "*" && src[i + 1] === "/")) i++;
+      i += 2;
+      continue;
+    }
+    if (c === '"' || c === "'" || c === "`") {
+      out += c;
+      i++;
+      while (i < src.length) {
+        const s = src[i]!;
+        out += s;
+        i++;
+        if (s === "\\") {
+          if (i < src.length) { out += src[i]; i++; }
+          continue;
+        }
+        if (s === c) break;
+      }
+      prev = c;
+      continue;
+    }
+    if (c === "/" && canStartRegex.test(prev)) {
+      out += c;
+      i++;
+      let inClass = false;
+      while (i < src.length) {
+        const s = src[i]!;
+        out += s;
+        i++;
+        if (s === "\\") {
+          if (i < src.length) { out += src[i]; i++; }
+          continue;
+        }
+        if (s === "[") inClass = true;
+        else if (s === "]") inClass = false;
+        else if (s === "/" && !inClass) break;
+      }
+      prev = "/";
+      continue;
+    }
+    out += c;
+    if (!/\s/.test(c)) prev = c;
+    i++;
+  }
+  return out;
+}
+
+/** Real catalog apps, plus the two invented for test/connections-api.test.ts.
+ *  This list lives in a TEST, which is where HARNESS-LAWS law 1 puts a word
+ *  list: "gates and evals — deterministic tests of outcomes. Measuring is not
+ *  programming." The same list in src/ would be the violation it is checking
+ *  for. */
+const APP_NAMES = [
+  "gmail", "googlecalendar", "googledrive", "google_drive", "outlook", "notion",
+  "slack", "dropbox", "salesforce", "github", "gitlab", "linear", "asana",
+  "trello", "hubspot", "shopify", "zoom", "jira", "confluence", "calendly",
+  "airtable", "discord", "telegram", "whatsapp", "spotify", "figma", "clickup",
+  "monday", "intercom", "zendesk", "quickbooks", "mailchimp", "sendgrid",
+  "zellibrix", "quandle", "quandle_mail",
+];
+
+function namesIn(code: string): string[] {
+  return APP_NAMES.filter((name) =>
+    new RegExp(`(^|[^a-z0-9_])${name}($|[^a-z0-9_])`, "i").test(code));
+}
+
+await check("the comment stripper removes prose, keeps code, and the scan is not vacuous", () => {
+  const stripped = codeOnly(PROVIDER_SOURCE);
+  // CONTROL 1 — comments really went. This sentence exists only in the file's
+  // header prose. If it survives, every "no app name in the source" result
+  // below is measuring nothing.
+  const PROSE = "Zero dependencies and an injected";
+  assert.ok(PROVIDER_SOURCE.includes(PROSE),
+    "the header sentence this control is anchored on moved; pick another and say so");
+  assert.ok(!stripped.includes(PROSE),
+    "the stripper left comments in, so the scan below cannot tell prose from code");
+  // CONTROL 2 — code really stayed, string literals included.
+  assert.ok(stripped.includes('"x-api-key"'), "the stripper ate a string literal");
+  assert.ok(stripped.includes("encodeURIComponent"), "the stripper ate code");
+  assert.ok(stripped.includes("/^[a-z0-9]{15}$/"), "the stripper ate a regex literal");
+  // CONTROL 3 — the scan finds an app name when one IS in a branch. Every
+  // "assert nothing was found" below is worthless without this.
+  assert.deepEqual(namesIn('if (slug === "gmail") return GMAIL_META;'), ["gmail"]);
+  assert.deepEqual(namesIn('const RANK = { notion: 1, slack: 2 };').sort(), ["notion", "slack"]);
+  assert.deepEqual(namesIn("// a comment about gmail is fine"), ["gmail"],
+    "the scan must see prose too; codeOnly is what removes it, not this");
+});
+
+await check("NO APP IS NAMED in the adapter's executable source", () => {
+  const found = namesIn(codeOnly(PROVIDER_SOURCE));
+  assert.deepEqual(found, [],
+    `src/connections/provider.ts names ${found.join(", ")} in code. A catalog search that `
+      + "knows an app's name has an opinion about what somebody typed, and "
+      + '"a new app in the catalog is a new app in Anticipy with zero code" is false.');
+});
+
+await check("NO APP IS NAMED in the route's executable source", () => {
+  const found = namesIn(codeOnly(ROUTE_SOURCE));
+  assert.deepEqual(found, [],
+    `src/routes/connections_api.ts names ${found.join(", ")} in code.`);
+});
+
+/** The body of one method, from the comment-stripped source, by brace match. */
+function methodBody(code: string, signature: string): string {
+  const at = code.indexOf(signature);
+  assert.notEqual(at, -1, `${signature} is no longer in the source under that signature`);
+  // Past the PARAMETER LIST first. `opts?: { limit?: number }` puts a brace
+  // inside the signature, and matching from the first one returns that type
+  // instead of the body — which reads as a method that never mentions its own
+  // argument, i.e. a false pass on the strictest check in this file.
+  let depthP = 0;
+  let afterParams = -1;
+  for (let i = code.indexOf("(", at); i < code.length; i++) {
+    if (code[i] === "(") depthP++;
+    else if (code[i] === ")") {
+      depthP--;
+      if (depthP === 0) { afterParams = i; break; }
+    }
+  }
+  assert.notEqual(afterParams, -1, `${signature} has an unbalanced parameter list`);
+  const open = code.indexOf("{", afterParams);
+  assert.notEqual(open, -1, `${signature} has no body`);
+  let depth = 0;
+  for (let i = open; i < code.length; i++) {
+    if (code[i] === "{") depth++;
+    else if (code[i] === "}") {
+      depth--;
+      if (depth === 0) return code.slice(open, i + 1);
+    }
+  }
+  throw new Error(`${signature} has an unbalanced body`);
+}
+
+await check("search() does exactly one thing with the query: hand it to the vendor", () => {
+  // The sharpest form of law 1 available over source. A local filter, a
+  // ranking, a did-you-mean or a synonym table all have to READ the query
+  // first — so the check is that the query is never read at all.
+  const body = methodBody(codeOnly(PROVIDER_SOURCE), "async search(query: string");
+
+  const uses = body.match(/\bquery\b/g) ?? [];
+  assert.equal(uses.length, 1,
+    `search() mentions the query ${uses.length} times in its body; it may mention it once, `
+      + "to put it in the query string");
+  assert.equal(body.split("encodeURIComponent(query)").length - 1, 1,
+    "the one use is no longer `encodeURIComponent(query)`");
+
+  // No method called on it, no index into it, no comparison against it.
+  assert.ok(!/\bquery\s*(?:\.|\[)/.test(body), "search() reaches into the query");
+  assert.ok(!/\bquery\s*(?:===?|!==?|<|>)/.test(body), "search() compares the query");
+  assert.ok(!/(?:===?|!==?|<|>)\s*query\b/.test(body), "search() compares against the query");
+
+  // And nothing anywhere in the method re-orders or sifts what came back.
+  for (const op of [".sort(", ".localeCompare(", ".toLowerCase(", ".toUpperCase(",
+                    ".startsWith(", ".endsWith(", ".indexOf(", ".search(", ".match(",
+                    ".split(", ".reverse("]) {
+    assert.ok(!body.includes(op),
+      `search() calls ${op} — a local ranking or filter is the one thing this method may not do`);
+  }
+  // CONTROL: those assertions are only worth something if they fire.
+  const fake = "{ const hit = rows.filter((r) => r.name.toLowerCase().includes(query)); }";
+  assert.ok(/\bquery\s*(?:\.|\[)/.test("{ query.trim(); }"));
+  assert.ok(fake.includes(".toLowerCase("));
+  assert.equal((fake.match(/\bquery\b/g) ?? []).length, 1);
+});
+
+// ===========================================================================
+// MUTATIONS RUN AGAINST src/connections/provider.ts's SEARCH, 2026-09-06.
+//
+// Each is anchored on a literal occurring EXACTLY ONCE in that file — the
+// script refuses to patch otherwise, because a regex that silently fails to
+// match produces a false "it is tested" reading, and that mistake was made
+// twice in this repo on 2026-09-05. ALL ELEVEN WENT RED.
+//
+//   1  `encodeURIComponent(query)` -> `encodeURIComponent(query.trim().toLowerCase())`
+//      -> "search puts the typed letters on the wire and nothing else"
+//         and "search() does exactly one thing with the query"
+//   2  `return out.slice(0, limit)` -> `return out`
+//      -> "search caps the answer at MAX_SEARCH_RESULTS, asked for AND cut"
+//   3  `&limit=${limit}` dropped from the path
+//      -> "search caps the answer at MAX_SEARCH_RESULTS, asked for AND cut"
+//   4  the missing-`items` refusal -> `return []`
+//      -> "a body with no items array refuses instead of reading as nothing
+//         matched"
+//   5  `if (out.length === 0 && unreadable > 0)` -> `if (false)`
+//      -> "a page where NOTHING is readable refuses; it is not an empty catalog"
+//   6  that same test -> `if (out.length === 0)`, so the vendor's own empty
+//      answer refuses too
+//      -> "the vendor's OWN empty list is an answer: nothing matched"
+//   7  `Math.min(MAX_SEARCH_RESULTS, …)` dropped, so a caller sets the cap
+//      -> "a caller cannot raise the cap, and an unusable one falls back to it"
+//   8  `return out.slice(0, limit).reverse()` — a local re-rank
+//      -> "search keeps the vendor's order and never re-sorts it" and
+//         "search() does exactly one thing with the query"
+//   9  unreadable rows dropped without being counted
+//      -> "a page where NOTHING is readable refuses…"
+//  10  `readToolkitMeta(row, null)` -> `readToolkitMeta(row, "unknown")`, so a
+//      slugless row is attributed to a made-up primary key
+//      -> "one unreadable row is dropped; the readable ones survive it"
+//  11  `if (!name || slug.length === 0)` -> `if (!name)`
+//      -> "one unreadable row is dropped; the readable ones survive it"
+//  12  `if (query === "gmail") return […]` added at the top of search()
+//      -> "NO APP IS NAMED in the adapter's executable source"
+// ===========================================================================
 
 if (failures) {
   console.error(`connections-provider: ${failures} failing, ${passes} passing`);

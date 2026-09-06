@@ -1,36 +1,57 @@
-# Connections is not live. Measured, 2026-09-06.
+# Connections on production, 2026-09-06. Seven legs green, two unproven, nobody has connected.
 
-**Read this before you believe the tests.** `migration/workers && npm test` is
-15 suites green, `connect-routes` alone is 44 checks, `connections-store` 46,
-`connections-provider` 169, and the spike behind the pure core has 1006. On the
-production backend, at 04:08 UTC today, **a person cannot connect anything.**
-Not "it is rough", not "it needs polish" — the URL in the text message answers
-404 and the four tables the feature writes to do not exist.
+**Read this before you believe the tests, and before you believe the gate's own
+green legs.** `migration/workers && npm test` is green. `pytest -q` is green.
+`overnight/is_connect_live.py` printed **5 PASS / 1 UNPROVEN** at 06:17 this
+morning over its six legs — and at that moment a person still could not connect
+an app, because the page the texted link led to had nothing on it to tap.
 
-That gap is the entire subject of HARNESS-LAWS law 3, and it is now instrumented:
+That is the gap this note exists to stop somebody rediscovering next month.
+Everything below was measured against `api.anticipy.ai` and `anticipy-backend`
+on **2026-09-06 between 06:17 and 07:25 UTC** with curl, `wrangler d1 execute`
+and the gate itself. Nothing here is inferred from source unless it says so in
+the sentence.
 
-    python3 overnight/is_connect_live.py
+**Three legs were added today and the six older ones were renumbered.** The
+order is now the order a person walks the chain in, because the gate's own
+instruction to its reader is "work the first red leg" and that is only true if
+the order is the order things happen in. A note quoting "leg 5" from earlier
+today means the vendor key, which is **leg 8** now.
+
+---
+
+## The board, right now
+
+    python3 overnight/is_connect_live.py            # exit 2
 
     IS CONNECT LIVE?   https://api.anticipy.ai   d1: anticipy-backend
     --------------------------------------------------------------------------
-    [FAIL] 1  THE WORKER SERVES /c/                    404 application/json — the
-             router's generic notFound(). routes/connect.ts is not on the
-             deployed Worker: every link in a text 404s
-    [....] 2  THE WIRING IS INSTALLED                  not measurable while leg 1
-             is red — the route that would answer 503 is not deployed
-    [FAIL] 3  THE FOUR TABLES EXIST ON LIVE D1         0 of 4 present on
-             anticipy-backend; MISSING: app_usage_signals, connect_links,
-             connect_nudges, connections
-    [....] 4  A LINK CAN BE MINTED, AND ITS ROW LANDS  not attempted:
-             connect_links does not exist on live D1 (leg 3)
-    [PASS] 5  THE VENDOR KEY ANSWERS                   POST .../tool_router/session
-             -> 201, a session id of 16 characters came back, and the connection
-             tool is off (config.manage_connections says off, the tool list does
-             not carry it) — the key in THIS environment, not the Worker's secret
-    [....] 6  SOMEBODY HAS ACTUALLY CONNECTED AN APP   not measurable: the
-             connections table could not be counted
+    [PASS] 1  THE SIX /me/connections ROUTES EXIST      all 6 answer 401 with
+             connections_api.ts's own "Sign in first.", and the control
+             /me/connectionsX answers the router's generic 404 — so those 401s
+             are these routes and not a blanket refusal
+    [PASS] 2  THE FOUR TABLES EXIST ON LIVE D1          all four present on
+             anticipy-backend: app_usage_signals, connect_links, connect_nudges,
+             connections
+    [....] 3  THE CATALOG ANSWERS "ADD AN APP"          no owner credential in
+             the environment (ANTICIPY_CONNECT_PROBE_CREDENTIAL or
+             ANTICIPY_OWNER_TOKEN), so the catalog was not asked
+    [PASS] 4  A LINK CAN BE MINTED, AND ITS ROW LANDS   one row inserted with the
+             seven columns store.ts writes, read back identical, deleted, and
+             confirmed gone
+    [PASS] 5  THE WORKER SERVES /c/                     401 text/html with
+             connect.ts's own CSP (form-action 'self')
+    [PASS] 6  THE WIRING IS INSTALLED                   a connect.ts page was
+             drawn, which only happens after WIRING(env) returned deps
+    [PASS] 7  THE PAGE OFFERS A WAY IN                  the signed-out page
+             carries 1 control(s) whose target resolves to /c/<43 chars>/code on
+             our own host
+    [PASS] 8  THE VENDOR KEY ANSWERS                    201, a session id of 16
+             characters, connection tool off — the key in THIS environment
+    [....] 9  SOMEBODY HAS ACTUALLY CONNECTED AN APP    nobody has connected
+             anything yet
     --------------------------------------------------------------------------
-    exit 1
+    UNPROVEN — a leg that could not be measured does not pass.
 
 Exit 0 means a person can connect an app and somebody has. Exit 1 means
 something we can SEE is broken. Exit 2 means a leg was not measured, and a leg
@@ -38,248 +59,250 @@ that was not measured does not pass — that third state is copied from
 `overnight/firmware_gate.py` and it is the difference between "we looked and it
 was fine" and "we never looked".
 
+**Exit 2 is not a pass.** Two legs are unproven, and the second of them is the
+finish line.
+
 ---
 
-## What is live, measured today and not inferred
+## Leg 7 went red, and then green, in one hour. That is the whole point of it.
+
+At **06:17 UTC** `GET https://api.anticipy.ai/c/<43 chars>`, signed out — the
+exact request a person makes when they tap the link in a text — answered this,
+in full, minus the stylesheet:
+
+```html
+<body>
+<h1>Sign in to finish</h1>
+<p>Sign in to Anticipy in this browser, then open this link again. It works for ten minutes.</p>
+
+</body>
+```
+
+No anchor. No form. No button. **The end of the road for every person who tapped
+a connect link.** And the way in already existed, one path segment away and
+deployed: `GET /c/{token}/code` answered 200 with "Get a code by text" and a
+form posting back to itself. `installConnectSessionReader(connectSession)` is
+called at `src/index.ts:145`, so the cookie that flow mints is honoured by the
+`/c/` page. The whole mechanism was live. The only thing missing was a link to
+it — `refusalPage("sign-in-required")` called `plainPage(401, …)` without the
+optional `back` argument, so nothing was drawn.
+
+It mattered more than that sentence suggests: `SettingsHomeView.runConnect`
+mints the link on the phone and hands it to a browser. The person is signed in
+on the phone and the browser is not, so that 401 was not an edge case — it was
+the first thing every single user would have seen.
+
+At **07:20 UTC** the same URL answered:
+
+```html
+<body>
+<h1>Sign in to finish</h1>
+<p>Anticipy needs to know it&#39;s you before it sets anything up. It can text a code to
+the phone number on your account — or you can sign in to Anticipy in this browser and
+open this link again.</p>
+<p><a href="/c/{token}/code">Get a code by text</a></p>
+</body>
+```
+
+Leg 7 went green against live in the same run that had been red an hour earlier.
+Both readings are pinned offline — `is_connect_live.py --self-test` and
+`tests/test_is_connect_live.py` both keep the 06:17 dead end as a fixture on
+purpose. **A fixture that quietly followed the repair would leave the leg
+untested against the only page it has ever had to catch.**
+
+---
+
+## What is live NOW, measured this hour
 
 | thing | measured | how |
 |---|---|---|
-| the Worker itself | `GET api.anticipy.ai/api/health` -> **200** | curl |
-| the Composio key | `POST backend.composio.dev/api/v3.1/tool_router/session` -> **201**, 16-character `session_id`, `config.manage_connections.enabled = false`, tool list is the five non-connection tools | gate leg 5 |
-| the local write path | the four tables stood up in a scratch local D1 from `schema.sql` section 5, the probe row inserted, read back identical, deleted | `tests/test_is_connect_live.py::test_the_mint_probe_lands_in_a_real_d1` |
+| the six `/me/connections` routes | each answers **401** `{"ok":false,"message":"Sign in first."}` with its own verb and no credential | gate leg 1 / curl |
+| that those 401s mean something | `/me/connectionsX` answers the router's generic `{"code":404,…}`; `/me/connections/nope` answers connections_api.ts's own `"There's nothing at this address."` | gate leg 1's control |
+| the four tables | `app_usage_signals`, `connect_links`, `connect_nudges`, `connections` all on `anticipy-backend` | gate leg 2 |
+| the write path | one probe row inserted with the seven columns `store.ts put()` writes, read back column-for-column identical, deleted, deletion confirmed | gate leg 4, against **production** |
+| `/c/{token}` | **401** `text/html` with connect.ts's own CSP (`form-action 'self'`), carrying one control to the code flow | gate legs 5–7 / curl |
+| the wiring | a connect.ts page is drawn at all, which happens only after `WIRING(env)` returned deps — so `missingConfig()` returned null, so **`DB`, `COMPOSIO_API_KEY` and the model key are all set on the deployed Worker**. That is new since this morning's note, which recorded both secrets absent | gate leg 6, read against wiring.ts:331 |
+| `/c/{token}/code` | **200**, "Get a code by text", with a form posting back to `/c/{token}/code` | gate leg 7's control / curl |
+| the vendor key | `POST backend.composio.dev/api/v3.1/tool_router/session` → **201**, 16-character `session_id`, `config.manage_connections.enabled=false`, connection meta-tool absent from the tool list | gate leg 8, with the key in `.env.local` |
+| connected accounts | **zero** rows with `status='connected'` | gate leg 9 |
 
-That is the whole list. One health check, one vendor key, and a schema that
-works somewhere that is not production.
-
-## What is not live
-
-**1. `/c/` is not deployed.** `GET https://api.anticipy.ai/c/<43 chars>` answers
-`{"code":404,"message":"The requested resource wasn't found.","data":{}}` — the
-router's own `notFound()` from `src/pb/wire.ts`. `src/index.ts:190` routes
-`/c/*` to `connectRoute`; the deployed Worker predates it. **Every link the
-product could put in a text message today 404s.**
-
-The apex is worse and it is worth knowing before somebody "improves" the link:
-
-    https://anticipy.ai/c/<token>       -> 301 to www.anticipy.ai/c/<token>
-    https://www.anticipy.ai/c/<token>   -> 307 to www.anticipy.ai/     (the token is dropped)
-
-So the spec's own `anticipy.ai/c/{token}` spelling is a dead link today, which
-is why `CONNECT_URL_BASE` is `https://api.anticipy.ai/c`. Moving it to the apex
-means adding the route, deploying, confirming the apex serves this code, and
-only then changing the constant — in that order, or every link already sitting
-in somebody's message thread breaks.
-
-**2. The four tables do not exist on `anticipy-backend`.** Measured directly:
-
-    SELECT name FROM sqlite_master WHERE type='table' AND name IN
-      ('app_usage_signals','connections','connect_nudges','connect_links')
-    -> zero rows
-
-37 tables are on that database. None of these four. `store.ts` refuses every
-write to a missing table by name (`ConnectionsSchemaMissing`) rather than
-turning it into a D1 1101, so the failure will at least be readable — but it is
-still every write.
-
-**3. The two secrets the wiring needs are not on the Worker.** `wrangler secret
-list` for `anticipy-api` returns 15 names, and neither `COMPOSIO_API_KEY` nor
-`GEMINI_API_KEY`/`GOOGLE_API_KEY` is among them. `connections/wiring.ts
-missingConfig()` refuses to build the deps without both:
-
-    DB                 present (wrangler.jsonc d1_databases)
-    COMPOSIO_API_KEY   ABSENT   -> no catalog, no vendor link, no callback confirmation
-    GEMINI_API_KEY     ABSENT   -> no permission sentences, and a consent page with
-                                   a blank list of claims is refused rather than drawn
-
-`GEMINI_API_KEY` is the one that will surprise somebody: it is required because
-`ANTICIPY_BROWSER_MODEL` in `wrangler.jsonc` is `google/gemini-3.1-pro-preview`,
-and `missingConfig` routes on that prefix. **Deploying without these two puts a
-503 behind every `/c/` URL** — better than a 404, still a dead product. Do the
-secrets and the deploy in the same sitting.
-
-**4. Nothing mints a link.** `connect_links` has exactly one writer
-(`store.ts put()`) and, at the time of writing, no product path calls it. The
-iOS side is the same shape: `ConnectedAppsModel.swift`'s default client throws
-`NoConnectionsClient` from every method, so the screen is drawn over nothing.
-
-**5. Nobody has connected anything through this product.** The vendor holds two
-ACTIVE accounts for owner `sxkotd1h02qb6gw` from the week-1 spike (`gmail`
-`ca_BNgvxQtJ703C`, `googlecalendar` `ca_sHENw6KtQ8Kx`, from
-`research/2026-09-05-composio-connections.md`) — connected BY HAND, in a Chrome,
-against raw vendor links. There is no row in this system for either of them,
-because there is no table to hold one. That is not the feature working.
+One leftover: `connect_links` holds a single row, `user_id=qeuy6sv1raof9rw`,
+`toolkit=notion`, `expires_at` 2026-09-06T05:44:40Z — **expired before this run
+and never spent**. It is inert (`locate()` calls it dead) and it is somebody's
+earlier hand-mint. Nothing prunes expired links; that is a housekeeping debt,
+not a defect.
 
 ---
 
-## The commands, in order
+## What is NOT measured, said plainly, so nobody reads a gap as a pass
 
-Each step ends with the check that proves it, because none of them is done until
-it is proven against live.
+1. **`?q=` — "Add an app" — has never been asked on production.** Leg 3 is
+   UNPROVEN because there is no owner credential in this environment, and it
+   cannot be faked: `connectionsApiRoute` settles the credential before it
+   builds a single dependency, so an anonymous caller gets 401 and never sees
+   the port behind it.
 
-### 1. The four tables
+   **What the source says will happen, which is not the same as a measurement:**
+   `ConnectionsApiDeps.search` is a declared port and `connectionsApiDeps()`
+   (connections_api.ts:299) does not fill it, so `searchCatalog` takes the
+   `typeof deps.search !== "function"` branch and answers
+   `refuse(503, "I couldn't look that up just now. Nothing has changed.")`. If
+   that is what production does, **Add an app is broken for everybody** and leg 3
+   is RED with that sentence quoted. Somebody has to point the gate at it:
 
-Whole file (idempotent — every statement in it is `IF NOT EXISTS`, and this is
-the option to prefer, since it also reconciles anything else that has drifted):
+       export ANTICIPY_CONNECT_PROBE_CREDENTIAL='<an owner auth token>'
+       python3 overnight/is_connect_live.py --read-only
 
-    npx wrangler d1 execute anticipy-backend --remote --file=migration/d1/schema.sql
+   The gate refuses to take that credential from `argv` — a secret on a command
+   line is a secret in `ps`, in a shell history and in every CI log — and it
+   refuses to send it anywhere but `anticipy.ai` and its subdomains, because
+   `WORKER` comes from `ANTICIPY_PB` and that variable pointed at a different
+   backend as recently as last week.
 
-Or just this feature — the seven statements of section 5, comments stripped so a
-runner that splits on `;` cannot cut one in half:
+2. **The code flow has never been driven end to end.** The gate GETs
+   `/c/{token}/code` and never POSTs it, deliberately: `POST` texts a six-digit
+   code to a real person's phone and is rate-limited per link and per owner
+   (`MAX_CODES_PER_LINK = 3`, `MAX_CODES_PER_OWNER = 5`). So nothing here proves
+   the text arrives, that `/verify` mints a cookie, or that
+   `ANTICIPY_AUTH_SECRET` is set on the Worker — and `sessionKey()` **fails
+   closed** on an unset secret, which means no code session exists at all and
+   the page keeps asking for a sign-in. **The control leg 7 now finds could lead
+   to a door that does not open, and this gate cannot tell you.** That needs a
+   human with a phone, or a script under `proof/`.
 
-```sql
-CREATE TABLE IF NOT EXISTS "app_usage_signals" (
-  "user_id"       TEXT NOT NULL CHECK (length("user_id") = 15),
-  "toolkit"       TEXT NOT NULL CHECK (length("toolkit") > 0),
-  "source"        TEXT NOT NULL CHECK ("source" IN ('said','observer','mx','link','connected','asked')),
-  "alias"         TEXT NOT NULL DEFAULT '' CHECK ("alias" IN ('','work','personal')),
-  "weight"        REAL NOT NULL DEFAULT 0 CHECK ("weight" >= 0),
-  "last_seen_at"  REAL NOT NULL DEFAULT 0,
-  PRIMARY KEY ("user_id", "toolkit", "source", "alias")
-);
+3. **Nobody has connected anything.** Leg 9 is UNPROVEN and stays UNPROVEN at
+   zero. That is the state of a feature nobody has been offered, not a failure —
+   a gate that cried failure the day before launch would teach its reader to
+   ignore it, which is how the ears stayed deaf for thirty hours next to a green
+   board. It turns green on the first real connection and it is worth more than
+   every other leg combined.
 
-CREATE TABLE IF NOT EXISTS "connections" (
-  "connected_account_id" TEXT PRIMARY KEY NOT NULL CHECK (length("connected_account_id") > 0),
-  "user_id"              TEXT NOT NULL CHECK (length("user_id") = 15),
-  "toolkit"              TEXT NOT NULL CHECK (length("toolkit") > 0),
-  "alias"                TEXT NOT NULL DEFAULT '' CHECK ("alias" IN ('','work','personal')),
-  "status"               TEXT NOT NULL CHECK ("status" IN ('connected','needs_reconnect','disconnected')),
-  "writes_enabled"       INTEGER NOT NULL DEFAULT 0 CHECK ("writes_enabled" IN (0,1)),
-  "last_used_at"         REAL NULL
-);
-
-CREATE TABLE IF NOT EXISTS "connect_nudges" (
-  "user_id"      TEXT NOT NULL CHECK (length("user_id") = 15),
-  "toolkit"      TEXT NOT NULL CHECK (length("toolkit") > 0),
-  "state"        TEXT NOT NULL CHECK ("state" IN ('never_asked','asked','declined','connected','needs_reconnect')),
-  "level"        INTEGER NOT NULL DEFAULT 0 CHECK ("level" BETWEEN 0 AND 3),
-  "snooze_until" REAL NULL,
-  "trigger"      TEXT NULL CHECK ("trigger" IS NULL OR "trigger" IN ('in_task','repeated_use','laptop_closed','user_named_it','onboarding')),
-  "sent_at"      REAL NULL,
-  "acted_at"     REAL NULL,
-  "channel"      TEXT NULL CHECK ("channel" IS NULL OR "channel" IN ('sms','ios')),
-  PRIMARY KEY ("user_id", "toolkit")
-);
-
-CREATE TABLE IF NOT EXISTS "connect_links" (
-  "token_handle" TEXT PRIMARY KEY NOT NULL CHECK (length("token_handle") = 64),
-  "user_id"      TEXT NOT NULL CHECK (length("user_id") = 15),
-  "toolkit"      TEXT NOT NULL CHECK (length("toolkit") > 0),
-  "alias"        TEXT NOT NULL DEFAULT '' CHECK ("alias" IN ('','work','personal')),
-  "expires_at"   REAL NOT NULL,
-  "used_at"      REAL NULL,
-  "completed_at" REAL NULL
-);
-
-CREATE INDEX IF NOT EXISTS "idx_connections_owner"    ON "connections"   ("user_id", "toolkit");
-CREATE INDEX IF NOT EXISTS "idx_connect_links_owner"  ON "connect_links" ("user_id", "toolkit");
-CREATE INDEX IF NOT EXISTS "idx_connect_links_expiry" ON "connect_links" ("expires_at");
-```
-
-Do not paste these into a `--command` with their comments still on: several of
-the comments in `schema.sql` contain semicolons. Use `--file`, or the stripped
-text above.
-
-**Check:**
-
-    npx wrangler d1 execute anticipy-backend --remote --command \
-      "SELECT name FROM sqlite_master WHERE type='table' AND name IN
-       ('app_usage_signals','connections','connect_nudges','connect_links')"
-
-Four names back. Anything less and gate leg 3 will say which.
-
-### 2. The two secrets, BEFORE the deploy
-
-    cd migration/workers
-    npx wrangler secret put COMPOSIO_API_KEY      # value is in .env.local
-    npx wrangler secret put GEMINI_API_KEY        # or GOOGLE_API_KEY; either is read
-
-**Check:** `npx wrangler secret list` shows both names (never values).
-
-### 3. The deploy
-
-    cd migration/workers && npx wrangler deploy
-
-**Check — and this is the step the whole file exists for:**
-
-    python3 overnight/is_connect_live.py
-
-Leg 1 must stop being red. If leg 2 then goes red, the Worker is deployed and
-the wiring refused: the missing variable's NAME is in the log line, not on the
-page (a 503 page that named an environment variable would be telling a stranger
-about our configuration), so read it with
-
-    cd migration/workers && npx wrangler tail --format pretty
-
-and look for `connect wiring: not installed on this Worker — <NAME> is unset`.
-
-### 4. Re-run the gate until it stops going down
-
-Legs 4 and 6 only become measurable once 1–3 are green. Leg 4 writes one row to
-production and deletes it; `--read-only` skips that and honestly reports the leg
-as UNPROVEN.
+4. **Leg 8 measures the key in THIS environment, not the Worker's secret.** They
+   are different objects. Leg 6 is the evidence that the Worker has one at all
+   (it could not draw a page otherwise); `wrangler secret list` is the evidence
+   of which names are set.
 
 ---
 
-## What remains before a person can tap a link
+## Exactly what has to happen before a person can connect, in order
 
-The three steps above make the page reachable. They do not make the feature
-exist. Still missing, in the order a person would hit them:
+1. ~~Put a control on the signed-out `/c/` page.~~ **Done 2026-09-06 07:20**,
+   proven by gate leg 7 against live.
+2. **Drive the code flow once, with a real phone.** Tap "Get a code by text",
+   receive the text, enter the code, land back on the connect page with the
+   app's name and three sentences on it. This is the next thing to do and it is
+   the largest unmeasured stretch of the chain. *Proof:* a human, or a `proof/`
+   script; the gate will not POST that route.
+3. **Fill `ConnectionsApiDeps.search`, or Add an app stays a 503.** Composio
+   v3.1 exposes `GET /toolkits`; add a catalog search to
+   `src/connections/provider.ts`, hand it through, and the search box works with
+   no other change. *Proof:* gate leg 3 green, with a credential exported.
+4. **Give the gate an owner credential in whatever runs it**, or leg 3 is
+   permanently UNPROVEN and the gate can never exit 0.
+5. **Then a real person taps and completes one connection.** *Proof:* gate leg 9
+   goes green, which is the only evidence any of this ever worked end to end.
 
-1. **Something has to mint a `connect_links` row and put the URL in front of the
-   person.** No product path calls `store.put()` today. The spec's shape: the
-   nudge state machine decides an ask is due, mints our token, and texts
-   `api.anticipy.ai/c/{token}`. Never a raw vendor link — that mistake was made
-   once already and is item 4 of `research/2026-09-05-composio-connections.md`.
-2. **Something has to mint the browser session.** `/c/` requires the signed-in
-   session to BE the owner the token was minted for. A tapped link from a phone
-   with no `anticipy_session` cookie answers 401 with "Sign in to finish", which
-   is correct and is also a dead end until something sets that cookie —
-   `HttpOnly; Secure; SameSite=Lax`, scoped to the apex, carrying the same
-   `owners` auth token the phone sends in `Authorization`.
-3. **The iOS client has to stop throwing.** Every method of
-   `ConnectedAppsModel`'s default client throws `NoConnectionsClient`, so the
-   Connected Apps screen renders over an error.
-4. **The nudge state machine, the signals table's writer, and Settings' write
-   opt-in** — all four tables have exactly one writer between them and no
-   product path yet.
-5. **The Gmail scope debt.** The spike's connection holds
-   `https://mail.google.com/` — read, compose, send and permanently delete. It
-   is a debt with a name in the 2026-09-05 note; when Anticipy's own Google
-   OAuth app is filed, that connection is disconnected and remade narrow.
+### Three live facts worth not rediscovering
+
+- **The apex still does not serve the page.** `https://anticipy.ai/c/<token>`
+  answers 301 to `www`, and `www` answers 307 to `https://www.anticipy.ai/` —
+  the token is dropped. A zone-level redirect intercepts before the Worker route
+  is consulted, so this is a dashboard change, not a code one. Links are minted
+  on `api.anticipy.ai` for that reason (`CONNECT_URL_BASE`), and the phone
+  accepts both hosts (`ConnectHandoff.connectLinkHosts`).
+- **Cloudflare injects an analytics `<script>` into the connect page, for some
+  callers and not others.** Measured: the same URL was 1003 bytes to curl and
+  1370 bytes to the gate, and the difference is
+  `<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/…">`
+  inserted by the edge after connect.ts wrote the response. Our own CSP is
+  `default-src 'none'` with no `script-src`, so the browser refuses to run it —
+  the page is not executing third-party code today. It is still a third-party
+  script tag injected into the one screen in the product where a person hands
+  over a key to something of theirs, and it deserves a deliberate decision (Web
+  Analytics off for this route, or accepted knowingly) rather than a surprise.
+  It does not affect leg 7: the beacon has a `src`, and the scan reads `href`
+  and `action`.
+- **`handleLink`'s header comment is stale** (`connections_api.ts:1045-1056`): it
+  says the phone refuses what the route mints because
+  `ConnectHandoff.connectLinkHosts` is `["anticipy.ai"]`. It is
+  `["anticipy.ai", "api.anticipy.ai"]` as of today, so the phone accepts it. The
+  comment is in a file this change does not own; it is recorded here rather than
+  edited so the next reader does not chase a defect that was fixed.
 
 ---
 
-## What this gate cannot tell you, said plainly
+## What this gate cannot tell you
 
 - **It cannot tell you the page is correct.** It probes as a signed-out caller
   and gets a refusal by design; nothing here renders a consent page or reads a
   permission sentence. The register rules ("connect your Notion", never
-  "authorize", never the vendor's name) are checked by the suite, not by this.
-- **It cannot tell you a real person's tap works.** No browser, no session
-  cookie, no vendor round trip. Leg 6 turning green is the first evidence any of
-  that ever worked, which is exactly why zero is UNPROVEN rather than red — and
-  why a green leg 6 is worth more than every other leg combined.
-- **Leg 4 proves the DATABASE accepts the row store.ts writes, not that the
+  "authorize", never the vendor's name) are checked by the Worker's own suite,
+  not by this.
+- **Leg 7 proves a control EXISTS, not that it works.** It resolves the target of
+  an `href` or an `action` and checks the path and the host. Whether tapping it
+  produces a text is item 2 above, and is unmeasured.
+- **Leg 4 proves the DATABASE accepts the row `store.ts` writes, not that the
   product mints one.** It writes its own probe row: a `token_handle` of 32
   random bytes with no preimage anybody holds, an owner id that is not an owner,
   an `expires_at` in the past and a NULL `used_at`, deleted immediately and the
   deletion confirmed. Four independent reasons it can never be redeemed, because
   a gate that writes to production has to earn it.
-- **It does not read anybody's words.** Law 1: every comparison in it is over an
-  HTTP status code, a CSP header this Worker mints itself, four table names,
-  seven column values it wrote itself, and one vendor status code.
+- **It does not read anybody's words.** HARNESS-LAWS law 1: every comparison in
+  it is over an HTTP status code and verb, a CSP header this Worker mints
+  itself, two sentences this Worker writes for two named cases, four table
+  names, seven column values it wrote itself, the target of an HTML attribute
+  resolved as a URL, the length of a JSON array, and one vendor status code. The
+  one string it sends into the product — the catalog probe query, one letter —
+  is not an app name and is not matched against anything here.
+
+## Each new leg carries a CONTROL, and that is not decoration
+
+A leg that cannot fail for the right reason is worse than no leg. Each of the
+three added today can only ever *withhold* green when its control fails:
+
+- **Leg 1** asks `/me/connectionsX`, which is deliberately not a route. It must
+  answer the router's generic 404. A Worker that answered 401 to every path
+  would otherwise light all six routes green while measuring the edge.
+- **Leg 3** asks `GET /me/connections` with the same credential first. If the
+  list route accepts it and the catalog refuses, the catalog is what is wrong;
+  if the list route refuses it too, the credential is stale and the leg is
+  UNPROVEN. A stale token reported as a broken catalog sends the reader to write
+  a search adapter that was never the problem.
+- **Leg 7** runs its scan over `/c/{token}/code` first — a page whose own form
+  posts to exactly the path the scan looks for. If the scan comes back empty
+  *there*, the scan is broken and the leg is UNPROVEN, not red. A pattern that
+  silently stopped matching is the specific way an instrument lies, and it has
+  produced false "it is tested" readings in this repo.
 
 ## Files
 
-- `overnight/is_connect_live.py` — the gate. `--self-test` runs every verdict
-  offline; `--read-only` skips the one leg that writes.
-- `tests/test_is_connect_live.py` — 46 tests, including the local-D1 proof that
-  the mint probe really lands. 17 mutations run against the gate, 17 killed:
-  every one of them a way this gate could quietly lie (an unwired 503 downgraded
-  to "unproven", zero connections reported as a failure, the router's 404 read as
-  a connect page, an unreadable D1 printed as zero tables, the probe row's expiry
-  or owner scoping dropped, the read-back or the delete-confirmation skipped, a
-  vendor session that confirms nothing waved through).
+- `overnight/is_connect_live.py` — the gate. Nine legs. `--self-test` runs 61
+  verdicts offline against shapes this system has actually had; `--read-only`
+  skips the one leg that writes; `--catalog-query` changes what leg 3 types into
+  the search box.
+- `tests/test_is_connect_live.py` — **88 tests**, including the local-D1 proof
+  that the mint probe really lands and a test that reads
+  `CONNECTIONS_API_ROUTES` and `METHOD` out of `connections_api.ts` so the
+  gate's six paths and verbs cannot drift from the Worker's. Collected by
+  `pytest -q` (pytest.ini `testpaths = tests`), which is what CI runs
+  (`.github/workflows/system-invariants.yml`).
+  **18 mutations run against the gate, 18 killed**: a missing route waved
+  through, leg 1's control skipped, an anonymous 2xx accepted, the catalog 503
+  downgraded to UNPROVEN, a refused credential blamed on the catalog, an empty
+  catalog answer called green, a dead-end page called green, leg 7's calibration
+  skipped, a control on somebody else's host accepted, a route path and a route
+  verb each typed wrong, the router's 404 read as a refusal, the anonymous
+  probes carrying a credential, the control page POSTed to, the catalog asked
+  without the credential, the credential zone loosened to a bare suffix test,
+  the credential zone dropped entirely, and zero connections called red.
 - `migration/d1/schema.sql` section 5 — the four tables, and the only book.
 - `research/2026-09-05-composio-connections.md` — what the spike learned and
   what it got wrong first.
+
+### One gap in CI worth someone's attention
+
+`.github/workflows/system-invariants.yml` triggers on `tests/**`, `overnight/**`,
+`brain/**`, `backend/**` and `extension/**` — **not** on `migration/**`. So a
+change to `connections_api.ts` alone does not run the test that pins the gate's
+six paths and verbs against it. Adding `migration/**` to both path lists is one
+line in a file this change does not own.

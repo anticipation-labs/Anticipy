@@ -1685,3 +1685,414 @@ test("everything the caller is handed comes from the row LOCATE verified", async
   assert.equal(r.outcome === "ok" && r.link.expires_at, link.expires_at);
   assert.equal(r.outcome === "ok" && r.link.used_at, T0 + 1, "only the used bit comes from the write");
 });
+
+// ===========================================================================
+// FINDING D — THE VENDOR IS ASKED BEFORE THE LEASE IS TAKEN
+// ===========================================================================
+// Finding 5's fix put the exactly-once lease AFTER the write it authorises, so
+// a failed `onConnected` hands the lease back and the person's refresh writes
+// the row. That fix has a second half nobody was holding: the lease is also
+// taken after the OWNERSHIP check, and it has to be.
+//
+// Move `complete()` above the `vendorVouchesFor` refusal and the whole suite
+// stayed green while this happened: a forged or stale callback — an account id
+// the vendor does not hold for this owner — burns the exactly-once bit on its
+// way to being refused. The real callback that arrives a second later then
+// loses the lease, answers `connected, recorded: false`, and NOTHING IS EVER
+// WRITTEN. Composio publishes no success webhook, so nothing mentions that
+// connection again. It is the permanent silent data loss of finding 5, reached
+// through the door finding 2 built.
+//
+// Anyone holding the callback URL can send that first request, which makes it
+// cheap to do on purpose as well as easy to do by accident.
+
+/** A store that counts the two writes that matter, and delegates them
+ *  untouched. `completes` is the lease being TAKEN — the number this section
+ *  is about. */
+class CountingStore implements ConnectLinkStore {
+  inner = new MemoryConnectLinkStore();
+  completes = 0;
+  releases = 0;
+  put(row: StoredLink) { return this.inner.put(row); }
+  read(handle: string) { return this.inner.read(handle); }
+  claim(handle: string, usedAt: number) { return this.inner.claim(handle, usedAt); }
+  complete(handle: string, at: number): Promise<ClaimOutcome> {
+    this.completes++;
+    return this.inner.complete(handle, at);
+  }
+  release(handle: string, at: number): Promise<ClaimOutcome> {
+    this.releases++;
+    return this.inner.release(handle, at);
+  }
+  all() { return this.inner.all(); }
+}
+
+test("A REFUSED CALLBACK DOES NOT BURN THE EXACTLY-ONCE LEASE", async () => {
+  const store = new CountingStore();
+  const s = sink();
+  const link = await tapped(store);
+  const provider = stubProvider({ accounts: [acct("ca_mine")] });
+  const opts = { signedInAs: OWNER, store, onConnected: s.onConnected, provider };
+
+  // An account id the vendor does not hold for this owner. Refused — and the
+  // refusal must cost the owner nothing.
+  const forged = await connectPageDone(
+    link.token,
+    { status: CALLBACK_SUCCESS, connectedAccountId: "ca_somebody_elses" },
+    { ...opts, now: T0 + 60_000 },
+  );
+  assert.deepEqual(forged, { state: "not-connected" });
+  assert.equal(
+    store.completes,
+    0,
+    "the lease was taken on the way to refusing: the real callback can now never write",
+  );
+  assert.equal(store.all()[0]!.completed_at, null);
+
+  // THE CONSEQUENCE, spelled out rather than inferred from the counter: the
+  // genuine callback still writes the connection.
+  const real = await connectPageDone(
+    link.token,
+    { status: CALLBACK_SUCCESS, connectedAccountId: "ca_mine" },
+    { ...opts, now: T0 + 61_000 },
+  );
+  assert.equal(real.state === "connected" && real.recorded, true, JSON.stringify(real));
+  assert.equal(s.recorded.length, 1);
+  assert.equal(s.recorded[0]!.connected_account_id, "ca_mine");
+});
+
+test("nor does a vendor outage, nor a callback that is not a success", async () => {
+  // The other two refusals on the same route, for the same reason: every one of
+  // them is a state the person retries, and a retry that cannot write is a
+  // dead end wearing a friendly sentence.
+  const store = new CountingStore();
+  const s = sink();
+  const link = await tapped(store);
+  const opts = { signedInAs: OWNER, store, onConnected: s.onConnected };
+
+  const down = await connectPageDone(
+    link.token,
+    { status: CALLBACK_SUCCESS, connectedAccountId: "ca_mine" },
+    { ...opts, now: T0 + 60_000, provider: stubProvider({ failConnections: true }) },
+  );
+  assert.deepEqual(down, { state: "could-not-confirm" });
+
+  const notSuccess = await connectPageDone(
+    link.token,
+    { status: "denied", connectedAccountId: "ca_mine" },
+    { ...opts, now: T0 + 60_500, provider: stubProvider({ accounts: [acct("ca_mine")] }) },
+  );
+  assert.deepEqual(notSuccess, { state: "not-connected" });
+
+  assert.equal(store.completes, 0, "a refusal took the lease");
+
+  const real = await connectPageDone(
+    link.token,
+    { status: CALLBACK_SUCCESS, connectedAccountId: "ca_mine" },
+    { ...opts, now: T0 + 61_000, provider: stubProvider({ accounts: [acct("ca_mine")] }) },
+  );
+  assert.equal(real.state === "connected" && real.recorded, true);
+  assert.equal(s.recorded.length, 1);
+});
+
+test("the lease IS taken once the vendor vouches — the control", async () => {
+  // Without this the ordering pin above is satisfied by deleting `complete`
+  // altogether, which would make every refresh of the callback write the
+  // connection again. Exactly-once is the property; ordering is how it is kept.
+  const store = new CountingStore();
+  const s = sink();
+  const link = await tapped(store);
+  const opts = {
+    signedInAs: OWNER, store, onConnected: s.onConnected,
+    provider: stubProvider({ accounts: [acct("ca_mine")] }),
+  };
+  const params = { status: CALLBACK_SUCCESS, connectedAccountId: "ca_mine" };
+
+  const first = await connectPageDone(link.token, params, { ...opts, now: T0 + 60_000 });
+  assert.equal(first.state === "connected" && first.recorded, true);
+  assert.equal(store.completes, 1);
+  assert.equal(store.all()[0]!.completed_at, T0 + 60_000);
+
+  const refresh = await connectPageDone(link.token, params, { ...opts, now: T0 + 60_100 });
+  assert.equal(refresh.state === "connected" && refresh.recorded, false);
+  assert.equal(store.completes, 2, "the second caller still ASKS; it simply loses");
+  assert.equal(s.recorded.length, 1, "and the row is written once");
+});
+
+// ===========================================================================
+// FINDING E — EVERY FAIL-CLOSED LEG IN `vendorVouchesFor`, DRIVEN
+// ===========================================================================
+// The ownership check answers false on anything it cannot read: a non-array, an
+// entry that is not an object, and three fields that must each be a string
+// before they are compared. All five were DECORATIVE under test — each could be
+// flipped from `return false` to `return true` with the suite green, because
+// every existing case fed it a well-formed list and disagreed only on the
+// VALUES.
+//
+// That matters because the list is a vendor's answer over a network. A shape we
+// did not expect is not a yes; it is the absence of an answer, and binding a
+// stranger's mailbox on the absence of an answer is the highest-severity defect
+// this file has. Each leg below now has a case that only it refuses, and each
+// case has a well-formed twin that must still connect — so a leg cannot be
+// "fixed" by refusing everything.
+
+/** A vendor that answers with exactly this, whatever it is. `stubProvider`
+ *  cannot express a malformed answer: it maps over an array of `Connection`,
+ *  which is the shape under test. */
+function vendorSaying(listed: unknown) {
+  const calls: string[] = [];
+  return {
+    calls,
+    async connections(user: string): Promise<Connection[]> {
+      calls.push(user);
+      return listed as Connection[];
+    },
+  };
+}
+
+/** One `done` against a vendor answering `listed`. Returns the page state and
+ *  what was written, so every leg below reads the same two facts. */
+async function doneAgainst(listed: unknown, accountId = "ca_real") {
+  const store = new MemoryConnectLinkStore();
+  const s = sink();
+  const link = await tapped(store);
+  const state = await connectPageDone(
+    link.token,
+    { status: CALLBACK_SUCCESS, connectedAccountId: accountId },
+    {
+      signedInAs: OWNER, store, onConnected: s.onConnected, now: T0 + 60_000,
+      provider: vendorSaying(listed),
+    },
+  );
+  return { state, recorded: s.recorded, completedAt: store.all()[0]!.completed_at };
+}
+
+/** The entry that DOES vouch, as a plain object rather than through `acct`, so
+ *  each leg below can spoil exactly one field of it and nothing else. */
+const wellFormed = () => ({
+  connected_account_id: "ca_real",
+  user_id: OWNER as string,
+  toolkit: SLUG_A,
+  status: "connected",
+});
+
+test("E1: an answer that is not a list vouches for nothing", async () => {
+  for (const listed of [null, undefined, "ca_real", 7, true, {}, { 0: wellFormed(), length: 1 }]) {
+    const got = await doneAgainst(listed);
+    assert.deepEqual(got.state, { state: "not-connected" }, JSON.stringify(listed));
+    assert.equal(got.recorded.length, 0, JSON.stringify(listed));
+    assert.equal(got.completedAt, null, JSON.stringify(listed));
+  }
+});
+
+test("E2: an entry that is not an object vouches for nothing", async () => {
+  // A JSON array of bare id strings is a shape a vendor could plausibly return,
+  // and reading one as a match would bind on a value nothing was compared to.
+  for (const entry of [null, undefined, "ca_real", 7, true]) {
+    const got = await doneAgainst([entry]);
+    assert.deepEqual(got.state, { state: "not-connected" }, JSON.stringify(entry));
+    assert.equal(got.recorded.length, 0);
+  }
+});
+
+test("E3: an entry whose account id is not a string vouches for nothing", async () => {
+  for (const id of [undefined, null, 7, {}, ["ca_real"]]) {
+    const got = await doneAgainst([{ ...wellFormed(), connected_account_id: id }]);
+    assert.deepEqual(got.state, { state: "not-connected" }, JSON.stringify(id));
+    assert.equal(got.recorded.length, 0);
+  }
+});
+
+test("E4: an entry whose owner is not a string vouches for nothing", async () => {
+  // The list was asked for BY owner, so an entry with no readable owner is an
+  // unscoped answer, and an unscoped answer is not evidence about ours.
+  for (const user of [undefined, null, 7, {}, [OWNER]]) {
+    const got = await doneAgainst([{ ...wellFormed(), user_id: user }]);
+    assert.deepEqual(got.state, { state: "not-connected" }, JSON.stringify(user));
+    assert.equal(got.recorded.length, 0);
+  }
+});
+
+test("E5: an entry whose toolkit is not a string vouches for nothing", async () => {
+  // Without this leg an entry with no readable toolkit would file whatever
+  // credential answered under the app the link was minted for — a calendar
+  // token in the mail row, and every future mail step aimed at it.
+  for (const toolkit of [undefined, null, 7, {}, [SLUG_A]]) {
+    const got = await doneAgainst([{ ...wellFormed(), toolkit }]);
+    assert.deepEqual(got.state, { state: "not-connected" }, JSON.stringify(toolkit));
+    assert.equal(got.recorded.length, 0);
+  }
+});
+
+test("E's control: the well-formed entry each leg spoils DOES connect", async () => {
+  // Five refusals prove nothing on their own — `return false` refuses all of
+  // them and everybody else too, and nobody could ever connect anything. This
+  // is the same object each case above spoils one field of, unspoiled.
+  const got = await doneAgainst([wellFormed()]);
+  assert.equal(got.state.state, "connected");
+  assert.equal(got.state.state === "connected" && got.state.recorded, true);
+  assert.equal(got.recorded.length, 1);
+  assert.equal(got.recorded[0]!.connected_account_id, "ca_real");
+  assert.equal(got.recorded[0]!.user_id, OWNER);
+  assert.equal(got.completedAt, T0 + 60_000);
+});
+
+test("E's control: one unreadable entry does not spoil a readable one beside it", async () => {
+  // A vendor list is many rows and one of them being junk is not a verdict on
+  // the rest. Refusing the whole list on a single bad entry would be an outage
+  // for an owner whose account is right there in it.
+  const got = await doneAgainst([null, { ...wellFormed(), user_id: 7 }, wellFormed()]);
+  assert.equal(got.state.state, "connected");
+  assert.equal(got.recorded.length, 1);
+});
+
+// ===========================================================================
+// FINDING F — THREE ORACLES THAT WERE COPIES OF THE THING THEY MEASURED
+// ===========================================================================
+// `CALLBACK_SUCCESS` and `CALLBACK_WINDOW_MS` are asserted all over this file
+// by being IMPORTED and handed back to the module. That proves the module is
+// self-consistent and nothing else: change `CALLBACK_SUCCESS` to "banana" and
+// every one of those tests still passes, while production stops recognising the
+// vendor's callbacks. Change `CALLBACK_WINDOW_MS` to a second and the boundary
+// tests still pass, while every real OAuth round trip expires mid-password-
+// manager. An oracle that is a copy of the implementation catches nothing —
+// this layer measured that once already, which is why the connect-link prefix
+// is written out in each suite rather than imported.
+//
+// So the values are written down here, independently, and the behaviour is
+// driven with the literals rather than with the constants.
+
+test("F1: the vendor's spelling of success is 'success', written out", () => {
+  assert.equal(CALLBACK_SUCCESS, "success");
+});
+
+test("F1: a callback carrying the literal word connects, and a near miss does not", async () => {
+  // Driven with literals on purpose. If the constant drifts, this goes red;
+  // if the constant is what the test reads, nothing can.
+  const yes = await doneAgainstStatus("success");
+  assert.equal(yes.state.state, "connected");
+  assert.equal(yes.recorded.length, 1);
+
+  for (const wrong of ["SUCCESS", " success", "success ", "successful", "ok", "true", "", null]) {
+    const no = await doneAgainstStatus(wrong);
+    assert.deepEqual(no.state, { state: "not-connected" }, JSON.stringify(wrong));
+    assert.equal(no.recorded.length, 0, JSON.stringify(wrong));
+  }
+});
+
+/** One `done` whose only variable is the vendor's status field. */
+async function doneAgainstStatus(status: string | null) {
+  const store = new MemoryConnectLinkStore();
+  const s = sink();
+  const link = await tapped(store);
+  const state = await connectPageDone(
+    link.token,
+    { status, connectedAccountId: "ca_real" },
+    {
+      signedInAs: OWNER, store, onConnected: s.onConnected, now: T0 + 60_000,
+      provider: stubProvider({ accounts: [acct("ca_real")] }),
+    },
+  );
+  return { state, recorded: s.recorded };
+}
+
+test("F2: the callback window is one hour, written out, and is NOT the link's TTL", () => {
+  assert.equal(CALLBACK_WINDOW_MS, 3_600_000);
+  assert.equal(CALLBACK_WINDOW_MS, 60 * 60 * 1000);
+  // The two answer different questions and the docstring says so: LINK_TTL_MS
+  // is how long an UNTAPPED link may sit in a text; this is how long the vendor
+  // round trip may take — a password manager, a 2FA push, a workspace picker,
+  // and in the Notion case a login the person did not have. Collapsing them
+  // would throw away connections that exist at the vendor, with no webhook that
+  // would ever mention them again.
+  assert.notEqual(CALLBACK_WINDOW_MS, LINK_TTL_MS);
+  assert.ok(CALLBACK_WINDOW_MS > LINK_TTL_MS);
+});
+
+test("F2: the hour is the hour, measured with the literal rather than the constant", async () => {
+  const store = new MemoryConnectLinkStore();
+  const s = sink();
+  const link = await tapped(store);
+  const usedAt = T0 + 1;
+  const params = { status: CALLBACK_SUCCESS, connectedAccountId: "ca_real" };
+  const provider = stubProvider({ accounts: [acct("ca_real")] });
+  const opts = { signedInAs: OWNER, store, onConnected: s.onConnected, provider };
+
+  const late = await connectPageDone(link.token, params, { ...opts, now: usedAt + 3_600_000 });
+  assert.deepEqual(late, { state: "expired" }, "an hour after the tap the callback is dead");
+  assert.equal(s.recorded.length, 0);
+
+  const justInTime = await connectPageDone(link.token, params, {
+    ...opts, now: usedAt + 3_600_000 - 1,
+  });
+  assert.equal(justInTime.state, "connected", "and one millisecond before it, it is alive");
+  assert.equal(s.recorded.length, 1);
+});
+
+test("F3: a callback with no provider to ask throws where an operator will see it", async () => {
+  // A missing provider is a WIRING bug in the Worker, not a person's problem.
+  // The alternative — degrading to `could-not-confirm` — would tell every owner
+  // "try again" forever while nothing was ever wrong on their side, and the
+  // product would look broken to the only people who could not fix it.
+  //
+  // There was no test for this at all, so the guard could be deleted, softened
+  // to a state, or turned into `!== undefined` with the suite green.
+  const store = new MemoryConnectLinkStore();
+  const s = sink();
+  const link = await tapped(store);
+  const params = { status: CALLBACK_SUCCESS, connectedAccountId: "ca_real" };
+
+  for (const provider of [undefined, null, {}, { connections: null }, { connections: "yes" }]) {
+    await assert.rejects(
+      () => connectPageDone(link.token, params, {
+        signedInAs: OWNER, store, onConnected: s.onConnected, now: T0 + 60_000,
+        provider: provider as never,
+      }),
+      (e: unknown) => {
+        assert.ok(e instanceof TypeError, `not a TypeError: ${String(e)}`);
+        // It has to say WHY, or the operator reads "cannot read properties of
+        // undefined" and starts guessing.
+        assert.ok(/confirmed/.test(e.message), e.message);
+        return true;
+      },
+      JSON.stringify(provider),
+    );
+  }
+  assert.equal(s.recorded.length, 0);
+  assert.equal(store.all()[0]!.completed_at, null, "and the wiring bug consumed nothing");
+});
+
+test("F3's control: the guard fires only on the path that needs a provider", async () => {
+  // Every refusal that is settled before the account id has to be confirmed
+  // must still answer normally with no provider wired, or one wiring bug turns
+  // every state on this route into a 500 — including the ones that tell a
+  // person to sign in.
+  const store = new MemoryConnectLinkStore();
+  const s = sink();
+  const link = await tapped(store);
+  const bare = { store, onConnected: s.onConnected, provider: undefined as never };
+  const params = { status: CALLBACK_SUCCESS, connectedAccountId: "ca_real" };
+
+  assert.deepEqual(
+    await connectPageDone(link.token, params, { ...bare, signedInAs: null, now: T0 + 60_000 }),
+    { state: "sign-in-required" },
+  );
+  assert.deepEqual(
+    await connectPageDone(link.token, params, { ...bare, signedInAs: STRANGER, now: T0 + 60_000 }),
+    { state: "wrong-user" },
+  );
+  assert.deepEqual(
+    await connectPageDone(link.token, params, { ...bare, signedInAs: OWNER, now: T0 + 3_700_000 }),
+    { state: "expired" },
+  );
+  // And a callback the vendor did not call a success never needs asking about.
+  assert.deepEqual(
+    await connectPageDone(
+      link.token,
+      { status: "denied", connectedAccountId: "ca_real" },
+      { ...bare, signedInAs: OWNER, now: T0 + 60_000 },
+    ),
+    { state: "not-connected" },
+  );
+  assert.equal(s.recorded.length, 0);
+});

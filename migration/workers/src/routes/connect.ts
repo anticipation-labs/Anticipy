@@ -13,6 +13,32 @@
  *                          connection exists — Composio publishes no success
  *                          webhook, only `expired`.
  *
+ * AND THE WAY OUT OF THE WALL. Every leg here needs a signed-in session, and the
+ * browser that matters arrived by tapping a text and holds nothing — so what a
+ * real person met on 2026-09-06, on a link minted on production and opened in
+ * Chrome, was a page reading "sign in to Anticipy in this browser" that linked
+ * to NOTHING. There is no web sign-in on this Worker and they are holding a
+ * phone. The refusal now carries the one door that exists: `/c/{token}/code`
+ * (routes/connect_auth.ts), which texts a code to the number on the account.
+ * It is offered on all three legs, `/done` included, and on that one it is
+ * offered HONESTLY RATHER THAN HOPEFULLY. `checkCode` will not mint a session
+ * for a link that has already been spent (connect_auth.ts, deliberately: a link
+ * picked up AFTER the owner used it must not still be an account door for an
+ * hour), so a browser that lost its cookie during the vendor round trip taps
+ * the door, reads "check your phone" and no text arrives. That case is a real
+ * remaining hole — the connection exists at the vendor, has no row here, and no
+ * webhook will ever mention it again — and it belongs to whoever revisits that
+ * rule, not to this page. The alternative here is a wall, which recovers
+ * nothing either and says less.
+ *
+ * THE DOOR IS NOT AN ORACLE, and that is why it is drawn where it is. The offer
+ * is minted from the token in the caller's own URL and from nothing else; it is
+ * identical for a live link, an expired one, a spent one, a stranger's and a
+ * string somebody invented, because `locate` has already settled the session
+ * before anything is looked up and `/c/{token}/code` never reads the store
+ * either. The suite pins that as five responses that are one response, byte for
+ * byte once the caller's own token is normalised out.
+ *
  * WHY OUR OWN LINK EXISTS AT ALL, MEASURED. On 2026-09-05 four vendor connect
  * links were generated and handed to a person to tap later. The vendor's links
  * live ten minutes. All four were dead before they were tapped
@@ -479,8 +505,14 @@ export function parseConnectPath(pathname: unknown): ConnectRoute | null {
  * value. It is validated because it is reflected into a hidden form field, into
  * a URL another company reads, and into a deep link — three places where an
  * unvalidated string is somebody else's injection point.
+ *
+ * EXPORTED, and it has to be. The state now crosses into routes/connect_auth.ts
+ * — offer, send, box, redirect — and a second copy of this alphabet is a second
+ * answer to "what may a state be": the day one of them drifts, a value one file
+ * refuses is reflected by the other. connect_auth.ts imports THIS one, which is
+ * the direction the dependency already runs.
  */
-function checkedState(raw: unknown): string | null {
+export function checkedState(raw: unknown): string | null {
   if (typeof raw !== "string") return null;
   const s = raw.trim();
   if (s === "" || s.length > 128) return null;
@@ -1284,7 +1316,14 @@ function appLink(toolkit: string, status: string,
 // oracle rule, expressed as copy.
 const SIGN_IN_HEADING = "Sign in to finish";
 const SIGN_IN_LINE =
-  "Sign in to Anticipy in this browser, then open this link again. It works for ten minutes.";
+  "Anticipy needs to know it's you before it sets anything up. It can text a code to the "
+  + "phone number on your account — or you can sign in to Anticipy in this browser and open "
+  + "this link again.";
+/** The label on the door. The product's own words for it (routes/connect_auth.ts
+ *  ASK_HEADING says the same thing at the top of the page it opens), so what the
+ *  person taps and what they arrive at read as one thing. Never "authenticate",
+ *  never "verify". */
+const CODE_OFFER_LABEL = "Get a code by text";
 const EXPIRED_HEADING = "That link has expired";
 const EXPIRED_LINE = "Links last ten minutes. Ask Anticipy for a new one and it'll send another.";
 const USED_HEADING = "That link has been used";
@@ -1293,11 +1332,48 @@ const WRONG_USER_HEADING = "You're signed in as someone else";
 const WRONG_USER_LINE =
   "This link was made for a different Anticipy account. Sign in as that account and open it again.";
 
-/** The four states that must look the same to a stranger, drawn in one place so
- *  they cannot drift apart in five. */
-function refusalPage(state: "sign-in-required" | "expired" | "already-used" | "wrong-user"): Response {
-  switch (state) {
-    case "sign-in-required": return plainPage(401, SIGN_IN_HEADING, SIGN_IN_LINE);
+/**
+ * The door out of the signed-out page: the phone-code offer, carrying the
+ * phone's attempt id when the request brought one.
+ *
+ * ROOT-RELATIVE, like every other link this file mints: the routes live on
+ * whatever host is serving them, and an absolute URL built from a constant
+ * would send a preview deployment's visitors to production.
+ *
+ * THE STATE IS ENCODED HERE AND DECODED THERE, which is what "carried verbatim"
+ * means on a wire. `connectRoute` reads it back with `searchParams.get`, so a
+ * state containing "%" — the phone's alphabet allows one — arrives as the
+ * characters the phone minted. Writing it raw would corrupt that case; encoding
+ * an already-encoded one would corrupt it the other way.
+ *
+ * It takes nothing but the caller's own URL. No store, no catalog, no session:
+ * whatever this returns is the same offer for every token there is.
+ */
+function codeOfferUrl(token: string, state: string | null): string {
+  return `/c/${token}/code${state ? `?state=${encodeURIComponent(state)}` : ""}`;
+}
+
+/**
+ * The four states that must look the same to a stranger, drawn in one place so
+ * they cannot drift apart in five.
+ *
+ * ONLY `sign-in-required` CARRIES THE DOOR, and only it may. The other three
+ * are answers to a caller who has already proved they are somebody: expired and
+ * already-used are the owner's own link, gone, and a code would open nothing;
+ * wrong-user is a browser holding a DIFFERENT account's session, and
+ * `connectSession` lets that session win outright, so a code could not promote
+ * them anyway. Putting the offer on those pages would also put the token on
+ * them — and the expired page is the one a signed-in stranger sees, which the
+ * suite compares against an invented token byte for byte.
+ */
+function refusalPage(
+  which: "sign-in-required" | "expired" | "already-used" | "wrong-user",
+  token: string, state: string | null,
+): Response {
+  switch (which) {
+    case "sign-in-required":
+      return plainPage(401, SIGN_IN_HEADING, SIGN_IN_LINE,
+        { href: codeOfferUrl(token, state), label: CODE_OFFER_LABEL });
     case "expired":          return plainPage(410, EXPIRED_HEADING, EXPIRED_LINE);
     case "already-used":     return plainPage(410, USED_HEADING, USED_LINE);
     case "wrong-user":       return plainPage(403, WRONG_USER_HEADING, WRONG_USER_LINE);
@@ -1369,7 +1445,7 @@ async function handleView(
     return plainPage(503, "One moment",
       "Anticipy couldn't load this just now. Refresh in a moment — nothing has changed.");
   }
-  if (view.state !== "ok") return refusalPage(view.state);
+  if (view.state !== "ok") return refusalPage(view.state, token, state);
   return viewPage(token, view, state);
 }
 
@@ -1415,7 +1491,10 @@ async function handleGo(
     return plainPage(503, "That didn't go through",
       "Ask Anticipy for a new link and give it another try. Nothing has changed on your account.");
   }
-  return refusalPage(go.state);
+  // The state here is the one the PAGE posted, not one off the query: a
+  // signed-out tap has to come back to a door that still knows which attempt
+  // the phone is waiting on.
+  return refusalPage(go.state, token, state);
 }
 
 async function handleDone(
@@ -1455,7 +1534,7 @@ async function handleDone(
       return plainPage(500, "Almost there",
         "Anticipy couldn't save that just now. Refresh this page and it'll finish.");
     default:
-      return refusalPage(done.state);
+      return refusalPage(done.state, token, state);
   }
 }
 

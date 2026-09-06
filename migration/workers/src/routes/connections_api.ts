@@ -71,15 +71,16 @@
  *
  * ── WHAT IS NOT DONE HERE, WRITTEN DOWN RATHER THAN LEFT TO BE FOUND ────────
  *
- * 1. `?q=` HAS NO CATALOG SEARCH. `ConnectionsApiDeps.search` is declared and
- *    nothing fills it, so the search box answers 503 rather than a lie. See
- *    that field's own comment for the one change that makes it real.
+ * 1. `?q=`'s BUDGET IS PER ISOLATE, NOT PER ACCOUNT. See `SEARCH_WINDOW_MS`.
+ *    (The search itself is wired: `connectionsApiDeps` fills
+ *    `ConnectionsApiDeps.search` from the provider's own catalog search.)
  * 2. `/link` MINTS ON A HOST THE PHONE REFUSES. See `handleLink`.
- * 3. ONLY `/link` IS RATE-LIMITED. A signed-in caller can still drive
- *    `?slugs=` (up to `MAX_CATALOG_SLUGS` vendor round trips a request) and
- *    `/sentences` (one MODEL call a request, which costs money) as fast as they
- *    like. Both are authenticated and attributable, neither writes anything,
- *    and the budget shape to copy is the one below — but it is not fitted.
+ * 3. `?slugs=` AND `/sentences` ARE STILL UNBUDGETED. A signed-in caller can
+ *    drive `?slugs=` (up to `MAX_CATALOG_SLUGS` vendor round trips a request)
+ *    and `/sentences` (one MODEL call a request, which costs money) as fast as
+ *    they like. Both are authenticated and attributable and neither writes
+ *    anything; the budget shape to copy is `spendSearch` below, and the durable
+ *    substrate both want is the one in item 1.
  * 4. `/writes` CAN RESURRECT A ROW under one race. The stored row is read, then
  *    written, and `putConnection` is an upsert: a disconnect landing between
  *    those two re-inserts the connection. It self-heals — the vendor no longer
@@ -95,7 +96,11 @@ import {
   type StoredConnection,
   type StoredLink,
 } from "../connections/store.ts";
-import { connectionsFromEnv, type ConnectionsEnv } from "../connections/provider.ts";
+import {
+  connectionsFromEnv,
+  MAX_SEARCH_RESULTS,
+  type ConnectionsEnv,
+} from "../connections/provider.ts";
 import { makePermissionWords } from "../connections/words.ts";
 import { makeSentenceWriter } from "../connections/wiring.ts";
 import {
@@ -211,6 +216,82 @@ export const MAX_CATALOG_SLUGS = 25;
  *  produces one row per connection the screen just moved. */
 export const MAX_WRITE_ROWS = 50;
 
+/**
+ * THE SEARCH BUDGET, per owner per hour — and READ THE SECOND HALF OF THIS.
+ *
+ * `?q=` is the one GET here that spends somebody else's money: every call is a
+ * vendor round trip against the whole catalog, and the phone fires one per
+ * pause in the typing (300 ms in SettingsConnectedAppsView, 250 ms in
+ * OnboardingConnectStep). A person hunting for two apps in one sitting lands
+ * well under a hundred; a stuck retry loop, a scripted client or a search box
+ * wired to every keystroke does not, and nothing else would notice.
+ *
+ * 120 an hour is chosen to sit far above the first and to bound the second. It
+ * is a COST CEILING, and the copy for it says "a lot of looking", not "no".
+ *
+ * WHAT IT IS NOT: a defence. The count lives in `searchBudget`, a module-level
+ * Map, so it is PER WORKER ISOLATE — requests land in whichever isolate the edge
+ * picks, and a caller who wants more searches gets them by opening more
+ * connections. That is exactly the objection `MAX_LINKS_PER_OWNER` above avoids
+ * by counting rows in D1, and it is avoidable there only because `/link` writes
+ * a row anyway. A search writes nothing, so the honest options were a new D1
+ * table or a Durable Object counter (src/do/PairCodeCounter.ts is the shape) —
+ * both a schema or binding change, neither in this file. Until one of them
+ * exists this brake stops an accident and not an adversary, and it is written
+ * down here so nobody later reads it as the thing it is not.
+ */
+export const MAX_SEARCHES_PER_OWNER = 120;
+export const SEARCH_WINDOW_MS = 60 * 60 * 1000;
+
+/** How many owners one isolate tracks before it forgets all of them.
+ *
+ *  Same reasoning as `MAX_CACHED_SESSIONS` in the provider: an isolate lives for
+ *  hours and serves everybody, so an unbounded owner→timestamps map is a slow
+ *  leak in a 128 MB budget. Clearing forgives everyone, which is the safe
+ *  direction for a cost brake — the failure of clearing is a few extra vendor
+ *  calls, and the failure of NOT clearing is the Worker running out of memory
+ *  and answering nothing at all.
+ *
+ *  The arithmetic, because a ceiling nobody multiplied out is not a ceiling: an
+ *  owner's list stops growing at `MAX_SEARCHES_PER_OWNER` (nothing is pushed
+ *  once they are refused), so the worst case is 1,000 × 120 timestamps. That is
+ *  low six figures of numbers, which fits; the same table at five thousand
+ *  owners does not obviously fit beside everything else in the isolate, and
+ *  "obviously" is the whole standard for a number like this. */
+export const MAX_TRACKED_SEARCHERS = 1000;
+
+/** owner -> the times inside the window at which they searched. */
+const searchBudget = new Map<string, number[]>();
+
+/** Drop every owner's search history. For tests, which own time and must not
+ *  inherit a budget spent by the check above them, and for a caller that wants
+ *  a clean isolate. */
+export function resetSearchBudget(): void {
+  searchBudget.clear();
+}
+
+/** Spend one search from this owner's window, or refuse.
+ *
+ *  Same shape as `handleLink`'s counting: keep only what falls inside the
+ *  window, compare against the ceiling, record the spend. A refusal records
+ *  NOTHING — a caller already over the line must not be able to push their own
+ *  window forward by hammering it, which would turn an hour's cooldown into a
+ *  permanent one. */
+function spendSearch(owner: string, now: number): boolean {
+  const since = now - SEARCH_WINDOW_MS;
+  const kept = (searchBudget.get(owner) ?? []).filter((at) => at >= since);
+  if (kept.length >= MAX_SEARCHES_PER_OWNER) {
+    searchBudget.set(owner, kept);
+    return false;
+  }
+  if (!searchBudget.has(owner) && searchBudget.size >= MAX_TRACKED_SEARCHERS) {
+    searchBudget.clear();
+  }
+  kept.push(now);
+  searchBudget.set(owner, kept);
+  return true;
+}
+
 // ---------------------------------------------------------------------------
 // THE SEAM
 // ---------------------------------------------------------------------------
@@ -243,23 +324,25 @@ export interface ConnectionsApiDeps {
    *  describe one app two ways. */
   words: { sentences(meta: ToolkitMeta): Promise<string[]> };
   /**
-   * THE CATALOG SEARCH, AND THE ONE PORT NOTHING FILLS TODAY.
+   * THE CATALOG SEARCH.
    *
    * `?q=` is a free-text search over the WHOLE catalog — how somebody connects
    * an app nobody ever asked them about (ConnectedAppsModel.search,
-   * OnboardingConnectStep.askTheCatalog). `ConnectionProvider` has no such
-   * method: it offers `toolkit(slug)`, a point lookup on a vendor primary key,
-   * and treating a typed phrase as a primary key would be this file deciding
-   * what somebody's words MEANT — HARNESS-LAWS law 1, in the one place the spec
-   * spends a paragraph forbidding it ("no local list to match against, no
-   * ranking, no did-you-mean").
+   * OnboardingConnectStep.askTheCatalog). `connectionsApiDeps` fills this from
+   * the vendor adapter's own `search()`, which puts the typed letters in a
+   * query string and returns the vendor's rows in the vendor's order.
    *
-   * So the port is declared and left unfilled, and `?q=` answers the honest
-   * 503 that the screen renders as "could not reach Anticipy" — never `[]`,
-   * which would tell somebody the catalog holds nothing. To make it real: add a
-   * catalog search to src/connections/provider.ts (Composio v3.1 exposes
-   * `GET /toolkits`), hand it through here, and the search box works with no
-   * other change. Both branches are pinned in the suite.
+   * IT IS THE PORT AND NOT THE IMPLEMENTATION, for the same reason `provider`
+   * is: what somebody meant is the catalog's question, and this file must have
+   * no way to answer it. Nothing here reads the query, ranks the answer or
+   * knows an app's name — HARNESS-LAWS law 1, in the one place the spec spends
+   * a paragraph forbidding it ("no local list to match against, no ranking, no
+   * did-you-mean").
+   *
+   * STILL OPTIONAL, deliberately. A caller injecting a narrower deps object —
+   * the suite does, to pin the branch — gets the honest 503 that the screen
+   * renders as "could not reach Anticipy", never `[]`, which would tell
+   * somebody the catalog holds nothing. Both branches are pinned in the suite.
    */
   search?(query: string): Promise<ToolkitMeta[]>;
   /** Injectable clock. Tests own time; production passes nothing. */
@@ -302,10 +385,19 @@ export function connectionsApiDeps(env: ConnectionsApiEnv): ConnectionsApiDeps |
     return null;
   }
   const store: ConnectionsStore = createD1Store(env);
+  // ONE adapter, used as two ports. `connectionsFromEnv` is memoised per key, so
+  // this is the isolate's single provider either way; naming it here makes it
+  // visible that the catalog the search box asks is the same catalog the
+  // disconnect confirmation reads a name out of.
+  const provider = connectionsFromEnv(env);
   return {
     store,
-    provider: connectionsFromEnv(env),
+    provider,
     words: makePermissionWords(makeSentenceWriter(env)),
+    // The cap is the provider's own `MAX_SEARCH_RESULTS` and is not passed from
+    // here: one constant, so the number the vendor is asked for and the number
+    // the route will hand back cannot drift into two answers.
+    search: (query: string) => provider.search(query),
   };
 }
 
@@ -355,6 +447,7 @@ const COULD_NOT_DISCONNECT = "I couldn't disconnect that just now, so nothing ha
 const CATALOG_UNREACHABLE = "I couldn't look that up just now. Nothing has changed.";
 const NO_SENTENCES = "I couldn't get that ready just now. Nothing has changed.";
 const TOO_MANY_LINKS = "That's a lot of tries in one go. Give it an hour and ask me again.";
+const TOO_MANY_LOOKUPS = "That's a lot of looking in one go. Give it an hour and ask me again.";
 
 const refuse = (status: number, message: string): Response =>
   json(status, { ok: false, message });
@@ -515,13 +608,13 @@ async function handleList(owner: string, deps: ConnectionsApiDeps): Promise<Resp
 // ===========================================================================
 
 async function handleCatalog(
-  url: URL, deps: ConnectionsApiDeps,
+  url: URL, owner: string, deps: ConnectionsApiDeps, now: number,
 ): Promise<Response> {
   const slugs = url.searchParams.get(QUERY_SLUGS);
   if (slugs !== null) return await describeSlugs(slugs, deps);
 
   const query = url.searchParams.get(QUERY_SEARCH);
-  if (query !== null) return await searchCatalog(query, deps);
+  if (query !== null) return await searchCatalog(query, owner, deps, now);
 
   return refuse(400, BAD_REQUEST);
 }
@@ -569,28 +662,80 @@ async function describeSlugs(raw: string, deps: ConnectionsApiDeps): Promise<Res
  * not tokenised, not matched against anything here. Which app somebody meant is
  * the catalog's question and a model's; a local list would be the thing the
  * spec forbids outright ("a new app in the catalog is a new app in Anticipy
- * with zero code").
+ * with zero code"). The one thing this function knows how to ask about a query
+ * is whether there IS one, which is a shape and not a meaning.
+ *
+ * THE ORDER OF THE THREE GATES IS THE POINT. A malformed ask is refused before
+ * a budget is spent on it; an unwired port is reported before a budget is spent
+ * on a call that will not happen; the budget is spent last, immediately before
+ * the vendor round trip it exists to bound.
  */
-async function searchCatalog(query: string, deps: ConnectionsApiDeps): Promise<Response> {
+async function searchCatalog(
+  query: string, owner: string, deps: ConnectionsApiDeps, now: number,
+): Promise<Response> {
+  // NOTHING WAS TYPED, and both halves of that were MEASURED against the vendor
+  // on 2026-09-06 rather than assumed. `?q=` with an empty value becomes
+  // `search=` at the far end, which answers 200 with the first page of the whole
+  // catalog — 1,505 toolkits, in no relation to anything anybody asked; `?q=`
+  // with nothing but spaces is a vendor 400, which would arrive here as an
+  // exception and leave the screen saying it could not reach Anticipy. Neither
+  // is a lookup failure, so this is a 400 rather than the 503 that means outage.
+  //
+  // MEASURING EMPTINESS IS NOT READING MEANING, and the line is exactly here: a
+  // query with letters in it is passed on untouched, spaces and all, because
+  // the phone already trims before it asks (ConnectOnboardingPolicy.searchQuery,
+  // ConnectedAppsModel.search — both refuse to send a blank) and its client
+  // deliberately does not (ConnectedAppsClientTests pins "  work mail  " going
+  // out with its spaces). So this branch is unreachable from the app and exists
+  // for everything else that can reach a URL.
+  if (query.trim() === "") return refuse(400, BAD_REQUEST);
+
   if (typeof deps.search !== "function") {
     console.log(
-      "me/connections/catalog?q: 503 — no catalog search port is wired on this Worker. "
-        + "ConnectionProvider offers toolkit(slug), a point lookup, and a typed phrase is not "
-        + "a primary key. Add a catalog search to src/connections/provider.ts and pass it "
-        + "through ConnectionsApiDeps.search.",
+      "me/connections/catalog?q: 503 — no catalog search port is wired on these deps. "
+        + "connectionsApiDeps fills it from the provider's own catalog search; a caller "
+        + "injecting its own deps must pass one or the search box cannot work.",
     );
     return refuse(503, CATALOG_UNREACHABLE);
   }
+
+  if (!spendSearch(owner, now)) {
+    console.log(
+      `me/connections/catalog?q: 429 — this owner is over ${MAX_SEARCHES_PER_OWNER} `
+        + "searches in the window on this isolate",
+    );
+    return refuse(429, TOO_MANY_LOOKUPS);
+  }
+
   let hits: unknown;
   try {
     hits = await deps.search(query);
-  } catch {
+  } catch (err) {
+    console.log(`me/connections/catalog?q: the catalog did not answer — ${named(err)}`);
     return refuse(503, CATALOG_UNREACHABLE);
   }
   // A port that answered something other than a list has not told us the
   // catalog is empty; it has told us nothing.
   if (!Array.isArray(hits)) return refuse(503, CATALOG_UNREACHABLE);
-  return json(200, { items: hits.map((m) => catalogRow(m as ToolkitMeta)) });
+  // THE CAP, AGAIN, and not because the provider's is in doubt. This is the
+  // seam a port that is not the provider comes through, and a phone rendering
+  // one scrolling list must not be handed 1,505 rows by anything. It is the
+  // provider's own constant, so there is one number and not two — and it CUTS
+  // the vendor's order rather than choosing within it.
+  //
+  // The mapping is guarded because it is the last place a port's answer is
+  // touched: an array holding a null or a string reaches `catalogRow`, which
+  // reads fields off it, and an uncaught TypeError out of a route handler is a
+  // 500 with a stack in it. 503 is the same thing this function says about
+  // every other unusable answer, and the screen already knows how to render it.
+  try {
+    return json(200, {
+      items: hits.slice(0, MAX_SEARCH_RESULTS).map((m) => catalogRow(m as ToolkitMeta)),
+    });
+  } catch (err) {
+    console.log(`me/connections/catalog?q: the answer could not be read — ${named(err)}`);
+    return refuse(503, CATALOG_UNREACHABLE);
+  }
 }
 
 // ===========================================================================
@@ -1040,7 +1185,7 @@ export async function connectionsApiRoute(
 
   switch (leg) {
     case "list": return await handleList(owner, wired);
-    case "catalog": return await handleCatalog(url, wired);
+    case "catalog": return await handleCatalog(url, owner, wired, now);
     case "writes": return await handleWrites(request, owner, wired);
     case "disconnect": return await handleDisconnect(request, owner, wired);
     case "sentences": return await handleSentences(request, wired);

@@ -268,7 +268,24 @@ enum DashboardPolicy {
         let plain = ISO8601DateFormatter()
         plain.formatOptions = [.withInternetDateTime]
 
-        func date(_ s: String) -> Date? { parse.date(from: s) ?? plain.date(from: s) }
+        /// THE STORE WRITES A SPACE WHERE ISO-8601 WANTS A T.
+        ///
+        /// Rows arrive stamped "2026-09-06 11:43:07.000Z", which is
+        /// PocketBase's shape and what D1 carries forward. `ISO8601DateFormatter`
+        /// refuses it, so every row failed to parse and `history` returned no
+        /// days at all — a History page that said "Nothing here yet" over a
+        /// phone holding a week of conversations. The thread never showed it
+        /// because thread ordering compares the strings and never parses them.
+        ///
+        /// Both spellings are accepted, and neither is guessed at beyond
+        /// swapping that one separator: a row this cannot read is still
+        /// dropped rather than filed under an invented day.
+        func date(_ raw: String) -> Date? {
+            for candidate in [raw, raw.replacingOccurrences(of: " ", with: "T")] {
+                if let d = parse.date(from: candidate) ?? plain.date(from: candidate) { return d }
+            }
+            return nil
+        }
 
         var buckets: [(key: Date, heading: String, rows: [Session])] = []
         for row in sessions.sorted(by: { $0.at > $1.at }) {

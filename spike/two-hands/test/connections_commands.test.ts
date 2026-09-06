@@ -507,6 +507,10 @@ function outcome(
     // express — see the partial-disconnect tests.
     deletedCount: result.deleted === true ? attempted : 0,
     revokedCount: result.revoked === true ? attempted : 0,
+    // Zero unless a case says otherwise. A provider that ANSWERED — with a yes
+    // or with a no — is a provider we have evidence about, and the unknown
+    // count is only for the ones that threw.
+    unknownCount: 0,
     result,
     ...over,
   };
@@ -556,13 +560,24 @@ test("nothing deleted and nothing revoked does not report success", () => {
   assert.ok(/nothing has changed/i.test(reply), reply);
 });
 
-test("a revoke without a delete says both halves", () => {
+test("a revoke without a delete says the access is gone AND the row is", () => {
+  // FINDING A, the sentence half. This branch used to promise a clean-up —
+  // "its entry is still on file on my side and I'm clearing it" — that no code
+  // performed. Nothing in the module cleared anything on a revoke, so the
+  // promise was a future tense with no future in it, and the row it described
+  // stayed `connected` forever. The copy may only describe what the code just
+  // did: the row is retired in the same pass, so the sentence says so.
   const reply = disconnectReply(
     meta("app-zeta", "Zeta"),
     outcome({ revoked: true, deleted: false, revokeUnavailable: false }),
   );
   assert.ok(/revoked/.test(reply), reply);
-  assert.ok(/still on file/i.test(reply), reply);
+  assert.equal(/still on file/i.test(reply), false, `promised a clean-up nobody performs: ${reply}`);
+  // Written out rather than matched loosely: "and I'm clearing it" and "and
+  // it's off your list" are different promises — one is a future the person has
+  // to trust, the other is a past they can check on the Settings screen.
+  assert.ok(/off your list/i.test(reply), reply);
+  assert.ok(/^Done\./.test(reply), reply);
 });
 
 test("nothing connected is said plainly, not as a success", () => {
@@ -642,7 +657,13 @@ test("the two surfaces agree after a partial disconnect", async () => {
   ]);
   const cmds = createCommands({
     table,
-    provider: providerOf({ throwOn: "ca_2" }),
+    provider: providerOf({
+      // ANSWERED, not thrown. The provider said no about `ca_2`, so we have
+      // evidence about it and the sentence may say it is still connected. The
+      // throw is a different fact and has its own test — see FINDING B, where
+      // saying "still connected" would be the lie.
+      results: { ca_2: { revoked: false, deleted: false, revokeUnavailable: false } },
+    }),
     links: minterOf(),
   });
 
@@ -723,6 +744,392 @@ test("the app's name comes from the catalog, never from this module", () => {
     outcome({ revoked: true, deleted: true, revokeUnavailable: false }),
   );
   assert.ok(nameless.includes("app-zeta"), nameless);
+});
+
+// ===========================================================================
+// 4a. FINDING A — THE REVOKED ROW HAS TO LEAVE THE LIST IT IS ON.
+// ===========================================================================
+// The defect, as it stood: `disconnect` retired a row only when the provider
+// reported a DELETE, while `disconnectReply`'s revoke-only branch told the
+// person their entry was "still on file on my side and I'm clearing it". No
+// code ever cleared it. So a revoke without a delete left the row `connected`
+// with its write opt-in intact — Settings went on listing an app whose token
+// was already dead at the vendor, and went on offering to make CHANGES in it,
+// while the text said access was revoked. Two surfaces, one account, opposite
+// claims, and the person had no way to tell which one was lying.
+//
+// About 5% of accounts cannot be revoked programmatically, so revoke-without-
+// delete is not an exotic path; it is the shape of the honest failure the whole
+// module was written around.
+
+test("FINDING A: a revoke retires the row even when the delete did not happen", async () => {
+  const table = tableOf([conn({ connected_account_id: "ca_1", writes_enabled: true })]);
+  const cmds = createCommands({
+    table,
+    provider: providerOf({
+      results: { ca_1: { revoked: true, deleted: false, revokeUnavailable: false } },
+    }),
+    links: minterOf(),
+  });
+
+  const got = await cmds.disconnect(OWNER, "app-zeta");
+  assert.equal(got.revokedCount, 1);
+  assert.equal(got.deletedCount, 0);
+
+  // The row is gone from the owner's list, and the write opt-in it carried went
+  // with it — a fresh connection later must not inherit a consent that was
+  // given to a credential which no longer exists.
+  assert.equal(table.rows[0]?.status, "disconnected");
+  assert.equal(table.rows[0]?.writes_enabled, false);
+});
+
+test("FINDING A: the reply and the Settings screen say the same thing", async () => {
+  const table = tableOf([conn({ connected_account_id: "ca_1", writes_enabled: true })]);
+  const cmds = createCommands({
+    table,
+    provider: providerOf({
+      results: { ca_1: { revoked: true, deleted: false, revokeUnavailable: false } },
+    }),
+    links: minterOf(),
+  });
+
+  const reply = await cmds.handle(OWNER, { kind: "disconnect", toolkit: "app-zeta" });
+  const view = await cmds.settings(OWNER);
+
+  assert.ok(/revoked/.test(reply), reply);
+  assert.ok(/off your list/i.test(reply), reply);
+  // The check the person can actually run: open Settings.
+  assert.deepEqual(view.apps, [], `the text said it was gone and the screen still lists it: ${reply}`);
+  assert.equal(writesEnabled(table.rows, "app-zeta"), false);
+});
+
+test("FINDING A's control: a provider that revoked NOTHING leaves the row alone", async () => {
+  // The guard has to be a guard and not an outage. If any answered disconnect
+  // retired a row, a provider that refused outright would silently delete the
+  // owner's connection from their own list while the token stayed live at the
+  // vendor — the same two-surface disagreement, mirrored. Only positive
+  // evidence of a revoke or a delete may move a row.
+  const table = tableOf([conn({ connected_account_id: "ca_1", writes_enabled: true })]);
+  const cmds = createCommands({
+    table,
+    provider: providerOf({
+      results: { ca_1: { revoked: false, deleted: false, revokeUnavailable: true } },
+    }),
+    links: minterOf(),
+  });
+
+  const reply = await cmds.handle(OWNER, { kind: "disconnect", toolkit: "app-zeta" });
+  assert.equal(table.rows[0]?.status, "connected", reply);
+  assert.equal(table.rows[0]?.writes_enabled, true, "and it did not quietly withdraw the opt-in");
+  const view = await cmds.settings(OWNER);
+  assert.equal(view.apps.length, 1, "the app the owner still has must still be on the screen");
+  assert.equal(/revok/i.test(reply), false, reply);
+});
+
+// ===========================================================================
+// 4b. FINDING B — A THROW IS NOT A REPORT.
+// ===========================================================================
+// The comment on the catch used to read "a provider that threw did not revoke
+// and did not delete". That is false for the order this provider implements:
+// `disconnect` is revoke THEN delete, two calls, and a transport failure on the
+// second lands AFTER the token is already dead at the vendor. So the reply
+// built from it — "so nothing has changed" — told the person an account was
+// untouched when it may have stopped working a second earlier, which is the one
+// sentence that guarantees they will not think to reconnect it.
+//
+// The all-false result stays: it is the FLOOR that keeps the word "revoked" out
+// of the copy. What changed is that a throw is COUNTED as unknown rather than
+// read as a refusal, so the sentence can say it could not tell.
+
+test("FINDING B: a provider that threw is not reported as 'nothing has changed'", async () => {
+  const table = tableOf([conn({ connected_account_id: "ca_1" })]);
+  const cmds = createCommands({
+    table,
+    provider: providerOf({ throwOn: "ca_1" }),
+    links: minterOf(),
+  });
+
+  const got = await cmds.disconnect(OWNER, "app-zeta");
+  assert.equal(got.unknownCount, 1, "a throw has to be counted somewhere or the reply cannot say it");
+  assert.equal(got.revokedCount, 0, "and it is still not evidence OF a revoke");
+  assert.equal(got.deletedCount, 0);
+
+  const reply = disconnectReply(meta("app-zeta", "Zeta"), got);
+  assert.equal(
+    /nothing has changed/i.test(reply),
+    false,
+    `claimed the account was untouched with no evidence either way: ${reply}`,
+  );
+  assert.ok(/can't tell how far it got/i.test(reply), reply);
+  // The word is still forbidden: no evidence of a revoke is not a revoke.
+  assert.equal(/revok/i.test(reply), false, reply);
+  // And what we DO know — that our own table did not move — is still said,
+  // because it is the half the person can act on.
+  assert.ok(/Nothing changed on my side/i.test(reply), reply);
+});
+
+test("FINDING B: a throw does not retire the row either", async () => {
+  // The mirror of finding A. We have no evidence there, and taking somebody's
+  // app off their own list on no evidence is the same defect pointing the other
+  // way — they would stop seeing an app that may still be connected.
+  const table = tableOf([conn({ connected_account_id: "ca_1", writes_enabled: true })]);
+  const cmds = createCommands({
+    table,
+    provider: providerOf({ throwOn: "ca_1" }),
+    links: minterOf(),
+  });
+  await cmds.disconnect(OWNER, "app-zeta");
+  assert.equal(table.rows[0]?.status, "connected");
+  assert.equal((await cmds.settings(OWNER)).apps.length, 1);
+});
+
+test("FINDING B: one answered no beside one throw does not claim the other is connected", async () => {
+  // The partial sentence used to end "the other 1 is still connected", which is
+  // a fact about the vendor. We only have one when the vendor ANSWERED. Against
+  // a throw, all we honestly know is that the row is still on the owner's list.
+  const table = tableOf([
+    conn({ connected_account_id: "ca_1", alias: "personal" }),
+    conn({ connected_account_id: "ca_2", alias: "work" }),
+  ]);
+  const cmds = createCommands({
+    table,
+    provider: providerOf({ throwOn: "ca_2" }),
+    links: minterOf(),
+  });
+
+  const got = await cmds.disconnect(OWNER, "app-zeta");
+  assert.deepEqual(
+    { attempted: got.attempted, deleted: got.deletedCount, unknown: got.unknownCount },
+    { attempted: 2, deleted: 1, unknown: 1 },
+  );
+
+  const reply = disconnectReply(meta("app-zeta", "Zeta"), got);
+  assert.ok(/I disconnected 1 of your 2 Zeta accounts/.test(reply), reply);
+  assert.equal(
+    /still connected/i.test(reply),
+    false,
+    `claimed the un-answered account is still working: ${reply}`,
+  );
+  assert.ok(/couldn't tell what happened to the other 1/i.test(reply), reply);
+  assert.ok(/still on your list/i.test(reply), reply);
+  assert.equal(/revok/i.test(reply), false, reply);
+});
+
+test("FINDING B's control: an ANSWERED refusal still says nothing has changed", async () => {
+  // The vendor answering "no" IS evidence, and the plain sentence is the right
+  // one for it. If the unknown wording swallowed this case, every ordinary
+  // failure would start telling people we could not tell — which is a product
+  // that never knows anything, and it would be this fix causing it.
+  const table = tableOf([conn({ connected_account_id: "ca_1" })]);
+  const cmds = createCommands({
+    table,
+    provider: providerOf({
+      results: { ca_1: { revoked: false, deleted: false, revokeUnavailable: false } },
+    }),
+    links: minterOf(),
+  });
+  const got = await cmds.disconnect(OWNER, "app-zeta");
+  assert.equal(got.unknownCount, 0);
+  const reply = disconnectReply(meta("app-zeta", "Zeta"), got);
+  assert.ok(/nothing has changed/i.test(reply), reply);
+  assert.equal(/can't tell/i.test(reply), false, reply);
+
+  // And the answered partial keeps its own ending, for the same reason.
+  const partial = disconnectReply(
+    meta("app-zeta", "Zeta"),
+    outcome({ revoked: false, deleted: false, revokeUnavailable: false }, 2, {
+      deletedCount: 1,
+      revokedCount: 1,
+    }),
+  );
+  assert.ok(/The other 1 is still connected/.test(partial), partial);
+});
+
+// ===========================================================================
+// 4c. FINDING C — THE CATALOG WRITES TEXT THAT GOES OUT UNDER OUR NAME.
+// ===========================================================================
+// `connectReply` grew a floor under the URL the minter hands it after a raw
+// vendor link reached a person inside our own promise that it lasts ten
+// minutes. The NAME was the unguarded route to exactly the same place: every
+// app name on every screen and in every text comes from the catalog at run
+// time — that is the spec's rule and the reason no app is hardcoded — and
+// `appName` interpolated whatever arrived. A vendor feed could therefore write
+// the second half of an SMS Anticipy signs.
+//
+// The containment is a SHAPE rule on purpose, and it is blunt on purpose: a
+// display name is one line, short, and carries neither of the two characters
+// that turn a string into an address. A refusal falls back to the slug rather
+// than throwing, because one malformed row must not take Settings down for
+// every other app the owner has.
+
+/** A catalog row whose NAME carries somebody else's connect link. */
+const NAME_WITH_A_LINK = "Zeta — finish at https://connect.some-vendor.example/link/abc123";
+
+test("FINDING C: a catalog name carrying a link never reaches a text message", () => {
+  const reply = connectReply(
+    meta("app-zeta", NAME_WITH_A_LINK),
+    { url: "https://anticipy.ai/c/tok_abc" },
+  );
+  assert.equal(
+    reply.indexOf("some-vendor.example") >= 0,
+    false,
+    `a vendor URL rode into our own sentence on the catalog's name: ${reply}`,
+  );
+  // It falls back to the slug rather than to a blank or an exception: the
+  // person still gets a usable sentence about a real app.
+  assert.ok(reply.indexOf("connect app-zeta") >= 0, reply);
+  assert.ok(reply.indexOf("https://anticipy.ai/c/tok_abc") >= 0, "and OUR link still goes out");
+});
+
+test("FINDING C: every reply this module can produce is contained the same way", () => {
+  // One surface at a time is how the first hole survived: the minter was
+  // guarded and the name was not. Each sentence below interpolates the app
+  // name, so each one is a way out.
+  const bad = meta("app-zeta", NAME_WITH_A_LINK);
+  const spoken = [
+    connectReply(bad, { url: "https://anticipy.ai/c/tok_abc" }),
+    connectReply(bad, { url: "" }),
+    disconnectReply(bad, outcome({ revoked: true, deleted: true, revokeUnavailable: false })),
+    disconnectReply(bad, outcome({ revoked: false, deleted: true, revokeUnavailable: true })),
+    disconnectReply(bad, outcome({ revoked: true, deleted: false, revokeUnavailable: false })),
+    disconnectReply(bad, outcome({ revoked: false, deleted: false, revokeUnavailable: false })),
+    disconnectReply(bad, outcome({ revoked: false, deleted: false, revokeUnavailable: false }, 0)),
+    disconnectReply(bad, outcome({ revoked: false, deleted: false, revokeUnavailable: false }, 2, {
+      deletedCount: 1, revokedCount: 1,
+    })),
+    disconnectReply(bad, outcome({ revoked: false, deleted: false, revokeUnavailable: false }, 1, {
+      unknownCount: 1,
+    })),
+    writesReply(bad, { toolkit: "app-zeta", enabled: true, applied: true, accounts: 1 }),
+    writesReply(bad, { toolkit: "app-zeta", enabled: false, applied: false, accounts: 0 }),
+    chooseAccountReply(bad, { toolkit: "app-zeta", alias: "work", chosen: true }),
+    chooseAccountReply(bad, { toolkit: "app-zeta", alias: "work", chosen: false }),
+    listReply(settingsView([conn()], [bad])),
+  ];
+  for (const line of spoken) {
+    assert.equal(
+      line.indexOf("some-vendor.example") >= 0,
+      false,
+      `the catalog wrote a vendor URL into: ${line}`,
+    );
+  }
+});
+
+test("FINDING C: a name that is a second sentence is refused, not printed", () => {
+  // Each shape below is a different way for one catalog field to become two
+  // messages, or one message plus an address. `\n` splits our promise from our
+  // link inside the same SMS; `:` and `/` are the two characters that turn a
+  // name into something a phone will linkify; length is how a whole sentence
+  // arrives where a noun belongs.
+  const refused: [string, string][] = [
+    ["https://connect.some-vendor.example/link/abc", "a bare vendor URL"],
+    ["Zeta\nTap https://some-vendor.example to finish", "a newline, i.e. a second sentence"],
+    ["Zeta\r\nsomething else", "a carriage return"],
+    ["Zeta\u0007", "a control character"],
+    ["Zeta\u007f", "a delete character"],
+    ["Zeta: tap here", "a colon"],
+    ["Zeta/two", "a slash"],
+    ["Z".repeat(65), "a name longer than any real app has"],
+    ["   ", "whitespace pretending to be a name"],
+    ["", "nothing at all"],
+  ];
+  for (const [name, why] of refused) {
+    const line = disconnectReply(
+      meta("app-zeta", name),
+      outcome({ revoked: true, deleted: true, revokeUnavailable: false }),
+    );
+    assert.equal(line, "Done. app-zeta disconnected and access revoked.", `${why}: ${line}`);
+  }
+});
+
+test("FINDING C: the slug is catalog metadata too, and gets the same treatment", () => {
+  // The slug is the vendor's primary key and it arrives through the same feed.
+  // Trusting it because it is usually shorter is how the fallback becomes the
+  // hole. With both unusable the reply names no app rather than an address.
+  const line = disconnectReply(
+    meta("https://some-vendor.example/x", "Zeta\nand another thing"),
+    outcome({ revoked: true, deleted: true, revokeUnavailable: false }, 1, {
+      toolkit: "https://some-vendor.example/x",
+    }),
+  );
+  assert.equal(line, "Done. that app disconnected and access revoked.", line);
+});
+
+test("FINDING C's control: real app names still render, punctuation and all", () => {
+  // A guard that refuses everything is an outage: an app whose name is refused
+  // loses its name on every screen the owner has. These are the shapes a real
+  // catalog carries, and every one of them must survive.
+  const fine = [
+    "Zeta",
+    "Zeta Mail",
+    "Zeta & Co.",
+    "Zeta (Work)",
+    "Zeta-Desk",
+    "Zeta.io",
+    "Zeta 2.0",
+    "Zeta+",
+    "Zeta — Notes",
+    "Zetá Correo",
+    "ゼータ",
+    "Z".repeat(64),
+  ];
+  for (const name of fine) {
+    const line = disconnectReply(
+      meta("app-zeta", name),
+      outcome({ revoked: true, deleted: true, revokeUnavailable: false }),
+    );
+    assert.equal(line, `Done. ${name} disconnected and access revoked.`, name);
+  }
+});
+
+test("FINDING C: one malformed row does not take the whole screen down", () => {
+  // A bad name is one row among many on a screen that lists every connected
+  // app. Throwing here — the way `connectReply` throws on a foreign URL — would
+  // be an outage for every OTHER app the owner has, which is a bigger failure
+  // than the one being contained.
+  const view = settingsView(
+    [conn(), conn({ toolkit: "app-theta", connected_account_id: "ca_9" })],
+    [meta("app-zeta", NAME_WITH_A_LINK), meta("app-theta", "Theta")],
+  );
+  assert.deepEqual(view.apps.map((a) => a.name), ["Theta", "app-zeta"]);
+  const text = listReply(view);
+  assert.equal(text.indexOf("some-vendor.example") >= 0, false, text);
+  assert.ok(text.indexOf("Theta") >= 0, text);
+});
+
+test("FINDING C: a logo the screen would load is an https URL or it is nothing", () => {
+  // The other field on the same feed, one surface along: the catalog decides
+  // what URL both skins fetch, and a `javascript:` or `data:` value there is
+  // markup this product handed to its own web view. Both skins already render
+  // an app with no logo — the catalog is allowed to have none — so null is a
+  // state that costs nobody anything.
+  const refused = [
+    "javascript:alert(1)",
+    "data:text/html;base64,PHN2Zz4=",
+    "http://cdn.example/zeta.png",
+    "//cdn.example/zeta.png",
+    "https://cdn.example/a b.png",
+    "https://cdn.example/a\npng",
+    "https://",
+    "",
+    "   ",
+  ];
+  for (const logo of refused) {
+    const view = settingsView([conn()], [meta("app-zeta", "Zeta", { logo })]);
+    assert.equal(view.apps[0]?.logo, null, JSON.stringify(logo));
+  }
+  // Non-strings from a feed that is JSON at rest.
+  for (const logo of [null, undefined, 7, {}, ["https://cdn.example/z.png"]]) {
+    const view = settingsView([conn()], [meta("app-zeta", "Zeta", { logo: logo as never })]);
+    assert.equal(view.apps[0]?.logo, null, JSON.stringify(logo));
+  }
+  // THE CONTROL: a real logo still reaches the screen, or every app loses its
+  // icon and somebody deletes this check.
+  const good = settingsView(
+    [conn()],
+    [meta("app-zeta", "Zeta", { logo: "https://cdn.example/zeta.png" })],
+  );
+  assert.equal(good.apps[0]?.logo, "https://cdn.example/zeta.png");
 });
 
 // ===========================================================================

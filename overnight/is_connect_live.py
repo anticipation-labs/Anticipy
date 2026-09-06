@@ -1,40 +1,80 @@
 #!/usr/bin/env python3
-"""CAN A PERSON ACTUALLY CONNECT AN APP? Six legs, measured against LIVE.
+"""CAN A PERSON ACTUALLY CONNECT AN APP? Nine legs, measured against LIVE.
 
 Everything about the Connections feature is repo-green. The pure core in
 `migration/workers/src/routes/connect.ts` is ported from a spike with 1006
 tests, `src/connections/store.ts` refuses a cross-owner write by name, the
 provider turns `manage_connections` off and checks the answer, the iOS screen
 is drawn — and on 2026-09-06 a person could not connect anything, because none
-of it is joined up and none of it is deployed. HARNESS-LAWS law 3 is the whole
+of it was joined up and none of it was deployed. HARNESS-LAWS law 3 is the whole
 reason this file exists: repo-green is not done, and a green suite over a
 feature nobody has wired reads exactly like a working product.
 
-WHAT EACH LEG ANSWERS, in the order the chain breaks:
+THE LEGS ARE THE CHAIN A PERSON WALKS, in that order, because the gate's own
+instruction to its reader is "work the first red leg" and that instruction is
+only true if the order is the order things happen in:
 
-  1. THE WORKER SERVES /c/ AT ALL. `GET api.anticipy.ai/c/<43 characters>` with
-     no credentials at all. connect.ts answers a signed-out caller with its own
-     HTML — the 401 sign-in page, or its own 404 — and every page it draws
-     carries the CSP it mints them with. The router's generic `notFound()`
-     (src/pb/wire.ts) is JSON, and that JSON is what a MISSING ROUTE looks
-     like. The two are not the same failure and this leg refuses to conflate
-     them: one is a page that refused you, the other is a Worker with no
-     connect page in it.
+    Settings -> Connected Apps        legs 1-2   the phone's six routes, the tables
+    "Add an app", and a search        leg 3      the catalog
+    a link is minted and texted       leg 4      connect_links
+    the person taps it                legs 5-7   the page, the wiring, the way in
+    the vendor's screen               leg 8      the key that opens a session
+    a connection exists               leg 9      a row on live D1
 
-  2. THE WIRING IS INSTALLED. An unwired Worker answers 503 carrying the
-     sentence connect.ts wrote for exactly this case. That is a RED leg and not
-     an unproven one, and the distinction is the point of the whole file: we
-     can SEE an unwired Worker. It told us. `installConnectWiring` had zero
-     callers when this gate was written, so the honest reading of a 503 here is
-     "the store, the catalog and the sentence writer are unset", never "we
-     could not tell".
+Legs 1, 3 and 7 were added on 2026-09-06 and THE SIX LEGS WERE RENUMBERED into
+that order — a note quoting "leg 5" from before that day means the vendor key,
+which is leg 8 now. The old order stopped at the /c/ page and had no instrument
+at all for the server half: the six routes the phone actually calls could have
+been absent from the deployed Worker and every leg here would still have been
+green.
 
-  3. THE FOUR TABLES EXIST ON LIVE D1. `app_usage_signals`, `connections`,
+WHAT EACH LEG ANSWERS:
+
+  1. THE SIX /me/connections ROUTES EXIST. Every path in
+     `CONNECTIONS_API_ROUTES`, asked with its own verb and NO credential. A
+     deployed route answers 401 carrying connections_api.ts's own
+     `{"ok":false,"message":"Sign in first."}`; an absent one falls through to
+     the router's generic `notFound()` (src/pb/wire.ts), which is JSON with
+     `"code":404` in it. Telling those apart is the whole leg — one is a route
+     that refused you, the other is a Worker with no such route in it.
+
+     AND THE CONTROL, because a 401 proves nothing on a Worker that answers 401
+     to everything: `/me/connectionsX` is deliberately NOT a route (index.ts
+     hands over `/me/connections` and the `/me/connections/` prefix, and nothing
+     else), so it must come back as the router's generic 404. If the control
+     does not, the discriminator is uncalibrated and this leg is UNPROVEN rather
+     than green — the six 401s would then be evidence about the edge, not about
+     the routes.
+
+  2. THE FOUR TABLES EXIST ON LIVE D1. `app_usage_signals`, `connections`,
      `connect_nudges`, `connect_links` — asked of `sqlite_master` on the
      production database, not on a local one and not on schema.sql. A table
      that is absent is red and is NAMED, because "connections is broken" sends
      a reader to the code and "connect_links does not exist" sends them to one
      wrangler command.
+
+  3. THE CATALOG ANSWERS "ADD AN APP". `GET /me/connections/catalog?q=…` with a
+     REAL owner credential, which is the only way to see this route at all:
+     `connectionsApiRoute` settles the credential before it builds a single
+     dependency, so an anonymous caller gets 401 and learns nothing about
+     whether the search port behind it is filled.
+
+     A 503 HERE IS RED AND THE MESSAGE IS QUOTED. `searchCatalog` answers
+     `refuse(503, CATALOG_UNREACHABLE)` for two different reasons — the
+     `ConnectionsApiDeps.search` port is unfilled on the deployed build, or the
+     catalog itself did not answer — and this leg does not guess between them,
+     because the body does not say. What it will not do is soften it: a person
+     who cannot search the catalog cannot connect an app nobody has already
+     asked them about, so that is a broken feature and not an unmeasured one.
+     (Measured 2026-09-06 06:17 the port had no filler at all; a
+     `provider.search` was written into `connectionsApiDeps()` the same day, and
+     whether the deployed build carries it is exactly what this leg is for.)
+
+     ITS CONTROL is `GET /me/connections` with the same credential. If the list
+     route accepts it and the catalog refuses, the catalog is what is wrong; if
+     the list route refuses it too, the CREDENTIAL is what is wrong and this leg
+     is UNPROVEN — a stale token reported as a broken catalog sends the reader
+     to write a search adapter that was never the problem.
 
   4. A LINK CAN BE MINTED AND ITS ROW LANDS. The one leg that writes. It
      inserts the exact seven columns `store.ts put()` writes, reads the row
@@ -56,12 +96,52 @@ WHAT EACH LEG ANSWERS, in the order the chain breaks:
      makes this leg UNPROVEN rather than green — a leg that was not run does
      not pass.
 
-  5. THE VENDOR KEY ANSWERS. One session create against Composio, exactly the
+  5. THE WORKER SERVES /c/ AT ALL. `GET api.anticipy.ai/c/<43 characters>` with
+     no credentials at all. connect.ts answers a signed-out caller with its own
+     HTML — the 401 sign-in page, or its own 404 — and every page it draws
+     carries the CSP it mints them with. The router's generic `notFound()` is
+     JSON, and that JSON is what a MISSING ROUTE looks like. The two are not the
+     same failure and this leg refuses to conflate them: one is a page that
+     refused you, the other is a Worker with no connect page in it.
+
+  6. THE WIRING IS INSTALLED. An unwired Worker answers 503 carrying the
+     sentence connect.ts wrote for exactly this case. That is a RED leg and not
+     an unproven one, and the distinction is the point of the whole file: we
+     can SEE an unwired Worker. It told us. `installConnectWiring` had zero
+     callers when this gate was written, so the honest reading of a 503 here is
+     "the store, the catalog and the sentence writer are unset", never "we
+     could not tell".
+
+  7. THE PAGE OFFERS A WAY IN. A page that renders is not a page that works.
+     The signed-out `/c/{token}` is `refusalPage("sign-in-required")`, and at
+     06:17 UTC on 2026-09-06 it was one heading, one sentence and NOTHING ELSE:
+     no link, no button, no form. `/c/{token}/code` was live one path segment
+     away, serving "Get a code by text" and the entire reason
+     routes/connect_auth.ts exists — and the page that needed it did not mention
+     it. Every person who tapped a texted link that morning hit a wall.
+
+     So this leg looks for a control on the page whose target RESOLVES to that
+     token's own code path — an `href` or an `action`, on one of our own hosts —
+     and is RED when there is none, because a dead end is a feature nobody can
+     use and a gate that passed on "the page rendered" would be certifying it.
+     It went red on the 06:17 page, and green at 07:20 the same day when a
+     control pointing at `/c/{token}/code` was deployed. Both readings are
+     pinned in the self-test, because a leg is only worth what it has been seen
+     to say on both sides of a real repair.
+
+     ITS CONTROL is the same scan run over `/c/{token}/code`, a page that is
+     KNOWN to carry exactly such a control (its own form posts back to itself).
+     If the scan finds nothing there either, then the scan is what failed and
+     this leg is UNPROVEN, not red. A pattern that silently stopped matching is
+     the specific way an instrument lies, and it has produced false readings in
+     this repo before.
+
+  8. THE VENDOR KEY ANSWERS. One session create against Composio, exactly the
      call `provider.ts #sessionId` makes, expecting 201 with a `session_id`. A
      key nobody has checked is the cheapest thing in this chain to be wrong and
      the most expensive to discover from a person's tap.
 
-  6. SOMEBODY HAS ACTUALLY CONNECTED AN APP. Distinct owners with a
+  9. SOMEBODY HAS ACTUALLY CONNECTED AN APP. Distinct owners with a
      `status='connected'` row on live D1. ZERO IS UNPROVEN, NOT RED, and that
      is deliberate: nobody having connected yet is not the same as the feature
      being broken, and a gate that cried failure on the day before launch would
@@ -71,30 +151,40 @@ WHAT EACH LEG ANSWERS, in the order the chain breaks:
 THE THIRD STATE IS MANDATORY HERE, and it is copied from firmware_gate.py: exit
 2 UNPROVEN is neither pass nor fail, and it belongs to anything that was
 GENUINELY NOT MEASURED — the network refused, wrangler has no credentials, no
-vendor key was given, a downstream leg could not be attempted because the leg
-above it is red. What it must never mean is "measured and disappointing".
+vendor key or owner credential was given, a downstream leg could not be
+attempted because the leg above it is red. What it must never mean is "measured
+and disappointing".
 
     0   every measurable leg passed
     1   RED — something we can SEE is broken
     2   UNPROVEN — a leg could not be measured. It does not pass.
 
 THIS FILE NEVER PRINTS A NUMBER IT DID NOT MEASURE. Every count on the screen
-came back from the live database or the live vendor in this run; a leg that
-could not be asked prints the reason instead of a zero, because a zero reads as
-evidence and an unasked question is not evidence.
+came back from the live database, the live Worker or the live vendor in this
+run; a leg that could not be asked prints the reason instead of a zero, because
+a zero reads as evidence and an unasked question is not evidence.
 
 HARNESS-LAWS LAW 1. Nothing here decides what anybody MEANT. It compares HTTP
-status codes, the CSP header our own Worker mints, four table names, seven
-column values it wrote itself, and one vendor status code. Law 1 permits
-deterministic gates by name ("Measuring is not programming"), and there is no
-prose anywhere in this file's inputs to misread — it never reads a message, a
-transcript or a person's words.
+status codes and verbs, the CSP header our own Worker mints, two sentences our
+own Worker writes for two named cases, four table names, seven column values it
+wrote itself, the target of an HTML attribute resolved as a URL, the length of a
+JSON array, and one vendor status code. Law 1 permits deterministic gates by
+name ("Measuring is not programming"), and there is no prose anywhere in this
+file's inputs to misread — it never reads a message, a transcript or a person's
+words. The one string it sends into the product, the catalog probe query, is not
+an app name and is not matched against anything here: what it means is the
+catalog's business, and all this file reads is whether an answer came back.
 
     python3 overnight/is_connect_live.py
     python3 overnight/is_connect_live.py --read-only     # leg 4 not attempted
     python3 overnight/is_connect_live.py --self-test     # offline, no network
 
 Read-only apart from leg 4, whose one row is described above.
+
+CREDENTIALS COME FROM THE ENVIRONMENT, NEVER FROM ARGV. `ANTICIPY_CONNECT_PROBE_
+CREDENTIAL` (or `ANTICIPY_OWNER_TOKEN`) is the owner auth token leg 3 asks with;
+a secret on a command line is a secret in `ps`, in a shell history and in every
+CI log that echoes its own command.
 """
 from __future__ import annotations
 
@@ -107,6 +197,7 @@ import subprocess
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 
 # The credentials sit next to the gates and nothing loaded them until _env
@@ -159,7 +250,7 @@ MANAGE_CONNECTIONS_TOOL = "COMPOSIO_MANAGE_CONNECTIONS"
 
 #: `TOKEN_CHARS = 43` in connect.ts: 32 bytes of base64url, unpadded. The
 #: probe token is well-formed ON PURPOSE — a malformed one would be refused by
-#: `parseConnectPath` before the route ever ran, and this leg would then be
+#: `parseConnectPath` before the route ever ran, and leg 5 would then be
 #: measuring the path parser instead of the deployment.
 TOKEN_CHARS = 43
 
@@ -172,6 +263,119 @@ CSP_MARK = "form-action 'self'"
 #: the tree, and the ONLY way from outside to tell a Worker that has the route
 #: and no wiring from one that has both.
 UNWIRED_MARK = "Connecting isn't switched on here"
+
+#: The router's own 404 body (src/pb/wire.ts `notFound`), compared with spaces
+#: removed so a reformatted serialiser does not silently stop matching. This is
+#: what an UNROUTED path answers, and every leg that asks "is this route on the
+#: deployed Worker" is really asking whether it got this instead.
+ROUTER_404_MARK = '"code":404'
+
+# ---------------------------------------------------------------------------
+# LEG 1 — the six routes the phone calls
+# ---------------------------------------------------------------------------
+
+#: The six routes, with the verb each one takes, read off
+#: `CONNECTIONS_API_ROUTES` and `METHOD` in routes/connections_api.ts — which
+#: are themselves read off the `Route` enum in ConnectedAppsClient.swift. Three
+#: books, and this is the one that asks production whether the middle book is
+#: deployed.
+#:
+#: THE VERB MATTERS. `connectionsApiRoute` checks the method BEFORE it checks
+#: the credential, so a GET on `/link` is a 405 with an `Allow` header and never
+#: reaches the 401 this leg reads. Asking with the wrong verb would report four
+#: deployed routes as unreadable.
+CONNECTIONS_ROUTES = (
+    ("list", "GET", "/me/connections"),
+    ("catalog", "GET", "/me/connections/catalog"),
+    ("writes", "POST", "/me/connections/writes"),
+    ("disconnect", "POST", "/me/connections/disconnect"),
+    ("sentences", "POST", "/me/connections/sentences"),
+    ("link", "POST", "/me/connections/link"),
+)
+
+#: THE CONTROL for leg 1. Not a route: index.ts hands `connectionsApiRoute` the
+#: exact path `/me/connections` and the `/me/connections/` prefix, and this is
+#: neither, so it must fall through to the router's generic 404. If it does not,
+#: then a 401 is not evidence that anything is deployed and the leg says so.
+CONNECTIONS_CONTROL_PATH = "/me/connectionsX"
+
+#: `SIGN_IN_FIRST` in connections_api.ts, byte for byte. Paired with the
+#: `{"ok":false}` envelope that file puts on every refusal, because the sentence
+#: alone could in principle appear anywhere and the envelope alone is every
+#: refusal it makes.
+SIGN_IN_FIRST_MARK = "Sign in first."
+REFUSAL_ENVELOPE_MARK = '"ok":false'
+
+#: `NOT_A_ROUTE` in connections_api.ts — the answer for a path UNDER the prefix
+#: that is not one of the six. It means the file is deployed and its route table
+#: disagrees with ours, which is a different repair from "the file is absent".
+NOT_A_LEG_MARK = "There's nothing at this address."
+
+# ---------------------------------------------------------------------------
+# LEG 3 — the catalog
+# ---------------------------------------------------------------------------
+
+#: What leg 3 types into the search box.
+#:
+#: DELIBERATELY NOT AN APP NAME, and deliberately not a category either. The
+#: product rule is that no app is hardcoded anywhere in this feature — names,
+#: logos and search results come from the catalog at run time — and a gate that
+#: probed with "gmail" would be the first file to break it, as well as being
+#: wrong the day the catalog changes. One letter is the shortest thing a
+#: substring search can be asked about and means nothing on its own.
+#:
+#: It only ever decides GREEN versus UNPROVEN: an answer of zero items is
+#: reported as zero items with the query named, never as a broken catalog,
+#: because what a catalog holds is not this file's to know. `--catalog-query`
+#: overrides it for a reader who wants to ask for something in particular.
+CATALOG_QUERY = "a"
+
+#: `QUERY_SEARCH` in connections_api.ts. The catalog's other query name,
+#: `slugs`, is not probed: it takes keys we already hold, and a person who has
+#: connected nothing has none.
+CATALOG_QUERY_NAME = "q"
+
+#: The two environment names leg 3 will take an owner credential from. Nothing
+#: else is read: the service token is not an owner credential, and a gate that
+#: fell back to it would be measuring a door the phone never uses.
+CREDENTIAL_ENV = ("ANTICIPY_CONNECT_PROBE_CREDENTIAL", "ANTICIPY_OWNER_TOKEN")
+
+#: WHERE THAT CREDENTIAL MAY BE SENT, AND NOWHERE ELSE.
+#:
+#: Leg 3 is the only leg in this file that sends a secret anywhere, and `WORKER`
+#: comes from an environment variable — `ANTICIPY_PB`, which pointed at a
+#: different backend as recently as last week. A gate that posted an owner's auth
+#: token to whatever host a variable happened to name would be a credential leak
+#: with a scoreboard on it. Our zone, or the credential is not sent and the leg
+#: says so; "not sent" is UNPROVEN, which is the honest reading.
+CREDENTIAL_ZONE = "anticipy.ai"
+
+
+def credential_may_be_sent(worker: str) -> bool:
+    """Is this host ours? Exact zone or a subdomain of it, port ignored.
+
+    A suffix test on the bare string would accept `evil-anticipy.ai`; the leading
+    dot is what makes it a subdomain check rather than a substring one.
+    """
+    host = urllib.parse.urlsplit(worker).netloc.split("@")[-1].split(":")[0].lower()
+    return host == CREDENTIAL_ZONE or host.endswith("." + CREDENTIAL_ZONE)
+
+# ---------------------------------------------------------------------------
+# LEG 7 — the way in
+# ---------------------------------------------------------------------------
+
+#: Every host a link of ours may point at. "Every link is ours": a control on
+#: the connect page whose target is somebody else's host is not a way in, it is
+#: a way out, and it fails this leg rather than passing it.
+OUR_HOSTS = frozenset({
+    urllib.parse.urlsplit(WORKER).netloc,
+    "api.anticipy.ai", "anticipy.ai", "www.anticipy.ai",
+})
+
+#: The heading `/c/{token}/code` draws (`ASK_HEADING` in connect_auth.ts). Read
+#: only to say what the control page WAS when the scan came back empty, so the
+#: reader knows whether they are looking at the right page.
+CODE_PAGE_MARK = "Get a code by text"
 
 # ---------------------------------------------------------------------------
 # THE PROBE ROW (leg 4)
@@ -208,7 +412,195 @@ class VendorUnavailable(RuntimeError):
 
 
 # ===========================================================================
-# LEG 1 + LEG 2 — the deployed route, and whether anything is wired to it
+# LEG 1 — the six routes, and the control that says a 401 means anything
+# ===========================================================================
+
+def classify_connections_response(status: int, headers: dict, body: str) -> tuple[str, str]:
+    """What did the live Worker just answer for a /me/connections path?
+
+    Returns (kind, detail). Six kinds, because six different people fix them:
+
+      refused        connections_api.ts answered. 401, its own `{ok:false}`
+                     envelope, its own "Sign in first." This is the route being
+                     THERE — the only thing an anonymous caller can prove.
+      route-missing  the router's generic notFound(). The file is not on this
+                     Worker, or index.ts does not hand it this prefix.
+      not-a-leg      the prefix IS routed and this path is not one of the six:
+                     connections_api.ts's own "There's nothing at this address."
+                     The file is deployed and its route table disagrees with
+                     ours.
+      wrong-method   405. The verb tables disagree; the route exists.
+      answered       2xx WITHOUT a credential. Nothing anonymous may reach these
+                     routes, so this is the loudest failure in the file.
+      unreadable     something else answered — a proxy, an edge error, an origin
+                     that is not this Worker. Measured nothing.
+    """
+    lowered = {str(k).lower(): str(v) for k, v in (headers or {}).items()}
+    ctype = lowered.get("content-type", "")
+    body = body or ""
+    compact = body.replace(" ", "")
+
+    if status == 401 and SIGN_IN_FIRST_MARK in body and REFUSAL_ENVELOPE_MARK in compact:
+        return "refused", f"401 — connections_api.ts's own \"{SIGN_IN_FIRST_MARK}\""
+    if 200 <= status < 300:
+        return "answered", (f"{status} — an anonymous caller got an ANSWER, not a "
+                            "refusal")
+    if status == 404 and "application/json" in ctype and ROUTER_404_MARK in compact:
+        return "route-missing", (f"{status} application/json — the router's generic "
+                                 "notFound(), which is what an unrouted path answers")
+    if status == 404 and NOT_A_LEG_MARK in body:
+        return "not-a-leg", (f"{status} — connections_api.ts is deployed and says this is "
+                             f"not one of its routes (\"{NOT_A_LEG_MARK}\")")
+    if status == 405:
+        return "wrong-method", (f"{status} — the route is there and refused the verb this "
+                                f"gate asked with (allow: {lowered.get('allow', 'unset')})")
+    return "unreadable", (f"{status} {ctype or 'no content-type'} — neither a "
+                          "connections_api.ts refusal nor the router's 404")
+
+
+def leg_routes(results: list, control: tuple[str, str]) -> tuple[int, str, str]:
+    """LEG 1. Are all six routes on the deployed Worker?
+
+    `results` is a list of (name, method, path, kind, detail); `control` is the
+    (kind, detail) for `CONNECTIONS_CONTROL_PATH`.
+
+    THE CONTROL IS CHECKED FIRST and it can only ever withhold green. A Worker
+    that answered 401 to every path on earth would light all six of these up,
+    and the six of them would be measuring the edge.
+    """
+    control_kind, control_detail = control
+    names = {name: kind for name, _m, _p, kind, _d in results}
+
+    answered = [n for n, k in names.items() if k == "answered"]
+    if answered:
+        return RED, BAD, (
+            f"{', '.join(sorted(answered))} answered an ANONYMOUS caller with a 2xx. "
+            "whoIsAsking() is not being consulted, or is not the first thing consulted: "
+            "one person's connected accounts are readable by anybody with the URL")
+
+    if control_kind != "route-missing":
+        return UNPROVEN, INFO, (
+            f"the control {CONNECTIONS_CONTROL_PATH} answered {control_detail}, and it is "
+            "not a route on this Worker — so it should have been the router's generic 404. "
+            "Until it is, a 401 on the six proves nothing about whether they are deployed")
+
+    broken = [f"{n} ({k})" for n, _m, _p, k, _d in results
+              if k in ("route-missing", "not-a-leg", "wrong-method")]
+    if broken:
+        return RED, BAD, (
+            f"{len(results) - len(broken)} of {len(results)} answer 401; BROKEN: "
+            + ", ".join(broken)
+            + ". The phone's Connected Apps screen calls every one of these and shows "
+              "\"I couldn't read your connected apps\" for each that is not there")
+
+    unreadable = [n for n, _m, _p, k, _d in results if k in ("unreadable", "unreachable")]
+    if unreadable:
+        return UNPROVEN, INFO, (
+            f"{', '.join(sorted(unreadable))} answered something that is neither a "
+            "connections_api.ts refusal nor the router's 404, so nothing is claimed about "
+            "them either way")
+
+    return GREEN, OK, (
+        f"all {len(results)} answer 401 with connections_api.ts's own "
+        f"\"{SIGN_IN_FIRST_MARK}\", and the control {CONNECTIONS_CONTROL_PATH} answers the "
+        "router's generic 404 — so those 401s are these routes and not a blanket refusal")
+
+
+# ===========================================================================
+# LEG 3 — the catalog, which is how "Add an app" works
+# ===========================================================================
+
+def classify_api_json(status: int, headers: dict, body: str) -> dict:
+    """One connections_api.ts answer, read structurally.
+
+    `items` is the LENGTH of the `items` array or None if there is no array to
+    count — never 0 as a stand-in for "could not tell", which is the exact shape
+    this whole file exists to refuse. `message` is the sentence the Worker wrote
+    for its own failure, carried through verbatim so a red leg can quote it
+    rather than paraphrase it.
+    """
+    lowered = {str(k).lower(): str(v) for k, v in (headers or {}).items()}
+    body = body or ""
+    root = None
+    if "application/json" in lowered.get("content-type", ""):
+        try:
+            root = json.loads(body)
+        except ValueError:
+            root = None
+    items = None
+    message = None
+    if isinstance(root, dict):
+        if isinstance(root.get("items"), list):
+            items = len(root["items"])
+        raw = root.get("message")
+        if isinstance(raw, str) and raw:
+            message = raw
+    return {"status": status, "items": items, "message": message,
+            "json": isinstance(root, dict)}
+
+
+def leg_catalog(routes_code: int, credential: bool, control: dict | None,
+                answer: dict | None, query: str) -> tuple[int, str, str]:
+    """LEG 3. Does `?q=` come back with apps a person could pick from?
+
+    `control` is the answer `GET /me/connections` gave to the SAME credential.
+    Its only job is to decide whose fault a refusal is.
+    """
+    where = f"GET {CONNECTIONS_ROUTES[1][2]}?{CATALOG_QUERY_NAME}={query}"
+
+    if routes_code != GREEN:
+        return UNPROVEN, INFO, (
+            "not attempted: leg 1 did not establish that these routes are deployed, and a "
+            "catalog answer read over an undeployed route measures the router")
+    if not credential:
+        return UNPROVEN, INFO, (
+            f"no owner credential in the environment ({' or '.join(CREDENTIAL_ENV)}), so "
+            "the catalog was not asked. It CANNOT be asked without one: the route settles "
+            "the credential before it builds a single dependency, so an anonymous caller "
+            "sees 401 and never sees whether the search port behind it is filled")
+    if control is None or answer is None:
+        return UNPROVEN, INFO, (
+            "the catalog could not be reached with that credential — a network, not a "
+            "verdict about the catalog")
+    if control["status"] == 401:
+        return UNPROVEN, INFO, (
+            f"the CONTROL {CONNECTIONS_ROUTES[0][2]} refused this environment's credential "
+            "(401), so it is the credential that is stale, not the catalog. Nothing is "
+            "claimed here; mint a fresh owner token and run this again")
+    if control["status"] != 200 or control["items"] is None:
+        return UNPROVEN, INFO, (
+            f"the CONTROL {CONNECTIONS_ROUTES[0][2]} answered {control['status']}"
+            + (f" \"{control['message']}\"" if control["message"] else "")
+            + " instead of a list, so a catalog answer measured beside it would be "
+              "measuring the same unknown twice")
+
+    if answer["status"] == 200 and answer["items"] is not None:
+        if answer["items"] > 0:
+            return GREEN, OK, (
+                f"{where} -> 200 with {answer['items']} item(s). The search box on Add an "
+                "app has something to show, and the rows came from the catalog at run time")
+        return UNPROVEN, INFO, (
+            f"{where} -> 200 with 0 items. The search port answers, and nothing came back "
+            f"for {query!r} — whether the catalog is empty or this probe word simply "
+            "matches nothing there is not decidable from here. Ask for something in "
+            "particular with --catalog-query")
+    if answer["status"] == 200:
+        return RED, BAD, (
+            f"{where} -> 200 with no items array. ConnectedAppsClient reads row[\"items\"] "
+            "and throws on anything else, so the screen shows a failure for a 200")
+    if answer["json"] and answer["message"]:
+        return RED, BAD, (
+            f"{where} -> {answer['status']} \"{answer['message']}\". Add an app does not "
+            "work: this is the route reporting its own failure, and the 503 case is the "
+            "unfilled ConnectionsApiDeps.search port — a declared port that "
+            "connectionsApiDeps() does not fill, so every search answers this")
+    return UNPROVEN, INFO, (
+        f"{where} -> {answer['status']} with nothing readable in it, so nothing is claimed "
+        "about the catalog")
+
+
+# ===========================================================================
+# LEG 5 + LEG 6 — the deployed page, and whether anything is wired to it
 # ===========================================================================
 
 def probe_token() -> str:
@@ -248,7 +640,7 @@ def classify_c_response(status: int, headers: dict, body: str) -> tuple[str, str
     if CSP_MARK in csp:
         return "connect-page", (f"{status} text/html with connect.ts's own CSP "
                                 f"({CSP_MARK})")
-    if "application/json" in ctype and '"code":404' in body.replace(" ", ""):
+    if "application/json" in ctype and ROUTER_404_MARK in body.replace(" ", ""):
         return "route-missing", (f"{status} application/json — the router's generic "
                                  "notFound(), which is what an unrouted path answers")
     return "unreadable", (f"{status} {ctype or 'no content-type'} — neither a connect.ts "
@@ -256,7 +648,7 @@ def classify_c_response(status: int, headers: dict, body: str) -> tuple[str, str
 
 
 def leg_route(kind: str, detail: str, url: str) -> tuple[int, str, str]:
-    """LEG 1. Does the deployed Worker serve /c/ at all?"""
+    """LEG 5. Does the deployed Worker serve /c/ at all?"""
     if kind in ("connect-page", "unwired"):
         return GREEN, OK, f"{url} -> {detail}"
     if kind == "route-missing":
@@ -267,7 +659,7 @@ def leg_route(kind: str, detail: str, url: str) -> tuple[int, str, str]:
 
 
 def leg_wiring(kind: str, detail: str) -> tuple[int, str, str]:
-    """LEG 2. Is anything wired to it?
+    """LEG 6. Is anything wired to it?
 
     A 503 is RED and not unproven. We are not guessing at the wiring — the
     Worker told us, in a sentence written for this case.
@@ -279,13 +671,96 @@ def leg_wiring(kind: str, detail: str) -> tuple[int, str, str]:
     if kind == "connect-page":
         return GREEN, OK, (f"a connect.ts page was drawn ({detail}), which only "
                            "happens after WIRING(env) returned deps")
-    return UNPROVEN, INFO, ("not measurable while leg 1 is red — the route that would "
+    return UNPROVEN, INFO, ("not measurable while leg 5 is red — the route that would "
                             "answer 503 is not deployed, so the Worker cannot be "
                             "asked whether anything is wired to it")
 
 
 # ===========================================================================
-# LEG 3 — the four tables, on the live database
+# LEG 7 — is there a way off the page a person actually lands on
+# ===========================================================================
+
+#: `href="…"` and `action="…"`, single or double quoted. HTML structure, not
+#: prose: the value is then RESOLVED as a URL and compared to a path this file
+#: built itself. Nothing here reads what a link SAYS.
+_LINK_ATTR = re.compile(r"""(?:href|action)\s*=\s*(?:"([^"]*)"|'([^']*)')""", re.I)
+
+
+def code_controls(page_url: str, html: str, token: str) -> list:
+    """Every control on this page that starts the code flow for THIS token.
+
+    Resolved against the page's own URL, so a relative `code`, an absolute
+    `/c/{token}/code` and a fully qualified `https://api.anticipy.ai/c/{token}/
+    code` all count as the same thing — which is what a browser would do with
+    them.
+
+    A TARGET ON SOMEBODY ELSE'S HOST IS NOT A WAY IN. "Every link is ours": a
+    button pointing off our hosts is not a control this leg will accept, and
+    filtering by `OUR_HOSTS` is what makes that a measurement rather than a
+    hope.
+    """
+    want = f"/c/{token}/code"
+    found = []
+    for double, single in _LINK_ATTR.findall(html or ""):
+        raw = (double or single).strip()
+        if not raw:
+            continue
+        target = urllib.parse.urljoin(page_url, raw)
+        parts = urllib.parse.urlsplit(target)
+        if parts.path == want and parts.netloc in OUR_HOSTS:
+            found.append(target)
+    return found
+
+
+def leg_way_in(kind: str, status: int, page_url: str, body: str, token: str,
+               control_url: str | None, control_body: str | None) -> tuple[int, str, str]:
+    """LEG 7. Can the person who tapped the link get any further?
+
+    `control_*` is `/c/{token}/code`, a page KNOWN to carry the control this
+    scan looks for. If the scan comes back empty there, the scan is what broke.
+    """
+    if kind != "connect-page":
+        return UNPROVEN, INFO, (
+            "not attempted: leg 5 did not get a connect.ts page back, so there is no page "
+            "to look at")
+    if status != 401:
+        return UNPROVEN, INFO, (
+            f"the page answered {status}, not the 401 sign-in page. This leg measures the "
+            "one page a signed-out person actually lands on, and that is not what came "
+            "back")
+    if control_url is None or control_body is None:
+        return UNPROVEN, INFO, (
+            f"the control page /c/<{TOKEN_CHARS} chars>/code could not be fetched, so an "
+            "empty scan of the sign-in page would not be evidence of anything")
+    if not code_controls(control_url, control_body, token):
+        drew = "and it is not the code page either" if CODE_PAGE_MARK not in control_body \
+            else "though it IS the code page"
+        return UNPROVEN, INFO, (
+            f"the scan found no control on /c/<{TOKEN_CHARS} chars>/code, a page whose own "
+            f"form posts to exactly that path ({drew}). The SCAN is what failed here, not "
+            "the sign-in page, and a red leg from a broken instrument is worse than no leg")
+
+    controls = code_controls(page_url, body, token)
+    if controls:
+        return GREEN, OK, (
+            f"the signed-out page carries {len(controls)} control(s) whose target resolves "
+            f"to /c/<{TOKEN_CHARS} chars>/code on our own host — a person who taps the "
+            "texted link can start the code flow from the page they land on")
+    return RED, BAD, (
+        # `len(body)` is what THIS gate received, which is not always what the
+        # Worker wrote: measured 2026-09-06, Cloudflare's analytics beacon is
+        # injected into the HTML for some callers and not others (1003 bytes to
+        # curl, 1370 here). The count is offered as a sign of "a real page came
+        # back", never as a byte-for-byte claim about connect.ts's output.
+        f"the signed-out page is a DEAD END: {len(body)} bytes of HTML came back "
+        "with no href and no form action anywhere in it that reaches "
+        f"/c/<{TOKEN_CHARS} chars>/code. routes/connect_auth.ts serves that page and it "
+        "works; refusalPage(\"sign-in-required\") in routes/connect.ts never mentions it, "
+        "so the person is told to sign in in a browser and given nothing to tap")
+
+
+# ===========================================================================
+# LEG 2 — the four tables, on the live database
 # ===========================================================================
 
 def d1_query(sql: str, *, database: str = D1_DATABASE, root: str = ROOT,
@@ -300,7 +775,7 @@ def d1_query(sql: str, *, database: str = D1_DATABASE, root: str = ROOT,
 
     `remote=False` EXISTS FOR ONE REASON and it is not convenience: leg 4 is the
     only leg that writes, and its statements had never been run anywhere when
-    this file was written, because the four tables do not exist on production.
+    this file was written, because the four tables did not exist on production.
     tests/test_is_connect_live.py stands the tables up in a LOCAL D1 and drives
     the real mint probe through them, so the INSERT, the read-back comparison,
     the DELETE and this JSON parsing are exercised end to end before they are
@@ -375,7 +850,7 @@ def _first_result_set(stdout: str) -> list[dict]:
 
 
 def leg_tables(found: set, database: str) -> tuple[int, str, str]:
-    """LEG 3. All four, or say which are missing."""
+    """LEG 2. All four, or say which are missing."""
     missing = [t for t in TABLES if t not in found]
     if not missing:
         return GREEN, OK, (f"all four present on {database}: " + ", ".join(TABLES))
@@ -550,7 +1025,7 @@ def _remove_probe_link(run_sql, handle: str) -> tuple[bool, str]:
 
 
 # ===========================================================================
-# LEG 5 — the vendor key
+# LEG 8 — the vendor key
 # ===========================================================================
 
 def vendor_session(api_key: str, owner: str, *, base: str = COMPOSIO_BASE,
@@ -628,7 +1103,7 @@ def _vendor_answer(status: int, text: str) -> dict:
 
 
 def leg_vendor(answer: dict) -> tuple[int, str, str]:
-    """LEG 5. 201 with a session id the WORKER would accept.
+    """LEG 8. 201 with a session id the WORKER would accept.
 
     Not merely "the key authenticates". A session whose answer does not confirm
     the connection meta-tool is off is refused by `provider.ts` before it is
@@ -677,11 +1152,11 @@ def leg_vendor(answer: dict) -> tuple[int, str, str]:
 
 
 # ===========================================================================
-# LEG 6 — has anybody connected anything
+# LEG 9 — has anybody connected anything
 # ===========================================================================
 
 def leg_connected(owners: int | None, rows: int | None) -> tuple[int, str, str]:
-    """LEG 6. Owners with a connected row on live D1.
+    """LEG 9. Owners with a connected row on live D1.
 
     ZERO IS UNPROVEN. The day before the first person connects, zero is the
     correct state of a working feature; reporting it red would train the reader
@@ -713,14 +1188,21 @@ def overall(codes: list) -> int:
     return GREEN
 
 
-def _http_get(url: str, timeout: int = 30) -> tuple[int, dict, str]:
-    """GET with NO credentials at all — no Authorization, no cookie.
+def _http(url: str, method: str = "GET", headers: dict | None = None,
+          timeout: int = 30) -> tuple[int, dict, str]:
+    """One request, with exactly the headers the caller asked for.
 
-    That is what makes leg 1 measure the deployment: a signed-out caller is
-    answered by connect.ts before the store is ever touched, so this request
-    cannot read, spend or disturb anybody's link.
+    THE DEFAULT IS ANONYMOUS — no Authorization, no cookie — and every leg but
+    the catalog uses that default. That is what makes legs 1, 5, 6 and 7 measure
+    the DEPLOYMENT: a signed-out caller is answered before any store is touched,
+    so those requests cannot read, spend or disturb anybody's link.
+
+    `data=b""` on a POST so the request carries `Content-Length: 0` rather than
+    no length at all; the four POST routes settle the credential before they
+    read a body, so an empty one is refused without anything being written.
     """
-    req = urllib.request.Request(url, method="GET")
+    req = urllib.request.Request(url, data=b"" if method == "POST" else None,
+                                 method=method, headers=headers or {})
     try:
         with urllib.request.urlopen(req, timeout=timeout) as res:
             return res.status, dict(res.headers), res.read().decode("utf-8", "replace")
@@ -728,36 +1210,63 @@ def _http_get(url: str, timeout: int = 30) -> tuple[int, dict, str]:
         return err.code, dict(err.headers or {}), err.read().decode("utf-8", "replace")
 
 
+def _credential() -> str:
+    """The owner auth token leg 3 asks with, from the environment only.
+
+    NEVER RETURNED TO THE SCREEN and never put on a command line. The gate
+    prints whether one was found, not what it was.
+    """
+    for name in CREDENTIAL_ENV:
+        value = (os.environ.get(name) or "").strip()
+        if value:
+            return value
+    return ""
+
+
 def run(*, read_only: bool = False, http=None, sql=None, vendor=None,
-        owner: str | None = None, now_ms: int | None = None) -> tuple[int, list]:
+        owner: str | None = None, now_ms: int | None = None,
+        credential: str | None = None, catalog_query: str | None = None,
+        ) -> tuple[int, list]:
     """Every leg, in chain order. Returns (exit code, rows to print).
 
     The three transports are injected so the whole gate is testable offline;
-    `main()` supplies the real ones.
+    `main()` supplies the real ones. `http` is called as
+    `http(url, method=..., headers=...)`.
     """
-    http = http or _http_get
+    http = http or _http
     now_ms = now_ms if now_ms is not None else int(time.time() * 1000)
+    query = catalog_query if catalog_query is not None else CATALOG_QUERY
+    creds = _credential() if credential is None else credential
     rows: list[tuple[str, str, str]] = []
     codes: list[int] = []
 
-    # -- legs 1 and 2: one request, two questions -----------------------------
-    url = f"{WORKER}/c/{probe_token()}"
-    shown = f"{WORKER}/c/<{TOKEN_CHARS} chars>"
-    try:
-        status, headers, body = http(url)
-        kind, detail = classify_c_response(status, headers, body)
-    except Exception as exc:
-        kind, detail = "unreachable", f"the request failed: {type(exc).__name__}"
+    def ask(path: str, method: str = "GET", headers: dict | None = None):
+        """One live request, or None if the request itself failed."""
+        try:
+            return http(f"{WORKER}{path}", method=method, headers=headers)
+        except Exception:
+            return None
 
-    code, mark, sentence = leg_route(kind, detail, shown)
+    # -- leg 1: the six routes, plus the control ------------------------------
+    route_results = []
+    for name, method, path in CONNECTIONS_ROUTES:
+        answer = ask(path, method)
+        if answer is None:
+            kind, detail = "unreachable", "the request failed"
+        else:
+            kind, detail = classify_connections_response(*answer)
+        route_results.append((name, method, path, kind, detail))
+
+    control = ask(CONNECTIONS_CONTROL_PATH)
+    control_kind = ("unreachable", "the control request failed") if control is None \
+        else classify_connections_response(*control)
+
+    code, mark, sentence = leg_routes(route_results, control_kind)
+    routes_code = code
     codes.append(code)
-    rows.append((mark, "1  THE WORKER SERVES /c/", sentence))
+    rows.append((mark, "1  THE SIX /me/connections ROUTES EXIST", sentence))
 
-    code, mark, sentence = leg_wiring(kind, detail)
-    codes.append(code)
-    rows.append((mark, "2  THE WIRING IS INSTALLED", sentence))
-
-    # -- leg 3: the four tables ----------------------------------------------
+    # -- leg 2: the four tables ----------------------------------------------
     found: set = set()
     tables_known = False
     if sql is None:
@@ -773,7 +1282,31 @@ def run(*, read_only: bool = False, http=None, sql=None, vendor=None,
             f"live D1 could not be read ({exc}) — no claim is made about the tables. "
             "This is a credential or a network, not a schema")
     codes.append(code)
-    rows.append((mark, "3  THE FOUR TABLES EXIST ON LIVE D1", sentence))
+    rows.append((mark, "2  THE FOUR TABLES EXIST ON LIVE D1", sentence))
+
+    # -- leg 3: the catalog ---------------------------------------------------
+    control_answer = catalog_answer = None
+    sendable = bool(creds) and credential_may_be_sent(WORKER)
+    if routes_code == GREEN and sendable:
+        auth = {"Authorization": creds}
+        got = ask(CONNECTIONS_ROUTES[0][2], "GET", auth)
+        control_answer = None if got is None else classify_api_json(*got)
+        if control_answer is not None:
+            asked = ask(
+                CONNECTIONS_ROUTES[1][2] + "?"
+                + urllib.parse.urlencode({CATALOG_QUERY_NAME: query}), "GET", auth)
+            catalog_answer = None if asked is None else classify_api_json(*asked)
+    if creds and not sendable:
+        code, mark, sentence = UNPROVEN, INFO, (
+            f"an owner credential is set and was NOT SENT: {WORKER} is not on "
+            f"{CREDENTIAL_ZONE}. Point ANTICIPY_PB at our own zone and run this again; "
+            "posting an owner's auth token to whatever host an environment variable "
+            "happens to name is a credential leak, not a measurement")
+    else:
+        code, mark, sentence = leg_catalog(routes_code, sendable, control_answer,
+                                           catalog_answer, query)
+    codes.append(code)
+    rows.append((mark, "3  THE CATALOG ANSWERS \"ADD AN APP\"", sentence))
 
     # -- leg 4: mint one link -------------------------------------------------
     if read_only:
@@ -782,17 +1315,48 @@ def run(*, read_only: bool = False, http=None, sql=None, vendor=None,
             "known about whether a minted row lands")
     elif not tables_known:
         code, mark, sentence = UNPROVEN, INFO, (
-            "not attempted: live D1 could not be read at all (leg 3)")
+            "not attempted: live D1 could not be read at all (leg 2)")
     elif "connect_links" not in found:
         code, mark, sentence = UNPROVEN, INFO, (
-            "not attempted: connect_links does not exist on live D1 (leg 3), so there is "
+            "not attempted: connect_links does not exist on live D1 (leg 2), so there is "
             "nothing to write a link into and nothing to measure")
     else:
         code, mark, sentence = mint_probe_link(sql, now_ms)
     codes.append(code)
     rows.append((mark, "4  A LINK CAN BE MINTED, AND ITS ROW LANDS", sentence))
 
-    # -- leg 5: the vendor key ------------------------------------------------
+    # -- legs 5, 6 and 7: one page, three questions ---------------------------
+    token = probe_token()
+    page_path = f"/c/{token}"
+    page_url = f"{WORKER}{page_path}"
+    shown = f"{WORKER}/c/<{TOKEN_CHARS} chars>"
+    page = ask(page_path)
+    if page is None:
+        status, kind, detail, body = 0, "unreadable", "the request failed", ""
+    else:
+        status, headers, body = page
+        kind, detail = classify_c_response(status, headers, body)
+
+    code, mark, sentence = leg_route(kind, detail, shown)
+    codes.append(code)
+    rows.append((mark, "5  THE WORKER SERVES /c/", sentence))
+
+    code, mark, sentence = leg_wiring(kind, detail)
+    codes.append(code)
+    rows.append((mark, "6  THE WIRING IS INSTALLED", sentence))
+
+    control_url = control_body = None
+    if kind == "connect-page":
+        code_url = f"{page_url}/code"
+        got = ask(f"{page_path}/code")
+        if got is not None:
+            control_url, control_body = code_url, got[2]
+    code, mark, sentence = leg_way_in(kind, status, page_url, body, token,
+                                      control_url, control_body)
+    codes.append(code)
+    rows.append((mark, "7  THE PAGE OFFERS A WAY IN", sentence))
+
+    # -- leg 8: the vendor key ------------------------------------------------
     key = (os.environ.get("COMPOSIO_API_KEY") or "").strip()
     owner = (owner or os.environ.get("ANTICIPY_CONNECT_PROBE_OWNER")
              or os.environ.get("TWO_HANDS_OWNER") or "").strip()
@@ -814,9 +1378,9 @@ def run(*, read_only: bool = False, http=None, sql=None, vendor=None,
                 f"the vendor could not be reached ({exc}) — that is a network, not a "
                 "verdict about the key")
     codes.append(code)
-    rows.append((mark, "5  THE VENDOR KEY ANSWERS", sentence))
+    rows.append((mark, "8  THE VENDOR KEY ANSWERS", sentence))
 
-    # -- leg 6: has anybody connected anything --------------------------------
+    # -- leg 9: has anybody connected anything --------------------------------
     owners_n = rows_n = None
     if tables_known and "connections" in found:
         try:
@@ -829,7 +1393,7 @@ def run(*, read_only: bool = False, http=None, sql=None, vendor=None,
             owners_n = rows_n = None
     code, mark, sentence = leg_connected(owners_n, rows_n)
     codes.append(code)
-    rows.append((mark, "6  SOMEBODY HAS ACTUALLY CONNECTED AN APP", sentence))
+    rows.append((mark, "9  SOMEBODY HAS ACTUALLY CONNECTED AN APP", sentence))
 
     return overall(codes), rows
 
@@ -838,12 +1402,107 @@ def run(*, read_only: bool = False, http=None, sql=None, vendor=None,
 # SELF-TEST — the verdicts against shapes this system has actually had
 # ===========================================================================
 
+def _routes_all(kind: str) -> list:
+    """The six routes, every one of them answering the same way."""
+    return [(name, method, path, kind, kind) for name, method, path in CONNECTIONS_ROUTES]
+
+
 def self_test() -> int:
     """Offline. Pins each leg to a measured shape rather than to a guess."""
     cases = []
 
-    # Leg 1 / leg 2, from the live probe of 2026-09-06 and the two shapes the
-    # deployment can take once connect.ts ships.
+    # ---- LEG 1, from the live probe of 2026-09-06 --------------------------
+    json_headers = {"content-type": "application/json; charset=utf-8"}
+    live401 = (401, json_headers, '{"ok":false,"message":"Sign in first."}')
+    live404 = (404, {"content-type": "application/json"},
+               '{"code":404,"message":"The requested resource wasn\'t found.","data":{}}')
+    live_not_a_leg = (404, json_headers,
+                      '{"ok":false,"message":"There\'s nothing at this address."}')
+
+    for answer, want, why in [
+        (live401, "refused", "2026-09-06 LIVE: a deployed route refuses an anonymous caller"),
+        (live404, "route-missing", "2026-09-06 LIVE: /me/connectionsX, the control"),
+        (live_not_a_leg, "not-a-leg", "the prefix is routed and this path is not a leg"),
+        ((405, {"allow": "POST"}, ""), "wrong-method", "the verb tables disagree"),
+        ((200, json_headers, '{"items":[]}'), "answered",
+         "an anonymous caller got an ANSWER"),
+        ((502, {"content-type": "text/html"}, "<html>edge</html>"), "unreadable",
+         "an edge error measures nothing"),
+    ]:
+        cases.append((f"leg1    {why}",
+                      classify_connections_response(*answer)[0] == want))
+
+    control_ok = ("route-missing", "the router's generic 404")
+    cases.append(("leg1    2026-09-06 LIVE: six 401s beside a generic-404 control is green",
+                  leg_routes(_routes_all("refused"), control_ok)[0] == GREEN))
+    cases.append(("leg1    one route missing is red and names it",
+                  leg_routes([("list", "GET", "/me/connections", "route-missing", "")]
+                             + _routes_all("refused")[1:], control_ok)[0] == RED))
+    cases.append(("leg1    a missing route is NAMED, not counted",
+                  "list" in leg_routes(
+                      [("list", "GET", "/me/connections", "route-missing", "")]
+                      + _routes_all("refused")[1:], control_ok)[2]))
+    cases.append(("leg1    an anonymous 2xx is the loudest red there is",
+                  leg_routes([("list", "GET", "/me/connections", "answered", "")]
+                             + _routes_all("refused")[1:], control_ok)[0] == RED))
+    cases.append(("leg1    THE CONTROL: a Worker that 401s everything proves nothing",
+                  leg_routes(_routes_all("refused"), ("refused", "401"))[0] == UNPROVEN))
+    cases.append(("leg1    an unreadable route withholds green without crying red",
+                  leg_routes([("link", "POST", "/me/connections/link", "unreadable", "")]
+                             + _routes_all("refused")[1:], control_ok)[0] == UNPROVEN))
+    cases.append(("leg1    the six paths are the six connections_api.ts declares",
+                  [p for _n, _m, p in CONNECTIONS_ROUTES] == [
+                      "/me/connections", "/me/connections/catalog", "/me/connections/writes",
+                      "/me/connections/disconnect", "/me/connections/sentences",
+                      "/me/connections/link"]))
+
+    # ---- LEG 3, the catalog ------------------------------------------------
+    listed = {"status": 200, "items": 4, "message": None, "json": True}
+    unfilled = {"status": 503, "items": None, "json": True,
+                "message": "I couldn't look that up just now. Nothing has changed."}
+    cases.append(("leg3    the unfilled search port is RED, not unproven",
+                  leg_catalog(GREEN, True, listed, unfilled, "a")[0] == RED))
+    cases.append(("leg3    and the 503's own sentence is QUOTED",
+                  unfilled["message"] in leg_catalog(GREEN, True, listed, unfilled, "a")[2]))
+    cases.append(("leg3    a filled port with rows is green",
+                  leg_catalog(GREEN, True, listed,
+                              {"status": 200, "items": 3, "message": None, "json": True},
+                              "a")[0] == GREEN))
+    cases.append(("leg3    a filled port with no rows claims nothing",
+                  leg_catalog(GREEN, True, listed,
+                              {"status": 200, "items": 0, "message": None, "json": True},
+                              "a")[0] == UNPROVEN))
+    cases.append(("leg3    no credential is UNPROVEN and names the variable",
+                  leg_catalog(GREEN, False, None, None, "a")[0] == UNPROVEN
+                  and CREDENTIAL_ENV[0] in leg_catalog(GREEN, False, None, None, "a")[2]))
+    cases.append(("leg3    THE CONTROL: a refused credential is not a broken catalog",
+                  leg_catalog(GREEN, True,
+                              {"status": 401, "items": None, "json": True,
+                               "message": "Sign in first."},
+                              unfilled, "a")[0] == UNPROVEN))
+    cases.append(("leg3    not attempted while leg 1 is not green",
+                  leg_catalog(RED, True, listed, unfilled, "a")[0] == UNPROVEN))
+    cases.append(("leg3    the items count is a LENGTH, never a stand-in for unknown",
+                  classify_api_json(200, {"content-type": "application/json"},
+                                    '{"items":[1,2,3]}')["items"] == 3
+                  and classify_api_json(503, {"content-type": "application/json"},
+                                        '{"ok":false,"message":"no"}')["items"] is None))
+    cases.append(("leg3    the probe query is not an app name",
+                  len(CATALOG_QUERY) <= 2))
+    # The one secret this file ever sends. Our zone or nowhere, and a subdomain
+    # check rather than a suffix one, because `evil-anticipy.ai` ends with the
+    # zone and is not ours.
+    for host, allowed in [("https://api.anticipy.ai", True),
+                          ("https://anticipy.ai", True),
+                          ("https://preview.workers.anticipy.ai:8443", True),
+                          ("https://evil-anticipy.ai", False),
+                          ("https://anticipy.ai.example.com", False),
+                          ("http://localhost:8787", False),
+                          ("https://anticipy-backend.up.railway.app", False)]:
+        cases.append((f"leg3    the credential may {'' if allowed else 'NOT '}go to {host}",
+                      credential_may_be_sent(host) is allowed))
+
+    # ---- LEG 5 / LEG 6, and the two shapes the deployment can take ---------
     json404 = ({"content-type": "application/json"},
                '{"code":404,"message":"The requested resource wasn\'t found.","data":{}}')
     page401 = ({"content-type": "text/html; charset=utf-8",
@@ -855,11 +1514,11 @@ def self_test() -> int:
                 "content-security-policy": "default-src 'none'; form-action 'self'"},
                f"<h1>{UNWIRED_MARK}</h1>")
 
-    for status, (headers, body), want_kind, want1, want2, why in [
+    for status, (headers, body), want_kind, want5, want6, why in [
         (404, json404, "route-missing", RED, UNPROVEN,
-         "2026-09-06 LIVE: /c/ answers the router's JSON 404"),
+         "2026-09-06 04:08: /c/ answered the router's JSON 404"),
         (401, page401, "connect-page", GREEN, GREEN,
-         "deployed and wired: the sign-in page a signed-out caller gets"),
+         "2026-09-06 LIVE: the sign-in page a signed-out caller gets"),
         (503, page503, "unwired", GREEN, RED,
          "deployed, nothing wired: the Worker says so itself"),
         (502, ({"content-type": "text/html"}, "<html>edge error</html>"),
@@ -867,19 +1526,55 @@ def self_test() -> int:
          "an edge error is not evidence about the route"),
     ]:
         kind, detail = classify_c_response(status, headers, body)
-        cases.append((f"leg1/2  {why}", kind == want_kind
-                      and leg_route(kind, detail, "u")[0] == want1
-                      and leg_wiring(kind, detail)[0] == want2))
+        cases.append((f"leg5/6  {why}", kind == want_kind
+                      and leg_route(kind, detail, "u")[0] == want5
+                      and leg_wiring(kind, detail)[0] == want6))
 
-    # Leg 3, from the live query of 2026-09-06: none of the four exist.
-    cases.append(("leg3    2026-09-06 LIVE: zero of four tables",
+    # ---- LEG 7, the way in -------------------------------------------------
+    tok = "A" * TOKEN_CHARS
+    base = f"https://api.anticipy.ai/c/{tok}"
+    # Measured 2026-09-06 06:17 UTC: the whole body of the signed-out page, minus
+    # the stylesheet. There is no anchor and no form in it.
+    dead_end = ("<body><h1>Sign in to finish</h1><p>Sign in to Anticipy in this browser, "
+                "then open this link again. It works for ten minutes.</p></body>")
+    # The control page, as connect_auth.ts draws it.
+    code_page = (f"<body><h1>{CODE_PAGE_MARK}</h1>"
+                 f"<form method=\"post\" action=\"/c/{tok}/code\">"
+                 "<button type=\"submit\">Text me a code</button></form>"
+                 "<a class=\"later\" href=\"https://anticipy.ai/\">Skip for now</a></body>")
+    with_way_in = dead_end.replace("</body>", f"<a href=\"/c/{tok}/code\">Text me a code</a></body>")
+    off_site = dead_end.replace("</body>", f"<a href=\"https://elsewhere.example/c/{tok}/code\">go</a></body>")
+
+    cases.append(("leg7    2026-09-06 06:17: the dead-end page, measured, and it is RED",
+                  leg_way_in("connect-page", 401, base, dead_end, tok,
+                             f"{base}/code", code_page)[0] == RED))
+    cases.append(("leg7    a page carrying the control is green",
+                  leg_way_in("connect-page", 401, base, with_way_in, tok,
+                             f"{base}/code", code_page)[0] == GREEN))
+    cases.append(("leg7    a control pointing off our hosts is not a way in",
+                  leg_way_in("connect-page", 401, base, off_site, tok,
+                             f"{base}/code", code_page)[0] == RED))
+    cases.append(("leg7    THE CONTROL: a scan that finds nothing on the code page is "
+                  "UNPROVEN, not red",
+                  leg_way_in("connect-page", 401, base, dead_end, tok,
+                             f"{base}/code", "<body><h1>Get a code by text</h1></body>"
+                             )[0] == UNPROVEN))
+    cases.append(("leg7    not attempted when leg 5 got no page",
+                  leg_way_in("route-missing", 404, base, "", tok, None, None)[0] == UNPROVEN))
+    cases.append(("leg7    the relative form connect_auth.ts could use also counts",
+                  code_controls(f"{base}/code", "<form action=\"code\"></form>", tok) != []))
+    cases.append(("leg7    a link to the page itself is not a way in",
+                  code_controls(base, f"<a href=\"/c/{tok}\">back</a>", tok) == []))
+
+    # ---- LEG 2, from the live query of 2026-09-06 --------------------------
+    cases.append(("leg2    2026-09-06 04:08: zero of four tables",
                   leg_tables(set(), "anticipy-backend")[0] == RED))
-    cases.append(("leg3    all four present",
+    cases.append(("leg2    all four present",
                   leg_tables(set(TABLES), "anticipy-backend")[0] == GREEN))
-    cases.append(("leg3    one missing is named",
+    cases.append(("leg2    one missing is named",
                   "connect_links" in leg_tables(set(TABLES) - {"connect_links"}, "d")[2]))
 
-    # Leg 4's refusal to write anything redeemable.
+    # ---- LEG 4's refusal to write anything redeemable ----------------------
     now = 1_757_000_000_000
     good = _probe_row(now)
     cases.append(("leg4    the probe row is inert", probe_row_is_inert(good, now)[0]))
@@ -890,27 +1585,25 @@ def self_test() -> int:
     cases.append(("leg4    a claimed row is refused",
                   not probe_row_is_inert({**good, "used_at": float(now)}, now)[0]))
 
-    # Leg 5, the first case being the vendor's own answer of 2026-09-06:
-    # `config.manage_connections.enabled = false`, five tools, none of them the
-    # connection tool, and a 16-character session id.
+    # ---- LEG 8, the first case being the vendor's own answer of 2026-09-06 --
     live201 = {"status": 201, "session_id_len": 16, "manage_connections": False,
                "connection_tool_present": False}
-    cases.append(("leg5    2026-09-06 LIVE: 201, session id, connection tool off",
+    cases.append(("leg8    2026-09-06 LIVE: 201, session id, connection tool off",
                   leg_vendor(live201)[0] == GREEN))
-    cases.append(("leg5    201 with no session id is red",
+    cases.append(("leg8    201 with no session id is red",
                   leg_vendor({**live201, "session_id_len": 0})[0] == RED))
-    cases.append(("leg5    401 is red",
+    cases.append(("leg8    401 is red",
                   leg_vendor({"status": 401, "session_id_len": 0,
                               "manage_connections": None,
                               "connection_tool_present": None})[0] == RED))
-    cases.append(("leg5    the config saying manage_connections ON is red",
+    cases.append(("leg8    the config saying manage_connections ON is red",
                   leg_vendor({**live201, "manage_connections": True})[0] == RED))
-    cases.append(("leg5    the connection tool still in the list is red",
+    cases.append(("leg8    the connection tool still in the list is red",
                   leg_vendor({**live201, "connection_tool_present": True})[0] == RED))
-    cases.append(("leg5    an answer confirming NEITHER is red, not green",
+    cases.append(("leg8    an answer confirming NEITHER is red, not green",
                   leg_vendor({**live201, "manage_connections": None,
                               "connection_tool_present": None})[0] == RED))
-    cases.append(("leg5    one half confirming is enough, as in provider.ts",
+    cases.append(("leg8    one half confirming is enough, as in provider.ts",
                   leg_vendor({**live201, "manage_connections": None})[0] == GREEN))
     # The parser reads the two fields where the vendor actually puts them —
     # `config.manage_connections`, not a top-level key. Pinned because reading
@@ -919,20 +1612,20 @@ def self_test() -> int:
         "manage_connections": {"enabled": False}},
         "tool_router_tools": ["COMPOSIO_SEARCH_TOOLS"]})
     parsed = _vendor_answer(201, body)
-    cases.append(("leg5    manage_connections is read from config, not the root",
+    cases.append(("leg8    manage_connections is read from config, not the root",
                   parsed["manage_connections"] is False
                   and parsed["connection_tool_present"] is False
                   and parsed["session_id_len"] == 9))
 
-    # Leg 6 — the whole reason the third state exists.
-    cases.append(("leg6    zero connections is UNPROVEN, never red",
+    # ---- LEG 9 — the whole reason the third state exists -------------------
+    cases.append(("leg9    zero connections is UNPROVEN, never red",
                   leg_connected(0, 0)[0] == UNPROVEN))
-    cases.append(("leg6    one owner connected is green",
+    cases.append(("leg9    one owner connected is green",
                   leg_connected(1, 2)[0] == GREEN))
-    cases.append(("leg6    an uncountable table is UNPROVEN",
+    cases.append(("leg9    an uncountable table is UNPROVEN",
                   leg_connected(None, None)[0] == UNPROVEN))
 
-    # The roll-up.
+    # ---- The roll-up -------------------------------------------------------
     cases.append(("verdict red beats unproven", overall([GREEN, UNPROVEN, RED]) == RED))
     cases.append(("verdict unproven beats green", overall([GREEN, UNPROVEN]) == UNPROVEN))
     cases.append(("verdict all green is green", overall([GREEN, GREEN]) == GREEN))
@@ -975,10 +1668,15 @@ def main() -> int:
     ap.add_argument("--owner", default=None,
                     help="owner ROW id to open the vendor session for (15 lowercase "
                          "alphanumerics)")
+    ap.add_argument("--catalog-query", default=None,
+                    help=f"what leg 3 types into the search box (default {CATALOG_QUERY!r}). "
+                         "The owner credential itself is read from "
+                         f"{' or '.join(CREDENTIAL_ENV)} and is never taken from argv")
     args = ap.parse_args()
     if args.self_test:
         return self_test()
-    code, rows = run(read_only=args.read_only, owner=args.owner)
+    code, rows = run(read_only=args.read_only, owner=args.owner,
+                     catalog_query=args.catalog_query)
     report(code, rows)
     return code
 

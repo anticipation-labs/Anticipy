@@ -39,6 +39,25 @@
 // app's own settings, and `combineResults` makes that the verdict for the whole
 // app the moment ONE of the owner's accounts could not be revoked.
 //
+// AND THE SECOND SENTENCE IT MUST NEVER SAY: "nothing has changed", when what
+// actually happened is that we do not know. The provider revokes and THEN
+// deletes, over two separate calls, and a transport failure on the second one
+// lands after the revoke has already taken effect. A throw is therefore an
+// absence of evidence, never a report that the account is untouched — so the
+// throw is counted (`unknownCount`) and the reply says it could not tell.
+//
+// WHAT THE CATALOG IS ALLOWED TO PUT IN SOMEBODY'S TEXT MESSAGE. Nothing that
+// is not a name. Every app name and logo on this screen comes from the catalog
+// at run time — that is the spec's rule and it is why no app is hardcoded — but
+// it also means a vendor feed writes text that goes out over SMS under our
+// name. `appName` used to interpolate whatever arrived, so a catalog row whose
+// NAME carried a link put a raw vendor URL inside our own sentence promising it
+// lasts ten minutes: the same defect `connectReply`'s link floor was fitted
+// for, arriving through the other field. Both are contained now, and both
+// contain by CHARACTER WALK rather than by regex or substring test, because
+// this file's own law-1 legs forbid those outright and their bluntness is the
+// property worth keeping.
+//
 // Spec: "Connections: how Anticipy asks, learns, and never says Composio",
 // 2026-09-05, pages 20-31.
 
@@ -386,7 +405,7 @@ export function settingsView(
       bySlug.set(slug, {
         toolkit: slug,
         name: appName(metas.get(slug), slug),
-        logo: metas.get(slug)?.logo ?? null,
+        logo: appLogo(metas.get(slug)),
         status: row.status,
         aliases: [row.alias ?? null],
         accounts: 1,
@@ -412,11 +431,108 @@ export function settingsView(
   return { apps };
 }
 
+// ---------------------------------------------------------------------------
+// CONTAINING THE CATALOG — the second half of the link floor.
+// ---------------------------------------------------------------------------
+// The catalog is a vendor feed, and everything on it reaches a person: the name
+// goes into a text message, the logo into a screen. `connectReply` grew a floor
+// under the URL the minter hands it after a raw vendor link went out inside our
+// own sentence; the NAME was the unguarded way to the same place, because
+// `appName` interpolated whatever arrived. A row named
+// "Zeta — finish at <a vendor's connect link>" put that link in the same text,
+// under the same promise that it lasts ten minutes, which is false about
+// anybody else's URL.
+//
+// The containment is deliberately a SHAPE rule and deliberately blunt: a
+// display name is a name, so it is one line, short, and carries neither of the
+// two characters that turn a string into an address. It is written as a
+// character walk for the same reason `isOurLink` is — this file's law-1 legs
+// refuse regexes and substring tests without being able to tell a URL check
+// from a check on somebody's sentence, and that bluntness is worth more than
+// the convenience.
+//
+// WHAT IT DOES NOT STOP, said out loud rather than left to be discovered: a
+// bare host with no scheme and no path ("some-host.example") still renders, and
+// some phones will linkify it. It cannot be a vendor CONNECT link — those carry
+// a scheme and a path — which is the concrete failure here. Tightening further
+// would start refusing real app names, and an app whose name is refused loses
+// its name on every screen.
+//
+// AND WHAT IT COSTS, on the other side of the same line: a catalog row named
+// "Something: Notes" loses its display name and shows its slug. The `:` is not
+// needed to spot a connect link — `/` alone does that — so this is the rule
+// being deliberately blunter than the failure requires. It is priced that way
+// because the two mistakes are not the same size: a name wrongly refused is a
+// slug on a screen, and a name wrongly allowed is somebody else's address in a
+// text message Anticipy signed. If a real app ever loses its name here, the fix
+// is to narrow the character set with a test naming that app, never to drop the
+// check.
+//
+// A REFUSAL FALLS BACK; IT DOES NOT THROW. `connectReply` throws on a foreign
+// URL because that is our own plumbing offering somebody else's address, and
+// there is no honest sentence to send. A bad catalog row is different: it is
+// one row among many on a screen that lists every connected app, and taking
+// Settings down for every app because one name is malformed would be an outage.
+// So the slug stands in, exactly as it does when the catalog is silent.
+
+/** The longest a display name may be. Long enough for the longest real app
+ *  name with room to spare; short enough that a sentence cannot arrive inside
+ *  one. */
+const MAX_APP_NAME_CHARS = 64;
+
+/** The two characters that turn a name into an ADDRESS. Walked, never used in a
+ *  substring test — see the note above about this file's law-1 legs. */
+const ADDRESS_CHARS = ":/";
+
+/** Is this safe to interpolate into a sentence somebody reads on a phone? */
+function isRenderableName(value: string): boolean {
+  if (value === "") return false;
+  if (value.length > MAX_APP_NAME_CHARS) return false;
+  for (const ch of value) {
+    // A control character or a line break is a second sentence in somebody's
+    // text message, written by the catalog rather than by us. A newline inside
+    // "Here's your link to connect X: …" splits our promise from our link.
+    const code = ch.codePointAt(0) ?? 0;
+    if (code < 0x20 || code === 0x7f) return false;
+    for (const bad of ADDRESS_CHARS) {
+      if (ch === bad) return false;
+    }
+  }
+  return true;
+}
+
+/** The scheme a logo may have, and the only one. Written out here rather than
+ *  parsed, for the same reason `OUR_LINK_PREFIX` is. */
+const HTTPS_PREFIX = "https://";
+
+/**
+ * The logo the screen renders, or nothing.
+ *
+ * Same reasoning as the name, one surface along: the catalog decides what URL
+ * both skins load, and a `javascript:` or `data:` value there is markup this
+ * product handed to its own web view. Anything that is not a whitespace-free
+ * https URL becomes null, which both skins already have to handle — the catalog
+ * is allowed to have no logo at all.
+ */
+function appLogo(meta: ToolkitMeta | undefined | null): string | null {
+  const raw = meta && typeof meta.logo === "string" ? meta.logo.trim() : "";
+  if (raw.length <= HTTPS_PREFIX.length) return null;
+  if (raw.slice(0, HTTPS_PREFIX.length) !== HTTPS_PREFIX) return null;
+  for (const ch of raw) {
+    // Whitespace inside a URL means a second value is riding along.
+    if (ch.trim() === "") return null;
+  }
+  return raw;
+}
+
 function appName(meta: ToolkitMeta | undefined | null, fallback: string): string {
   const given = meta && typeof meta.name === "string" ? meta.name.trim() : "";
-  if (given !== "") return given;
+  if (isRenderableName(given)) return given;
+  // The slug is catalog metadata too — it is the vendor's primary key, and it
+  // arrives here through the same feed — so it is contained by the same rule
+  // rather than trusted because it is shorter.
   const slug = typeof fallback === "string" ? fallback.trim() : "";
-  return slug !== "" ? slug : "that app";
+  return isRenderableName(slug) ? slug : "that app";
 }
 
 // ---------------------------------------------------------------------------
@@ -531,6 +647,13 @@ export interface DisconnectOutcome {
    *  cannot afford. */
   deletedCount: number;
   revokedCount: number;
+  /** How many of them the provider never answered about, because the call
+   *  threw. NOT a count of failures: the provider revokes and then deletes over
+   *  two calls, so a throw can land after the revoke has already taken effect
+   *  at the vendor. This is the count of accounts whose state we DO NOT KNOW,
+   *  and it exists so the reply can say that instead of saying "nothing has
+   *  changed" about an account whose token may already be dead. */
+  unknownCount: number;
   result: DisconnectResult;
 }
 
@@ -554,13 +677,19 @@ export function disconnectReply(meta: ToolkitMeta | null, outcome: DisconnectOut
 
   if (revoked && deleted) return `Done. ${app} disconnected and access revoked.`;
   if (revoked) {
-    // Access is genuinely gone; our own record is not. Saying "done" here would
-    // be true about the part they care about and false about the part that
-    // makes the app vanish from Settings, so it says both.
-    return (
-      `${app} access is revoked — nothing can use it from here. Its entry is `
-      + "still on file on my side and I'm clearing it."
-    );
+    // ACCESS IS GONE AND SO IS THE ROW, and the second half of that sentence is
+    // a repair. This branch used to say the entry was "still on file on my side
+    // and I'm clearing it" — a promise of a clean-up no code performed, because
+    // `disconnect` only wrote the row away when the provider reported a DELETE.
+    // The row survived as `connected` with its write opt-in intact, so Settings
+    // went on offering an app whose token was already dead, and the two
+    // surfaces disagreed about whether somebody's mailbox was still reachable.
+    // `disconnect` now retires the row on a revoke as well, so this says what
+    // happened rather than what somebody hoped would happen next.
+    //
+    // What the vendor keeps after a revoke is a bookkeeping row of its own,
+    // which the person cannot see, cannot act on, and is not told about.
+    return `Done. ${app} access is revoked — nothing can use it from here, and it's off your list.`;
   }
   if (deleted) {
     return (
@@ -575,23 +704,46 @@ export function disconnectReply(meta: ToolkitMeta | null, outcome: DisconnectOut
   // Settings screen has already lost the rows that were deleted. Say the two
   // numbers, because "which one is still connected" is the only thing they can
   // act on, and still do not say "revoked", which is EVERY and did not happen.
+  // How many accounts the provider never answered about. A throw is not a
+  // report; see `unknownCount` and the catch in `disconnect` below.
+  const unsure = countOf(outcome.unknownCount, false, outcome.attempted);
+
   const gone = countOf(outcome.deletedCount, deleted, outcome.attempted);
   if (gone > 0 && gone < outcome.attempted) {
     return partialLine(`I disconnected ${gone} of your ${outcome.attempted} ${app} accounts.`,
-      outcome.attempted - gone);
+      outcome.attempted - gone, unsure > 0);
   }
   const off = countOf(outcome.revokedCount, revoked, outcome.attempted);
   if (off > 0 && off < outcome.attempted) {
     // Rarer, and worse to get wrong: nothing left our table, so both accounts
     // still LOOK connected, while one of them has quietly stopped working.
     return partialLine(`${app} access is off for ${off} of your ${outcome.attempted} accounts.`,
-      outcome.attempted - off);
+      outcome.attempted - off, unsure > 0);
   }
 
+  if (unsure > 0) {
+    // NOT "nothing has changed". The provider revokes and then deletes, over
+    // two calls; a throw on the second one lands after the first has already
+    // taken effect, so "the account is untouched" is a claim we have no
+    // evidence for. What we DO know is what our own table did, which is
+    // nothing, and that is the half worth saying.
+    return (
+      `I couldn't finish disconnecting ${app}, and I can't tell how far it got — it may have `
+      + "stopped working already. Nothing changed on my side. Want me to try again?"
+    );
+  }
   return `I couldn't disconnect ${app} just now, so nothing has changed. Want me to try again?`;
 }
 
-function partialLine(head: string, left: number): string {
+/** The tail of a partial answer. `unsure` splits the two endings, because "the
+ *  other one is still connected" is a fact about the vendor and we only have
+ *  one when the provider actually answered; otherwise all we can honestly
+ *  report is that the row is still on the owner's own list. */
+function partialLine(head: string, left: number, unsure: boolean): string {
+  if (unsure) {
+    return `${head} I couldn't tell what happened to the other ${left} — `
+      + `${left === 1 ? "it's" : "they're"} still on your list. Want me to try again?`;
+  }
   return `${head} The other ${left} ${left === 1 ? "is" : "are"} still connected — want me to `
     + "try again?";
 }
@@ -806,10 +958,12 @@ export function createCommands(deps: CommandDeps): Commands {
         attempted: 0,
         deletedCount: 0,
         revokedCount: 0,
+        unknownCount: 0,
         result: { revoked: false, deleted: false, revokeUnavailable: false },
       };
     }
     const results: DisconnectResult[] = [];
+    let unknownCount = 0;
     for (const row of live) {
       let result: DisconnectResult;
       try {
@@ -818,15 +972,36 @@ export function createCommands(deps: CommandDeps): Commands {
           ? (answered as DisconnectResult)
           : { revoked: false, deleted: false, revokeUnavailable: false };
       } catch {
-        // A provider that threw did not revoke and did not delete. Recording it
-        // as anything else is how the reply learns to claim a revoke nobody saw.
+        // WHAT WE KNOW HERE IS NOTHING, and the comment this replaced claimed
+        // otherwise: it said a provider that threw "did not revoke and did not
+        // delete", which is false for the order the provider implements. Revoke
+        // and delete are two calls, revoke first, and a transport failure on
+        // the second one lands AFTER the token is already dead at the vendor.
+        //
+        // The all-false result stays, because it is the FLOOR, not a report:
+        // `revoked: false` means "no evidence of a revoke", which is what keeps
+        // the word out of the reply. But it is counted as unknown rather than
+        // as a refusal, so the sentence can say it could not tell instead of
+        // telling somebody nothing changed about an account that may have
+        // stopped working a second ago.
         result = { revoked: false, deleted: false, revokeUnavailable: false };
+        unknownCount += 1;
       }
       results.push(result);
-      // Only a DELETED account leaves our table, and it leaves as
-      // `disconnected` rather than vanishing, so the write opt-in it carried
-      // cannot be inherited by a fresh connection later.
-      if (result.deleted === true) {
+      // WHAT RETIRES A ROW: a delete, OR a revoke. It was a delete alone until
+      // the two surfaces were compared, and a revoke without a delete then left
+      // the row sitting there as `connected` with its write opt-in intact —
+      // Settings offering an app whose token was already dead, and offering to
+      // make CHANGES in it. The reply had meanwhile told the person their
+      // access was revoked. Whichever of the two they believed, one of them was
+      // lying to them.
+      //
+      // It leaves as `disconnected` rather than vanishing, so the write opt-in
+      // it carried cannot be inherited by a fresh connection later. Nothing
+      // retires on the unknown path: we have no evidence there, and taking a
+      // row off somebody's list on no evidence is the mirror of the defect
+      // above.
+      if (result.deleted === true || result.revoked === true) {
         await table.put({ ...row, status: "disconnected", writes_enabled: false });
       }
     }
@@ -838,6 +1013,7 @@ export function createCommands(deps: CommandDeps): Commands {
       attempted: live.length,
       deletedCount: results.filter((r) => r.deleted === true).length,
       revokedCount: results.filter((r) => r.revoked === true).length,
+      unknownCount,
       result: combineResults(results),
     };
   }

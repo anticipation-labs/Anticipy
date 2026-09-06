@@ -151,13 +151,11 @@ final class FrontendShots: XCTestCase {
         tap(app, "Continue")
         shot("22-may-i-listen", settle: 1.5)
 
-        // The privacy sheet this beat can open.
-        if tapContaining(app, "Learn more", timeout: 3) {
-            shot("23-microphone-promises", settle: 1.4)
-            let done = app.buttons["Done"].firstMatch
-            if done.waitForExistence(timeout: 3) { done.tap() } else { app.swipeDown() }
-            Thread.sleep(forTimeInterval: 1.0)
-        }
+        // THE PRIVACY SHEET IS NOT WALKED HERE. It carries detents and no
+        // close button, so it goes away only by being dragged — and the drag
+        // that dismisses it also carries the beat back a page, which quietly
+        // turned the rest of this pass into five photographs of the wrong
+        // screen. `23-microphone-promises` is captured on its own below.
 
         tap(app, "Finish", timeout: 8)
         shot("24-finale", settle: 1.4)
@@ -176,6 +174,23 @@ final class FrontendShots: XCTestCase {
             coach.tap()
         }
         shot("29-home-arrived", settle: 1.6)
+    }
+
+    /// The sheet behind "Learn more" on the microphone beat, on its own,
+    /// because dismissing it costs the rest of the walk.
+    func testMicrophonePromises() throws {
+        let app = fresh(["-hasSeenIntro", "YES", "-hasOnboarded", "NO",
+                         "-accountID", "shots", "-authToken", "shots",
+                         "-ownerFirstName", "Alex", "-ownerEmail", "you@anticipy.ai",
+                         "-ownerPhone", "+16045550123", "-home.tipsSeen", "NO"])
+        app.launch()
+        tap(app, "Continue", timeout: 10)
+        tap(app, "Continue", timeout: 6)
+        if tapContaining(app, "Learn more", timeout: 6) {
+            shot("23-microphone-promises", settle: 1.6)
+            app.swipeUp()
+            shot("23b-microphone-promises-rest", settle: 1.2)
+        }
     }
 
     // MARK: - 3. The dashboard and every settings page
@@ -272,5 +287,55 @@ final class FrontendShots: XCTestCase {
         shot("56-settings-dark", settle: 1.2)
         back(app)
         shot("57-dashboard-dark", settle: 1.6)
+    }
+
+    // MARK: - 4. The dashboard with a day in it
+
+    /// The same screen, against a local stand-in backend serving one invented
+    /// day. Everything on it is sample data; the point is the shape of a
+    /// populated dashboard, which an empty one cannot show.
+    func testDashboardWithData() throws {
+        let app = XCUIApplication()
+        app.launchArguments += ["-backendURL", "http://127.0.0.1:8092",
+                                "-hasSeenIntro", "YES", "-hasOnboarded", "YES",
+                                "-accountID", "shots", "-authToken", "shots",
+                                "-ownerFirstName", "Alex", "-ownerEmail", "alex@example.com",
+                                "-ownerPhone", "+16045550123", "-home.tipsSeen", "YES"]
+        app.launch()
+
+        shot("60-dashboard-full-top", settle: 6.0)
+        // HISTORY, now that there is more than one day of conversation.
+        if tapContaining(app, "Switch view", timeout: 6) {
+            if tap(app, "History", timeout: 4) {
+                shot("70-history-populated", settle: 1.8)
+                if tapContaining(app, "Switch view", timeout: 4) { tap(app, "Today", timeout: 4) }
+                Thread.sleep(forTimeInterval: 1.2)
+            }
+        }
+        // THE CAPTURE MOMENT with things actually on it.
+        if tap(app, "Listen with phone", timeout: 6) {
+            let sb = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+            for _ in 0..<2 {
+                let allow = sb.buttons["Allow"].firstMatch
+                if allow.waitForExistence(timeout: 6) { allow.tap() }
+                Thread.sleep(forTimeInterval: 1.1)
+            }
+            shot("71-capture-populated", settle: 3.2)
+            tap(app, "Done listening", timeout: 5)
+            Thread.sleep(forTimeInterval: 1.2)
+        }
+        app.swipeUp(); shot("61-dashboard-full-middle", settle: 1.6)
+        app.swipeUp(); shot("62-dashboard-full-lower", settle: 1.6)
+        app.swipeUp(); shot("63-dashboard-full-foot", settle: 1.6)
+        app.swipeDown(); app.swipeDown(); app.swipeDown()
+        shot("64-dashboard-full-back-at-top", settle: 1.8)
+
+        // Settings over a reachable server, so the pages show connected state
+        // rather than every row saying it cannot reach anything.
+        if tap(app, "Settings", timeout: 8) {
+            shot("65-settings-live", settle: 1.8)
+            if row(app, "Listening") { shot("66-listening-live", settle: 1.4); back(app) }
+            if row(app, "Profile") { shot("67-profile-live", settle: 1.4); back(app) }
+        }
     }
 }

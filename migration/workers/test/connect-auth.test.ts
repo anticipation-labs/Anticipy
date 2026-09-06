@@ -33,6 +33,14 @@
  *   binding is the SIGNATURE rather than a comparison — so the check here
  *   presents A's cookie on B's path and expects nothing.
  *
+ *   THE DROPPED STATE. The phone puts `state={attempt id}` on the link it opens
+ *   and `ConnectHandoff.parseDone` refuses any callback that comes back without
+ *   it. Until 2026-09-06 the code flow lost it — the 303 after a correct code
+ *   went to `/c/{token}` with no query — so a person who proved who they were
+ *   could finish the connect and the phone would refuse the deep link home. The
+ *   state is carried through the offer, the send, the box and the redirect, it
+ *   is carried VERBATIM, and one that was never sent is never invented.
+ *
  *   THE SESSION THAT IS NOT A LOGIN. The cookie must be refused by
  *   src/pb/auth.ts `verifyToken`, must be scoped by Path to one link, must die
  *   at its stamped instant, and must not exist at all when
@@ -291,6 +299,12 @@ async function bodyOf(res: Response, where: string): Promise<string> {
 const normalise = (html: string, token: string): string =>
   html.split(token).join("{TOKEN}");
 
+/** How many times a literal appears. Counted rather than matched: a regex that
+ *  silently stopped matching reads as a pass, and did so three times in one day
+ *  on this feature. */
+const occurrences = (haystack: string, needle: string): number =>
+  haystack.split(needle).length - 1;
+
 /** `name=value` out of a Set-Cookie, ready to send back as `Cookie`. */
 function cookiePair(setCookie: string | null): string {
   assert.ok(setCookie, "expected a Set-Cookie");
@@ -353,6 +367,29 @@ await check("the offer page is byte-identical for a real token and an invented o
   const b = await bodyOf(
     (await connectAuthRoute(getReq(`/c/${fake}/code`), r.env, r.deps)) as Response, "GET /code fake");
   assert.equal(normalise(a, r.token), normalise(b, fake));
+});
+
+await check("the offer carries the phone's state, and invents one nobody sent", async () => {
+  const r = await rig();
+  const withState = await bodyOf((await connectAuthRoute(
+    getReq(`/c/${r.token}/code?state=ATTEMPT-1234`), r.env, r.deps)) as Response,
+    "GET /code with state");
+  assert.equal(occurrences(withState, '<input type="hidden" name="state" value="ATTEMPT-1234">'), 1,
+    "the offer drops the attempt id, so nothing downstream can hand it back to the phone");
+
+  const without = await bodyOf((await connectAuthRoute(
+    getReq(`/c/${r.token}/code`), r.env, r.deps)) as Response, "GET /code no state");
+  assert.equal(occurrences(without, 'name="state"'), 0,
+    "a state nobody sent was invented, and the phone refuses one it did not mint");
+
+  // The same shape check connect.ts applies, in the same place: this value is
+  // reflected into a hidden field, into a URL another company reads and into a
+  // deep link.
+  const bad = await bodyOf((await connectAuthRoute(
+    getReq(`/c/${r.token}/code?state=${encodeURIComponent('"><script>x</script>')}`),
+    r.env, r.deps)) as Response, "GET /code bad state");
+  assert.equal(occurrences(bad, 'name="state"'), 0);
+  assert.equal(occurrences(bad, "script"), 0);
 });
 
 await check("GET /verify is 405, and so is PUT anywhere — a prefetch cannot spend a guess", async () => {
@@ -988,6 +1025,82 @@ await check("CONTROL: a correct code lets the connect page draw", async () => {
   });
   assert.equal(after.state, "ok");
   assert.equal((after as { toolkit: ToolkitMeta }).toolkit.name, "Zellibrix");
+});
+
+// ===========================================================================
+// THE STATE, END TO END
+// ===========================================================================
+
+await check("the send carries the state on to the code box and to \"ask for another\"", async () => {
+  const r = await rig();
+  const res = await connectAuthRoute(
+    postReq(`/c/${r.token}/code`, { form: { state: "ATTEMPT-1234" } }), r.env, r.deps);
+  const html = await bodyOf(res as Response, "POST /code with state");
+  assert.equal(occurrences(html, '<input type="hidden" name="state" value="ATTEMPT-1234">'), 1,
+    "the box the person types into forgot which attempt they are finishing");
+  assert.equal(occurrences(html, `href="/c/${r.token}/code?state=ATTEMPT-1234"`), 1,
+    "asking for a second code starts an attempt the phone will not recognise");
+});
+
+await check("THE STATE SURVIVES THE CODE: a correct code lands back on the page holding it",
+  async () => {
+    const r = await rig();
+    const code = await askForCode(r);
+    const res = await connectAuthRoute(
+      postReq(`/c/${r.token}/verify`, { form: { code: code as string, state: "ATTEMPT-1234" } }),
+      r.env, r.deps) as Response;
+    assert.equal(res.status, 303);
+    assert.equal(res.headers.get("location"), `/c/${r.token}?state=ATTEMPT-1234`,
+      "the sign-in dropped ?state=, so the attempt id is gone and ConnectHandoff.parseDone "
+      + "refuses the deep link home — the person finishes the connect and the app never hears");
+  });
+
+await check("CONTROL: a code with no state lands back on a page with no state", async () => {
+  const r = await rig();
+  const code = await askForCode(r);
+  const res = await connectAuthRoute(
+    postReq(`/c/${r.token}/verify`, { form: { code: code as string } }), r.env, r.deps) as Response;
+  assert.equal(res.status, 303);
+  assert.equal(res.headers.get("location"), `/c/${r.token}`,
+    "a state nobody sent was invented; the phone refuses one it did not mint");
+});
+
+await check("a state that is not the phone's shape is dropped, not carried", async () => {
+  const r = await rig();
+  const code = await askForCode(r);
+  const res = await connectAuthRoute(
+    postReq(`/c/${r.token}/verify`, { form: { code: code as string, state: "not a state!" } }),
+    r.env, r.deps) as Response;
+  assert.equal(res.status, 303);
+  assert.equal(res.headers.get("location"), `/c/${r.token}`);
+});
+
+await check("the state is carried VERBATIM — encoded for the wire, never re-encoded", async () => {
+  const r = await rig();
+  const code = await askForCode(r);
+  // The phone's own alphabet allows "%" (ConnectHandoff.isOpaqueToken), which
+  // is the character a second round of encoding changes: "%2F" becomes "%252F"
+  // and what comes back to the app is not what it sent.
+  const state = "A%2FB-1234";
+  const res = await connectAuthRoute(
+    postReq(`/c/${r.token}/verify`, { form: { code: code as string, state } }),
+    r.env, r.deps) as Response;
+  const back = new URL(String(res.headers.get("location")), "https://api.anticipy.ai")
+    .searchParams.get("state");
+  assert.equal(back, state, "what the browser asks for next is not the state the phone minted");
+});
+
+await check("a wrong code comes back to a box that still holds the state", async () => {
+  const r = await rig();
+  const code = await askForCode(r);
+  const wrong = code === "000000" ? "111111" : "000000";
+  const res = await connectAuthRoute(
+    postReq(`/c/${r.token}/verify`, { form: { code: wrong, state: "ATTEMPT-1234" } }),
+    r.env, r.deps) as Response;
+  assert.equal(res.status, 400);
+  assert.equal(occurrences(await bodyOf(res, "verify wrong, state kept"),
+    '<input type="hidden" name="state" value="ATTEMPT-1234">'), 1,
+    "one typo cost the person the attempt their phone is waiting on");
 });
 
 // ===========================================================================

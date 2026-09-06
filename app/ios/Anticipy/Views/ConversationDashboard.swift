@@ -263,7 +263,17 @@ struct ConversationDashboard<Notices: View, Approval: View, Deck: View, Settings
     /// which are the ones the thread has not settled yet. Never parsed out of
     /// the audio here — they are rows the brain already decided.
     private var captureCards: [DashboardPolicy.Turn] {
-        turns.filter { $0.waitsOnTheOwner || isWorking($0) }.suffix(4).map { $0 }
+        // WHAT SHE IS HEARING, newest last — including the plain lines. The
+        // first version showed only turns that had already become a job or an
+        // approval, so somebody talking to a phone that had not finished
+        // thinking watched an empty screen and had no reason to believe it was
+        // working. The reference this screen is built from puts what you said
+        // on the screen as you say it, and that is the whole reassurance.
+        //
+        // It shows the lines; it does NOT decide which of them mattered. That
+        // is law 1 and it belongs to the brain — a card here says "heard this",
+        // never "this is a commitment".
+        Array(turns.suffix(4))
     }
 
     private func isWorking(_ t: DashboardPolicy.Turn) -> Bool {

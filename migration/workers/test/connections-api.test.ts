@@ -51,6 +51,12 @@
  * check that now kills it was written because of that, not before it. The
  * full report, with the check each mutation killed, is at the bottom of this
  * file.
+ *
+ * TWELVE MORE were run on 2026-09-06 when `?q=` stopped being a permanent 503
+ * and was wired to a real catalog search (numbers 26-37 below). ONE SURVIVED —
+ * a budget refusal that recorded its own attempt, which turns an hour of
+ * cooldown into a permanent one for whoever keeps tapping — and the window
+ * check was rewritten to keep tapping for exactly that reason.
  */
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
@@ -60,9 +66,15 @@ import { dirname, join } from "node:path";
 import { FakeD1, asD1 } from "./fake-d1.ts";
 import { issueToken } from "../src/pb/auth.ts";
 import { createD1Store, forgetLiveColumns, type StoredConnection } from "../src/connections/store.ts";
-import { FORBIDDEN_TERMS } from "../src/connections/words.ts";
+import {
+  ComposioConnections, connectionsFromEnv, resetConnectionsProvider, COMPOSIO_BASE_URL,
+} from "../src/connections/provider.ts";
+import { DEFAULT_CONNECT_MODEL } from "../src/connections/wiring.ts";
+import { OPENROUTER_BASE } from "../src/llm.ts";
+import { FORBIDDEN_TERMS, PermissionWordsRefused } from "../src/connections/words.ts";
 import { LINK_TTL_MS } from "../src/connections/nudge.ts";
 import { CONNECT_URL_BASE, TOKEN_CHARS } from "../src/routes/connect.ts";
+import { MAX_SEARCH_RESULTS } from "../src/connections/provider.ts";
 import {
   connectionsApiRoute,
   parseConnectionsApiPath,
@@ -73,6 +85,10 @@ import {
   LINK_WINDOW_MS,
   MAX_CATALOG_SLUGS,
   MAX_WRITE_ROWS,
+  MAX_SEARCHES_PER_OWNER,
+  SEARCH_WINDOW_MS,
+  connectionsApiDeps,
+  resetSearchBudget,
   type ConnectionsApiDeps,
   type ConnectionsApiEnv,
 } from "../src/routes/connections_api.ts";
@@ -171,6 +187,10 @@ const vendorRow = (owner: string, toolkit: string, account: string): Record<stri
 });
 
 async function rig(opts: RigOpts = {}): Promise<Rig> {
+  // `searchBudget` is module state, shared by every check in this process. A rig
+  // that inherited the spend of the check above it would make the search checks
+  // order-dependent, which is how a suite starts passing for the wrong reason.
+  resetSearchBudget();
   const db = new FakeD1();
   for (const [id, key] of [[OWNER, "key-owner"], [STRANGER, "key-stranger"]]) {
     db.db.prepare(
@@ -624,6 +644,170 @@ await check("a search port that throws or answers a non-list is an outage", asyn
     assert.equal(res.status, 503, what);
     assert.ok(!("items" in await jsonOf(res, `catalog search ${what}`)), what);
   }
+});
+
+await check("the real wiring FILLS the search port, so ?q= is not a permanent 503", async () => {
+  // THE FINDING THIS CLOSES. `ConnectionsApiDeps.search` was declared and
+  // nothing filled it, so "Add an app" answered 503 to every letter anybody
+  // typed. Built from the real `connectionsApiDeps` — not the rig's fake deps —
+  // because the defect was in the WIRING and a fake would have hidden it.
+  const db = new FakeD1();
+  const env = { DB: asD1(db), ANTICIPY_AUTH_SECRET: "s" } as unknown as ConnectionsApiEnv;
+  const wired = connectionsApiDeps(env);
+  assert.ok(wired, "connectionsApiDeps refused to build with a DB binding present");
+  assert.equal(typeof wired!.search, "function",
+    "nothing fills ConnectionsApiDeps.search, so the search box answers 503 to everybody");
+  // And it is the ADAPTER's search, not a second one invented here: with no
+  // COMPOSIO_API_KEY bound it refuses by name without issuing a request, which
+  // is the provider's own unconfigured behaviour reaching this seam.
+  await assert.rejects(() => wired!.search!("mail"), (err: Error) => {
+    assert.equal(err.name, "ConnectionsUnconfigured");
+    return true;
+  });
+});
+
+await check("?q= with nothing typed is a 400 and the catalog is never asked", async () => {
+  // Not a 503: nothing failed. The phone cannot produce this — both call sites
+  // refuse to send a blank (ConnectOnboardingPolicy.searchQuery,
+  // ConnectedAppsModel.search) — so it is everything else that can reach a URL.
+  for (const raw of ["", "%20%20", "%09"]) {
+    const r = await rig({ search: async () => [APPS.zellibrix] });
+    const res = await connectionsApiRoute(
+      getReq(`${R.catalog}?${QUERY_SEARCH}=${raw}`, r.ownerToken), r.env, r.deps);
+    assert.equal(res.status, 400, JSON.stringify(raw));
+    const body = await jsonOf(res, `catalog search blank ${raw}`);
+    assert.ok(!("items" in body), "a blank search answered with a list");
+    assert.deepEqual(r.log.search, [],
+      "an empty query was forwarded; at the vendor that is the first page of the whole catalog");
+  }
+});
+
+await check("?q= with letters and spaces around them still goes out untouched", async () => {
+  // The CONTROL on the blank check above: it measures emptiness only. A query
+  // that has anything in it keeps its spaces, because the client deliberately
+  // does not trim (ConnectedAppsClientTests pins "  work mail  ").
+  const typed = "  work mail  ";
+  const r = await rig({ search: async () => [APPS.zellibrix] });
+  const res = await connectionsApiRoute(
+    getReq(`${R.catalog}?${QUERY_SEARCH}=${encodeURIComponent(typed)}`, r.ownerToken), r.env, r.deps);
+  assert.equal(res.status, 200);
+  assert.deepEqual(r.log.search, [typed]);
+  await bodyOf(res, "catalog search spaces kept");
+});
+
+await check("the route cuts a search answer to MAX_SEARCH_RESULTS", async () => {
+  // Defence in depth over the provider's own cap: this is the seam a port that
+  // is NOT the provider comes through, and a phone rendering one scrolling list
+  // must not be handed 1,400 rows by anything.
+  const many = Array.from({ length: MAX_SEARCH_RESULTS + 40 }, (_, i) => ({
+    slug: `app${i}`, name: `App ${i}`, logo: null, description: null, appUrl: null, scopes: [],
+  }));
+  const r = await rig({ search: async () => many });
+  const res = await connectionsApiRoute(
+    getReq(`${R.catalog}?${QUERY_SEARCH}=a`, r.ownerToken), r.env, r.deps);
+  assert.equal(res.status, 200);
+  const items = (await jsonOf(res, "catalog search capped")).items as Record<string, unknown>[];
+  assert.equal(items.length, MAX_SEARCH_RESULTS);
+  assert.equal(items[0]!.slug, "app0", "the cut took from the wrong end, so the order changed");
+});
+
+await check("a search answer holding junk is an outage, not a 500 and not a short list", async () => {
+  // The last place a port's answer is touched. `catalogRow` reads fields off
+  // each row, so a null or a bare string in that array throws — and an uncaught
+  // throw out of a route handler is a 500 with a stack in it, on a path a
+  // signed-in stranger can reach.
+  const r = await rig({ search: async () => [APPS.zellibrix, null, "gmail"] });
+  const res = await connectionsApiRoute(
+    getReq(`${R.catalog}?${QUERY_SEARCH}=x`, r.ownerToken), r.env, r.deps);
+  assert.equal(res.status, 503, "a port answering junk produced something other than an outage");
+  const body = await jsonOf(res, "catalog search junk");
+  assert.ok(!("items" in body), "a junk answer came back as a list");
+});
+
+await check("an empty answer FROM THE CATALOG is 200 and empty — nothing matched", async () => {
+  // The one empty search list that is an answer rather than a failure: the
+  // catalog was reached and said so. Every other empty is a 503 above.
+  const r = await rig({ search: async () => [] });
+  const res = await connectionsApiRoute(
+    getReq(`${R.catalog}?${QUERY_SEARCH}=qqzzqq`, r.ownerToken), r.env, r.deps);
+  assert.equal(res.status, 200);
+  assert.deepEqual((await jsonOf(res, "catalog search nothing matched")).items, []);
+});
+
+await check("the search budget stops the owner past the ceiling, and asks the catalog nothing", async () => {
+  const r = await rig({ search: async () => [APPS.zellibrix] });
+  const ask = (): Promise<Response> => connectionsApiRoute(
+    getReq(`${R.catalog}?${QUERY_SEARCH}=mail`, r.ownerToken), r.env, r.deps);
+
+  for (let i = 0; i < MAX_SEARCHES_PER_OWNER; i++) {
+    assert.equal((await ask()).status, 200, `search ${i + 1} was refused early`);
+  }
+  assert.equal(r.log.search.length, MAX_SEARCHES_PER_OWNER);
+
+  const over = await ask();
+  assert.equal(over.status, 429, "the ceiling does not stop anything");
+  const body = await jsonOf(over, "catalog search over budget");
+  assert.ok(!("items" in body), "a refused search answered with a list");
+  assert.equal(r.log.search.length, MAX_SEARCHES_PER_OWNER,
+    "the catalog was asked anyway, so the budget bounds nothing it exists to bound");
+
+  // A refusal records nothing, so an hour's cooldown does not become a
+  // permanent one for somebody who kept tapping.
+  assert.equal((await ask()).status, 429);
+  await bodyOf(await ask(), "catalog search still over");
+});
+
+await check("the search budget is per owner: one owner's spend is not another's", async () => {
+  const r = await rig({ search: async () => [APPS.zellibrix] });
+  const url = `${R.catalog}?${QUERY_SEARCH}=mail`;
+  for (let i = 0; i < MAX_SEARCHES_PER_OWNER; i++) {
+    await connectionsApiRoute(getReq(url, r.ownerToken), r.env, r.deps);
+  }
+  assert.equal((await connectionsApiRoute(getReq(url, r.ownerToken), r.env, r.deps)).status, 429);
+  const stranger = await connectionsApiRoute(getReq(url, r.strangerToken), r.env, r.deps);
+  assert.equal(stranger.status, 200,
+    "one person's searching spent everybody's budget; the count is not keyed by owner");
+  await bodyOf(stranger, "catalog search other owner");
+});
+
+await check("the search budget is a WINDOW: an hour later the same owner is served", async () => {
+  let clock = NOW;
+  const r = await rig({ search: async () => [APPS.zellibrix], now: () => clock });
+  const url = `${R.catalog}?${QUERY_SEARCH}=mail`;
+  for (let i = 0; i < MAX_SEARCHES_PER_OWNER; i++) {
+    await connectionsApiRoute(getReq(url, r.ownerToken), r.env, r.deps);
+  }
+  // AND THEY KEEP TAPPING, once a second, for as long as they are refused. A
+  // refusal that RECORDED its own attempt would push this owner's window
+  // forward on every tap, and an hour's cooldown would become a permanent one
+  // for exactly the person most likely to keep trying.
+  for (let i = 1; i <= MAX_SEARCHES_PER_OWNER; i++) {
+    clock = NOW + i * 1000;
+    assert.equal((await connectionsApiRoute(getReq(url, r.ownerToken), r.env, r.deps)).status, 429);
+  }
+  // An hour after the last search that actually happened.
+  clock = NOW + SEARCH_WINDOW_MS + 1;
+  const later = await connectionsApiRoute(getReq(url, r.ownerToken), r.env, r.deps);
+  assert.equal(later.status, 200,
+    "the window never rolled: either it does not roll at all, or the refusals kept pushing it "
+      + "forward, and a heavy afternoon is a permanent ban");
+  await bodyOf(later, "catalog search after the window");
+});
+
+await check("an anonymous caller cannot spend anybody's search budget", async () => {
+  // The 401 gate runs before the budget: an owner id is what the budget is
+  // keyed by, and there is no owner until a credential has been verified.
+  const r = await rig({ search: async () => [APPS.zellibrix] });
+  for (let i = 0; i < MAX_SEARCHES_PER_OWNER + 5; i++) {
+    const res = await connectionsApiRoute(
+      getReq(`${R.catalog}?${QUERY_SEARCH}=mail`), r.env, r.deps);
+    assert.equal(res.status, 401);
+  }
+  assert.equal(r.log.search.length, 0);
+  const mine = await connectionsApiRoute(
+    getReq(`${R.catalog}?${QUERY_SEARCH}=mail`, r.ownerToken), r.env, r.deps);
+  assert.equal(mine.status, 200, "an anonymous flood spent a signed-in owner's budget");
+  await bodyOf(mine, "catalog search after anonymous flood");
 });
 
 await check("a catalog call naming neither q nor slugs is a 400", async () => {
@@ -1104,6 +1288,351 @@ await check("a database that cannot mint says so, and answers no url", async () 
 });
 
 // ===========================================================================
+// THE PRODUCTION WIRING — the path src/index.ts actually takes
+//
+// Every check above this line injects `r.deps`. `connectionsApiDeps` — the ONLY
+// wiring a real request uses, because src/index.ts calls
+// `connectionsApiRoute(request, env)` with no third argument — was executed by
+// nothing. Measured on 2026-09-06 with an anchor-unique mutation harness:
+// replacing that function's whole body with `return null` left `npm test` at
+// "60 passed, 0 failed". Sixty green checks over a path production does not
+// take is the defect class that cost this repo the most that day.
+//
+// So this section calls the factory BY NAME, asserts each port is the shipped
+// implementation by identity or by behaviour rather than by being non-null,
+// and ends with the control: a request served exactly as index.ts serves one.
+//
+// ONE PORT OF THE VENDOR AND ONE OF THE MODEL ARE STUBBED, at `globalThis.fetch`
+// and nowhere higher. Everything between these checks and that socket — the
+// factory, the D1 store, the vendor adapter, the sentence writer, the words
+// audit, the routes — is the shipped code.
+// ===========================================================================
+
+interface FetchCall { url: string; body: string }
+
+interface Socket {
+  calls: FetchCall[];
+  /** The raw assistant text the model answers with. */
+  modelText: string;
+  catalogFails: boolean;
+  restore(): void;
+}
+
+/** The one boundary this Worker does not control. Installed BEFORE any deps are
+ *  built, because `ComposioConnections` binds `globalThis.fetch` when it is
+ *  CONSTRUCTED and the isolate caches one adapter. */
+function socket(): Socket {
+  const real = globalThis.fetch;
+  const s: Socket = {
+    calls: [],
+    modelText: JSON.stringify({ sentences: MODEL_LINES }),
+    catalogFails: false,
+    restore: () => { globalThis.fetch = real; },
+  };
+  globalThis.fetch = (async (input: unknown, init?: { body?: unknown }) => {
+    const url = String((input as { url?: string })?.url ?? input);
+    s.calls.push({ url, body: String(init?.body ?? "") });
+    const reply = (status: number, value: unknown): Response =>
+      new Response(JSON.stringify(value), {
+        status, headers: { "content-type": "application/json" },
+      });
+    if (url.startsWith(COMPOSIO_BASE_URL)) {
+      if (s.catalogFails) return reply(500, { error: "the vendor is down" });
+      const meta = APPS.zellibrix;
+      const row = {
+        slug: meta.slug, name: meta.name, logo: meta.logo,
+        description: meta.description, app_url: meta.appUrl, scopes: meta.scopes,
+      };
+      // `GET /toolkits?search=` answers a page; `GET /toolkits/{slug}` answers
+      // one row. Two shapes, because the adapter reads them differently.
+      return reply(200, url.includes("/toolkits?") ? { items: [row] } : row);
+    }
+    return reply(200, { choices: [{ message: { content: s.modelText } }] });
+  }) as typeof globalThis.fetch;
+  resetConnectionsProvider();
+  return s;
+}
+
+/** Three lines a model could plausibly write that words.ts will accept: three of
+ *  them, distinct, under 80 characters, no exclamation, no URL, none of the
+ *  register the spec forbids. */
+const MODEL_LINES = [
+  "Anticipy can read your Zellibrix notes when you ask about them.",
+  "It can add a note for you when you ask it to.",
+  "You can turn this off any time in Settings.",
+];
+
+/** A Worker configured the way a deployed one is: the rig's own D1 and auth
+ *  secret, plus the vendor secret and the model key production holds. */
+function wiredEnv(r: Rig, over: Record<string, unknown> = {}): ConnectionsApiEnv {
+  return {
+    ...(r.env as unknown as Record<string, unknown>),
+    COMPOSIO_API_KEY: "ck_test_not_a_real_key",
+    OPENROUTER_API_KEY: "or_test_not_a_real_key",
+    ...over,
+  } as unknown as ConnectionsApiEnv;
+}
+
+/** A toolkit row with no scopes. `permissionSentences` refuses before the writer
+ *  is called, so a refusal here proves BOTH that the audit is real and that
+ *  nothing was asked to invent a permission. */
+const SCOPELESS = {
+  slug: "zellibrix", name: "Zellibrix", logo: null, description: null,
+  appUrl: null, scopes: [] as string[],
+};
+
+await check("connectionsApiDeps hands a configured Worker deps, and neither optional port",
+  async () => {
+    const s = socket();
+    try {
+      const r = await rig();
+      const deps = connectionsApiDeps(wiredEnv(r));
+      assert.ok(deps, "the only wiring a real request uses handed back nothing at all");
+      assert.equal(typeof deps.store.connectionsForOwner, "function");
+      assert.equal(typeof deps.provider.toolkit, "function");
+      assert.equal(typeof deps.words.sentences, "function");
+
+      // SEARCH IS FILLED NOW, and this leg says the opposite of what it said an
+      // hour ago. That is not drift: two agents worked the same file at once,
+      // one pinning `search` as unset (true then, and the reason `?q=` answered
+      // an honest 503 rather than lying about an empty catalog) while the other
+      // built the provider's catalog search. Both were right in turn; the port
+      // exists, so the assertion that matters is the stronger one.
+      //
+      // A FUNCTION IS NOT ENOUGH — the whole point of this leg is that
+      // production takes a path the suite executes, so the port has to reach
+      // the real provider rather than any callable. It is called.
+      assert.equal(typeof deps.search, "function",
+        "the search port is unfilled, so `?q=` answers 503 and 'Add an app' cannot "
+          + "find anything — which is the one way into a connection nobody asked for");
+      const hits = await deps.search!("a query no local list could answer");
+      assert.ok(Array.isArray(hits),
+        "the wired search did not answer with a list, so the box the person types "
+          + "into is wired to something that is not a catalog");
+
+      // `now` stays unset for its own reason: it is the tests' clock, and
+      // production owns the real one.
+      assert.equal(deps.now, undefined, "the wiring pinned the clock production owns");
+    } finally { s.restore(); }
+  });
+
+await check("the wired search hands the letters to the catalog byte for byte", async () => {
+  const s = socket();
+  try {
+    const r = await rig();
+    const deps = connectionsApiDeps(wiredEnv(r))!;
+
+    // A PHRASE, not a slug. Nothing in this Worker may read it, rank it, match
+    // it against a local list of app names or answer with a did-you-mean —
+    // that is deciding what somebody's words MEANT, and it belongs to the
+    // catalog. HARNESS-LAWS law 1, in the one place the spec spends a
+    // paragraph forbidding it.
+    const typed = "where my team keeps notes";
+    const found = await deps.search!(typed);
+    assert.equal(found.length, 1, "the catalog's own answer did not come back");
+    assert.equal(found[0].name, APPS.zellibrix.name,
+      "the row that came back is not the catalog's, so the search box is answering "
+        + "from somewhere inside this Worker");
+
+    const call = s.calls.find((c) => c.url.includes("/toolkits?"));
+    assert.ok(call, "the catalog was never searched, so the letters were answered locally");
+    assert.ok(call.url.includes(encodeURIComponent(typed)),
+      `the typed phrase did not reach the catalog unchanged: ${call.url}`);
+  } finally { s.restore(); }
+});
+
+await check("the wired store is the real D1 one, over this Worker's own binding", async () => {
+  const s = socket();
+  try {
+    const r = await rig();
+    const deps = connectionsApiDeps(wiredEnv(r))!;
+
+    // READ: the rows the rig wrote into SQLite, and only this owner's. A memory
+    // store or a stub would answer an empty list here.
+    const rows = await deps.store.connectionsForOwner(OWNER);
+    assert.deepEqual(rows.map((c) => c.connected_account_id).sort(),
+      [OWNER_ACCOUNT_2, OWNER_ACCOUNT].sort(),
+      "the wired store did not read this Worker's own connections table");
+    assert.ok(!rows.some((c) => c.connected_account_id === STRANGER_ACCOUNT));
+
+    // WRITE: through the port, read back out of SQLite outside the code under
+    // test. This is the assertion a `return null` factory cannot survive and a
+    // fake store cannot fake.
+    await deps.store.putConnection({
+      user_id: OWNER as never, toolkit: "zellibrix",
+      connected_account_id: "ca_OWNER_wired", alias: null, status: "connected",
+      writes_enabled: false, last_used_at: null,
+    });
+    const stored = storedConnections(r.db)
+      .filter((row) => row.connected_account_id === "ca_OWNER_wired");
+    assert.equal(stored.length, 1,
+      "a write through the wired store never reached this Worker's D1 binding");
+  } finally { s.restore(); }
+});
+
+await check("the wired provider is the shipped adapter, from the isolate's own factory",
+  async () => {
+    const s = socket();
+    try {
+      const r = await rig();
+      const env = wiredEnv(r);
+      const deps = connectionsApiDeps(env)!;
+      assert.ok(deps.provider instanceof ComposioConnections,
+        "the catalog port is not the shipped adapter");
+      assert.equal(deps.provider, connectionsFromEnv(env as never),
+        "the wiring built its own adapter instead of taking the isolate's, so a session "
+          + "minted for one request would be invisible to the next screen");
+
+      // And it really talks to the catalog: the app's name comes off the wire,
+      // and NOTHING in the Worker knows this app exists.
+      const meta = await deps.provider.toolkit("zellibrix");
+      assert.equal(meta.name, APPS.zellibrix.name);
+      assert.deepEqual(meta.scopes, APPS.zellibrix.scopes);
+      assert.ok(s.calls.some((c) => c.url === `${COMPOSIO_BASE_URL}/toolkits/zellibrix`),
+        "the catalog was never asked, so the name came from somewhere it must not come from");
+    } finally { s.restore(); }
+  });
+
+await check("the wired words port is the real audit, not three fixed lines", async () => {
+  const s = socket();
+  try {
+    const r = await rig();
+    const deps = connectionsApiDeps(wiredEnv(r))!;
+    const before = s.calls.length;
+    // A permission sentence written without a scope is an invention about what
+    // the connection gets. A stub returning three plausible lines passes every
+    // other check in this section and fails this one.
+    await assert.rejects(() => deps.words.sentences(SCOPELESS as never), PermissionWordsRefused,
+      "the wired words port invented sentences for a toolkit that declares no scopes");
+    assert.equal(s.calls.length, before,
+      "a model was asked to write permissions for a toolkit that declares none");
+  } finally { s.restore(); }
+});
+
+await check("the wired sentences come from a real model call over this Worker's own LLM path",
+  async () => {
+    const s = socket();
+    try {
+      const r = await rig();
+      const lines = await connectionsApiDeps(wiredEnv(r))!.words.sentences(
+        APPS.zellibrix as never);
+      // The model's OWN words, not a house-written replacement.
+      assert.deepEqual(lines, MODEL_LINES,
+        "what reached the phone is not what the model said");
+
+      const call = s.calls.find((c) => c.url.startsWith(OPENROUTER_BASE));
+      assert.ok(call,
+        "no model was called, so the sentence writer here is a stub and the phone and the "
+          + "connect page can describe one app two ways");
+      assert.ok(call.body.includes(DEFAULT_CONNECT_MODEL),
+        `the connect model is not the one this Worker holds a key for: ${call.body.slice(0, 120)}`);
+      // The prompt is built from the CATALOG ROW, so an app nobody has heard of
+      // still gets its own sentences.
+      for (const scope of APPS.zellibrix.scopes) {
+        assert.ok(call.body.includes(scope),
+          `the prompt was built without the catalog's own scope ${scope}`);
+      }
+    } finally { s.restore(); }
+  });
+
+await check("with the DB binding unset there is no wiring, and the door still says 401",
+  async () => {
+    const s = socket();
+    try {
+      const r = await rig();
+      const blind = wiredEnv(r, { DB: undefined });
+      assert.equal(connectionsApiDeps(blind), null,
+        "a Worker with no database handed back deps, so a store that cannot answer would be "
+          + "asked for somebody's connections");
+
+      // AND THE ROUTE ANSWERS 401, NOT 503 — worth writing down rather than
+      // leaving to be found. `DB` is the ONLY hard precondition of this
+      // factory, and the credential is verified against that same binding one
+      // step earlier, so an unbound DB is refused at the door as "not you"
+      // before it can ever be reported as "not wired". The 503 below the token
+      // check is a backstop for a future precondition, not a live branch.
+      const res = await connectionsApiRoute(getReq(R.list, r.ownerToken), blind);
+      assert.equal(res.status, 401,
+        "a Worker with no database answered something other than the signed-out answer");
+      await bodyOf(res, "wiring: no DB binding");
+    } finally { s.restore(); }
+  });
+
+await check("the vendor secret is NOT a precondition for these six routes, on purpose",
+  async () => {
+    const s = socket();
+    try {
+      const r = await rig();
+      const noVendor = wiredEnv(r, { COMPOSIO_API_KEY: undefined });
+
+      // DELIBERATELY NOT NULL, unlike connectDeps. Three of these six routes are
+      // pure D1, and refusing them all would tell somebody with two connected
+      // apps that Anticipy cannot read them because a text-generation secret is
+      // unset. Each route answers for its OWN missing configuration instead.
+      assert.ok(connectionsApiDeps(noVendor),
+        "an unset vendor secret took down listing connections, flipping the write toggle "
+          + "and minting a link, none of which the vendor is involved in");
+
+      // Pure D1, through the production path, with no vendor at all.
+      const list = await connectionsApiRoute(getReq(R.list, r.ownerToken), noVendor);
+      assert.equal(list.status, 200, "an unset vendor secret hid this owner's own connections");
+      const items = (await jsonOf(list, "wiring: list with no vendor")).items as unknown[];
+      assert.equal(items.length, 2);
+
+      // And the leg that DOES need the vendor fails on its own terms: an outage,
+      // never `{ items: [] }`, and NOT ONE REQUEST is issued.
+      const before = s.calls.length;
+      const catalog = await connectionsApiRoute(
+        getReq(`${R.catalog}?${QUERY_SLUGS}=zellibrix`, r.ownerToken), noVendor);
+      assert.equal(catalog.status, 503, "an unconfigured catalog answered as though it worked");
+      const body = await jsonOf(catalog, "wiring: catalog with no vendor");
+      assert.ok(!("items" in body),
+        "a Worker with no catalog told a screen with two connected apps that neither has a name");
+      assert.equal(s.calls.length, before,
+        "a Worker with no vendor secret still called out to the vendor");
+    } finally { s.restore(); }
+  });
+
+await check("THE CONTROL: served exactly as src/index.ts serves it, with no injected deps",
+  async () => {
+    const s = socket();
+    try {
+      const r = await rig();
+      const env = wiredEnv(r);
+
+      // NO THIRD ARGUMENT. This is `connectionsApiRoute(request, env)` — the one
+      // call site in src/index.ts, and the path every real phone takes. It must
+      // reach the REAL store and answer with this owner's own rows.
+      const mine = await connectionsApiRoute(getReq(R.list, r.ownerToken), env);
+      assert.notEqual(mine.status, 503,
+        "the production path answered 'not wired', which is what every phone would get");
+      assert.equal(mine.status, 200);
+      const items = (await jsonOf(mine, "wiring: control list")).items as
+        Record<string, unknown>[];
+      assert.deepEqual(items.map((row) => row.connected_account_id).sort(),
+        [OWNER_ACCOUNT_2, OWNER_ACCOUNT].sort(),
+        "the production path answered from something other than this Worker's own D1");
+      assert.ok(!items.some((row) => row.user_id !== OWNER),
+        "a stranger's row reached this owner through the production path");
+
+      // THE DIFFERENCE BETWEEN 'NOT WIRED' AND 'NOT YOU', on the same Worker and
+      // the same route, one credential apart. A 503 to a signed-out caller would
+      // mean the wiring is broken; a 401 means it is fine and they are not
+      // signed in — and the phone renders those two as different screens.
+      const nobody = await connectionsApiRoute(getReq(R.list), env);
+      assert.equal(nobody.status, 401, "a signed-out caller was told about the wiring");
+      const refused = await jsonOf(nobody, "wiring: control signed out");
+      assert.equal(refused.ok, false);
+      assert.ok(!("items" in refused));
+
+      // Neither call cost this Worker a vendor round trip: the list is pure D1
+      // and the 401 is decided before anything is built.
+      assert.equal(s.calls.length, 0,
+        "the production path called the vendor to answer a question about our own table");
+    } finally { s.restore(); }
+  });
+
+// ===========================================================================
 // THE WHOLE-SUITE SCANS
 // ===========================================================================
 
@@ -1152,6 +1681,61 @@ await check("no app is named in the route's source", () => {
   for (const name of ["Zellibrix", "zellibrix", "Quandle", "quandle_mail"]) {
     assert.ok(!SOURCE.includes(name), `the route names ${name}`);
   }
+});
+
+await check("no REAL app is named in the route's executable code either", () => {
+  // LAW 1, over the shipped source rather than over behaviour. The two invented
+  // names above only catch a hardcode somebody copied out of this file; the way
+  // a search box actually acquires a local opinion is one `if (q === "gmail")`
+  // added in a hurry, and no behavioural check catches a case nobody wrote.
+  //
+  // Comments are removed first, because this file discusses real apps in prose
+  // and must go on being allowed to. STRING LITERALS ARE KEPT: a name in a
+  // literal is exactly the violation.
+  //
+  // The stripper is line-based, which is only sound while no CODE line in this
+  // file contains "//" — inside a string or a regex it would cut the line in
+  // half and the scan would silently measure less than it claims. That
+  // precondition is the first control below. (test/connections-provider.test.ts
+  // carries the character-level scanner, because the adapter has both `"://"`
+  // and regex literals in code; this file has neither, and a second copy of 60
+  // lines of scanner is its own kind of drift.)
+  const code = SOURCE
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .split("\n")
+    .filter((line) => !line.trim().startsWith("//"))
+    .map((line) => line.replace(/\/\/.*$/, ""))
+    .join("\n");
+
+  // CONTROL 1 — the precondition the stripper rests on.
+  for (const line of code.split("\n")) {
+    assert.ok(!line.includes("//"),
+      `a code line in connections_api.ts now contains "//": ${line.trim()}. The line-based `
+        + "strip above is no longer sound; use the scanner in connections-provider.test.ts.");
+  }
+  // CONTROL 2 — prose really went, and code really stayed.
+  assert.ok(SOURCE.includes("one mailbox served everybody")
+    || SOURCE.includes("mailbox was connected by hand"));
+  assert.ok(!code.includes("mailbox was connected by hand"), "the stripper left comments in");
+  assert.ok(code.includes("MAX_SEARCHES_PER_OWNER"), "the stripper ate code");
+  assert.ok(code.includes("Sign in first."), "the stripper ate a string literal");
+
+  const APP_NAMES = [
+    "gmail", "googlecalendar", "googledrive", "google_drive", "outlook", "notion",
+    "slack", "dropbox", "salesforce", "github", "gitlab", "linear", "asana",
+    "trello", "hubspot", "shopify", "zoom", "jira", "confluence", "calendly",
+    "airtable", "discord", "telegram", "whatsapp", "spotify", "figma",
+  ];
+  const found = (hay: string): string[] => APP_NAMES.filter((name) =>
+    new RegExp(`(^|[^a-z0-9_])${name}($|[^a-z0-9_])`, "i").test(hay));
+
+  // CONTROL 3 — the scan finds a name when one IS in a branch. Without this,
+  // the assertion below passes for a scan that matches nothing at all.
+  assert.deepEqual(found('if (q.toLowerCase().includes("gmail")) return refuse(404, x);'), ["gmail"]);
+
+  assert.deepEqual(found(code), [],
+    `src/routes/connections_api.ts names ${found(code).join(", ")} in code. Which app somebody `
+      + "meant is the catalog's question; a name here is this Worker answering it.");
 });
 
 await check("the phone and the connect page share one sentence writer", () => {
@@ -1223,6 +1807,66 @@ await check("the vendor's name is nowhere in the source either", () => {
 //      -> "a catalog that cannot list means the vendor is never asked to delete"
 //  20  `app_url` handed over as `appUrl`
 //      -> "?slugs= describes the toolkits it was given"
+//
+// ALL TWENTY RAN AGAINST INJECTED DEPS, and none of them touched the wiring.
+// A twenty-first, run 2026-09-06 with the same harness, is why the production
+// section above exists:
+//
+//  21  `connectionsApiDeps`'s whole body -> `return null`
+//      -> SURVIVED. "60 passed, 0 failed." The function is the ONLY wiring a
+//         real request uses — src/index.ts calls
+//         `connectionsApiRoute(request, env)` with no third argument — so
+//         sixty green checks were describing a path production does not take.
+//
+// FIVE MORE, RUN AFTER THAT SECTION WAS WRITTEN, ALL KILLED:
+//  21  `connectionsApiDeps` -> `return null`
+//      -> "THE CONTROL: served exactly as src/index.ts serves it, with no
+//         injected deps" (and eight others)
+//  22  the store swapped for one whose write and read are no-ops
+//      -> "the wired store is the real D1 one, over this Worker's own binding"
+//  23  `words` swapped for a stub returning three fixed lines
+//      -> "the wired words port is the real audit, not three fixed lines"
+//  24  `connectionsFromEnv(env)` -> a second adapter under another key
+//      -> "the wired provider is the shipped adapter, from the isolate's own
+//         factory"
+//  25  the `search:` line deleted from the returned deps
+//      -> "the wired search hands the letters to the catalog byte for byte"
+//
+// AND THE SEARCH BOX ITSELF, 2026-09-06 — the finding that `?q=` answered 503
+// unconditionally because `ConnectionsApiDeps.search` was declared and nothing
+// filled it. Numbers 26-36 patch this file's route; the adapter's own eleven
+// are in test/connections-provider.test.ts.
+//
+//  26  `search: (query) => provider.search(query)` deleted from
+//      `connectionsApiDeps` — the defect exactly as it shipped
+//      -> "the real wiring FILLS the search port, so ?q= is not a permanent 503"
+//  27  `if (query.trim() === "")` -> `if (false)`
+//      -> "?q= with nothing typed is a 400 and the catalog is never asked"
+//  28  that same blank branch's 400 -> 503
+//      -> "?q= with nothing typed is a 400 and the catalog is never asked"
+//  29  `hits.slice(0, MAX_SEARCH_RESULTS)` -> `hits`
+//      -> "the route cuts a search answer to MAX_SEARCH_RESULTS"
+//  30  `if (!spendSearch(owner, now))` -> `if (false)`
+//      -> "the search budget stops the owner past the ceiling, and asks the
+//         catalog nothing"
+//  31  the same branch left in place but the port called before it
+//      -> "the search budget stops the owner past the ceiling…"
+//  32  `spendSearch(owner, now)` -> `spendSearch("everybody", now)`
+//      -> "the search budget is per owner: one owner's spend is not another's"
+//  33  the window filter dropped, so a spend never expires
+//      -> "the search budget is a WINDOW: an hour later the same owner is served"
+//  34  the refusal branch made to record its own attempt (SURVIVED first run)
+//      -> "the search budget is a WINDOW: an hour later the same owner is served"
+//  35  the 429 answered as `json(200, { items: [] })`
+//      -> "the search budget stops the owner past the ceiling…"
+//  36  the 401 gate made to fall through for the catalog leg only, and
+//      `if (query.toLowerCase().includes("gmail")) …` added to searchCatalog
+//      -> "an anonymous caller cannot spend anybody's search budget" and
+//         "no REAL app is named in the route's executable code either"
+//  37  the guard around the row mapping removed, so a port answering
+//      `[meta, null, "gmail"]` throws out of the handler
+//      -> "a search answer holding junk is an outage, not a 500 and not a
+//         short list"
 // ===========================================================================
 
 console.log(`\n${passes} passed, ${failures} failed`);

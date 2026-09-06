@@ -44,6 +44,41 @@
  *   an unreadable model reply repaired into three sentences;
  *   the fenced-reply unwrap removed; the model's own text ignored;
  *   `''` no longer mapping to a null alias; the clock pinned in the deps.
+ *
+ * WHAT THAT ROUND STILL COULD NOT SEE, and section 6 was written for. Every
+ * check above section 6 calls `connectDeps`, and `connectDeps` is not what
+ * production installs: src/index.ts hands over `connectWiring` and
+ * `connectAuthWiring`, two exported consts that wrap it. Measured 2026-09-06
+ * with an anchor-unique harness (an anchor occurring other than exactly once
+ * refuses to patch, because a regex that silently missed has produced three
+ * false "it is tested" readings in this repo):
+ *
+ *   `connectAuthWiring` gutted to `return null` — SURVIVED, npm test 60/0.
+ *   The phone-code half of the connect chain had a production path no
+ *   assertion in this repo executed.
+ *
+ * FIVE MUTATIONS RUN AGAINST src/connections/wiring.ts AFTER section 6, ALL
+ * KILLED, with the check that killed each:
+ *   `connectWiring` -> null
+ *     -> "connectWiring — the value src/index.ts installs — builds the four REAL ports"
+ *   `connectAuthWiring` -> null
+ *     -> "CONTROL: /c/{token}/code with NO injected deps reaches the real wiring"
+ *   `codes:` swapped for one whose `insert` writes nothing
+ *     -> "connectAuthWiring — the other value src/index.ts installs — is the code half, over D1"
+ *   `toolkitName` returning a hardcoded app name instead of asking the catalog
+ *     -> "connectAuthWiring's app name comes from the catalog, and a blip costs only the name"
+ *   `connectAuthWiring` no longer refusing when `connectDeps` refuses
+ *     -> "CONTROL: the same request on a Worker with no vendor secret is the honest 503"
+ *
+ * AND THREE AGAINST src/index.ts's ROUTER, which section 7 exists for. All
+ * KILLED, all previously invisible — no test in this repo went through
+ * `worker.fetch` for either prefix:
+ *   the `/me/connections` branch deleted
+ *     -> "worker.fetch routes /me/connections to the six routes, not to the 404"
+ *   `path.startsWith("/c/")` pointed at a prefix nothing uses
+ *     -> "worker.fetch routes /c/{token} and /c/{token}/code, and neither is a 404"
+ *   the `/c/` branch no longer chaining connectAuthRoute before connectRoute
+ *     -> "worker.fetch routes /c/{token} and /c/{token}/code, and neither is a 404"
  */
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
@@ -53,7 +88,12 @@ import {
   connectRoute, connectWiringInstalled, tokenHandle, SESSION_COOKIE,
   type ConnectEnv, type Connection,
 } from "../src/routes/connect.ts";
-import { connectDeps, makeSentenceWriter, type ConnectWiringEnv } from "../src/connections/wiring.ts";
+import {
+  connectAuthWiring, connectDeps, connectWiring, makeSentenceWriter, type ConnectWiringEnv,
+} from "../src/connections/wiring.ts";
+import {
+  connectAuthRoute, connectAuthWiringInstalled, type ConnectAuthEnv,
+} from "../src/routes/connect_auth.ts";
 import {
   ComposioConnections, connectionsFromEnv, resetConnectionsProvider, COMPOSIO_BASE_URL,
 } from "../src/connections/provider.ts";
@@ -61,10 +101,15 @@ import { PermissionWordsRefused } from "../src/connections/words.ts";
 import {
   createD1Store, createMemoryStore, CrossOwnerWrite, type ConnectionsStore,
 } from "../src/connections/store.ts";
-// THE LINK UNDER TEST. Imported for its side effect and nothing else: loading
-// the Worker's entry point is what installs the wiring, and if that line is
-// ever deleted the first check below goes red.
-import "../src/index.ts";
+// THE LINK UNDER TEST, twice over. Loading the Worker's entry point is what
+// installs the wiring, and if either install line is deleted the first check
+// below goes red. The DEFAULT EXPORT is the other half: section 7 drives
+// `worker.fetch` so the router branch that hands a request to these routes is
+// executed too, rather than assumed. On 2026-09-06 the deployed Worker answered
+// 404 on `/c/<43 chars>` while `/api/health` answered 200 — the prefix was not
+// carried at all — and no repo check could have seen it, because no repo check
+// went through the router.
+import worker from "../src/index.ts";
 
 let failures = 0;
 let passes = 0;
@@ -776,7 +821,288 @@ await check("a signed-out caller is told nothing, wired or not", async () => {
 });
 
 // ===========================================================================
-// 6. NO APP IS HARDCODED — the scan the whole feature turns on
+// 6. THE TWO EXPORTED FACTORIES src/index.ts ACTUALLY INSTALLS
+//
+// Everything above this point calls `connectDeps`. That is the function the
+// wiring is BUILT from, and it is not the value production hands over:
+// src/index.ts passes `connectWiring` and `connectAuthWiring`, two exported
+// consts that wrap it. Until these checks existed, gutting either of those to
+// `return null` left `npm test` at 0 failed for `connectAuthWiring` — measured
+// 2026-09-06 with the anchor-unique mutation harness, not reasoned about — so
+// the phone-code half of the connect chain had a production path no assertion
+// in this repo executed.
+//
+// Every check below therefore calls the EXPORTED CONST BY NAME, and the two
+// controls at the end drive the two routes with NO injected deps, which is
+// exactly how src/index.ts calls them.
+// ===========================================================================
+
+/** A toolkit row with no scopes, for the one refusal that proves the words port
+ *  is the real audit rather than three fixed lines. `permissionSentences`
+ *  refuses before the writer is called, so this also proves nothing was asked. */
+const SCOPELESS = { slug: "zellibrix", name: "Zellibrix", logo: null, description: null,
+                    appUrl: null, scopes: [] as string[] };
+
+await check("connectWiring — the value src/index.ts installs — builds the four REAL ports",
+  async () => {
+    const s = socket();
+    const r = await rig();
+    seedLink(r, { alias: "work" });
+
+    // THE EXPORTED CONST, not connectDeps. This is the object `installConnectWiring`
+    // was handed at module load, called the way routes/connect.ts calls it.
+    const deps = connectWiring(r.env as ConnectEnv);
+    assert.ok(deps, "connectWiring handed a fully configured Worker no deps at all");
+
+    // STORE: the real D1 one, over this Worker's own binding. A memory store or
+    // a stub would answer null for a row only SQLite has ever seen.
+    const row = await deps.store.read(r.handle);
+    assert.ok(row, "connectWiring's store did not read this Worker's own connect_links table");
+    assert.equal(row.user_id, OWNER);
+    assert.equal(row.toolkit, APP.slug);
+    assert.equal(row.alias, "work");
+
+    // PROVIDER: the shipped adapter, and the ISOLATE's one, so a link minted in
+    // one request is visible to the next screen.
+    assert.ok(deps.provider instanceof ComposioConnections,
+      "connectWiring's catalog port is not the shipped adapter");
+    assert.equal(deps.provider, connectionsFromEnv(r.env),
+      "connectWiring built its own adapter instead of taking the isolate's");
+    const meta = await deps.provider.toolkit(APP.slug);
+    assert.equal(meta.name, APP.name, "the app's name did not come off the catalog");
+    assert.ok(s.calls.some((c) => c.url === `${COMPOSIO_BASE_URL}/toolkits/${APP.slug}`),
+      "connectWiring's provider never asked the catalog");
+
+    // WORDS: the real audit. A stub returning three fixed lines passes every
+    // other assertion in this check and fails this one.
+    const before = s.calls.length;
+    await assert.rejects(() => deps.words.sentences(SCOPELESS as never), PermissionWordsRefused,
+      "connectWiring's words port invented sentences for a toolkit with no scopes");
+    assert.equal(s.calls.length, before,
+      "a model was asked to write permissions for a toolkit that declares none");
+
+    assert.equal(typeof deps.onConnected, "function");
+    // Left unset for the same three reasons connectDeps leaves them unset.
+    assert.equal(deps.now, undefined, "connectWiring pinned the clock production owns");
+    assert.equal(deps.successStatus, undefined);
+    assert.equal(deps.baseUrl, undefined,
+      "a baseUrl here shadows env.CONNECT_BASE_URL, and a preview whose callback URL "
+        + "silently points at production is what that variable exists to prevent");
+    s.restore();
+  });
+
+await check("connectWiring refuses without the vendor secret, and the CONTROL is the same rig with it",
+  async () => {
+    const s = socket();
+    const unset = await rig({ COMPOSIO_API_KEY: undefined });
+    assert.equal(connectWiring(unset.env as ConnectEnv), null,
+      "connectWiring handed back deps on a Worker with no catalog, so the page it draws "
+        + "cannot name the app and no link can be redeemed");
+    assert.equal(s.calls.length, 0, "an unconfigured Worker still called out to the vendor");
+
+    // THE CONTROL. One variable apart, so the null above is the missing secret
+    // and not something broken in the rig.
+    const set = await rig();
+    assert.ok(connectWiring(set.env as ConnectEnv),
+      "connectWiring refuses a Worker that has everything, so the check above proves nothing");
+    s.restore();
+  });
+
+await check("connectAuthWiring — the other value src/index.ts installs — is the code half, over D1",
+  async () => {
+    const s = socket();
+    const r = await rig();
+    seedLink(r);
+
+    const deps = connectAuthWiring(r.env);
+    assert.ok(deps, "connectAuthWiring handed a configured Worker no deps, so no code is textable");
+
+    // LINKS: the SAME connect_links table connect.ts is wired with. Two stores
+    // would be two answers to "is this link still live", and one route could
+    // text a code for a link the other had already spent.
+    const link = await deps.links.read(r.handle);
+    assert.ok(link, "connectAuthWiring's link store did not read this Worker's own table");
+    assert.equal(link.user_id, OWNER);
+
+    // CODES: the real D1 code store. Written through the port, read back out of
+    // SQLite outside the code under test.
+    const at = NOW;
+    await deps.codes.insert({
+      id: "codeaaaaaaaaaa1",
+      token_handle: r.handle,
+      user_id: OWNER as never,
+      code_hash: "c".repeat(64),
+      expires_at: at + 600_000,
+      attempts: 0,
+      used_at: null,
+      created_at: at,
+    });
+    const raw = r.d1.db.prepare(
+      `SELECT "id", "user_id" FROM "connect_codes" WHERE "token_handle" = ?`,
+    ).all(r.handle) as { id: string; user_id: string }[];
+    assert.equal(raw.length, 1,
+      "connectAuthWiring's code store did not write to this Worker's connect_codes table");
+    assert.equal(raw[0].user_id, OWNER);
+    const newest = await deps.codes.newest(r.handle);
+    assert.equal(newest?.id, "codeaaaaaaaaaa1");
+
+    // The clock and the id mint are the tests' and production's respectively,
+    // exactly as connectDeps leaves them.
+    assert.equal(deps.now, undefined, "connectAuthWiring pinned the clock production owns");
+    assert.equal(deps.newId, undefined);
+    s.restore();
+  });
+
+await check("connectAuthWiring's app name comes from the catalog, and a blip costs only the name",
+  async () => {
+    const s = socket();
+    const r = await rig();
+    const deps = connectAuthWiring(r.env)!;
+
+    // NO APP IS HARDCODED: the Worker has never heard of this one.
+    assert.equal(await deps.toolkitName(APP.slug), APP.name,
+      "the name in the text did not come off the catalog");
+    assert.ok(s.calls.some((c) => c.url === `${COMPOSIO_BASE_URL}/toolkits/${APP.slug}`),
+      "the catalog was never asked, so the name came from somewhere it must not come from");
+
+    // A catalog outage costs the app's NAME in one sentence of the text, never
+    // the code itself — so this port swallows rather than throws.
+    s.catalogFails = true;
+    assert.equal(await deps.toolkitName(APP.slug), null,
+      "a catalog blip escaped as a throw, which stops somebody signing in over a display name");
+    s.restore();
+  });
+
+await check("connectAuthWiring refuses without the vendor secret, and the CONTROL is the same rig with it",
+  async () => {
+    const s = socket();
+    const unset = await rig({ COMPOSIO_API_KEY: undefined });
+    assert.equal(connectAuthWiring(unset.env), null,
+      "the code half is live on a Worker whose page half is not, so somebody can be texted a "
+        + "code for a link no page can ever draw");
+    const set = await rig();
+    assert.ok(connectAuthWiring(set.env),
+      "connectAuthWiring refuses a Worker that has everything, so the check above proves nothing");
+    s.restore();
+  });
+
+await check("CONTROL: /c/{token}/code with NO injected deps reaches the real wiring", async () => {
+  const s = socket();
+  const r = await rig();
+  seedLink(r);
+
+  // The wiring is installed by loading src/index.ts, the same way the page half
+  // is. A gate leg can ask this; it cannot ask whether the factory works.
+  assert.equal(connectAuthWiringInstalled(), true,
+    "src/index.ts does not install the connect-auth wiring, so /c/{token}/code answers 503 "
+      + "for every token there has ever been");
+
+  // NO DEPS ARGUMENT — exactly how src/index.ts calls this. A 200 here is the
+  // only assertion in the repo that executes `connectAuthWiring` through the
+  // route, and gutting that factory to `return null` turns it into the 503.
+  const res = await connectAuthRoute(
+    getReq(`/c/${r.token}/code`), r.env as unknown as ConnectAuthEnv);
+  assert.ok(res, "the code route did not claim its own path");
+  const html = await res.text();
+  assert.equal(res.status, 200,
+    `the wired Worker refused to offer a code: ${html.slice(0, 200)}`);
+  assert.ok(html.includes("<form"), "the offer page has no way to ask for the code");
+  assert.ok(html.includes(`/c/${r.token}/code`), "the form does not post back to this link");
+  s.restore();
+});
+
+await check("CONTROL: the same request on a Worker with no vendor secret is the honest 503",
+  async () => {
+    const s = socket();
+    const r = await rig({ COMPOSIO_API_KEY: undefined });
+    seedLink(r);
+    // One variable apart from the check above. This is what "not wired" looks
+    // like, so the 200 above is "wired" and not "the route always answers 200".
+    const res = await connectAuthRoute(
+      getReq(`/c/${r.token}/code`), r.env as unknown as ConnectAuthEnv);
+    assert.ok(res);
+    const html = await res.text();
+    assert.equal(res.status, 503, "an unconfigured Worker offered to text a code anyway");
+    assert.ok(!html.includes("<form"), "an unwired Worker offered a button that cannot work");
+    assert.equal(s.calls.length, 0, "an unconfigured Worker still called out to the vendor");
+    s.restore();
+  });
+
+// ===========================================================================
+// 7. THE ROUTER — the last piece of wiring nothing executed
+//
+// Everything above calls a route function directly. `src/index.ts` decides
+// which requests ever REACH one, and that decision is wiring too: a branch
+// removed, reordered or shadowed takes the whole feature down while every
+// route function in the repo still passes its own suite. That is not
+// hypothetical — measured on 2026-09-06, `GET https://api.anticipy.ai/c/<43
+// chars>` answered 404 while `/api/health` answered 200, and
+// test/evidence-bytes.test.ts exists because two other routes shipped written,
+// correct and unrouted.
+//
+// So these two go through `worker.fetch`, with the real env, the real wiring
+// and no injected deps: exactly what a phone and a browser get.
+// ===========================================================================
+
+const ctx = { waitUntil() {}, passThroughOnException() {} } as unknown as ExecutionContext;
+
+await check("worker.fetch routes /me/connections to the six routes, not to the 404", async () => {
+  const s = socket();
+  const r = await rig();
+
+  // SIGNED IN: 200, from the real D1 store through the real wiring. This owner
+  // has connected nothing, so the list is empty — an empty list is the honest
+  // answer HERE, where the store answered; it is a failure only when something
+  // could not be read, and that polarity is pinned in connections-api.test.ts.
+  const mine = await worker.fetch(
+    new Request("https://api.anticipy.ai/me/connections",
+      { headers: { Authorization: r.ownerToken } }),
+    r.env as never, ctx);
+  assert.notEqual(mine.status, 404,
+    "the Worker does not carry /me/connections at all, so every Connected Apps screen "
+      + "shows 'I couldn't read your connected apps'");
+  assert.equal(mine.status, 200, `the router reached something that refused: ${mine.status}`);
+  assert.deepEqual(await mine.json(), { items: [] });
+
+  // SIGNED OUT: 401 and JSON, so the phone renders "sign in", not "we are down".
+  // A 404 here would be indistinguishable from an unrouted Worker.
+  const nobody = await worker.fetch(
+    new Request("https://api.anticipy.ai/me/connections"), r.env as never, ctx);
+  assert.equal(nobody.status, 401, "an unrouted or misrouted door answered the signed-out call");
+  assert.equal(nobody.headers.get("content-type"), "application/json; charset=utf-8");
+  assert.equal(s.calls.length, 0, "the vendor was asked about our own table");
+  s.restore();
+});
+
+await check("worker.fetch routes /c/{token} and /c/{token}/code, and neither is a 404", async () => {
+  const s = socket();
+  const r = await rig();
+  seedLink(r);
+
+  // THE CODE HALF FIRST, because index.ts chains them: connectAuthRoute answers
+  // null for anything that is not its own, and connect.ts keeps every path it
+  // owned. A branch that stopped chaining would 404 one of these two.
+  const code = await worker.fetch(
+    new Request(`https://api.anticipy.ai/c/${r.token}/code`), r.env as never, ctx);
+  assert.notEqual(code.status, 404,
+    "the deployed shape of 2026-09-06: the Worker does not carry the /c/ prefix, so every "
+      + "link Anticipy has ever texted is a dead end");
+  assert.equal(code.status, 200, "the router reached something that refused to offer a code");
+  assert.ok((await code.text()).includes("<form"), "the offer page has no way to ask");
+
+  // THE PAGE HALF, signed out. 401 rather than 404: the door exists and this
+  // caller has proved nothing, which is a different sentence.
+  const page = await worker.fetch(
+    new Request(`https://api.anticipy.ai/c/${r.token}`), r.env as never, ctx);
+  assert.equal(page.status, 401, "the page half is unrouted or answers a stranger");
+  const html = await page.text();
+  assert.doesNotMatch(html, /zellibrix/i,
+    "the app the owner is connecting was named to whoever intercepted the text");
+  s.restore();
+});
+
+// ===========================================================================
+// 8. NO APP IS HARDCODED — the scan the whole feature turns on
 // ===========================================================================
 
 await check("the wiring names no app, no logo and no scope word", async () => {

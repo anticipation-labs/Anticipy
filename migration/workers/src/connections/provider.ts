@@ -41,9 +41,29 @@
 //   GET    /connected_accounts?user_ids={owner}      -> {items:[…]}
 //   POST   /connected_accounts/{id}/revoke           -> 200 ACTIVE / 409 not
 //   DELETE /connected_accounts/{id}                  -> 200
-// `GET /toolkits/{slug}` is the one endpoint here that was NOT measured that
-// day; `toolkit()` says so at its call site and refuses an unreadable answer
-// rather than inventing a name.
+// The two catalog endpoints were not measured that day. They were on 2026-09-06,
+// against this account's live key, and every claim below is from that run rather
+// than from the docs:
+//   GET /toolkits?search={q}&limit={n}  -> 200 {items, next_cursor, total_pages,
+//                                          current_page, total_items}
+//                                         item: {slug, name, type, auth_schemes,
+//                                          …, meta:{description, logo, app_url,
+//                                          categories, tools_count, …}}
+//   GET /toolkits/{slug}                -> 200 the same row plus base_url,
+//                                          enabled and auth_config_details
+// Three search probes, because the answers are the reason for three branches:
+//   search=calendar        -> 3 items, slugs googlecalendar/outlook/googletasks
+//                             (lowercase slugs, display-cased names)
+//   search=qqzzxx…         -> 200 {items: [], total_items: 0} — a REAL "nothing
+//                             matched", which is why an empty list from the
+//                             vendor is an answer and every other empty is not
+//   search=  (blank/spaces) -> a blank value returns the first page of the whole
+//                             catalog (total_items 1505) and a spaces-only value
+//                             is a vendor 400. Neither is a search, which is why
+//                             routes/connections_api.ts refuses one before it
+//                             gets here.
+// A search row carries NO auth_config_details, so `scopes` is always empty on
+// one — see `readToolkitMeta`.
 //
 // WHAT THIS FILE MAY NOT DO. It contains no app names, no permission copy and
 // no phrasing. Which toolkit a person meant is a model's question (contract's
@@ -127,6 +147,22 @@ export const OWNER_ID_SHAPE = /^[a-z0-9]{15}$/;
  *  cost of an LRU is code nobody can check. Correctness does not depend on it:
  *  the cache is an optimisation, and the wrong-person guards are on the wire. */
 export const MAX_CACHED_SESSIONS = 500;
+
+/** THE SEARCH CAP, and it is a CEILING no caller can raise.
+ *
+ *  `search()` asks the vendor for at most this many rows and cuts whatever
+ *  comes back to this many regardless, because `limit` is a request and a
+ *  vendor that ignores it would put the whole catalog — 1,400+ toolkits — on a
+ *  phone that renders one scrolling list.
+ *
+ *  Forty rather than ten: the whole point of `?q=` is connecting an app nobody
+ *  ever asked about, and a tight cut is a local ranking decision wearing a
+ *  number's clothes — it silently decides that the 11th row the VENDOR ranked
+ *  is not worth showing. Forty is past where anybody scrolls and far short of
+ *  a payload that matters. There is no second page: one search box asks one
+ *  question, and `next_cursor` is deliberately not read, so nothing here can
+ *  walk the catalog. */
+export const MAX_SEARCH_RESULTS = 40;
 
 // ---------------------------------------------------------------------------
 // NAMED FAILURES. A method that returns an empty list because nobody set a key
@@ -572,6 +608,67 @@ function readScopes(root: Record<string, unknown>): string[] {
     take(asRecord(detail)?.scopes);
   }
   return found;
+}
+
+/** One catalog row, from either endpoint that produces one, or null.
+ *
+ *  `GET /toolkits/{slug}` and `GET /toolkits?search=` return the SAME row shape
+ *  — the detail endpoint adds `auth_config_details`, which only `readScopes`
+ *  looks at — so they share one reader. Two readers would be two answers to
+ *  what an app is called, and the search list and the connect page would
+ *  eventually disagree about the same toolkit.
+ *
+ *  `null` means the row cannot be shown: no name, or no slug. Both are fatal to
+ *  a row rather than cosmetic — the slug is the vendor primary key every later
+ *  call is made with, and a nameless row renders as a blank line with a Connect
+ *  button on it. WHAT THE CALLER DOES WITH `null` DIFFERS, and deliberately:
+ *  `toolkit()` refuses the whole call, because it was asked about one app and
+ *  has no answer; `search()` drops the row, because one unreadable row in forty
+ *  must not cost the other thirty-nine — and `search()` still refuses when
+ *  NOTHING was readable, which is the shape that would otherwise claim an empty
+ *  catalog.
+ *
+ *  `fallbackSlug` is the slug the caller ASKED about. `search()` passes null: it
+ *  asked about no slug at all, so a row that names none is unusable rather than
+ *  attributable to anything. */
+function readToolkitMeta(
+  root: Record<string, unknown>,
+  fallbackSlug: string | null,
+): ToolkitMeta | null {
+  const meta = asRecord(root.meta);
+  const name = asString(root.name) ?? asString(meta?.name);
+  // The vendor's own spelling when it gives one: `connections()` returns
+  // canonical slugs in `toolkit.slug`, so taking the canonical form here is what
+  // keeps a catalog row and the connection it later produces on the same key.
+  const slug = toolkitSlug(asString(root.slug) ?? fallbackSlug ?? "");
+  if (!name || slug.length === 0) return null;
+  return {
+    slug,
+    name,
+    logo: asString(root.logo) ?? asString(meta?.logo) ?? null,
+    description: asString(root.description) ?? asString(meta?.description) ?? null,
+    appUrl: asString(root.app_url) ?? asString(meta?.app_url) ?? asString(root.appUrl) ?? null,
+    // EMPTY ON EVERY SEARCH ROW, and that is the vendor's shape rather than a
+    // gap here: measured 2026-09-06, a listing row carries no
+    // `auth_config_details` at all. Empty means UNKNOWN, exactly as it does for
+    // `toolkit()`, and words.ts refuses to generate permission sentences from
+    // nothing — so the phone's disclosure sheet asks
+    // `/me/connections/sentences`, which does the detail fetch, and never builds
+    // consent copy out of a search row.
+    //
+    // A SEPARATE, LARGER FINDING FROM THE SAME RUN, recorded here because this
+    // is where the next reader will be standing: `readScopes` came back EMPTY
+    // for every toolkit measured on the detail endpoint too (googlecalendar,
+    // gmail, notion, slack). The live rows carry no `scopes` key anywhere — the
+    // field is `auth_config_details[].required_scopes`, which `readScopes` does
+    // not read, and on this account it is an empty array in all four anyway. So
+    // permission scopes are UNKNOWN for every app in production today, and
+    // anything that refuses on an empty scope list refuses for all of them.
+    // That is not this function's to fix — the data is not merely under another
+    // key, it is absent — and adding the other key name would be a change that
+    // looks like a fix and moves nothing measurable.
+    scopes: readScopes(root),
+  };
 }
 
 /**
@@ -1168,10 +1265,9 @@ export class ComposioConnections implements ConnectionProvider {
     );
     const root = asRecord(json);
     if (!root) throw new ConnectionsResponseShape("toolkit", "response was not an object");
-    const meta = asRecord(root.meta);
 
-    const name = asString(root.name) ?? asString(meta?.name);
-    if (!name) {
+    const out = readToolkitMeta(root, asked);
+    if (out === null) {
       // Refusing beats defaulting to the slug. "Connect your googlecalendar" is
       // the sentence a slug fallback ships, in the register the spec spends a
       // page forbidding, and it would look like a copy decision rather than a
@@ -1181,19 +1277,117 @@ export class ComposioConnections implements ConnectionProvider {
         `no name for ${JSON.stringify(asked)}; the connect page has nothing to call this app`,
       );
     }
+    return out;
+  }
 
-    return {
-      // The vendor's own spelling when it gives one: `connections()` returns
-      // canonical slugs in `toolkit.slug`, so taking the canonical form here is
-      // what keeps the connect page and the row it later produces on the same
-      // key.
-      slug: toolkitSlug(asString(root.slug) ?? asked),
-      name,
-      logo: asString(root.logo) ?? asString(meta?.logo) ?? null,
-      description: asString(root.description) ?? asString(meta?.description) ?? null,
-      appUrl: asString(root.app_url) ?? asString(meta?.app_url) ?? asString(root.appUrl) ?? null,
-      scopes: readScopes(root),
-    };
+  // -------------------------------------------------------------------------
+  // search — THE ONLY WAY TO ADD AN APP NOBODY ASKED ABOUT
+  // -------------------------------------------------------------------------
+  /**
+   * The whole catalog, searched with the letters somebody typed.
+   *
+   * ── LAW 1 IS THE WHOLE DESIGN OF THIS METHOD ─────────────────────────────
+   *
+   * The typed phrase is percent-encoded into the query string and handed to the
+   * VENDOR. That is the only thing done to it. There is no local filter, no
+   * local ranking, no did-you-mean, no synonym table and no list of app names
+   * anywhere in this file — which is why `?q=` could not simply be pointed at
+   * `toolkit(slug)`: treating a phrase a person typed as a vendor primary key
+   * would be this adapter deciding what their words MEANT, and getting it wrong
+   * silently, with "nothing matched" as the alibi.
+   *
+   * What comes back is returned in THE ORDER THE VENDOR GAVE. Re-sorting is the
+   * same violation with a numeric face on it: whichever row we promoted would be
+   * our opinion about which app they meant, formed with no context at all.
+   *
+   * ── AN EMPTY LIST IS AN ANSWER, AND ONLY WHEN THE VENDOR GAVE IT ─────────
+   *
+   * `items: []` from the vendor means "nothing in the catalog matches those
+   * letters", which the search box renders honestly. Every other outcome —
+   * no key, a dead network, a non-2xx, a body with no `items` array, a page of
+   * rows none of which can be read — THROWS, so the route answers 503 and the
+   * screen says it could not reach us. The one thing this must never do is
+   * return `[]` because something went wrong: that tells a person the catalog
+   * holds nothing, and the catalog holds 1,400 apps.
+   *
+   * Capped at `MAX_SEARCH_RESULTS` on both halves: it is sent as the vendor's
+   * own `limit`, AND the answer is cut to it whatever arrives.
+   *
+   * ── NO OWNER, AND THAT IS NOT AN OVERSIGHT ───────────────────────────────
+   *
+   * Every other public method here re-validates an owner row id at runtime
+   * because it reaches a credential of one particular person's. The catalog is
+   * the vendor's global list of what CAN be connected; it names nobody, returns
+   * nothing about anybody's accounts, and is identical for every owner. Adding
+   * an owner argument would put a value on the wire that this endpoint has no
+   * meaning for, and would teach the next reader that the owner check is
+   * ceremony rather than the thing standing between a display name and somebody
+   * else's mailbox. The route is still behind the signed-in gate and its own
+   * per-owner budget.
+   *
+   * ENDPOINT MEASURED LIVE 2026-09-06 — path, both parameters, the envelope and
+   * the row shape, plus the no-match and blank answers this method's branches
+   * are built on. The measurements are in this file's header. Every field is
+   * still read defensively, because a shape that held on one afternoon is not a
+   * contract.
+   */
+  async search(query: string, opts?: { limit?: number }): Promise<ToolkitMeta[]> {
+    const wanted = Number(opts?.limit ?? MAX_SEARCH_RESULTS);
+    // A CEILING, not a default: `MAX_SEARCH_RESULTS` is the most any caller can
+    // ask for, and an unusable number falls back to it rather than reaching the
+    // vendor as `limit=NaN`.
+    const limit = Number.isFinite(wanted) && wanted >= 1
+      ? Math.min(MAX_SEARCH_RESULTS, Math.trunc(wanted))
+      : MAX_SEARCH_RESULTS;
+
+    const json = await this.#callOrThrow(
+      "catalog search",
+      "GET",
+      `/toolkits?search=${encodeURIComponent(query)}&limit=${limit}`,
+    );
+
+    const root = asRecord(json);
+    const items = Array.isArray(json)
+      ? json
+      : Array.isArray(root?.items)
+        ? (root.items as unknown[])
+        : null;
+    if (items === null) {
+      // NOT an empty list. "We could not read the answer" and "the catalog holds
+      // nothing that matches" are different sentences on a person's screen.
+      throw new ConnectionsResponseShape("catalog search", "no items array in the response");
+    }
+
+    const out: ToolkitMeta[] = [];
+    let unreadable = 0;
+    for (const entry of items) {
+      const row = asRecord(entry);
+      const meta = row === null ? null : readToolkitMeta(row, null);
+      if (meta === null) unreadable++;
+      else out.push(meta);
+    }
+
+    // ONE unreadable row among readable ones is dropped in silence, and that is
+    // the opposite of what `connections()` does with an unreadable row — on
+    // purpose. There, a dropped row becomes "you have not connected Notion" and
+    // texts somebody about the app they connected last week. Here, a dropped row
+    // is one line missing from a list of forty, and refusing the whole search
+    // over it would break the search box every time the vendor ships a
+    // half-populated entry.
+    //
+    // ALL of them unreadable is the different thing, and it refuses: a page of
+    // rows we cannot parse is a shape change or an outage, and returning `[]`
+    // for it would say the catalog has nothing matching those letters.
+    if (out.length === 0 && unreadable > 0) {
+      throw new ConnectionsResponseShape(
+        "catalog search",
+        `${unreadable} of ${items.length} catalog rows could not be read, so nothing here is `
+          + "an answer about what the catalog holds",
+      );
+    }
+
+    // The vendor's order, cut to the cap. Never re-sorted.
+    return out.slice(0, limit);
   }
 }
 

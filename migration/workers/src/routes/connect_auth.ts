@@ -65,6 +65,19 @@
  * from the catalog at run time — there is no app name in this source and there
  * must never be one.
  *
+ * AND IT CARRIES THE PHONE'S ATTEMPT ID, WHICH IS NOT DECORATION. The app puts
+ * `state={attempt id}` on the link it opens (ConnectHandoff.outboundLink) and
+ * `ConnectHandoff.parseDone` REFUSES any callback that comes back without it —
+ * the deep link `anticipy://connected/{toolkit}` can be opened by any web page,
+ * any other app or a QR code on a poster, so the state is the whole of what
+ * binds a callback to the one attempt this phone started. Until 2026-09-06 this
+ * file dropped it: the 303 after a correct code went to `/c/{token}` with the
+ * query gone, so a person could prove who they were, finish the connect, and
+ * have the app refuse the handoff home. It is now carried through all four hops
+ * — offer, send, box, redirect — VERBATIM (see `connectPagePath`), it is checked
+ * with connect.ts's own `checkedState` on the way in rather than re-spelled
+ * here, and one that was never sent is never invented.
+ *
  * WHAT THIS FILE DOES NOT OWN, and must not grow into: the `connect_links`
  * store, the catalog, the connect page itself. They arrive injected, exactly as
  * they do for connect.ts.
@@ -74,7 +87,7 @@
  */
 import { sendText, type MessagingEnv } from "../messaging.ts";
 import {
-  tokenHandle, whoIsSignedIn,
+  checkedState, tokenHandle, whoIsSignedIn,
   type ConnectEnv, type ConnectLinkStore, type OwnerId, type StoredLink,
 } from "./connect.ts";
 
@@ -831,15 +844,37 @@ function plainPage(status: number, heading: string, sentence: string): Response 
 </body>`);
 }
 
+/**
+ * `/c/{token}`, carrying the phone's attempt id when there is one, and
+ * `/c/{token}/code` likewise.
+ *
+ * ENCODED HERE AND DECODED THERE, which is what "carried verbatim" means on a
+ * wire: connect.ts reads the value back with `searchParams.get`, so a state
+ * containing "%" — the phone's own alphabet allows one — arrives as the exact
+ * characters the phone minted. Writing it raw would corrupt that case, and
+ * encoding an already-encoded one would corrupt it the other way. A state that
+ * is absent stays absent: no key, no empty `?state=`, nothing for
+ * `ConnectHandoff.parseDone` to read as an attempt id nobody minted.
+ */
+function connectPagePath(token: string, state: string | null): string {
+  return `/c/${token}${state ? `?state=${encodeURIComponent(state)}` : ""}`;
+}
+
+function codePath(token: string, state: string | null): string {
+  return `/c/${token}/code${state ? `?state=${encodeURIComponent(state)}` : ""}`;
+}
+
 /** The offer. It names NOTHING — not the app, not the owner, not whether the
  *  link is real — because it is drawn before anybody has proved anything, and
- *  it is drawn without touching the store for the same reason. */
-function askPage(token: string): Response {
+ *  it is drawn without touching the store for the same reason. The one thing it
+ *  carries is the caller's own attempt id, straight back out in a hidden field,
+ *  so the send below knows which attempt it is finishing. */
+function askPage(token: string, state: string | null): Response {
   return page(200, ASK_HEADING, `<body>
 <h1>${esc(ASK_HEADING)}</h1>
 <p>${esc(ASK_LINE)}</p>
 <form method="post" action="/c/${esc(token)}/code">
-  <button type="submit">${esc(ASK_BUTTON)}</button>
+${state ? `  <input type="hidden" name="state" value="${esc(state)}">\n` : ""}  <button type="submit">${esc(ASK_BUTTON)}</button>
 </form>
 <p class="fine">${esc(OPTIONAL_LINE)}</p>
 <a class="later" href="https://anticipy.ai/">Skip for now</a>
@@ -848,19 +883,22 @@ function askPage(token: string): Response {
 
 /**
  * The one answer `POST /c/{token}/code` gives, and the page a wrong code comes
- * back to. Every byte of it is the same for every token; only `wrong` changes,
- * and `wrong` is about the CODE the caller just typed, never about the token.
+ * back to. Every byte of it is the same for every token once the caller's OWN
+ * two strings are taken out — the token in the form action and the attempt id
+ * they arrived with, neither of which this file learned from the store. What
+ * else changes is `wrong`, and `wrong` is about the CODE the caller just typed,
+ * never about the token.
  */
-function enterCodePage(token: string, wrong: boolean): Response {
+function enterCodePage(token: string, wrong: boolean, state: string | null): Response {
   return page(wrong ? 400 : 200, SENT_HEADING, `<body>
 <h1>${esc(SENT_HEADING)}</h1>
 ${wrong ? `<p class="wrong">${esc(NOPE_LINE)}</p>\n` : ""}<p>${esc(SENT_LINE)}</p>
 <form method="post" action="/c/${esc(token)}/verify">
-  <input type="text" name="code" inputmode="numeric" autocomplete="one-time-code"
+${state ? `  <input type="hidden" name="state" value="${esc(state)}">\n` : ""}  <input type="text" name="code" inputmode="numeric" autocomplete="one-time-code"
          maxlength="6" pattern="[0-9]*" aria-label="6-digit code" autofocus>
   <button type="submit">${esc(SENT_BUTTON)}</button>
 </form>
-<p class="fine">Didn't get one? <a href="/c/${esc(token)}/code">Ask for another</a>. ${esc(OPTIONAL_LINE)}</p>
+<p class="fine">Didn't get one? <a href="${esc(codePath(token, state))}">Ask for another</a>. ${esc(OPTIONAL_LINE)}</p>
 </body>`);
 }
 
@@ -889,20 +927,35 @@ function isCrossSitePost(request: Request): boolean {
   }
 }
 
-/** One field out of a form post. Never throws: a body that is not a form is
- *  simply no field, and a POST with no code is a wrong code, not a 500. */
-async function formField(request: Request, name: string): Promise<string> {
+/**
+ * The form, parsed ONCE.
+ *
+ * A Request body may be read exactly once, so a one-field helper called twice
+ * hands the second caller nothing — and the second field on `/verify` is the
+ * phone's attempt id, whose loss is silent, passes every check that only looks
+ * at the code, and ends as a deep link the app refuses. One parse, then fields
+ * off the result.
+ *
+ * Never throws: a body that is not a form is simply no fields, and a POST with
+ * no code is a wrong code, not a 500.
+ */
+async function formOf(request: Request): Promise<FormData | null> {
   const ct = request.headers.get("content-type") ?? "";
   if (!ct.includes("application/x-www-form-urlencoded") && !ct.includes("multipart/form-data")) {
-    return "";
+    return null;
   }
   try {
-    const form = await request.formData();
-    const v = form.get(name);
-    return typeof v === "string" ? v.trim() : "";
+    return await request.formData();
   } catch {
-    return "";
+    return null;
   }
+}
+
+/** One field off a parsed form, trimmed. A missing field and a field that is
+ *  not a string are the same empty answer. */
+function field(form: FormData | null, name: string): string {
+  const v = form?.get(name);
+  return typeof v === "string" ? v.trim() : "";
 }
 
 /** What a log line may say about a link: the first 12 hex of its handle. Never
@@ -955,12 +1008,13 @@ async function phoneFor(db: D1Database, ownerId: string): Promise<string> {
 export async function connectAuthRoute(
   request: Request, env: ConnectAuthEnv, deps?: ConnectAuthDeps,
 ): Promise<Response | null> {
-  let route: ConnectAuthRoute | null;
+  let url: URL;
   try {
-    route = parseConnectAuthPath(new URL(request.url).pathname);
+    url = new URL(request.url);
   } catch {
     return null;
   }
+  const route = parseConnectAuthPath(url.pathname);
   if (!route) return null;
 
   const method = request.method === "HEAD" ? "GET" : request.method;
@@ -980,7 +1034,11 @@ export async function connectAuthRoute(
     return plainPage(503, UNWIRED_HEADING, UNWIRED_LINE);
   }
 
-  if (method === "GET") return askPage(route.token);
+  // The offer is a GET, so its attempt id is on the query — the link
+  // connect.ts's signed-out page drew. Everything after this is a POST and
+  // reads the state out of the form body instead, which is where our own page
+  // put it and where it survives the redirect chain.
+  if (method === "GET") return askPage(route.token, checkedState(url.searchParams.get("state")));
 
   // Before anything is read and long before anything is sent.
   if (isCrossSitePost(request)) {
@@ -1009,6 +1067,10 @@ export async function connectAuthRoute(
 async function handleSend(
   request: Request, env: ConnectAuthEnv, deps: ConnectAuthDeps, token: string, now: number,
 ): Promise<Response> {
+  // Read the body BEFORE the send, and outside its try: the attempt id rides in
+  // it, the page below has to carry it on, and a send that fails must not also
+  // lose the state — the two failures would then be one silent one.
+  const state = checkedState(field(await formOf(request), "state"));
   try {
     await mintAndSend(env, deps, token, now);
   } catch (err) {
@@ -1018,7 +1080,7 @@ async function handleSend(
     // what `connectCodesTableReady` is for.
     console.log(`connect code: send path failed — ${(err as Error)?.message ?? "unknown"}`);
   }
-  return enterCodePage(token, false);
+  return enterCodePage(token, false, state);
 }
 
 async function mintAndSend(
@@ -1105,7 +1167,11 @@ async function mintAndSend(
 async function handleCheck(
   request: Request, env: ConnectAuthEnv, deps: ConnectAuthDeps, token: string, now: number,
 ): Promise<Response> {
-  const typed = await formField(request, "code");
+  // ONE parse of the body for both fields. Two calls would hand the second one
+  // an already-consumed stream, and the field it would lose is the state.
+  const form = await formOf(request);
+  const typed = field(form, "code");
+  const state = checkedState(field(form, "state"));
   let cookie: string | null = null;
   try {
     cookie = await checkCode(env, deps, token, typed, now);
@@ -1113,16 +1179,22 @@ async function handleCheck(
     console.log(`connect check: failed — ${(err as Error)?.message ?? "unknown"}`);
     cookie = null;
   }
-  if (!cookie) return enterCodePage(token, true);
+  // A wrong code comes back to the same box WITH the state still in it: one
+  // typo must not cost the person the attempt their phone is waiting on.
+  if (!cookie) return enterCodePage(token, true, state);
 
-  // 303 back to the page itself. The browser re-requests /c/{token} carrying
-  // the new cookie, and connect.ts draws the consent page it could not draw a
-  // moment ago. An empty body, so nothing about the session is rendered
-  // anywhere.
+  // 303 back to the page itself, CARRYING THE ATTEMPT ID. The browser
+  // re-requests /c/{token}?state=… with the new cookie, connect.ts draws the
+  // consent page it could not draw a moment ago, and the hidden field on that
+  // page is what eventually rides out to the vendor and back into
+  // `anticipy://connected/{toolkit}`. Dropping the query here is the whole of
+  // finding 2: the person finishes the connect and the app refuses the handoff,
+  // because `ConnectHandoff.parseDone` requires the state the attempt started
+  // with. An empty body, so nothing about the session is rendered anywhere.
   return new Response(null, {
     status: 303,
     headers: {
-      location: `/c/${token}`,
+      location: connectPagePath(token, state),
       "set-cookie": cookie,
       "cache-control": "no-store",
       "referrer-policy": "no-referrer",

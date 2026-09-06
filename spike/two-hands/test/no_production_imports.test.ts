@@ -63,6 +63,18 @@
 //      `+` chains joined — before anything resolves them, so the fence reads
 //      what node reads.
 //
+//   4. THE FENCE'S OWN FIXTURES ARE IN THE TREE IT WALKS. Legs 6, 7 and 8 plant
+//      real violations in the real spike, because that is the only way to prove
+//      the WALKER hands a file to the scanner. While those fixtures had fixed
+//      names, a second copy of this suite running at the same instant read them
+//      as this checkout's violations and deleted them out from under the run
+//      that wrote them — measured at 2 to 4 red legs per process, so the suite
+//      answered 1006/1006 or 1004/1006 depending on nothing that was in the
+//      repo. A fence that answers differently run to run teaches the next
+//      reader to re-run until it is green, which is the same as deleting it.
+//      Fixtures are now named for the run that owns them, and the walker is
+//      blind to every plant that is not this run's. See RUN_ID below and leg 9.
+//
 // `<up>` ABOVE AND THROUGHOUT stands for the `../..` that climbs out of the
 // spike, and it is written that way on purpose: leg 3 reads this file's RAW
 // source, comments included, so a real climbing path in a comment here is a
@@ -98,6 +110,94 @@ const REPO = resolve(SPIKE, "..", "..");
  *  checkout reached through a symlinked parent would otherwise make every link
  *  inside the spike look like an escape. */
 const SPIKE_REAL = realpathSync(SPIKE);
+
+// ---------------------------------------------------------------------------
+// THE PLANTS BELONG TO ONE RUN, AND EVERY OTHER RUN IS BLIND TO THEM.
+// ---------------------------------------------------------------------------
+// MEASURED, not theorised. Two copies of this suite run against this checkout
+// at the same instant used to produce 2, 3 or 4 red legs per process, every
+// time, and always these: the plant legs and the legs that assert the tree is
+// clean. Three separate collisions, all from ONE cause — the plants had fixed
+// names:
+//
+//   1. `fence-probe/`, `zzOversize.mjs` and `zzUpperCase.MJS` were the same
+//      paths in both processes, so each `finally` deleted the OTHER run's
+//      fixture out from under its assertions.
+//   2. `clearProbe(PROBE_DIR)` at load blew away a probe directory the other
+//      process was in the middle of walking.
+//   3. Legs 1, 2 and 3 assert the real tree is clean, and the other process's
+//      in-flight plant IS a real import of brain/ sitting in the tree. Red,
+//      correctly, about a file that is not the checkout's.
+//
+// The whole suite therefore reported 1006/1006 or 1004/1006 depending on what
+// else was running, and a fence that answers differently run to run teaches the
+// next reader to re-run until it is green — which is the same as deleting it.
+//
+// The fix has two halves and needs both. Names are scoped to THIS process, so
+// no run can delete another's fixture; and the walker refuses, by name, to look
+// at a plant belonging to any other run, so a neighbour's fixture is not this
+// checkout's violation. The pid is what makes the id unique among processes
+// alive at the same time — which is exactly the set that can collide — and the
+// random tail covers a pid reused by a later run.
+const RUN_ID = `${process.pid}-${Math.random().toString(36).slice(2, 10)}`;
+
+/** Reserved. Every fixture this file writes is named `<prefix><run id>-...`,
+ *  and NOTHING ELSE in the spike may be. The walker's skip below is a hole in
+ *  the fence exactly this wide, which is why the prefix is a string nobody
+ *  would type by accident and why the skip is REPORTED rather than silent. */
+const PLANT_PREFIX = "zzfenceprobe-";
+
+/** The full shape of a fixture name: the prefix, a pid, a tail, a dash. The
+ *  SHAPE is checked and not merely the prefix, because the skip below is a hole
+ *  in the fence and this is what keeps it exactly one run's fixtures wide. A
+ *  file called `zzfenceprobe-evil.ts` importing brain/ carries the reserved
+ *  prefix and no run id; without this it would be skipped as "somebody else's"
+ *  by every process forever, which is a fence with a documented way through it.
+ *  With it, that file is walked, scanned and refused like any other. */
+const PLANT_NAME = new RegExp(`^${PLANT_PREFIX}\\d+-[a-z0-9]+-`);
+
+/** Is this name a fixture belonging to some OTHER run of this suite?
+ *
+ *  Ours are not foreign — legs 6, 7 and 8 exist to watch the walker pick them
+ *  up, and a skip that hid them would turn every one of those legs into an
+ *  assertion about an empty list. */
+function isForeignPlant(name: string): boolean {
+  if (!PLANT_NAME.test(name)) return false;
+  return !name.startsWith(`${PLANT_PREFIX}${RUN_ID}-`);
+}
+
+/** Best-effort tidying, and NOT the thing that makes the legs deterministic —
+ *  the walker's skip is. This only stops a Ctrl-C from littering the tree with
+ *  2MB fixtures nobody will ever look at again.
+ *
+ *  A plant is swept only when the process that wrote it is GONE. Signal 0 asks
+ *  the kernel without sending anything: ESRCH means no such process, EPERM
+ *  means somebody else's live one. Anything we cannot answer counts as alive,
+ *  because deleting a running suite's fixture is the failure this whole section
+ *  is about. */
+function ownerIsGone(name: string): boolean {
+  const rest = name.slice(PLANT_PREFIX.length);
+  const pid = Number.parseInt(rest.slice(0, rest.indexOf("-")), 10);
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return false;
+  } catch (err) {
+    return (err as NodeJS.ErrnoException).code === "ESRCH";
+  }
+}
+
+function sweepAbandonedPlants(dir: string): void {
+  try {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      if (!isForeignPlant(entry.name)) continue;
+      if (!ownerIsGone(entry.name)) continue;
+      clearProbe(join(dir, entry.name));
+    }
+  } catch {
+    // A directory that is not there yet is not a problem to solve here.
+  }
+}
 
 /** The four directories the owner's rule names. Written as a list on purpose:
  *  this is a gate, and a gate is the one place HARNESS-LAWS law 1 allows a list
@@ -181,10 +281,19 @@ interface Tree {
    *  Refusing to read something enormous is reasonable; refusing SILENTLY is
    *  how a fence becomes a comment. */
   oversize: string[];
+  /** Fixtures belonging to ANOTHER run of this suite, skipped by name.
+   *
+   *  Listed for the same reason `oversize` is, and the reason is the whole
+   *  history of this walker: three separate defects here were a bare `continue`
+   *  that removed a file from every leg and told nobody. The skip is a hole in
+   *  the fence — narrow, reserved to one prefix, and necessary, because another
+   *  process's in-flight plant is not this checkout's violation — so it is
+   *  named out loud where a reader can see how wide it is. */
+  foreign: string[];
 }
 
 function emptyTree(): Tree {
-  return { files: [], symlinks: [], oversize: [] };
+  return { files: [], symlinks: [], oversize: [], foreign: [] };
 }
 
 /**
@@ -209,6 +318,16 @@ function emptyTree(): Tree {
 function walk(dir: string, keep: (path: string) => boolean, skip: Set<string>, out: Tree): Tree {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const full = join(dir, entry.name);
+    // BEFORE anything touches the filesystem again. Another run owns this
+    // entry: it may be deleted between this line and a `statSync` or a
+    // `readFileSync`, which is an ENOENT crash rather than a verdict, and if it
+    // survives long enough to be read it is a violation belonging to somebody
+    // else's checkout of the same tree. Skipped for both reasons, and recorded
+    // so the skip is not a silence.
+    if (isForeignPlant(entry.name)) {
+      out.foreign.push(full);
+      continue;
+    }
     if (entry.isSymbolicLink()) {
       out.symlinks.push(full);
       continue;
@@ -786,18 +905,87 @@ function* repoEntries(files: string[]): Generator<RepoEntry> {
 
 const SPIKE_NEEDLE = ["spike", "two-hands"].join("/");
 
+/**
+ * Which LINES of a file an import statement covers, and what each one imports.
+ *
+ * A LINE IS NOT A STATEMENT, and reading one as the other is how this leg spent
+ * its first week reporting one of four live violations. Every named import of
+ * more than one symbol is formatted as
+ *
+ *     import type {
+ *       OwnerId,
+ *     } from "…/spike/two-hands/…";
+ *
+ * and the line that names the spike is the one with the closing brace on it —
+ * with no `import` keyword anywhere in the string. `SPECIFIER_PATTERNS` already
+ * read whole statements (`[^;'"]*?` crosses newlines); it was the CALLER that
+ * chopped the source into lines first. So the statements are matched against
+ * the whole file and their character ranges converted back to line numbers,
+ * which keeps the `file:line:` report the leg has always printed.
+ *
+ * Offsets survive `stripComments` because it substitutes spaces and keeps every
+ * newline — a comment removed by deletion would shift every line number after
+ * it and the report would name the wrong line.
+ */
+function importStatementLines(rawSource: string): Map<number, string> {
+  const source = stripComments(rawSource);
+  const lineStarts = [0];
+  for (let i = 0; i < source.length; i++) if (source[i] === "\n") lineStarts.push(i + 1);
+  const lineAt = (index: number): number => {
+    let lo = 0;
+    let hi = lineStarts.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1;
+      if (lineStarts[mid]! <= index) lo = mid;
+      else hi = mid - 1;
+    }
+    return lo + 1;
+  };
+
+  const covered = new Map<number, string>();
+  const record = (start: number, end: number, specifier: string): void => {
+    const last = lineAt(Math.max(start, end - 1));
+    for (let line = lineAt(start); line <= last; line++) covered.set(line, specifier);
+  };
+  for (const pattern of SPECIFIER_PATTERNS) {
+    pattern.lastIndex = 0;
+    let match: RegExpExecArray | null;
+    while ((match = pattern.exec(source)) !== null) {
+      record(match.index, match.index + match[0].length, cookStringLiteral(match[1]!));
+    }
+  }
+  CONCAT_SPECIFIER.lastIndex = 0;
+  let concat: RegExpExecArray | null;
+  while ((concat = CONCAT_SPECIFIER.exec(source)) !== null) {
+    record(concat.index, concat.index + concat[0].length, concatenatedValue(concat[1]!));
+  }
+  return covered;
+}
+
 /** Split every line that NAMES the spike into the two piles the fence exists to
- *  tell apart: an import of it, and a sentence about it. */
+ *  tell apart: an import of it, and a sentence about it.
+ *
+ *  Getting this backwards costs more than a miss. A real import misread as
+ *  prose increments `mentions`, which is the control certifying that this leg
+ *  classified anything at all — so the scanner was being vouched for by the
+ *  very violations it could not see. */
 function inboundImportScan(entries: Iterable<RepoEntry>): { importedBy: string[]; mentions: number } {
   const importedBy: string[] = [];
   let mentions = 0;
 
   for (const entry of entries) {
     if (!entry.source.includes(SPIKE_NEEDLE)) continue;
+    const statements = importStatementLines(entry.source);
     const lines = entry.source.split("\n");
     for (let i = 0; i < lines.length; i++) {
       if (!lines[i].includes(SPIKE_NEEDLE)) continue;
-      if (isImportishLine(lines[i])) {
+      // The statement this line belongs to has to be importing THE SPIKE. A
+      // line that merely sits inside some other import — or in a comment above
+      // one — is prose, and the repo is full of prose naming this directory on
+      // purpose (Law 4). `isImportishLine` stays as the second reading because
+      // it catches Python's forms, which have no specifier to range over.
+      const specifier = statements.get(i + 1);
+      if ((specifier !== undefined && specifier.includes(SPIKE_NEEDLE)) || isImportishLine(lines[i])) {
         importedBy.push(`${entry.label}:${i + 1}: ${lines[i].trim().slice(0, 120)}`);
       } else {
         mentions++;
@@ -1040,6 +1228,42 @@ test("the inbound leg fails on a scan that classified nothing, and on a real imp
   assert.equal(imported.mentions, 0);
   assert.equal(imported.importedBy.length, 1);
   assert.throws(() => assertInboundHolds(imported), /imports the week-1 spike/);
+
+  // A MULTI-LINE IMPORT, which is what a named import of more than one symbol
+  // is formatted as by every formatter anybody runs. Found live on 2026-09-05:
+  // production had FOUR imports of the spike and this leg was reporting one —
+  // the only one written on a single line. The other three had the specifier on
+  // a closing `} from "…"` line, and the classifier was reading ONE LINE at a
+  // time, so `import` was never in the same string as `from`.
+  //
+  // Both halves of that are asserted, and the second is the worse one: a real
+  // import misread as prose does not merely go unreported, it increments
+  // `mentions` — so it feeds the control that certifies this leg classified
+  // something. The scanner was being kept honest by the very violations it was
+  // missing.
+  const spread = inboundImportScan([
+    {
+      label: "migration/workers/src/connections/store.ts",
+      source: `import type {\n  OwnerId,\n  Toolkit,\n} from ${q}../../../${spikePath}${q};\n`,
+    },
+  ]);
+  assert.equal(spread.importedBy.length, 1, "a multi-line import of the spike went unseen");
+  assert.equal(spread.mentions, 0, "and it was counted as prose, which certifies the scanner");
+  assert.throws(() => assertInboundHolds(spread), /imports the week-1 spike/);
+
+  // THE CONTROL. A statement that names the spike in PROSE beside an import of
+  // something else is still prose. Widening the classifier from one line to one
+  // statement must not turn every line near an import into a violation — the
+  // repo is full of notes that name this directory, and Law 4 says they should
+  // be.
+  const nearby = inboundImportScan([
+    {
+      label: "migration/workers/src/connections/store.ts",
+      source: `// ported from ${spikePath}\nimport {\n  hear,\n} from ${q}./local.ts${q};\n`,
+    },
+  ]);
+  assert.deepEqual(nearby.importedBy, [], "a comment above an unrelated import is not an import");
+  assert.equal(nearby.mentions, 1);
 });
 
 // ---------------------------------------------------------------------------
@@ -1052,22 +1276,35 @@ test("the inbound leg fails on a scan that classified nothing, and on a real imp
 // ever meets ordinary files.
 function clearProbe(dir: string): void {
   if (existsSync(dir)) {
-    for (const entry of readdirSync(dir, { withFileTypes: true })) {
-      if (entry.isSymbolicLink()) unlinkSync(join(dir, entry.name));
+    try {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        if (entry.isSymbolicLink()) unlinkSync(join(dir, entry.name));
+      }
+    } catch {
+      // Not a directory — a stale plant FILE reaches here through the sweep,
+      // and it has no entries to unlink. The delete below handles both.
     }
   }
   rmSync(dir, { recursive: true, force: true });
 }
 
-const PROBE_DIR = join(SPIKE, "fence-probe");
+/** This run's probe directory. One level under the spike, like the fixed
+ *  `fence-probe/` it replaces, so `upToRepo` still counts the same climb. */
+const PROBE_DIR = join(SPIKE, `${PLANT_PREFIX}${RUN_ID}-probe`);
 
-// CLEARED ONCE AT LOAD, before any leg runs. An interrupted run — Ctrl-C, a
-// killed process, a pipe closed by `head` — leaves a plant in the tree, and
-// every later run of the WHOLE suite then fails legs 1, 2 and 3 on a file
-// nobody wrote, which reads exactly like the fence catching a real violation.
-// It cost twenty minutes of chasing a ghost once already. The plants are this
-// file's own test data and this directory name belongs to nobody else.
-clearProbe(PROBE_DIR);
+// SWEPT ONCE AT LOAD, and the polarity is worth stating: this is hygiene, not
+// correctness. An interrupted run — Ctrl-C, a killed process, a pipe closed by
+// `head` — used to leave a plant in the tree that made every LATER run fail
+// legs 1, 2 and 3 on a file nobody wrote, which reads exactly like the fence
+// catching a real violation. It cost twenty minutes of chasing a ghost once.
+//
+// That ghost is now impossible whether or not this sweep runs, because the
+// walker skips every plant that is not this run's — a leftover is another run's
+// by definition. What the sweep buys is that a 2MB fixture from a killed run
+// does not sit in `test/` forever, and it only ever removes plants whose
+// process is gone.
+sweepAbandonedPlants(SPIKE);
+sweepAbandonedPlants(join(SPIKE, "test"));
 
 /** How far up a planted file has to climb to reach the repo root: out of any
  *  directories it sits in under `fence-probe/`, then out of `fence-probe`,
@@ -1321,16 +1558,16 @@ test("nothing inside the spike is too big for the fence to read", () => {
   // walker reports the refusal or swallows it, and deleting the fix left this
   // leg green. Mutation testing caught that. So the refusal is DRIVEN first,
   // against a planted file, and only then is the real tree asserted clean.
-  const huge = join(SPIKE, "test", "zzOversize.mjs");
+  const huge = join(SPIKE, "test", `${PLANT_PREFIX}${RUN_ID}-oversize.mjs`);
   writeFileSync(huge, `// ${"x".repeat(2_100_000)}\nexport default 1;\n`);
   try {
     const withPlant = spikeTree();
     assert.ok(
-      withPlant.oversize.some((f) => f.endsWith("zzOversize.mjs")),
+      withPlant.oversize.some((f) => f === huge),
       "a file too big to scan must be REPORTED as unread, not dropped in silence",
     );
     assert.ok(
-      !withPlant.files.some((f) => f.endsWith("zzOversize.mjs")),
+      !withPlant.files.some((f) => f === huge),
       "and it must not be counted as scanned",
     );
   } finally {
@@ -1357,12 +1594,12 @@ test("extension matching is case-insensitive, because the filesystem is", () => 
   // spike" scans this file too, and a violating string sitting in the fence's
   // own source is a violation. Caught exactly that way on the first run.
   const spec = "../".repeat(3) + "br" + "ain/llm.ts";
-  const planted = join(SPIKE, "test", "zzUpperCase.MJS");
+  const planted = join(SPIKE, "test", `${PLANT_PREFIX}${RUN_ID}-upper.MJS`);
   writeFileSync(planted, `import { hear } from "${spec}";\nexport default hear;\n`);
   try {
     const tree = spikeTree();
     assert.ok(
-      tree.files.some((f) => f.endsWith("zzUpperCase.MJS")),
+      tree.files.some((f) => f === planted),
       "the walker never opened an uppercase-extension module, so no leg could object to it",
     );
     assert.ok(
@@ -1451,4 +1688,182 @@ test("a symlink out of the spike is a violation; one that stays inside is not", 
   const clean = spikeTree();
   assert.deepEqual(outsideSpikeViolations(clean), []);
   assert.deepEqual(productionDirViolations(clean), []);
+});
+
+// ---------------------------------------------------------------------------
+// LEG 9 — ONE RUN'S FIXTURES ARE INVISIBLE TO ANOTHER RUN'S FENCE.
+// ---------------------------------------------------------------------------
+// The leg that makes this suite answer the same way twice. Legs 6, 7 and 8 put
+// real violations in the real tree because that is the only way to prove the
+// WALKER hands them to the scanner — and for as long as those fixtures had
+// fixed names, a second copy of the suite running at the same instant saw them,
+// called them violations of this checkout, and deleted them out from under the
+// run that wrote them. Measured: two concurrent runs, 2 to 4 red legs each,
+// every time. The whole suite reported 1006/1006 or 1004/1006 depending on
+// nothing that was in the repo.
+//
+// Both halves are asserted here: what the walker refuses to look at, and what
+// it still refuses to let past. The second is not optional — a skip wide enough
+// to hide a neighbour's plant is wide enough to hide a real import, so the
+// control plants the identical file under OUR id and requires all three legs to
+// name it.
+test("a plant belonging to another run is skipped by name, said out loud, and still caught when it is ours", () => {
+  const q = '"';
+  // What a second copy of this suite looks like from here: same machine, same
+  // checkout, different run. The pid is OURS on purpose — a live one — so this
+  // fixture also proves the load-time sweep leaves running suites alone.
+  const foreignRun = `${process.pid}-notthisrun`;
+  assert.notEqual(foreignRun, RUN_ID);
+  assert.equal(isForeignPlant(`${PLANT_PREFIX}${foreignRun}-probe`), true);
+  assert.equal(isForeignPlant(`${PLANT_PREFIX}${RUN_ID}-probe`), false, "our own plant is not foreign");
+
+  const foreignDir = join(SPIKE, `${PLANT_PREFIX}${foreignRun}-probe`);
+  const foreignBig = join(SPIKE, "test", `${PLANT_PREFIX}${foreignRun}-oversize.mjs`);
+  // Assembled from parts, never written out: leg 3 reads this file's own raw
+  // source, so a real climbing path in a literal here is the fence violating
+  // itself.
+  const spec = `${upToRepo("uses.ts")}${PRODUCTION_DIRS[0]}/llm.ts`;
+  const body = `import { hear } from ${q}${spec}${q};\nexport default hear;\n`;
+
+  try {
+    mkdirSync(foreignDir, { recursive: true });
+    writeFileSync(join(foreignDir, "uses.ts"), body);
+    writeFileSync(foreignBig, `// ${"x".repeat(2_100_000)}\nexport default 1;\n`);
+
+    const tree = spikeTree();
+    // SAID, not silently dropped. Three defects in this walker were a bare
+    // `continue`; the skip that fixes the flake must not become the fourth.
+    assert.ok(tree.foreign.includes(foreignDir), `the skip was silent: ${tree.foreign.join(", ")}`);
+    assert.ok(tree.foreign.includes(foreignBig), `the skip was silent: ${tree.foreign.join(", ")}`);
+    assert.ok(
+      !tree.files.some((f) => f.startsWith(foreignDir + sep)),
+      "another run's module was opened and scanned",
+    );
+    // The three legs that used to go red on somebody else's fixture.
+    assert.deepEqual(outsideSpikeViolations(tree), []);
+    assert.deepEqual(productionDirViolations(tree), []);
+    assert.deepEqual(escapingPathViolations(tree.files), []);
+    // And the oversize list, which leg 7 asserts is empty over the whole spike.
+    assert.deepEqual(tree.oversize, []);
+
+    // The sweep must not touch a plant whose process is alive, or this fix
+    // would delete the fixtures of the very run it exists to protect.
+    sweepAbandonedPlants(SPIKE);
+    sweepAbandonedPlants(join(SPIKE, "test"));
+    assert.ok(existsSync(foreignDir), "the sweep deleted a live run's probe directory");
+    assert.ok(existsSync(foreignBig), "the sweep deleted a live run's fixture");
+
+    // THE CONTROL. The identical file, under OUR run id, is a violation in
+    // every leg — so the skip is scoped to the id and not to the prefix.
+    clearProbe(PROBE_DIR);
+    mkdirSync(PROBE_DIR, { recursive: true });
+    writeFileSync(join(PROBE_DIR, "uses.ts"), body);
+    const ours = spikeTree();
+    assert.ok(ours.files.includes(join(PROBE_DIR, "uses.ts")), "our own plant was skipped too");
+    assert.ok(outsideSpikeViolations(ours).some((v) => v.includes("uses.ts")), "leg 1 went blind");
+    assert.ok(productionDirViolations(ours).some((v) => v.includes("uses.ts")), "leg 2 went blind");
+  } finally {
+    clearProbe(foreignDir);
+    rmSync(foreignBig, { force: true });
+    clearProbe(PROBE_DIR);
+  }
+
+  // WHAT CANNOT BE ASSERTED HERE, and the first draft of this leg asserted it:
+  // `foreign` is empty. It is not — a second copy of this suite running right
+  // now has fixtures in the tree, which is the entire situation this leg was
+  // written for, and `deepEqual(clean.foreign, [])` went red in exactly that
+  // case. The claim that holds is about THIS run: nothing it wrote is left, and
+  // the tree it can see is clean.
+  const clean = spikeTree();
+  assert.deepEqual(outsideSpikeViolations(clean), []);
+  assert.deepEqual(productionDirViolations(clean), []);
+  assert.ok(!existsSync(foreignDir), "this run left a probe directory behind");
+  assert.ok(!existsSync(foreignBig), "this run left a fixture behind");
+  assert.ok(!existsSync(PROBE_DIR), "this run left its own probe directory behind");
+  assert.deepEqual(
+    clean.foreign.filter((f) => f.includes(`${PLANT_PREFIX}${RUN_ID}`)),
+    [],
+    "this run's own fixtures cannot be foreign to it",
+  );
+});
+
+test("an abandoned plant is swept, and a running one is not", () => {
+  // The hygiene half, and its polarity. A pid the kernel says nothing is using
+  // is a run that died — Ctrl-C, a killed process, a pipe closed by `head` —
+  // and its 2MB fixture should not sit in `test/` forever. A pid that IS alive
+  // is a suite in the middle of its own assertions, and deleting its fixture is
+  // the collision this whole section exists to end, so the sweep has to be able
+  // to tell them apart and has to fall the safe way when it cannot.
+  //
+  // NOTE THE SWEEP IS NOT WHAT MAKES THE LEGS DETERMINISTIC. The walker is
+  // blind to every plant that is not this run's whether or not anybody tidies
+  // — leg 9 proves that with a plant it never sweeps. This only stops litter.
+  //
+  // Run inside THIS run's own probe directory rather than in `test/`: an
+  // abandoned fixture in the shared tree is one a concurrent run would sweep,
+  // correctly, in the middle of these assertions — a test for a concurrency fix
+  // that is itself racy teaches nobody anything.
+  assert.equal(ownerIsGone(`${PLANT_PREFIX}999999-longgone-probe`), true, "999999 is not a live pid here");
+  assert.equal(ownerIsGone(`${PLANT_PREFIX}${process.pid}-x-probe`), false, "our own pid is alive");
+  assert.equal(ownerIsGone(`${PLANT_PREFIX}notanumber-x-probe`), false, "an unreadable id counts as alive");
+
+  const sandbox = join(PROBE_DIR, "sweep");
+  const abandoned = join(sandbox, `${PLANT_PREFIX}999999-longgone-oversize.mjs`);
+  const running = join(sandbox, `${PLANT_PREFIX}${process.pid}-stillrunning-probe`);
+  try {
+    mkdirSync(sandbox, { recursive: true });
+    writeFileSync(abandoned, `// ${"x".repeat(2_100_000)}\nexport default 1;\n`);
+    mkdirSync(running, { recursive: true });
+
+    // Blind BEFORE anyone tidies, which is the property that killed the ghost.
+    const before = spikeTree();
+    assert.ok(before.foreign.includes(abandoned), "the walker read a dead run's leftover");
+    assert.deepEqual(before.oversize, [], "a leftover must not read as an unscannable file");
+
+    sweepAbandonedPlants(sandbox);
+    assert.ok(!existsSync(abandoned), "the leftover was never cleaned up");
+    assert.ok(existsSync(running), "the sweep deleted a running suite's fixture");
+  } finally {
+    clearProbe(PROBE_DIR);
+  }
+});
+
+test("the skip is one run's fixtures wide, and nothing else fits through it", () => {
+  // The skip in `walk` is the only way past this fence, so its width is a leg
+  // of its own. Asserted on the PREDICATE rather than by planting files,
+  // deliberately: a fixture that a NEIGHBOURING run is supposed to see is a
+  // real violation in that run's tree for as long as it exists, and planting
+  // one to test a concurrency fix would put the flake back to measure it.
+  const alive = process.pid;
+
+  // Skipped: another run's, in the shape this file writes.
+  for (const name of [
+    `${PLANT_PREFIX}${alive}-notthisrun-probe`,
+    `${PLANT_PREFIX}1-abc123-oversize.mjs`,
+    `${PLANT_PREFIX}999999-longgone-upper.MJS`,
+  ]) {
+    assert.equal(isForeignPlant(name), true, name);
+  }
+
+  // NOT skipped: ours, whatever it is called after the id.
+  for (const name of [`${PLANT_PREFIX}${RUN_ID}-probe`, `${PLANT_PREFIX}${RUN_ID}-anything.ts`]) {
+    assert.equal(isForeignPlant(name), false, name);
+  }
+
+  // NOT skipped: anything that merely wears the reserved prefix. This is the
+  // hole the shape check closes — every one of these would otherwise be
+  // invisible to every run of this suite, permanently, which is a fence with a
+  // published way through it.
+  for (const name of [
+    `${PLANT_PREFIX}evil.ts`,
+    `${PLANT_PREFIX}-evil.ts`,
+    `${PLANT_PREFIX}notapid-abc-evil.ts`,
+    `${PLANT_PREFIX}12-evil.ts`,
+    `${PLANT_PREFIX}12-UPPER-evil.ts`,
+    "zzfenceprobe.ts",
+    "src/index.ts",
+    "router.ts",
+  ]) {
+    assert.equal(isForeignPlant(name), false, name);
+  }
 });

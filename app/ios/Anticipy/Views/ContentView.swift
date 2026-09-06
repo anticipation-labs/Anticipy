@@ -1103,6 +1103,23 @@ struct HomeView: View {
         return DashboardPolicy.thread(heard: heard, said: said, jobs: rows)
     }
 
+    /// PAST CONVERSATIONS, from the segments the brain already stamped on the
+    /// lines. `HeardGroup` does the grouping the feed has always used, so the
+    /// history list and the feed agree about where one conversation ended and
+    /// the next began. A group with nothing to call itself is skipped rather
+    /// than listed as "Untitled": a row a person cannot recognise is a row
+    /// that wastes the tap.
+    private var dashboardHistory: [DashboardPolicy.Day] {
+        let sessions = HeardGroup.build(session.transcript).compactMap { group -> DashboardPolicy.Session? in
+            guard let title = group.goalTitle ?? group.lines.first.map({ $0.text }),
+                  !title.isEmpty,
+                  let at = group.lines.compactMap({ $0.created.isEmpty ? nil : $0.created }).min()
+            else { return nil }
+            return DashboardPolicy.Session(id: group.id, title: title, at: at)
+        }
+        return DashboardPolicy.history(sessions, now: Date())
+    }
+
     private var dashboardCaptureState: DashboardPolicy.CaptureState {
         DashboardPolicy.captureState(micBlocked: session.micBlocked,
                                      listening: session.listener.isListening,
@@ -1137,7 +1154,7 @@ struct HomeView: View {
                     captureState: dashboardCaptureState,
                     listening: session.listener.isListening,
                     everListened: !session.transcript.isEmpty,
-                    history: [],
+                    history: dashboardHistory,
                     onStartListening: { session.startListening() },
                     onHoldListening: {
                         if session.listener.isListening { session.stopListening() }
@@ -1145,7 +1162,7 @@ struct HomeView: View {
                     },
                     onStopListening: { session.stopListening() },
                     onSend: { line in typedLine = line; submitTyped() },
-                    onOpenSession: { _ in },
+                    onOpenSession: { _ in },   // opening one back up is not built yet
                     onRefresh: { await session.refresh() }
                 ) {
                     dashboardNotices

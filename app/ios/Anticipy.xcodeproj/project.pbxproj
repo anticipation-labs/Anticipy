@@ -60,6 +60,7 @@
 		859C9A2572940C9366F344A8 /* ListenResumePolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = DFAFAF3DD2B73755BB35E975 /* ListenResumePolicy.swift */; };
 		8E57577FB951B85FBF9F584F /* CaptureSourcePolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD680DFB54A1BBE979377745 /* CaptureSourcePolicy.swift */; };
 		8EBF95ED1C7E5C562D44A86A /* AnswerRoutePolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 347F8F94513CF0FA870620CE /* AnswerRoutePolicy.swift */; };
+		EBC9A4252F4BEC04ED026BC9 /* ConnectedAppsClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 548CC6564DEE43166F884FA7 /* ConnectedAppsClient.swift */; };
 		1CAE6BB6547D40C497480CCD /* RetryReconciliationPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1C669D9A40144BF9AB35E44 /* RetryReconciliationPolicy.swift */; };
 		946396466F25E501C639DFF1 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 8095C94E5CB8E9048543E8B5 /* PrivacyInfo.xcprivacy */; };
 		971583FBD4A7D9FACD05AF00 /* SettingsKitPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = C112A671A60C1CCDA902CE04 /* SettingsKitPolicy.swift */; };
@@ -162,6 +163,7 @@
 		279CD122187AC50931E7FBAB /* InterviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InterviewView.swift; sourceTree = "<group>"; };
 		2A1BB76AD5C8C31F5FFC05B4 /* LocalTranscriber.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalTranscriber.swift; sourceTree = "<group>"; };
 		347F8F94513CF0FA870620CE /* AnswerRoutePolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnswerRoutePolicy.swift; sourceTree = "<group>"; };
+		548CC6564DEE43166F884FA7 /* ConnectedAppsClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectedAppsClient.swift; sourceTree = "<group>"; };
 		E1C669D9A40144BF9AB35E44 /* RetryReconciliationPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RetryReconciliationPolicy.swift; sourceTree = "<group>"; };
 		35BF4F0710D0F39FD92F0289 /* SettingsListeningView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsListeningView.swift; sourceTree = "<group>"; };
 		368691500357FCAF594BFF34 /* PendantRadioPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PendantRadioPolicy.swift; sourceTree = "<group>"; };
@@ -345,6 +347,7 @@
 				FA5C4F252F014AB5B0913B40 /* ConnectOnboardingPolicy.swift */,
 				B26F79BAAFC6A603B27D7D32 /* ConnectSession.swift */,
 				347F8F94513CF0FA870620CE /* AnswerRoutePolicy.swift */,
+				548CC6564DEE43166F884FA7 /* ConnectedAppsClient.swift */,
 				BE0AB97746861DA294983C3B /* AnticipyBackend.swift */,
 				82A5C0CD5302B692C964648D /* CalendarHandPolicy.swift */,
 				E468B3BEC49CF56CD1534BED /* JobReceipt.swift */,
@@ -630,6 +633,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				8EBF95ED1C7E5C562D44A86A /* AnswerRoutePolicy.swift in Sources */,
+				EBC9A4252F4BEC04ED026BC9 /* ConnectedAppsClient.swift in Sources */,
 				1CAE6BB6547D40C497480CCD /* RetryReconciliationPolicy.swift in Sources */,
 				0BB2CC5D62582F4FF458E8ED /* AnticipyApp.swift in Sources */,
 				18A477FBAFC0AF1ADB1EAF87 /* AnticipyBackend.swift in Sources */,

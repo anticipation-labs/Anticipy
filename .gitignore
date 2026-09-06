@@ -58,3 +58,10 @@ xcuserdata/
 # (anticipy-owner-state); nothing needs these in git, ever.
 migration/workers/owners/
 **/owners/*/memory.db
+
+# npm installs. 635MB across four of them as of 2026-09-06, and the one at the
+# repo root was untracked AND unignored — one `git add -A` from being committed,
+# which is the same shape as the 356MB Chrome incident above. The eighteen files
+# under migration/spike/containers-sdk/node_modules are a deliberately vendored
+# 220K SDK and stay tracked; gitignore does not untrack what is already in.
+node_modules/

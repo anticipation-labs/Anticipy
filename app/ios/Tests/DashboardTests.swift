@@ -153,6 +153,20 @@ check(P.history([], now: now, calendar: cal).isEmpty, "no conversations, no days
 check(P.history([P.Session(id: "x", title: "junk", at: "not a date")], now: now, calendar: cal).isEmpty,
       "a row with no readable date is dropped rather than shown under a guess")
 
+// THE SHAPE THE STORE ACTUALLY WRITES. Rows arrive "2026-09-06 11:43:07.000Z"
+// — a space where ISO-8601 wants a T — and the first version of `history`
+// parsed none of them, so History said "Nothing here yet" over a phone full of
+// conversations. The thread hid the bug because it sorts the strings and never
+// parses them.
+let pbStyle = iso.string(from: dayStart.addingTimeInterval(11 * 3_600))
+    .replacingOccurrences(of: "T", with: " ")
+let pbDays = P.history([P.Session(id: "pb", title: "Written by the store", at: pbStyle)],
+                       now: now, calendar: cal)
+check(pbDays.count == 1 && pbDays[0].heading == "Today",
+      "a timestamp with a space instead of a T is still today",
+      "got \(pbDays.map(\.heading))")
+check(pbDays.first?.sessions.first?.id == "pb", "and the row survives to be shown")
+
 // -------------------------------------------------------------- empty line
 check(P.emptyLine(listening: true, everListened: true) != P.emptyLine(listening: false, everListened: true),
       "the empty screen says something different while she is listening")

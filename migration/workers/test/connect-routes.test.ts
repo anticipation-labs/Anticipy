@@ -23,8 +23,12 @@
  *   "a real Anticipy token" and "not one" — a live token answered one way and
  *   an invented one another — which is exactly the fact whoever intercepted the
  *   text wants, available for free and without spending the link. Five tokens
- *   in five different states must produce ONE response, byte for byte, on all
- *   three legs, and the store must not be read at all.
+ *   in five different states must produce ONE response, byte for byte once the
+ *   caller's OWN token is normalised out, on all three legs — and the store
+ *   must not be read at all. The token is normalised because the signed-out
+ *   page now carries the way forward (`/c/{token}/code`), which is the token
+ *   the caller already holds and nothing the store knows; every other byte of
+ *   those five pages must still be identical.
  *
  *   THE WRONG PERSON. The spike's `connectPageDone` wrote the callback's
  *   `connected_account_id` verbatim, and its own docstring claimed that could
@@ -306,6 +310,18 @@ async function fingerprint(res: Response, where: string): Promise<string> {
   return `${res.status}\n${headers}\n\n${text}`;
 }
 
+/** The same page for two different tokens differs only by the token, which the
+ *  caller supplied and already holds — exactly the normalisation
+ *  connect-auth.test.ts does for the code pages. What must NOT differ is
+ *  anything the STORE knows. */
+const normalise = (text: string, token: string): string => text.split(token).join("{TOKEN}");
+
+/** How many times a literal appears. Counted rather than matched: a regex that
+ *  silently stopped matching reads as a pass, and did so three times in one day
+ *  on this feature. */
+const occurrences = (haystack: string, needle: string): number =>
+  haystack.split(needle).length - 1;
+
 /** The five states a token can be in, all as tokens an anonymous caller might
  *  present. Each is a separate rig so nothing leaks between them. */
 async function fiveTokens(): Promise<{ label: string; r: Rig; token: string }[]> {
@@ -383,7 +399,7 @@ await check("signed out, five different tokens give ONE answer, byte for byte, o
     const seen = new Map<string, string[]>();
     for (const { label, r, token } of await fiveTokens()) {
       const res = await connectRoute(getReq(`/c/${token}`), r.env, r.deps);
-      const fp = await fingerprint(res, `anon view ${label}`);
+      const fp = normalise(await fingerprint(res, `anon view ${label}`), token);
       seen.set(fp, [...(seen.get(fp) ?? []), label]);
       assert.equal(r.store.reads, 0,
         `the store was asked about a ${label} token by a caller who proved nothing — `
@@ -398,7 +414,7 @@ await check("signed out, five different tokens give ONE answer on /go — and sp
     const seen = new Set<string>();
     for (const { label, r, token } of await fiveTokens()) {
       const res = await connectRoute(postReq(`/c/${token}/go`), r.env, r.deps);
-      seen.add(await fingerprint(res, `anon go ${label}`));
+      seen.add(normalise(await fingerprint(res, `anon go ${label}`), token));
       assert.equal(r.store.reads, 0, `the store was read on an anonymous /go (${label})`);
       assert.equal(r.log.authorize.length, 0, "the vendor was asked by an anonymous caller");
     }
@@ -413,7 +429,7 @@ await check("signed out, five different tokens give ONE answer on /done", async 
   for (const { label, r, token } of await fiveTokens()) {
     const res = await connectRoute(
       getReq(`/c/${token}/done?status=success&connected_account_id=ca_VENDOR_1`), r.env, r.deps);
-    seen.add(await fingerprint(res, `anon done ${label}`));
+    seen.add(normalise(await fingerprint(res, `anon done ${label}`), token));
     assert.equal(r.store.reads, 0, `the store was read on an anonymous /done (${label})`);
     assert.equal(r.written.length, 0, "a signed-out callback wrote a connection");
   }
@@ -496,7 +512,108 @@ await check("the signed-out page names no app and no owner", async () => {
   const html = await bodyOf(res, "anon view copy");
   assert.doesNotMatch(html, /Zellibrix/i, "the app was named above the lock screen");
   assert.doesNotMatch(html, new RegExp(OWNER), "the owner id was printed to a stranger");
-  assert.doesNotMatch(html, new RegExp(r.token), "the token was echoed into the page");
+  // The caller's OWN token may appear exactly once, on the way forward, and
+  // nowhere else. It is the one string on that page the caller already holds;
+  // a second occurrence is a page that grew something else to say about a link
+  // nobody has proved anything about.
+  assert.equal(occurrences(html, r.token), 1,
+    "the signed-out page says more about the caller's link than the way forward");
+  assert.equal(occurrences(html, `href="/c/${r.token}/code"`), 1);
+});
+
+await check("the signed-out page is not a dead end — it offers the code, and reads nothing",
+  async () => {
+    // MEASURED ON PRODUCTION 2026-09-06: a real link, minted and opened in
+    // Chrome, drew a page that said "sign in in this browser" and linked to
+    // nothing. There is no web sign-in on this Worker and the person is holding
+    // a phone, so that page was the end of the product.
+    const r = await rig();
+    const res = await connectRoute(getReq(`/c/${r.token}`), r.env, r.deps);
+    assert.equal(res.status, 401);
+    const html = await bodyOf(res, "anon view offer");
+    assert.equal(occurrences(html, `href="/c/${r.token}/code"`), 1,
+      "the wall has no door: nothing on the page starts the phone-code flow");
+    assert.equal(occurrences(html, "Get a code by text"), 1,
+      "the control is not in the product's register, or is not there at all");
+    // THE OFFER IS NOT AN ORACLE. It is drawn before anything is looked up, and
+    // /c/{token}/code never reads the store either, so it is the same offer for
+    // a live link, a spent one and a string somebody made up.
+    assert.equal(r.store.reads, 0,
+      "the way forward was drawn from the store — the door became the oracle");
+  });
+
+await check("the offer is on every leg that says sign in — the tap and the callback too",
+  async () => {
+    const r = await rig();
+    const go = await connectRoute(
+      postReq(`/c/${r.token}/go`, null, { form: { state: "ATTEMPT-1234" } }), r.env, r.deps);
+    assert.equal(go.status, 401);
+    assert.equal(occurrences(await bodyOf(go, "anon go offer"),
+      `href="/c/${r.token}/code?state=ATTEMPT-1234"`), 1,
+      "a signed-out tap on Connect is a dead end");
+    assert.equal(r.store.reads, 0, "the store was read on an anonymous /go");
+    assert.equal(r.log.authorize.length, 0);
+
+    // THE ONE THAT LOSES A CONNECTION. The browser comes back from the vendor
+    // with no cookie, and a wall here means the account exists at the vendor
+    // with no row anywhere and no webhook that will ever mention it again.
+    const d = await rig();
+    const done = await connectRoute(getReq(
+      `/c/${d.token}/done?state=ATTEMPT-1234&status=success&connected_account_id=ca_VENDOR_1`),
+      d.env, d.deps);
+    assert.equal(done.status, 401);
+    assert.equal(occurrences(await bodyOf(done, "anon done offer"),
+      `href="/c/${d.token}/code?state=ATTEMPT-1234"`), 1,
+      "the callback's own sign-in page offers nothing, so the connection is lost silently");
+    assert.equal(d.store.reads, 0, "the store was read on an anonymous /done");
+  });
+
+await check("the phone's state rides the way forward, and one nobody sent is not invented",
+  async () => {
+    const r = await rig();
+    const withState = await bodyOf(await connectRoute(
+      getReq(`/c/${r.token}?state=ATTEMPT-1234`), r.env, r.deps), "anon view state");
+    assert.equal(occurrences(withState, `href="/c/${r.token}/code?state=ATTEMPT-1234"`), 1,
+      "the attempt id is dropped at the wall, so the deep link home is refused by parseDone");
+
+    const without = await bodyOf(await connectRoute(
+      getReq(`/c/${r.token}`), r.env, r.deps), "anon view no state");
+    assert.equal(occurrences(without, "state="), 0,
+      "a state nobody sent was invented, and the phone will refuse it");
+    assert.equal(occurrences(without, `href="/c/${r.token}/code"`), 1,
+      "and the way forward is still there without one");
+  });
+
+await check("the state on the way forward is carried VERBATIM, never re-encoded", async () => {
+  const r = await rig();
+  // The phone's own alphabet allows "%" (ConnectHandoff.isOpaqueToken), which
+  // is the character a missing encode and a double encode each corrupt, in
+  // opposite directions. What the next hop reads back must be what arrived.
+  const state = "A%2FB-1234";
+  const html = await bodyOf(await connectRoute(
+    getReq(`/c/${r.token}?state=${encodeURIComponent(state)}`), r.env, r.deps),
+    "anon view verbatim state");
+  const m = /href="([^"]*\/code\?[^"]*)"/.exec(html);
+  assert.ok(m, "no way forward on the page at all");
+  const back = new URL((m[1] as string).replace(/&amp;/g, "&"), "https://api.anticipy.ai")
+    .searchParams.get("state");
+  assert.equal(back, state,
+    "the attempt id the code flow will read is not the one the phone minted");
+});
+
+await check("a state that is not the phone's shape never reaches the way forward", async () => {
+  const r = await rig();
+  const bad = await bodyOf(await connectRoute(
+    getReq(`/c/${r.token}?state=${encodeURIComponent('"><script>x</script>')}`), r.env, r.deps),
+    "anon view bad state");
+  assert.equal(occurrences(bad, "state="), 0, "an unvalidated state was reflected into our HTML");
+  assert.equal(occurrences(bad, "script"), 0);
+
+  // THE CONTROL: the same page, with a state the phone would actually mint,
+  // carries it. A check that refuses both is an outage, not a check.
+  const ok = await bodyOf(await connectRoute(
+    getReq(`/c/${r.token}?state=ATTEMPT-1234`), r.env, r.deps), "anon view good state");
+  assert.equal(occurrences(ok, "state=ATTEMPT-1234"), 1);
 });
 
 // ===========================================================================
@@ -766,6 +883,38 @@ await check("a stranger's tap and a signed-out tap spend nothing", async () => {
     "a signed-in stranger burned somebody else's link");
   assert.equal(r.log.authorize.length, 0);
 });
+
+await check("THE CHAIN: the state on the page is the state that reaches the vendor",
+  async () => {
+    // The hop AFTER the phone-code redirect, and the one nothing covered until
+    // 2026-09-06: `/c/{token}/verify` now 303s to `/c/{token}?state=…`, and if
+    // the consent page does not put that value back into its own form the state
+    // dies here instead — one hop later, just as silently, with the same ending
+    // (ConnectHandoff.parseDone refusing the deep link home).
+    const r = await rig();
+    const html = await bodyOf(await connectRoute(
+      getReq(`/c/${r.token}?state=ATTEMPT-1234`, asHeader(r.ownerToken)), r.env, r.deps),
+      "view carries the state");
+    assert.equal(occurrences(html, '<input type="hidden" name="state" value="ATTEMPT-1234">'), 1,
+      "the consent page dropped the attempt id the browser arrived with");
+
+    // Posted back exactly as the page rendered it — read out of the HTML rather
+    // than retyped, so this drives the chain instead of assuming it.
+    const rendered = /name="state" value="([^"]*)"/.exec(html);
+    assert.ok(rendered, "no state field to post");
+    await bodyOf(await connectRoute(
+      postReq(`/c/${r.token}/go`, asHeader(r.ownerToken),
+        { form: { state: rendered[1] as string } }), r.env, r.deps), "go from the page");
+    assert.equal(r.log.authorize[0]!.callbackUrl,
+      callbackUrl(r.token, "https://api.anticipy.ai/c", "ATTEMPT-1234"),
+      "the URL the other company sends the browser back to carries no attempt id");
+
+    // THE CONTROL: no state on the page means no state invented anywhere.
+    const bare = await rig();
+    const plain = await bodyOf(await connectRoute(
+      getReq(`/c/${bare.token}`, asHeader(bare.ownerToken)), bare.env, bare.deps), "view no state");
+    assert.equal(occurrences(plain, 'name="state"'), 0);
+  });
 
 await check("a state that is not the phone's opaque shape is dropped, not reflected", async () => {
   const r = await rig();
