@@ -1,0 +1,63 @@
+# Ask App Store Connect a question. READ ONLY, and manual only.
+#
+# WHY THIS EXISTS. On 2026-09-06 build 153 was VALID and the owner's phone was
+# on build 88. "VALID" is Apple's verdict on the BYTES — processing finished,
+# the archive is installable — and says nothing about whether any human can see
+# the build in TestFlight. That needs a tester group, and an external group
+# needs a review as well. Nothing in this repo could ask, because the App Store
+# Connect credentials live only in CI: there is no signing identity and no .p8
+# on the development Mac, which is the same reason iOS ships from here rather
+# than from a laptop.
+#
+# WHAT IT WILL NEVER DO. It does not attach a build to a group, invite a
+# tester, submit for review, or change anything at all. Distributing software
+# to people is the owner's decision, made in App Store Connect. This prints
+# what is true and stops.
+name: Ask App Store Connect (read only)
+
+on:
+  workflow_dispatch:
+    inputs:
+      build:
+        description: "Build number to ask about (e.g. 153)"
+        required: true
+        type: string
+      bundle:
+        description: "Bundle id"
+        required: false
+        default: "ai.anticipy.app"
+        type: string
+
+concurrency:
+  group: asc-query-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  ask:
+    runs-on: macos-15
+    timeout-minutes: 10
+    env:
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # Same shape as the TestFlight workflow's key step, so there is one way
+      # this credential is materialised rather than two.
+      - name: Put the App Store Connect key where the helper looks
+        env:
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          mkdir -p $RUNNER_TEMP/asc
+          echo -n "$ASC_KEY_P8" | base64 --decode -o $RUNNER_TEMP/asc/AuthKey.p8
+          chmod 600 $RUNNER_TEMP/asc/AuthKey.p8
+
+      - name: Who can install this build
+        env:
+          ASC_KEY_PATH: ${{ runner.temp }}/asc/AuthKey.p8
+        run: |
+          python3 app/ios/scripts/app_store_connect.py who-can-install \
+            --bundle "${{ inputs.bundle }}" --build "${{ inputs.build }}"
