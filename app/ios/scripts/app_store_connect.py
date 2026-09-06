@@ -118,13 +118,18 @@ class Client:
         self.credentials = credentials
 
     def request(self, method: str, path: str,
-                params: dict[str, str | int] | None = None) -> Any:
+                params: dict[str, str | int] | None = None,
+                body: dict[str, Any] | None = None) -> Any:
         url = API + path
         if params:
             url += "?" + urllib.parse.urlencode(params)
+        headers = {"Authorization": "Bearer " + self.credentials.token()}
+        payload = None
+        if body is not None:
+            payload = json.dumps(body).encode()
+            headers["Content-Type"] = "application/json"
         request = urllib.request.Request(
-            url, method=method,
-            headers={"Authorization": "Bearer " + self.credentials.token()})
+            url, method=method, data=payload, headers=headers)
         with urllib.request.urlopen(request, timeout=30) as response:
             if response.status == 204:
                 return None
@@ -187,6 +192,80 @@ def live_next_build(client: Client, bundle_id: str,
     return next_build_number(
         [(item.get("attributes") or {}).get("version", "") for item in builds],
         source)
+
+
+def invite_tester(client: Client, bundle_id: str, group_name: str,
+                  email: str, first: str, last: str, confirm: str) -> int:
+    """Add ONE person to ONE tester group. A WRITE, and it is not reversible
+    from here.
+
+    Apple emails an invitation to the address the moment this succeeds. That
+    reaches a real human being, so this command exists behind a confirmation
+    the caller has to type out, and the confirmation is not a boolean flag:
+    `--confirm INVITE` cannot be set by a default, a stale environment
+    variable, or a workflow input somebody left filled in from last time.
+
+    It refuses to create a group, refuses to remove anybody, and refuses to
+    guess which group is meant when the name does not match exactly one.
+    """
+    if confirm != "INVITE":
+        print("refused: this invites a real person by email. Pass "
+              "--confirm INVITE to mean it.")
+        return 2
+    if "@" not in email or email.startswith("@") or email.endswith("@"):
+        print(f"refused: {email!r} is not an address")
+        return 2
+
+    apps = client.request("GET", "/v1/apps", {
+        "filter[bundleId]": bundle_id, "limit": 1})["data"]
+    if len(apps) != 1:
+        raise RuntimeError(f"expected one app for {bundle_id}, found {len(apps)}")
+
+    groups = client.request("GET", "/v1/betaGroups", {
+        "filter[app]": apps[0]["id"], "limit": 50})["data"]
+    named = [g for g in groups
+             if (g.get("attributes") or {}).get("name") == group_name]
+    if len(named) != 1:
+        have = ", ".join(sorted((g.get("attributes") or {}).get("name", "?")
+                                for g in groups)) or "none"
+        print(f"refused: {group_name!r} does not name exactly one group. "
+              f"Groups on this app: {have}")
+        return 2
+    group = named[0]
+
+    # Already there is a SUCCESS, not an error: the caller wanted this person
+    # able to install, and they are. Re-inviting would send a second email for
+    # nothing.
+    existing = client.request("GET", f"/v1/betaGroups/{group['id']}/betaTesters",
+                              {"limit": 100})["data"]
+    for tester in existing:
+        attrs = tester.get("attributes") or {}
+        if (attrs.get("email") or "").lower() == email.lower():
+            print(f"already in {group_name}: state={attrs.get('state', '?')}. "
+                  "Nothing sent.")
+            return 0
+
+    client.request("POST", "/v1/betaTesters", body={
+        "data": {
+            "type": "betaTesters",
+            "attributes": {"firstName": first, "lastName": last, "email": email},
+            "relationships": {"betaGroups": {"data": [
+                {"type": "betaGroups", "id": group["id"]}]}},
+        }
+    })
+    print(f"invited {email} to {group_name}. Apple has sent the email; the "
+          "person must accept it in TestFlight before any build appears.")
+
+    after = client.request("GET", f"/v1/betaGroups/{group['id']}/betaTesters",
+                           {"limit": 100})["data"]
+    for tester in after:
+        attrs = tester.get("attributes") or {}
+        if (attrs.get("email") or "").lower() == email.lower():
+            print(f"confirmed on the group: state={attrs.get('state', '?')}")
+            return 0
+    print("WARNING: the invitation was accepted by the API but the person is "
+          "not on the group when read back. Check App Store Connect.")
+    return 1
 
 
 def who_can_install(client: Client, bundle_id: str, version: str) -> int:
@@ -418,6 +497,13 @@ def main() -> int:
     who = sub.add_parser("who-can-install")
     who.add_argument("--bundle", required=True)
     who.add_argument("--build", required=True)
+    invite = sub.add_parser("invite-tester")
+    invite.add_argument("--bundle", required=True)
+    invite.add_argument("--group", required=True)
+    invite.add_argument("--email", required=True)
+    invite.add_argument("--first", required=True)
+    invite.add_argument("--last", required=True)
+    invite.add_argument("--confirm", default="")
     args = parser.parse_args()
 
     client = Client(Credentials.environment())
@@ -428,6 +514,9 @@ def main() -> int:
         wait_for_valid_build(client, args.bundle, args.build, args.timeout)
     elif args.command == "who-can-install":
         return who_can_install(client, args.bundle, args.build)
+    elif args.command == "invite-tester":
+        return invite_tester(client, args.bundle, args.group, args.email,
+                             args.first, args.last, args.confirm)
     else:
         free_signing_slot(client, args.dry_run)
     return 0

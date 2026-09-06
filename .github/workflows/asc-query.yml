@@ -9,11 +9,14 @@
 # on the development Mac, which is the same reason iOS ships from here rather
 # than from a laptop.
 #
-# WHAT IT WILL NEVER DO. It does not attach a build to a group, invite a
-# tester, submit for review, or change anything at all. Distributing software
-# to people is the owner's decision, made in App Store Connect. This prints
-# what is true and stops.
-name: Ask App Store Connect (read only)
+# WHAT IT WILL NEVER DO ON ITS OWN. It does not attach a build to a group and
+# does not submit anything for review. It CAN add one named person to one named
+# tester group, and that is the only write it has: it is dispatched by hand,
+# with the address typed in, and it refuses unless `confirm` is the literal
+# word INVITE. Apple emails a real human being the moment it succeeds, which is
+# why the confirmation is a typed word rather than a checkbox somebody can
+# leave ticked from last time.
+name: Ask App Store Connect
 
 on:
   workflow_dispatch:
@@ -26,6 +29,31 @@ on:
         description: "Bundle id"
         required: false
         default: "ai.anticipy.app"
+        type: string
+      email:
+        description: "Tester to add (leave blank to only ask, never write)"
+        required: false
+        default: ""
+        type: string
+      first:
+        description: "Tester first name"
+        required: false
+        default: ""
+        type: string
+      last:
+        description: "Tester last name"
+        required: false
+        default: ""
+        type: string
+      group:
+        description: "Tester group to add them to"
+        required: false
+        default: "Internal"
+        type: string
+      confirm:
+        description: "Type INVITE to actually send the invitation email"
+        required: false
+        default: ""
         type: string
 
 concurrency:
@@ -54,6 +82,17 @@ jobs:
           mkdir -p $RUNNER_TEMP/asc
           echo -n "$ASC_KEY_P8" | base64 --decode -o $RUNNER_TEMP/asc/AuthKey.p8
           chmod 600 $RUNNER_TEMP/asc/AuthKey.p8
+
+      - name: Invite a tester
+        if: inputs.confirm == 'INVITE' && inputs.email != ''
+        env:
+          ASC_KEY_PATH: ${{ runner.temp }}/asc/AuthKey.p8
+        run: |
+          python3 app/ios/scripts/app_store_connect.py invite-tester \
+            --bundle "${{ inputs.bundle }}" --group "${{ inputs.group }}" \
+            --email "${{ inputs.email }}" \
+            --first "${{ inputs.first }}" --last "${{ inputs.last }}" \
+            --confirm INVITE
 
       - name: Who can install this build
         env:
