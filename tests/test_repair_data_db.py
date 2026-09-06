@@ -16,6 +16,7 @@ What it pins, each on a mutation that has been tried:
 import hashlib
 import os
 import pathlib
+import re
 import shutil
 import sqlite3
 import subprocess
@@ -102,7 +103,7 @@ def _punch_holes_in_agents_only(db: pathlib.Path, root: int, pages: int) -> None
     page arithmetic to be right or wrong about, and nothing version-specific.
     """
     original = db.read_bytes()
-    for page in range(root + 1, pages + 1):
+    for page in _candidate_pages(db, root, pages):
         before = db.read_bytes()
         with open(db, "r+b") as f:
             f.seek((page - 1) * 4096 + 8)
@@ -110,17 +111,90 @@ def _punch_holes_in_agents_only(db: pathlib.Path, root: int, pages: int) -> None
         damaged = subprocess.run(["sqlite3", str(db), "PRAGMA integrity_check;"],
                                  capture_output=True, text=True).stdout.strip() != "ok"
         collateral = not (_reads_whole(db, "owners", 50) and _reads_whole(db, "events", 2000))
-        if collateral or not damaged:
+        if collateral or not damaged or not _still_recoverable(db):
             db.write_bytes(before)          # this page was not agents-only; undo it
             continue
         if _count_holes(db, original) >= HOLES_WANTED:
             return
     raise AssertionError(
-        f"could not damage {HOLES_WANTED} page(s) of `agents` without also "
-        f"damaging `owners` or `events`, having tried pages {root + 1}..{pages}. "
-        f"The fixture has not broken the file, so nothing below would be "
-        f"measuring the repair."
+        f"could not damage {HOLES_WANTED} page(s) of `agents` while leaving "
+        f"`owners` and `events` both readable AND still visible to `.recover`, "
+        f"having tried {len(_candidate_pages(db, root, pages))} page(s) "
+        f"(dbstat named {len(_agents_pages(db))} of them) with sqlite3 "
+        f"{sqlite3.sqlite_version}. The fixture has not built the file this "
+        f"test is about, so nothing below would be measuring the repair -- and "
+        f"that is a fixture problem, NOT a verdict on repair_data_db.sh."
     )
+
+
+def _agents_pages(db: pathlib.Path) -> list:
+    """The pages SQLite says belong to `agents`, when it will say.
+
+    `dbstat` is a virtual table compiled in by default on Debian/Ubuntu and on
+    macOS, and it answers exactly the question the old fixture was guessing at.
+    Its `path` is '/' for the root page, so anything else is a page whose loss
+    damages the tree without taking the table's entry with it.
+
+    Returns [] rather than raising when dbstat is not compiled in -- the caller
+    falls back to trying every page, which is slower and still correct.
+    """
+    conn = sqlite3.connect(db)
+    try:
+        rows = conn.execute(
+            "SELECT pageno FROM dbstat WHERE name='agents' AND path<>'/' "
+            "ORDER BY pageno"
+        ).fetchall()
+        return [r[0] for r in rows]
+    except sqlite3.DatabaseError:
+        return []
+    finally:
+        conn.close()
+
+
+def _candidate_pages(db: pathlib.Path, root: int, pages: int) -> list:
+    """Pages to try, best first.
+
+    `agents`'s own non-root pages come first and are usually the whole answer;
+    everything after the root follows as a fallback for a SQLite built without
+    dbstat. Every page still has to pass the three checks in the caller, so
+    this ordering only decides how fast the fixture gets there -- it is not
+    trusted to be right.
+    """
+    known = _agents_pages(db)
+    rest = [n for n in range(root + 1, pages + 1) if n not in set(known)]
+    return known + rest
+
+
+def _still_recoverable(db: pathlib.Path) -> bool:
+    """Can `.recover` still SEE `owners` and `events` in this file?
+
+    The fixture's job is "a file whose damage is confined to `agents`", and
+    reading the two other tables is not enough to establish that. A hole can
+    leave `owners` perfectly readable through its own root page while wrecking
+    something `.recover` walks to find the schema -- and `.recover` then emits
+    its scaffolding and nothing else. On GitHub's runner that is exactly what
+    happened: 172 bytes of SQL, no tables at all, and a recovered file that
+    passes `PRAGMA integrity_check` as "ok" because an empty database is a
+    valid one. The repair script's step-5 gate caught it and refused the swap,
+    which is the gate working -- but the fixture had stopped building the
+    scenario this test is about.
+
+    So the precondition is checked rather than hoped for. A page that costs
+    `.recover` the whole schema is not agents-only damage, whatever a
+    `SELECT count(*)` says.
+    """
+    out = subprocess.run(["sqlite3", str(db), ".recover"],
+                         capture_output=True, text=True).stdout
+    # `.recover` writes the schema unquoted and the rows single-quoted:
+    #     CREATE TABLE owners(id TEXT PRIMARY KEY, name TEXT);
+    #     INSERT OR IGNORE INTO 'owners'(_rowid_, 'id', 'name') VALUES (...);
+    # The first draft of this looked for '"owners"' and so matched NOTHING, on
+    # any file, healthy or not -- the same silently-unmatched-anchor mistake
+    # that has produced three false "it is tested" readings this week. Both
+    # halves are required: the CREATE alone would pass on a file whose rows
+    # were all lost.
+    return all(f"CREATE TABLE {t}" in out and f"INTO '{t}'" in out
+               for t in ("owners", "events"))
 
 
 def _count_holes(db: pathlib.Path, original: bytes) -> int:
@@ -162,8 +236,21 @@ def test_a_broken_file_is_rebuilt_and_the_original_kept(tmp_path):
     # every row of the tables the damage never touched
     assert count(db, "owners") == 50
     assert count(db, "events") == 2000
-    # and what the damage orphaned is listed, not vanished
+    # WHAT THE DAMAGED TABLE DID, said out loud. Not "listed, not vanished" --
+    # that was the old claim here and a measured run disproves it: `agents`
+    # came back 497 of 600 with `lost_and_found` holding ZERO, because cells
+    # `.recover` cannot parse as cells do not become lost_and_found entries.
+    # They are gone. The guarantee is that the shortfall is NAMED and the
+    # original is still on disk, so a person can decide about it.
     assert "lost_and_found" in out
+    recovered = int(re.search(r"rows agents: original=600 recovered=(\d+)", out).group(1))
+    assert recovered < 600, (
+        "the fixture no longer damages `agents` at all, so this test is "
+        "measuring a healthy-file repair:\n" + out
+    )
+    assert f"agents is short by {600 - recovered} row(s)" in out, (
+        "the repair lost rows out of `agents` and did not say so:\n" + out
+    )
     assert (tmp_path / "repair-t1.done").exists()
     # the recovered file must not sit beside a WAL that belonged to the old one
     assert not (tmp_path / "data.db-wal").exists()
@@ -285,3 +372,53 @@ def test_a_recovery_that_lost_a_table_is_refused(tmp_path):
         "a refused repair left its one-shot marker behind, so a retry after the "
         "cause is fixed would be skipped:\n" + out
     )
+
+
+def test_what_recover_complains_about_is_printed_not_counted(tmp_path):
+    """`.recover`'s stderr is the diagnostic, and it used to be thrown away.
+
+    The line read ".recover wrote 172 bytes of SQL (1 stderr lines)" on
+    GitHub's runner. 172 bytes is `.recover`'s scaffolding and nothing else --
+    no tables at all -- and the one stderr line was the reason why. It was
+    counted and discarded, so the only visible symptom was a number nobody
+    could act on, and the next line said the recovered file passed
+    integrity_check as "ok", because an empty database does.
+
+    Counting a diagnostic is not reading one.
+    """
+    real = shutil.which("sqlite3")
+    assert real, "needs the sqlite3 CLI"
+
+    complaint = "recovery scan aborted at page 999"
+    shim_dir = tmp_path / "bin"
+    shim_dir.mkdir()
+    shim = shim_dir / "sqlite3"
+    shim.write_text(
+        "#!/bin/sh\n"
+        "# Real sqlite3, except the .recover CALL also complains on stderr.\n"
+        "#\n"
+        "# Matching `$2` and not `$*`: the recovered file is named\n"
+        "# data.db.recovered-<tag>-<stamp>, so a glob of *.recover* fires on\n"
+        "# every later call that mentions that PATH -- including the\n"
+        "# integrity_check on it, which then read 'ok <complaint>' and failed\n"
+        "# the clean-file check. The script invokes `sqlite3 <db> .recover`,\n"
+        "# so the command is exactly $2.\n"
+        'if [ "${2:-}" = ".recover" ]; then\n'
+        f'  {real} "$@"; echo "{complaint}" >&2; exit 0\n'
+        "fi\n"
+        f'exec {real} "$@"\n'
+    )
+    shim.chmod(0o755)
+
+    build(tmp_path, corrupt=True)
+    env = dict(os.environ, PATH=f"{shim_dir}:{os.environ.get('PATH', '')}")
+    done = subprocess.run(["sh", str(SCRIPT), str(tmp_path), "t8"],
+                          capture_output=True, text=True, env=env)
+    out = done.stdout + done.stderr
+
+    assert complaint in out, (
+        "the script did not print what .recover said on stderr:\n" + out
+    )
+    # THE CONTROL: a complaint is not by itself a reason to stop. .recover
+    # found everything here, so the repair still finishes.
+    assert "done: data.db is the recovered file" in out, out

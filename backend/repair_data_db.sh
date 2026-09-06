@@ -13,9 +13,22 @@
 # image is malformed (11)"; integrity_check named bad pages in three b-trees
 # and a forced table scan of `agents` returned nothing. A REINDEX rebuilds
 # indexes from rows and cannot help when the rows' own pages are bad.
-# `.recover` walks every page it can still read, writes what it finds as
-# SQL, and puts orphaned cells in `lost_and_found` — nothing readable is
-# lost, and what was unreadable is listed for a person instead of vanishing.
+# `.recover` walks every page it can still read and writes what it finds as
+# SQL. Cells it can read but cannot place go to `lost_and_found`.
+#
+# WHAT THAT DOES NOT MEAN. This used to claim "nothing readable is lost, and
+# what was unreadable is listed for a person instead of vanishing." The second
+# half is not true and a measured run says so: on a file with holes punched
+# through `agents`, the recovered table came back 497 rows out of 600 with
+# `lost_and_found` holding ZERO. The 103 rows were not listed anywhere. They
+# were in cells `.recover` could not parse as cells, and those do not become
+# lost_and_found entries — they are simply gone.
+#
+# So the honest promise is smaller: the ORIGINAL is kept byte for byte and
+# nothing is swapped unless the recovered file still has every table the
+# original could read. Row counts are printed on both sides, and a shortfall is
+# named. Deciding whether a shortfall is acceptable is a person's job, and they
+# can only do it because the original is still there.
 #
 # Proven on a deliberately corrupted file by tests/test_repair_data_db.py,
 # which also pins: the original is kept byte for byte, a healthy file is
@@ -60,10 +73,29 @@ SQL="$DIR/repair-$TAG-$STAMP.sql"
 NEW="$DIR/data.db.recovered-$TAG-$STAMP"
 rm -f "$NEW" "$SQL"
 sqlite3 "$DB" '.recover' > "$SQL" 2>"$SQL.err"
-say ".recover wrote $(wc -c < "$SQL") bytes of SQL ($(wc -l < "$SQL.err") stderr lines)"
+say ".recover wrote $(wc -c < "$SQL") bytes of SQL"
+# SAY WHAT IT SAID. This used to print "(N stderr lines)" and throw the lines
+# away, and on GitHub's runner that read ".recover wrote 172 bytes of SQL (1
+# stderr lines)" -- 172 bytes is the scaffolding and nothing else, the one line
+# was the reason, and nobody could see it. Counting a diagnostic is not reading
+# one. Capped, because a damaged file can produce thousands of these.
+if [ -s "$SQL.err" ]; then
+  say ".recover said:"
+  sed -n '1,20p' "$SQL.err" | while IFS= read -r L; do say "    $L"; done
+  [ "$(wc -l < "$SQL.err")" -gt 20 ] && say "    ...and $(( $(wc -l < "$SQL.err") - 20 )) more line(s) in $SQL.err"
+fi
+# `.recover` on a file it cannot read still emits the scaffolding -- a BEGIN, a
+# lost_and_found table and a COMMIT -- so "not empty" is not the same as "found
+# something". A file with no tables in it passes integrity_check as "ok", which
+# is exactly how an empty database could reach step 4 and be called repaired.
+# Step 5 is the real gate; this is the early, cheap one.
 if [ ! -s "$SQL" ]; then say ".recover produced nothing; STOPPING, original untouched"; rm -f "$SQL" "$SQL.err"; exit 0; fi
 sqlite3 "$NEW" < "$SQL" >/dev/null 2>"$NEW.err"
-say "import finished ($(wc -l < "$NEW.err") stderr lines)"
+say "import finished"
+if [ -s "$NEW.err" ]; then
+  say "the import said:"
+  sed -n '1,20p' "$NEW.err" | while IFS= read -r L; do say "    $L"; done
+fi
 
 # 4. Only a file SQLite calls "ok" may take the original's place.
 VERDICT=$(sqlite3 "$NEW" 'PRAGMA integrity_check;' 2>&1 | head -5 | tr '\n' ' ')
@@ -110,7 +142,7 @@ for T in _collections _params _migrations owners owner_profile jobs events segme
   case "$NEWC" in
     ''|*[!0-9]*) LOSSES="$LOSSES $T(original=$OLD recovered=$NEWC)"; continue ;;
   esac
-  [ "$NEWC" -lt "$OLD" ] && say "  ...$T is short by $((OLD - NEWC)) row(s); they are in lost_and_found below"
+  [ "$NEWC" -lt "$OLD" ] && say "  ...$T is short by $((OLD - NEWC)) row(s) — GONE unless lost_and_found below is non-zero"
 done
 if [ -n "$LOSSES" ]; then
   say "STOPPING: the recovered file has LOST a table the ORIGINAL can still read:$LOSSES"
