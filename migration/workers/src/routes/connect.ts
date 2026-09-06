@@ -97,6 +97,7 @@
  * 2026-09-05, page 26.
  */
 import { verifyToken, type AuthEnv } from "../pb/auth.ts";
+import { forbiddenTermIn } from "../connections/words.ts";
 import {
   waitBudgetMs, waitForConnection, type WaitEnv,
 } from "../connections/wait.ts";
@@ -1189,6 +1190,27 @@ const esc = (raw: unknown): string =>
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
 
+/** A catalog description is PROSE ANOTHER COMPANY WROTE, on the one screen the
+ *  register rule exists for, and it used to be rendered verbatim.
+ *
+ *  Measured against the live catalog on 2026-09-06: four of eight descriptions
+ *  carry "integration" — gmail, googlecalendar, linear and github. Every
+ *  sentence this product writes is screened by permissionSentences before a
+ *  person sees it; this one walked straight past, so the page could say
+ *  "integration", "api", or the vendor's own name while the copy beside it was
+ *  forbidden from doing so.
+ *
+ *  A description that fails the screen is DROPPED, not rewritten. The three
+ *  permission sentences are the consent; the description is decoration, and a
+ *  page that silently paraphrases somebody else's blurb is inventing a claim
+ *  about their product. The page reads fine without it — the app's name and
+ *  logo are already there. */
+function describable(raw: unknown): string {
+  const text = String(raw ?? "").trim();
+  if (!text) return "";
+  return forbiddenTermIn(text) === null ? text : "";
+}
+
 /** A catalog logo is a URL another company controls. https only, and no other
  *  scheme: `javascript:` and `data:` in an attribute on OUR origin — the origin
  *  the session cookie lives on — is somebody else's code running in the
@@ -1274,7 +1296,7 @@ function viewPage(token: string, v: Extract<ConnectPageView, { state: "ok" }>,
   const body = `<body>
 ${logo ? `<img class="logo" src="${esc(logo)}" alt="">` : ""}
 <h1>Connect your ${esc(name)}${which}</h1>
-${v.toolkit.description?.trim() ? `<p>${esc(v.toolkit.description)}</p>` : ""}
+${describable(v.toolkit.description) ? `<p>${esc(describable(v.toolkit.description))}</p>` : ""}
 <p>Here's what Anticipy would be able to do:</p>
 <ul>
 ${v.sentences.map((s) => `  <li>${esc(s)}</li>`).join("\n")}

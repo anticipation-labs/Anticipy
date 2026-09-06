@@ -159,6 +159,9 @@ interface Socket {
   modelText: string;
   /** Set to make the catalog answer 500, the way a vendor outage does. */
   catalogFails: boolean;
+  /** The catalog row the vendor serves. Mutable so a check can serve prose the
+   *  vendor really publishes rather than the fixture's tidy sentence. */
+  app: Record<string, unknown>;
   /** The status the model answers with. 500 is a provider having a bad day. */
   modelStatus: number;
   restore: () => void;
@@ -169,6 +172,7 @@ function socket(): Socket {
   const s: Socket = {
     calls: [],
     modelText: JSON.stringify({ sentences: GOOD_SENTENCES }),
+    app: APP as Record<string, unknown>,
     catalogFails: false,
     modelStatus: 200,
     restore: () => { globalThis.fetch = real; },
@@ -182,7 +186,7 @@ function socket(): Socket {
       });
     if (url.startsWith(COMPOSIO_BASE_URL)) {
       if (s.catalogFails) return json(500, { error: "the vendor is down" });
-      if (url.includes("/toolkits/")) return json(200, APP);
+      if (url.includes("/toolkits/")) return json(200, s.app);
       return json(200, {});
     }
     // Both model paths land here; the reply shape is the chat-completions one,
@@ -593,6 +597,46 @@ await check("the retry gives up rather than looping, and words.ts still judges",
     "words.ts stopped refusing an over-long line, so the limit moved");
   s.restore();
 });
+
+await check("a vendor description carrying a forbidden word is DROPPED, not shown", async () => {
+  // THE ONE SCREEN THE REGISTER RULE EXISTS FOR, and the vendor's own prose
+  // walked straight onto it. Measured against the live catalog on 2026-09-06,
+  // four of eight descriptions carry "integration" — gmail, googlecalendar,
+  // linear and github — and the string below is the real Gmail one, verbatim.
+  //
+  // Every sentence this product WRITES is screened by permissionSentences. The
+  // description was rendered with esc() and nothing else, so the page could say
+  // "integration", "api" or the vendor's own name while the copy beside it was
+  // forbidden from doing so.
+  const vendorProse = "Gmail is Google's email service, featuring spam protection, "
+    + "search functionality and integration with other Google services.";
+
+  const s1 = socket();
+  const r1 = await rig();
+  seedLink(r1);
+  s1.app = { ...APP, description: vendorProse };
+  const html = await (await connectRoute(
+    getReq(`/c/${r1.token}`, r1.ownerToken), r1.env as ConnectEnv)).text();
+  s1.restore();
+
+  assert.ok(html.includes(APP.name), "the page stopped naming the app entirely");
+  assert.ok(!html.includes("integration"),
+    "the vendor's description reached the consent page carrying a forbidden word");
+  assert.ok(!html.includes("spam protection"), "the description was shown after all");
+
+  // THE CONTROL: a clean description IS shown. A screen that dropped every
+  // description would pass every line above and be a different bug.
+  const s2 = socket();
+  const r2 = await rig();
+  seedLink(r2);
+  s2.app = { ...APP, description: "Where your team keeps its notes." };
+  const clean = await (await connectRoute(
+    getReq(`/c/${r2.token}`, r2.ownerToken), r2.env as ConnectEnv)).text();
+  s2.restore();
+  assert.ok(clean.includes("Where your team keeps its notes."),
+    "a description with nothing wrong with it was dropped too");
+});
+
 
 // ===========================================================================
 // 3. onConnected — ONE BATCH, IDEMPOTENT

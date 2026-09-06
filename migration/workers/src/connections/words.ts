@@ -405,6 +405,25 @@ function escapeForRegExp(s: string): string {
 /** Whole-word / whole-phrase containment. The boundary is "not a letter or a
  *  digit" rather than `\b`, so "API-key" trips "api" (a hyphen is a boundary)
  *  while "capital" does not (a letter is not). */
+/**
+ * The forbidden term in a piece of copy WE DID NOT WRITE, or null.
+ *
+ * The vendor's catalog `description` is rendered on the connect page — the one
+ * screen the register rule exists for — and it arrives from a machine nobody
+ * here reviews. Measured against the live catalog on 2026-09-06, four of eight
+ * descriptions carry "integration": gmail, googlecalendar, linear and github.
+ * Every sentence the product WRITES is screened by permissionSentences; this
+ * one was rendered verbatim.
+ *
+ * The caller drops the description when this returns a term. Dropping is the
+ * right answer and rewriting is not: the description is decoration, the three
+ * permission sentences are the consent, and a page that silently paraphrases
+ * an app's own blurb is inventing a claim about somebody else's product.
+ */
+export function forbiddenTermIn(text: string): string | null {
+  return firstTermIn(text, FORBIDDEN_TERMS);
+}
+
 function firstTermIn(text: string, terms: readonly string[]): string | null {
   const hay = forScan(text);
   for (const term of terms) {
