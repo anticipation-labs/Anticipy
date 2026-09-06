@@ -38,6 +38,7 @@ final class LiveActivityController: ObservableObject {
     private var lastReason: LiveActivityPolicy.Reason?
     private var lastHeard = -1
     private var lastAlive: Bool?
+    private var lastPending = -1
     /// The line count when this listening run began. `heard` is the delta, so
     /// the capsule counts THIS session rather than everything the app has held
     /// since launch.
@@ -80,13 +81,13 @@ final class LiveActivityController: ObservableObject {
               jobs: [AgentJob],
               lines: Int,
               now: Date = Date()) {
-        let working = jobs.contains { $0.status == "running" || $0.status == "queued" }
-        let waiting = jobs.contains { $0.status == "awaiting_confirm" }
+        let workingCount = jobs.filter { $0.status == "running" || $0.status == "queued" }.count
+        let waitingCount = jobs.filter { $0.status == "awaiting_confirm" }.count
         let reason = LiveActivityPolicy.reason(listening: listening,
                                                paused: paused,
                                                reachable: reachable,
-                                               working: working,
-                                               waiting: waiting)
+                                               working: workingCount > 0,
+                                               waiting: waitingCount > 0)
 
         guard let reason else { finish(); return }
         guard available else { return }
@@ -101,6 +102,10 @@ final class LiveActivityController: ObservableObject {
             startedAt = nil
         }
         let heard = heardBaseline.map { max(0, lines - $0) } ?? 0
+        // How many jobs are in the state this capsule is about. Counted here so
+        // the one line can read "3 waiting on you" rather than "Waiting on you"
+        // while two more sit unmentioned behind it.
+        let pending = reason == .waiting ? waitingCount : (reason == .working ? workingCount : 0)
         let alive = LiveActivityPolicy.face(reason, heard: heard, elapsed: 0).alive
 
         #if canImport(ActivityKit)
@@ -109,10 +114,26 @@ final class LiveActivityController: ObservableObject {
             reason: ActivityReason.wire(reason),
             heard: heard,
             startedAt: alive ? startedAt : nil,
-            alive: alive)
+            alive: alive,
+            pending: pending)
 
         endingTask?.cancel()
         endingTask = nil
+
+        // ONE CAPSULE, AND THIS IS WHERE THAT IS TRUE OR NOT.
+        //
+        // A Live Activity OUTLIVES THE PROCESS. iOS keeps it on the lock screen
+        // after a force-quit, and it is still there when the app comes back —
+        // but `activity` is an instance property and comes back nil. The first
+        // version of this asked "is my handle nil?" and requested a new one, so
+        // a force-quit and relaunch left TWO capsules stacked on the lock
+        // screen, three after the next, and nothing in the app could see them.
+        //
+        // The question that is actually being asked is "does iOS already hold
+        // one of mine?", so ask iOS. Adopt what it has; end anything past the
+        // first, which nothing should ever produce and which is exactly the
+        // pile this guard exists to make impossible.
+        adoptExistingActivity()
 
         if activity == nil {
             do {
@@ -127,13 +148,34 @@ final class LiveActivityController: ObservableObject {
                 // nothing to tell them: the app itself is unaffected.
                 return
             }
-        } else if reason != lastReason || heard != lastHeard || alive != lastAlive {
+        } else if reason != lastReason || heard != lastHeard || alive != lastAlive
+                    || pending != lastPending {
             let current = activity
             Task { await current?.update(using: state) }
         }
         lastReason = reason
         lastHeard = heard
         lastAlive = alive
+        lastPending = pending
+        #endif
+    }
+
+    /// THE ONE-CAPSULE RULE, enforced against iOS rather than against a local
+    /// variable.
+    ///
+    /// Takes back the activity this app already has on screen — after a
+    /// relaunch, a force-quit, a crash — and ends every extra beyond the first.
+    /// Called before every request, so a second capsule cannot outlive one
+    /// `sync`.
+    private func adoptExistingActivity() {
+        #if canImport(ActivityKit)
+        guard #available(iOS 16.1, *) else { return }
+        let live = Activity<ListeningActivityAttributes>.activities
+        guard let first = live.first else { return }
+        if activity == nil { activity = first }
+        for extra in live where extra.id != activity?.id {
+            Task { await extra.end(dismissalPolicy: .immediate) }
+        }
         #endif
     }
 
@@ -146,6 +188,7 @@ final class LiveActivityController: ObservableObject {
         lastReason = nil
         lastHeard = -1
         lastAlive = nil
+        lastPending = -1
         activity = nil
         endingTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds:
@@ -167,10 +210,17 @@ final class LiveActivityController: ObservableObject {
         lastReason = nil
         lastHeard = -1
         lastAlive = nil
+        lastPending = -1
         #if canImport(ActivityKit)
-        guard #available(iOS 16.1, *), let current = activity else { return }
+        guard #available(iOS 16.1, *) else { return }
         activity = nil
-        Task { await current.end(dismissalPolicy: .immediate) }
+        // Everything iOS holds for this app, not merely the handle this
+        // instance happens to have. A sign-out that left one capsule behind
+        // would hand the next person on this phone a lock screen saying
+        // somebody is being listened to.
+        for live in Activity<ListeningActivityAttributes>.activities {
+            Task { await live.end(dismissalPolicy: .immediate) }
+        }
         #endif
     }
 }

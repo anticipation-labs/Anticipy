@@ -137,8 +137,46 @@ check(L.compact(.offline, heard: 7) == "7", "same offline")
 check(!L.compact(.paused, heard: 0).isEmpty, "paused still shows something")
 check(L.compact(.waiting, heard: 0) == "!", "a question is one character")
 for reason in everyReason {
-    check(L.compact(reason, heard: 12).count <= 4,
+    check(L.compact(reason, heard: 12, pending: 12).count <= 4,
           "nothing in the island is longer than the island", "\(reason)")
+}
+
+// ============================================ ONE CAPSULE, AND IT SAYS HOW MANY
+// The five reasons are states of ONE activity, not five activities. Exactly one
+// is chosen at a time, and the chosen one carries the count of what it is about
+// so nothing sits unmentioned behind it.
+check(L.face(.working, heard: 0, elapsed: 0, pending: 1).detail == "Working on something",
+      "one job in flight is 'something', not '1 things'")
+check(L.face(.working, heard: 0, elapsed: 0, pending: 3).detail == "Working on 3 things",
+      "three say so", L.face(.working, heard: 0, elapsed: 0, pending: 3).detail)
+check(L.face(.waiting, heard: 0, elapsed: 0, pending: 1).detail == "Waiting on you",
+      "one question reads as one question")
+check(L.face(.waiting, heard: 0, elapsed: 0, pending: 4).detail == "4 waiting on you",
+      "four say so rather than hiding three behind the first",
+      L.face(.waiting, heard: 0, elapsed: 0, pending: 4).detail)
+// A count is still a count — no name, no goal, nothing anybody said.
+for n in [2, 9, 40] {
+    for reason in [L.Reason.working, .waiting] {
+        let d = L.face(reason, heard: 0, elapsed: 0, pending: n).detail
+        check(d.contains("\(n)"), "the number is the only variable part", d)
+        check(d.filter { $0.isNumber } == "\(n)", "and nothing else numeric leaks in", d)
+    }
+}
+// The count never reaches the states it would be a lie about.
+for reason in [L.Reason.listening, .offline, .paused] {
+    check(L.face(reason, heard: 2, elapsed: 30, pending: 7)
+            == L.face(reason, heard: 2, elapsed: 30, pending: 0),
+          "a job count changes nothing while the microphone is the subject",
+          "\(reason)")
+}
+// And exactly one reason comes back, ever — `reason` returns a single value,
+// never a set. Every combination of the five inputs is walked here, because
+// "only one capsule" is a property of THIS function and nothing else.
+for bits in 0..<32 {
+    let r = L.reason(listening: bits & 1 != 0, paused: bits & 2 != 0,
+                     reachable: bits & 4 != 0, working: bits & 8 != 0,
+                     waiting: bits & 16 != 0)
+    if let r { check(everyReason.contains(r), "one of the five, or none", "\(bits)") }
 }
 
 // ========================================================= IT LEAVES BY ITSELF

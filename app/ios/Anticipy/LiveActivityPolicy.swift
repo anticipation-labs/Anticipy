@@ -73,7 +73,10 @@ enum LiveActivityPolicy {
 
     /// `heard` is the number of lines this listening session has produced —
     /// a count, never their content. `elapsed` is seconds since it started.
-    static func face(_ reason: Reason, heard: Int, elapsed: TimeInterval) -> Face {
+    /// `pending` is how many jobs are in the state `reason` names, so the one
+    /// capsule can say how much is going on instead of "something".
+    static func face(_ reason: Reason, heard: Int, elapsed: TimeInterval,
+                     pending: Int = 0) -> Face {
         switch reason {
         case .listening:
             return Face(title: "Anticipy",
@@ -91,14 +94,19 @@ enum LiveActivityPolicy {
                         detail: "Paused",
                         alive: false, action: .stopListening)
         case .working:
+            // A COUNT, never a name. "Working on the deck" would put somebody's
+            // sentence on a locked screen; "Working on 2 things" says the same
+            // useful part of it and nothing that identifies anybody.
             return Face(title: "Anticipy",
-                        detail: "Working on something",
+                        detail: pending > 1 ? "Working on \(pending) things"
+                                            : "Working on something",
                         alive: false, action: .openApp)
         case .waiting:
             // NOT the goal's wording. A goal is somebody's sentence and this
             // is a lock screen.
             return Face(title: "Anticipy",
-                        detail: "Waiting on you",
+                        detail: pending > 1 ? "\(pending) waiting on you"
+                                            : "Waiting on you",
                         alive: false, action: .openApp)
         }
     }
@@ -160,12 +168,12 @@ enum LiveActivityPolicy {
     /// The Dynamic Island's compact form has room for a handful of characters.
     /// A count is the only thing that survives being that small and still means
     /// something.
-    static func compact(_ reason: Reason, heard: Int) -> String {
+    static func compact(_ reason: Reason, heard: Int, pending: Int = 0) -> String {
         switch reason {
         case .listening, .offline: return heard > 0 ? "\(heard)" : ""
         case .paused:              return "❙❙"
-        case .working:             return "···"
-        case .waiting:             return "!"
+        case .working:             return pending > 1 ? "\(pending)" : "···"
+        case .waiting:             return pending > 1 ? "\(pending)!" : "!"
         }
     }
 

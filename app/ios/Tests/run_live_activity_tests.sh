@@ -124,6 +124,43 @@ if [ "$intents" != "1" ]; then
     exit 2
 fi
 
+# ============================================================== EXACTLY ONE
+#
+# A Live Activity OUTLIVES THE PROCESS — iOS keeps it on the lock screen after a
+# force-quit, and it is still there when the app comes back. The controller's
+# handle is not: it is an instance property and returns nil. Asking "is my
+# handle nil?" before requesting therefore stacked a second capsule on every
+# relaunch, a third on the next, with nothing in the app able to see them.
+#
+# The question has to be put to iOS, not to a local variable.
+if ! grep -q 'Activity<ListeningActivityAttributes>.activities' "$control"; then
+    echo "The controller no longer asks iOS what it is already showing."
+    echo
+    echo "Then it cannot know about the capsule a previous run of this app left"
+    echo "on the lock screen, and it will request another one beside it. That"
+    echo "is how an app ends up with a stack of its own notifications that"
+    echo "nothing on the phone can clear but a reinstall."
+    exit 2
+fi
+if ! grep -q 'adoptExistingActivity()' "$control"; then
+    echo "Nothing adopts the activity this app already has on screen."
+    exit 2
+fi
+requests=$(code "$control" | grep -c 'Activity.request(' || true)
+if [ "$requests" != "1" ]; then
+    echo "Expected exactly one Activity.request call site, found $requests."
+    echo "One capsule means one place that can create one."
+    exit 2
+fi
+# The adoption has to happen BEFORE the request, or it adopts nothing.
+adopt_line=$(grep -n 'adoptExistingActivity()$' "$control" | head -1 | cut -d: -f1)
+req_line=$(grep -n 'Activity.request(' "$control" | head -1 | cut -d: -f1)
+if [ -z "$adopt_line" ] || [ -z "$req_line" ] || [ "$adopt_line" -ge "$req_line" ]; then
+    echo "adoptExistingActivity() does not run before Activity.request()."
+    echo "Adopting after requesting is adopting the one you just made."
+    exit 2
+fi
+
 # ================================================ IT ENDS RATHER THAN LINGERS
 # An app that will not leave somebody's lock screen is an app they delete.
 if ! grep -q 'func finish()' "$control"; then

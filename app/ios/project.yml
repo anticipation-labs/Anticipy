@@ -694,7 +694,15 @@ settings:
     #      running build 144 on a simulator and looking at the island rather
     #      than by reading the file. Lock screen keeps ink; the island gets
     #      cream.
-    CURRENT_PROJECT_VERSION: "145"
+    # 146: ONE capsule, proven against iOS rather than against a variable. A
+    #      Live Activity outlives the process — iOS keeps it on the lock screen
+    #      through a force-quit — but the controller's handle does not, so
+    #      "is my handle nil?" requested a SECOND capsule on every relaunch and
+    #      a third on the next. It adopts what iOS already holds now, and ends
+    #      anything past the first. The one capsule also carries a count:
+    #      "3 waiting on you" rather than "Waiting on you" with two hidden
+    #      behind it.
+    CURRENT_PROJECT_VERSION: "146"
     DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: NO
@@ -746,7 +754,7 @@ targets:
         # literal from a Mac one, and two products answering "which build
         # are you holding" with different numbers is the exact disease this
         # gate exists to prevent.
-        CURRENT_PROJECT_VERSION: "145"
+        CURRENT_PROJECT_VERSION: "146"
         DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_ENTITLEMENTS: ../macos/AnticipyMac/AnticipyMac.entitlements

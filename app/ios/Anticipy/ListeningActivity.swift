@@ -37,6 +37,9 @@ struct ListeningActivityAttributes: ActivityAttributes {
         var startedAt: Date?
         /// Whether the microphone is actually hearing right now.
         var alive: Bool
+        /// How many jobs are in the state `reason` names. Also a COUNT — the
+        /// capsule says "3 waiting on you", never which three.
+        var pending: Int = 0
     }
 
     /// Fixed for the life of the activity. Nothing identifying: the owner's

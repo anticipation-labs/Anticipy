@@ -60,7 +60,9 @@ struct AnticipyLiveActivity: Widget {
                 ActivityMark(alive: context.state.alive, size: 15,
                              stroke: ActivityPalette.ground)
             } compactTrailing: {
-                Text(LiveActivityPolicy.compact(reason(context.state), heard: context.state.heard))
+                Text(LiveActivityPolicy.compact(reason(context.state),
+                                                heard: context.state.heard,
+                                                pending: context.state.pending))
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(ActivityPalette.champagne)
                     .monospacedDigit()
@@ -78,7 +80,8 @@ struct AnticipyLiveActivity: Widget {
 
     private func face(_ s: ListeningActivityAttributes.ContentState) -> LiveActivityPolicy.Face {
         LiveActivityPolicy.face(reason(s), heard: s.heard,
-                                elapsed: s.startedAt.map { -$0.timeIntervalSinceNow } ?? 0)
+                                elapsed: s.startedAt.map { -$0.timeIntervalSinceNow } ?? 0,
+                                pending: s.pending)
     }
 }
 
@@ -95,7 +98,8 @@ struct LockScreenActivityView: View {
     private var face: LiveActivityPolicy.Face {
         LiveActivityPolicy.face(ActivityReason.from(state.reason),
                                 heard: state.heard,
-                                elapsed: state.startedAt.map { -$0.timeIntervalSinceNow } ?? 0)
+                                elapsed: state.startedAt.map { -$0.timeIntervalSinceNow } ?? 0,
+                                pending: state.pending)
     }
 
     var body: some View {

@@ -103,6 +103,36 @@ this file distinguished the two grounds.
 region passes cream. Build 145. Same lesson as the offline qualifier: neither
 was findable by reading.
 
+## The third defect, and it is the one that mattered
+
+The owner saw the five-face harness sheet and read it as the app's behaviour:
+five capsules stacked on one lock screen. It was not — the app holds ONE
+activity and `reason` picks one of five faces for it. But the complaint sent me
+back to the request path, and there was a real version of the bug sitting in it.
+
+**A Live Activity outlives the process.** iOS keeps it on the lock screen
+through a force-quit, and it is still there when the app comes back. The
+controller's handle is not: it is an instance property and returns nil. The
+guard read `if activity == nil { request }`, so every relaunch asked "is my
+handle nil?", got yes, and requested a SECOND capsule beside the one already on
+screen. A third after the next force-quit. Nothing in the app could see them,
+and nothing on the phone could clear them but a reinstall.
+
+Measured on a simulator: four launch-listen-force-quit cycles under builds
+144/145 left **four** distinct activity ids in `liveactivitiesd`. The same four
+cycles under 146 leave **one**, reused — `822C3CF5…` updated each time rather
+than replaced.
+
+The question is now put to iOS rather than to a local variable:
+`adoptExistingActivity()` takes back whatever `Activity<…>.activities` holds and
+ends anything past the first, and it runs before the one request site. Four
+source facts guard it, including that the adoption happens BEFORE the request —
+adopting after requesting is adopting the one you just made.
+
+The same run added a count, because a single capsule has to carry what it
+replaced: `3 waiting on you` rather than `Waiting on you` with two more hidden
+behind it. Still a count, still never a name.
+
 ## Proof
 
 * `sh app/ios/Tests/run_live_activity_tests.sh` — 131 walked checks plus 14
