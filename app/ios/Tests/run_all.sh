@@ -122,7 +122,12 @@ sh "$HERE/run_connect_onboarding_tests.sh"
 # connect link. Its suite compiles ConnectOnboardingPolicy and FirstRunRoute
 # together, which is the only way to see that the snooze the phone stores means
 # what the policy says a snooze means — the two cannot import each other.
-sh "$HERE/run_connect_onboarding_step_tests.sh"
+# NOTE (build 141): the connect-step suite's line was HERE and is removed.
+# Build 140 committed this file while run_connect_onboarding_step_tests.sh was
+# still an uncommitted file in another session's working tree, so CI ran a
+# script that is not in the repository and exited 127 — the same half-a-change
+# failure build 132 fixed for ConnectedAppsClient.swift. Put it back in the SAME
+# commit that adds the script.
 sh "$HERE/run_job_receipt_tests.sh"
 # The same card from the other end. That one asks what the server proved
 # before it says "done"; this asks which section a job reaches at all — and

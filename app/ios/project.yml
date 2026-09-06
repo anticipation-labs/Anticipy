@@ -610,6 +610,9 @@ settings:
     #      correctly minted link, every time. Both hosts are ours and both are
     #      allowed now; the three subdomain refusals that were doing the real
     #      work are pinned separately.
+    # 141: build 140 shipped a run_all.sh that ran a script not in the repo, so
+    #      CI exited 127. The reference is out until the commit that adds the
+    #      script puts it back.
     # 140: insights. The "Done" heading becomes a card — days you've talked,
     #      and the catch ratio with its denominator — opening a page of what it
     #      adds up to. Three of the metrics originally asked for did not survive
@@ -647,7 +650,7 @@ settings:
     #      pushes saying "substring not found", which reads as a rotted test
     #      rather than a regressed banner; it now finds the banner wherever it
     #      lives, so a move reports as a move.
-    CURRENT_PROJECT_VERSION: "140"
+    CURRENT_PROJECT_VERSION: "141"
     DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: NO
@@ -699,7 +702,7 @@ targets:
         # literal from a Mac one, and two products answering "which build
         # are you holding" with different numbers is the exact disease this
         # gate exists to prevent.
-        CURRENT_PROJECT_VERSION: "140"
+        CURRENT_PROJECT_VERSION: "141"
         DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_ENTITLEMENTS: ../macos/AnticipyMac/AnticipyMac.entitlements
