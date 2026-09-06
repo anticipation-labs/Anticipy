@@ -785,7 +785,7 @@ settings:
     #      cut. Three circular corners made continuous, and a whole-tree motion
     #      contract that found five more files animating without ever asking
     #      about Reduce Motion, OnboardingView among them at fifteen.
-    # 154: TWO LIVE DEFECTS THE OWNER REPORTED, both in the dashboard.
+    # 155: TWO LIVE DEFECTS THE OWNER REPORTED, both in the dashboard.
     #
     #      STOP DID NOT STOP. The X on the capture face fired no listening
     #      callback at all — it flipped `mode` back to .thread and left the
@@ -807,9 +807,16 @@ settings:
     #      with a goal leads with it — a change of FACE, never of membership,
     #      because filtering to judged lines only was tried and reverted.
     #
+    #      AND THE CAPTURE FACE NO LONGER TYPES YOUR WORDS BACK AT YOU. It
+    #      showed every heard line while you spoke; it shows what she is DOING
+    #      now, and the transcript lives on the history face where it always
+    #      was. `heardAnything` reads the RAW turns so the reassurance survives
+    #      the filter — the first version of this screen filtered the same way
+    #      and somebody talking to a phone mid-thought watched an empty screen.
+    #
     #      Not a Law 1 change: `decision` and `goal` are columns a MODEL wrote,
     #      read back. The phone still cannot judge a line and must never try.
-    CURRENT_PROJECT_VERSION: "154"
+    CURRENT_PROJECT_VERSION: "155"
     DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: NO
@@ -861,7 +868,7 @@ targets:
         # literal from a Mac one, and two products answering "which build
         # are you holding" with different numbers is the exact disease this
         # gate exists to prevent.
-        CURRENT_PROJECT_VERSION: "154"
+        CURRENT_PROJECT_VERSION: "155"
         DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_ENTITLEMENTS: ../macos/AnticipyMac/AnticipyMac.entitlements

@@ -112,8 +112,14 @@ struct ConversationDashboard<Notices: View, Approval: View, Deck: View, Settings
     private var face: DashboardPolicy.CaptureFace {
         // A hold is the owner's own doing, so it outranks every state the
         // listener could report about why it is not running.
+        // RAW turns, deliberately — not `captureCards`. The cards are filtered
+        // to tasks now, and asking THEM whether anything was heard would tell
+        // the face "nothing yet" all through a sentence she is transcribing
+        // perfectly well. That is the empty-screen incident wearing a new
+        // shape: the face must know she is hearing somebody even while there
+        // is nothing to show.
         DashboardPolicy.captureFace(held ? .paused : captureState,
-                                    heardAnything: !captureCards.isEmpty)
+                                    heardAnything: !turns.isEmpty)
     }
 
     // MARK: - The thread
@@ -289,17 +295,38 @@ struct ConversationDashboard<Notices: View, Approval: View, Deck: View, Settings
     /// which are the ones the thread has not settled yet. Never parsed out of
     /// the audio here — they are rows the brain already decided.
     private var captureCards: [DashboardPolicy.Turn] {
-        // WHAT SHE IS HEARING, newest last — including the plain lines. The
-        // first version showed only turns that had already become a job or an
-        // approval, so somebody talking to a phone that had not finished
-        // thinking watched an empty screen and had no reason to believe it was
-        // working. The reference this screen is built from puts what you said
-        // on the screen as you say it, and that is the whole reassurance.
+        // WHAT SHE IS DOING, newest last. NOT what she is hearing.
         //
-        // It shows the lines; it does NOT decide which of them mattered. That
-        // is law 1 and it belongs to the brain — a card here says "heard this",
-        // never "this is a commitment".
-        Array(turns.suffix(4))
+        // This used to be `Array(turns.suffix(4))` over everything, so speaking
+        // filled the screen with a running transcript of every word — which is
+        // what the owner reported on 2026-09-06: "it shows every little word
+        // that I'm saying. I want you to hide the transcript and only show the
+        // task." The transcript is not lost; it is what the history face is
+        // made of, and `HeardGroup` has always grouped it there.
+        //
+        // THE INCIDENT THIS MUST NOT REOPEN. The first version of this screen
+        // ALSO showed only judged turns, and somebody talking to a phone that
+        // had not finished thinking watched an empty screen and had no reason
+        // to believe it was working. Filtering alone re-creates that exactly.
+        //
+        // So the reassurance moves rather than disappears: `face` is told
+        // `heardAnything` from the RAW turns, not from this filtered list, so
+        // the capture face still knows she is hearing somebody and says so —
+        // and the waveform and the breathing mark are live the whole time. The
+        // owner sees proof she is listening without seeing their own words
+        // typed back at them.
+        //
+        // It still does NOT decide which lines mattered. That is law 1 and it
+        // belongs to the brain: a card appears here because the brain gave the
+        // line a goal, never because this file recognised a word.
+        Array(turns.filter(isTask).suffix(4))
+    }
+
+    /// Whether a turn is something she is DOING rather than something she
+    /// heard. `.owner` is the raw line and is the only case excluded.
+    private func isTask(_ t: DashboardPolicy.Turn) -> Bool {
+        if case .owner = t { return false }
+        return true
     }
 
     private func isWorking(_ t: DashboardPolicy.Turn) -> Bool {

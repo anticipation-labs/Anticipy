@@ -133,6 +133,30 @@ if ! code "$dash" | grep -q 'ListenControlPolicy.face('; then
     exit 2
 fi
 
+# ==================== THE CAPTURE FACE SHOWS TASKS, NOT A TRANSCRIPT
+# Reported 2026-09-06: "it shows every little word that I'm saying. I want you
+# to hide the transcript and only show the task." The transcript lives on the
+# history face; the capture face is what she is DOING.
+if ! code "$dash" | grep -q 'turns.filter(isTask)'; then
+    echo "The capture face is showing raw heard lines again."
+    echo "The transcript belongs on the history face, not typed back at"
+    echo "somebody while they are still talking."
+    exit 2
+fi
+# ...but the reassurance must not go with it. `heardAnything` reads the RAW
+# turns: asking the FILTERED cards would tell the face "nothing yet" all
+# through a sentence she is transcribing perfectly well, which is the
+# empty-screen incident the first version of this screen caused.
+if ! code "$dash" | grep -q 'heardAnything: !turns.isEmpty'; then
+    echo "The capture face asks the filtered cards whether anything was heard."
+    echo
+    echo "That is the empty-screen incident in a new shape: somebody talking to"
+    echo "a phone that has not finished thinking sees nothing and concludes she"
+    echo "is dead. The face must know she is hearing somebody even when there"
+    echo "is nothing yet to show."
+    exit 2
+fi
+
 # ============================== THE TASK LEADS, AND THE VERDICT SURVIVES
 # The dashboard could only ever draw a transcript because the mapping into
 # HeardRow kept id/text/at and dropped the brain's `decision` and `goal`. The
