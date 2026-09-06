@@ -193,6 +193,23 @@ enum DashboardPolicy {
         let id: String
         let text: String
         let at: String
+        /// THE BRAIN'S VERDICT ON THIS LINE — `ignore`, `act` or `ask`.
+        ///
+        /// It was being dropped. `TranscriptLine` has carried this since the
+        /// brain started stamping it, and the mapping into this struct kept
+        /// only id/text/at — so the policy layer STRUCTURALLY could not tell a
+        /// line the brain called a task from a line it called noise, and the
+        /// thread rendered every one of them as an identical grey bubble. That
+        /// is the "it shows the whole transcript instead of the task" report.
+        ///
+        /// NOT A LAW 1 PROBLEM AND NOT A LAW 1 FIX. Nothing here decides what a
+        /// sentence means; this is a column a MODEL wrote, read back. The phone
+        /// still cannot judge a line and must never try.
+        var decision: String? = nil
+        /// What she is quietly chasing because of this line. Stamped even when
+        /// the decision is `ignore` — that pairing is the difference between
+        /// "left alone" and "looking into it".
+        var goal: String? = nil
     }
 
     /// Assemble the thread. Oldest first, because a conversation is read
@@ -206,7 +223,25 @@ enum DashboardPolicy {
         turns.reserveCapacity(heard.count + said.count + jobs.count)
 
         for row in heard where !row.text.isEmpty {
-            turns.append(.owner(id: row.id, text: row.text, at: row.at))
+            // THE TASK LEADS, WHEN THERE IS ONE.
+            //
+            // A line the brain gave a goal to is a line it recognised as
+            // something to do, and it now renders as that thing rather than as
+            // another sentence in a wall of them. A line with no goal stays
+            // exactly what it was: what you said.
+            //
+            // EVERY LINE STILL APPEARS. Filtering to only the judged ones was
+            // tried and reverted — see `captureCards` in ConversationDashboard,
+            // whose comment records that somebody talking to a phone which had
+            // judged nothing yet watched an empty screen and concluded she was
+            // dead. Leading with the task is a change of FACE, never of
+            // membership.
+            if let goal = row.goal?.trimmingCharacters(in: .whitespacesAndNewlines),
+               !goal.isEmpty {
+                turns.append(.working(id: row.id, text: goal, at: row.at))
+            } else {
+                turns.append(.owner(id: row.id, text: row.text, at: row.at))
+            }
         }
         for row in said where !row.text.isEmpty {
             switch row.decision {

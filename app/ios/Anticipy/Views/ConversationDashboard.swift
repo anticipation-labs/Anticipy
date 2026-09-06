@@ -42,6 +42,11 @@ struct ConversationDashboard<Notices: View, Approval: View, Deck: View, Settings
     let turns: [DashboardPolicy.Turn]
     let captureState: DashboardPolicy.CaptureState
     let listening: Bool
+    /// Whether iOS has taken the microphone away. Passed in rather than read
+    /// here so the one control at the foot can be derived from
+    /// `ListenControlPolicy` — a screen that assumes the mic is available shows
+    /// a start button over a live listener, which is the defect this closed.
+    var micBlocked: Bool = false
     let everListened: Bool
     let history: [DashboardPolicy.Day]
 
@@ -221,13 +226,34 @@ struct ConversationDashboard<Notices: View, Approval: View, Deck: View, Settings
                    placeholder: "Ask Anticipy, or tell her something…",
                    onSend: send,
                    focus: $writing)
+            // DERIVED, NEVER HARDWIRED. A button that always says "Listen with
+            // phone" is a button that says it over a live microphone — which is
+            // how the ✕ above was able to strand a running listener with no way
+            // to stop it. `ListenControlPolicy` already answers this question
+            // for the whole app; the label, the glyph and what the tap MEANS all
+            // come from it now, so the screen cannot offer a start over a
+            // session that is already running.
+            let control = ListenControlPolicy.face(micBlocked: micBlocked,
+                                                   isListening: listening,
+                                                   suspended: false)
             Button {
                 Haptics.engage()
-                onStartListening()
+                switch control.tap {
+                case .start:   onStartListening()
+                case .stop:    onStopListening()
+                case .nothing: break
+                }
             } label: {
                 HStack(spacing: 10) {
-                    Image(systemName: "mic.fill").font(.system(size: 15, weight: .semibold))
-                    Text("Listen with phone").font(.system(size: 16, weight: .semibold))
+                    // The policy's glyph, except that the landing face has no
+                    // room for a breathing dot — it is a foot button, not the
+                    // capture face. A live listener gets the stop square there.
+                    Image(systemName: {
+                        if case .symbol(let name) = control.glyph { return name }
+                        return "stop.fill"
+                    }())
+                        .font(.system(size: 15, weight: .semibold))
+                    Text(control.label).font(.system(size: 16, weight: .semibold))
                 }
                 .foregroundStyle(OnboardTheme.onInk)
                 .frame(maxWidth: .infinity)
@@ -285,6 +311,22 @@ struct ConversationDashboard<Notices: View, Approval: View, Deck: View, Settings
         VStack(spacing: 0) {
             HStack {
                 Button {
+                    // IT ENDS THE CAPTURE, NOT JUST THE FACE.
+                    //
+                    // This used to write `held = false; mode = .thread` and
+                    // nothing else — so tapping it took somebody back to the
+                    // thread with the microphone STILL RUNNING, the tap still
+                    // installed and `keepListening` still true. The landing
+                    // face's only listen control calls `onStartListening()`,
+                    // which is a no-op on a live listener, so there was then
+                    // no control anywhere on Home that could stop it. That is
+                    // the "I pressed stop and it kept listening" report, and
+                    // this line is the whole of it.
+                    //
+                    // Guarded on `listening`: a ✕ after a hold must not call
+                    // stopListening() a second time and sound `listen-close`
+                    // over a session that already closed.
+                    if listening { onStopListening() }
                     withAnimation(Theme.springSlow) { held = false; mode = .thread }
                 } label: {
                     Image(systemName: "xmark")

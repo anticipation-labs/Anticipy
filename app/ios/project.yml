@@ -785,7 +785,31 @@ settings:
     #      cut. Three circular corners made continuous, and a whole-tree motion
     #      contract that found five more files animating without ever asking
     #      about Reduce Motion, OnboardingView among them at fifteen.
-    CURRENT_PROJECT_VERSION: "153"
+    # 154: TWO LIVE DEFECTS THE OWNER REPORTED, both in the dashboard.
+    #
+    #      STOP DID NOT STOP. The X on the capture face fired no listening
+    #      callback at all — it flipped `mode` back to .thread and left the
+    #      microphone running, the tap installed and keepListening true. Worse,
+    #      the face carrying the only working stop (the tick) became
+    #      UNREACHABLE, because `mode = .capture` happens only on a false->true
+    #      edge of `listening` and listening never went false. From that tap
+    #      onward Home could not stop capture at all; only Settings or the
+    #      lock-screen capsule could. The X ends the capture now, and the foot
+    #      control is DERIVED from ListenControlPolicy instead of being
+    #      hardwired to start — a button that always says "Listen with phone"
+    #      says it over a live mic, where begin() makes it a silent no-op.
+    #
+    #      THE DASHBOARD COULD ONLY DRAW A TRANSCRIPT. The mapping into
+    #      HeardRow kept id/text/at and DROPPED the `decision` and `goal` the
+    #      brain stamps, so the policy layer structurally could not tell a line
+    #      the brain recognised as a task from one it called noise. Every line
+    #      rendered as the same grey bubble. The verdict travels now and a line
+    #      with a goal leads with it — a change of FACE, never of membership,
+    #      because filtering to judged lines only was tried and reverted.
+    #
+    #      Not a Law 1 change: `decision` and `goal` are columns a MODEL wrote,
+    #      read back. The phone still cannot judge a line and must never try.
+    CURRENT_PROJECT_VERSION: "154"
     DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: NO
@@ -837,7 +861,7 @@ targets:
         # literal from a Mac one, and two products answering "which build
         # are you holding" with different numbers is the exact disease this
         # gate exists to prevent.
-        CURRENT_PROJECT_VERSION: "153"
+        CURRENT_PROJECT_VERSION: "154"
         DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_ENTITLEMENTS: ../macos/AnticipyMac/AnticipyMac.entitlements

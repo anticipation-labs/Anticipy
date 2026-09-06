@@ -16,6 +16,7 @@ policy="$app/DashboardPolicy.swift"
 view="$app/Views/ConversationDashboard.swift"
 kit="$app/Views/DashboardKit.swift"
 home="$app/Views/ContentView.swift"
+dash="$app/Views/ConversationDashboard.swift"
 for f in "$policy" "$view" "$kit" "$home"; do
     [ -f "$f" ] || { echo "missing $f"; exit 2; }
 done
@@ -99,6 +100,64 @@ fi
 
 # -------------------------------------------------------------- the walk
 # main.swift, because swiftc allows top-level code under that name only.
+# ================== EVERY CONTROL THAT CAN BE TAPPED WHILE LISTENING STOPS IT
+# 2026-09-06: Home had exactly ONE control bound to stopListening — the tick on
+# the capture face — and the X beside it fired no listening callback at all. It
+# only flipped `mode` back to .thread, so the microphone kept running and the
+# face carrying the tick became UNREACHABLE, because `mode = .capture` happens
+# only on a false->true edge of `listening` and listening never went false.
+# From that tap onward Home could not stop capture at all.
+if ! code "$dash" | grep -q 'if listening { onStopListening() }'; then
+    echo "The capture face's dismiss button does not end the capture."
+    echo
+    echo "It is the universal 'close this' affordance. Wired to view state"
+    echo "alone it strands a running microphone with no stop anywhere on Home —"
+    echo "and the face that HAS a stop cannot be re-entered, because it is"
+    echo "gated on a false->true edge of \`listening\` that never comes."
+    exit 2
+fi
+
+# ...and the foot control must be DERIVED, never hardwired to start.
+if code "$dash" | grep -q 'Haptics.engage()$' && \
+   code "$dash" | grep -A 1 'Haptics.engage()$' | grep -q '^\s*onStartListening()'; then
+    echo "The foot control is hardwired to onStartListening()."
+    echo
+    echo "A button that always says 'Listen with phone' says it over a LIVE"
+    echo "microphone, and PhoneListener.begin() guards on !isListening, so the"
+    echo "tap is a silent no-op. Derive it from ListenControlPolicy.face, which"
+    echo "exists for exactly this and was unwired when Home became the thread."
+    exit 2
+fi
+if ! code "$dash" | grep -q 'ListenControlPolicy.face('; then
+    echo "The dashboard no longer asks ListenControlPolicy what the control is."
+    exit 2
+fi
+
+# ============================== THE TASK LEADS, AND THE VERDICT SURVIVES
+# The dashboard could only ever draw a transcript because the mapping into
+# HeardRow kept id/text/at and dropped the brain's `decision` and `goal`. The
+# policy layer then had nothing to tell a task from a sentence.
+if ! code "$policy" | grep -q 'var goal: String?'; then
+    echo "HeardRow no longer carries the goal the brain stamped."
+    echo
+    echo "Without it the policy cannot tell a line the brain recognised as"
+    echo "something to do from a line it called noise, and every line renders"
+    echo "as the same grey bubble — the whole transcript, no tasks."
+    exit 2
+fi
+if ! code "$home" | grep -q 'goal: \$0.goal'; then
+    echo "ContentView drops the verdict again when it builds HeardRow."
+    exit 2
+fi
+# But every line must still APPEAR. Filtering to judged lines only was tried
+# and reverted: somebody talking to a phone that had judged nothing watched an
+# empty screen and concluded she was dead.
+if code "$policy" | grep -qE 'for row in heard where.*goal|heard\.filter'; then
+    echo "The thread filters heard lines by whether they were judged."
+    echo "Leading with the task is a change of FACE, never of membership."
+    exit 2
+fi
+
 cp "$here/DashboardTests.swift" "$out/main.swift"
 swiftc "$policy" "$out/main.swift" -o "$out/dashboardtests"
 "$out/dashboardtests"

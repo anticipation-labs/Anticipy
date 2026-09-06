@@ -1170,7 +1170,10 @@ struct HomeView: View {
     /// lives in `DashboardPolicy` where `run_dashboard_tests.sh` can walk it.
     private var dashboardTurns: [DashboardPolicy.Turn] {
         let heard = session.transcript.map {
-            DashboardPolicy.HeardRow(id: $0.id, text: $0.text, at: $0.created)
+            // The verdict travels with the line. It was dropped here, which is
+            // why the dashboard could only ever draw a transcript.
+            DashboardPolicy.HeardRow(id: $0.id, text: $0.text, at: $0.created,
+                                     decision: $0.decision, goal: $0.goal)
         }
         let said = session.anticipySays.compactMap { ev -> DashboardPolicy.SaidRow? in
             guard ev.kind == "anticipy_says", let text = ev.text, !text.isEmpty else { return nil }
@@ -1245,6 +1248,7 @@ struct HomeView: View {
                     turns: dashboardTurns,
                     captureState: dashboardCaptureState,
                     listening: session.listener.isListening,
+                    micBlocked: micNeedsHelp,
                     everListened: !session.transcript.isEmpty,
                     history: dashboardHistory,
                     onStartListening: { session.startListening() },
