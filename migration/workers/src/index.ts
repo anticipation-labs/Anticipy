@@ -62,6 +62,7 @@ import { workerOwners, purgeAudit, authClaim, phoneRemove, profileUpsert, type S
 import { handsApiRun, HANDS_API_RUN_PATH, type HandsApiEnv } from "./routes/hands_api.ts";
 import { handsApiTools, HANDS_API_TOOLS_PATH, type HandsApiToolsEnv } from "./routes/hands_api_tools.ts";
 import { adminConnectLink, ADMIN_CONNECT_LINK_PATH, type AdminConnectLinkEnv } from "./routes/admin_connect_link.ts";
+import { adminSmsLines, ADMIN_SMS_LINES_PATH, type AdminSmsLinesEnv } from "./routes/admin_sms_lines.ts";
 import { agentRegister, agentKey, agentLlm, agentCaptcha, agentUpgradeCredential, type AgentEnv } from "./routes/agent.ts";
 import {
   serveFile, shareEvidence, depositEvidenceImage, discardEvidenceImage, type AssetEnv,
@@ -223,6 +224,9 @@ export default {
     // text it. Internal-key only; see routes/admin_connect_link.ts.
     if (path === ADMIN_CONNECT_LINK_PATH) {
       return adminConnectLink(request, env as unknown as AdminConnectLinkEnv);
+    }
+    if (path === ADMIN_SMS_LINES_PATH) {
+      return adminSmsLines(request, env as unknown as AdminSmsLinesEnv);
     }
 
     // Twilio's inbound webhook. TWILIO_AUTH_TOKEN is the only thing that can
