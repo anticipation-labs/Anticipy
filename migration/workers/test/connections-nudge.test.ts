@@ -33,6 +33,25 @@
  *   is computed here from this owner's own rows rather than taken from a
  *   caller. A row for a DIFFERENT toolkit closes the gate.
  *
+ *   TWO TICKS, TWO TEXTS, ONE ROW. Driven on 2026-09-06: two sweeps in flight
+ *   together both read the same absent row, both cleared the 7-day cap because
+ *   neither had written, and both sent — and the upsert then collapsed them
+ *   into one row, so nothing afterwards could say it had happened. Three checks
+ *   run the real `sendConnectAsk` concurrently against node:sqlite loaded with
+ *   the real schema: a fresh owner, an owner whose row already says `asked`
+ *   (where only `sent_at` can tell the two apart), and a Skip landing mid-ask.
+ *
+ *   TWO TICKS, TWO APPS, TWO TEXTS. The round-2 audit, same day, on that fix:
+ *   the lease it added is keyed (user_id, toolkit), and the cap it enforces is
+ *   keyed by PERSON — "one connect ask per user per 7 days ACROSS ALL APPS"
+ *   (page 24). Two ticks about DIFFERENT apps take DIFFERENT rows, so neither
+ *   predicate is false and one owner gets two texts. The sequential version of
+ *   that check passed throughout, which is the whole lesson: the cap was true
+ *   under sequence and false under overlap. Four checks: the race itself, two
+ *   owners at once (the cap is one PERSON's, not the fleet's), the week's far
+ *   edge (the lease and the policy must end it at the same instant), and the
+ *   whole thing again over a table missing its optional columns.
+ *
  *   THE VENDOR LINK IN A TEXT. Four raw vendor links went into messages on
  *   2026-09-05 and all four were dead before they were tapped. The containment
  *   refuses a second URL — including a SCHEMELESS one, which every phone
@@ -74,11 +93,13 @@ import {
   recordDecline,
   sendConnectAsk,
   shouldAsk,
+  type AskClaim,
   type NudgeDeps,
   type NudgeEnv,
   type NudgeMoment,
 } from "../src/connections/nudge.ts";
-import { createMemoryStore, type ConnectionsStore } from "../src/connections/store.ts";
+import { createD1Store, createMemoryStore, type ConnectionsStore, type StoreEnv }
+  from "../src/connections/store.ts";
 import {
   CONNECT_URL_BASE, LINK_TTL_MS, TOKEN_CHARS,
   parseConnectPath, redeem, tokenHandle,
@@ -86,6 +107,7 @@ import {
 import { CONNECT_LINK_PREFIX, FORBIDDEN_TERMS, MAX_ASK_SEGMENTS } from "../src/connections/words.ts";
 import type { ConnectNudge, NudgeContext, NudgeTrigger, ToolkitMeta }
   from "../../../spike/two-hands/src/connections/contract.ts";
+import { FakeD1, asD1 } from "./fake-d1.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(here, "..", "..", "..");
@@ -224,8 +246,52 @@ interface Rig {
   drafted: { link: string; slug: string; moment: string }[];
 }
 
+/**
+ * THE LEASE THE IN-MEMORY STORE DOES NOT HAVE.
+ *
+ * `createMemoryStore` has compare-and-sets for `connect_links` and none for
+ * `connect_nudges`, so this stands in for the one store.ts will grow. It is
+ * honest rather than decorative: the whole body runs inside a promise chain,
+ * which is real mutual exclusion in ONE isolate — and one isolate is all an
+ * in-memory store has ever been.
+ *
+ * It reads `this`, so a test that deletes a method off a COPY of the store
+ * breaks this too, the way a real store method would break.
+ *
+ * IT IS NOT WHAT PRODUCTION USES. The shipped lease is `d1ClaimAsk` in
+ * src/connections/nudge.ts, one conditional statement against a real
+ * `connect_nudges` primary key; the check that reproduces the overlapping-tick
+ * defect drives THAT, over node:sqlite and the real schema.
+ */
+function memoryClaim(): AskClaim {
+  let queue: Promise<unknown> = Promise.resolve();
+  return function (this: ConnectionsStore, expect, write, budget) {
+    const store = this;
+    const run = queue.then(async () => {
+      const cur = await store.readNudge(write.user_id, write.toolkit);
+      const state = cur === null ? "never_asked" : cur.state;
+      const sentAt = cur === null ? null : cur.sent_at;
+      if (state !== expect.state || sentAt !== expect.sent_at) return false;
+      // BOTH PREDICATES, because a lease that enforces only the row half is the
+      // round-2 defect: two ticks about two apps take two rows and both win.
+      // The whole body is inside the queue, so this read-then-write is as
+      // atomic here as the SQL is over D1.
+      if (budget !== null) {
+        const others = (await store.nudgesForOwner(budget.owner))
+          .filter((r) => r.toolkit !== write.toolkit)
+          .filter((r) => typeof r.sent_at === "number" && r.sent_at > budget.noAskSince);
+        if (others.length > 0) return false;
+      }
+      await store.putNudge(write);
+      return true;
+    });
+    queue = run.catch(() => undefined);
+    return run;
+  };
+}
+
 function rig(over: Partial<NudgeDeps> = {}, env: NudgeEnv = SENDBLUE, moment?: NudgeMoment): Rig {
-  const store = createMemoryStore();
+  const store = { ...createMemoryStore(), claimAsk: memoryClaim() } as ConnectionsStore;
   const drafted: Rig["drafted"] = [];
   const deps: NudgeDeps = {
     store,
@@ -242,6 +308,36 @@ function rig(over: Partial<NudgeDeps> = {}, env: NudgeEnv = SENDBLUE, moment?: N
     ...over,
   };
   return { env, store, deps, drafted };
+}
+
+/**
+ * THE SAME RIG OVER A REAL DATABASE — the shipped `createD1Store` on top of
+ * node:sqlite loaded with migration/d1/schema.sql, so the exactly-once lease
+ * below is SQLite's own answer about a real `connect_nudges` primary key
+ * rather than a fixture agreeing with itself.
+ */
+interface D1Rig extends Rig { d1: FakeD1 }
+
+function d1Rig(over: Partial<NudgeDeps> = {}, moment?: NudgeMoment): D1Rig {
+  const d1 = new FakeD1();
+  const env = { ...SENDBLUE, DB: asD1(d1) } as NudgeEnv;
+  const store = createD1Store(env as unknown as StoreEnv);
+  const drafted: Rig["drafted"] = [];
+  const deps: NudgeDeps = {
+    store,
+    catalog: { toolkit: async (slug) => meta(slug) },
+    write: (input) => {
+      const i = input as { evidence: { link: string }; meta: ToolkitMeta; moment: string };
+      drafted.push({ link: i.evidence.link, slug: i.meta.slug, moment: i.moment });
+      return goodDraft(i.evidence.link);
+    },
+    moment: async () => moment ?? goodMoment(),
+    phone: async () => TO,
+    due: async () => [],
+    now: () => NOW,
+    ...over,
+  };
+  return { d1, env, store, deps, drafted };
 }
 
 function reset(): void {
@@ -798,6 +894,200 @@ await check("a second ask, straight after the first, does not go out", async () 
   assert.equal((await r.store.linksForOwner(OWNER)).length, 1, "a link was minted for a held ask");
 });
 
+await check("TWO TICKS AT ONCE: one text, one row, and the loser says so", async () => {
+  // Cloudflare can have two five-minute invocations in flight together, and a
+  // manual sweep beside the scheduled one certainly can. Both read the same
+  // absent `connect_nudges` row, both clear the 7-day cap BECAUSE NEITHER HAS
+  // WRITTEN YET, and before the lease both sent a text carrying a live link —
+  // two interruptions, and one row afterwards, so nothing could ever tell.
+  reset();
+  const r = d1Rig();
+  const both = await Promise.all([
+    sendConnectAsk(r.env, OWNER, SLUG_A, "in_task", r.deps),
+    sendConnectAsk(r.env, OWNER, SLUG_A, "in_task", r.deps),
+  ]);
+  for (const d of r.drafted) tokenOf(d.link);
+
+  assert.equal(calls.length, 1,
+    `${calls.length} connect texts left the Worker for one owner in one moment`);
+  assert.equal(both.filter((o) => o.sent).length, 1,
+    "two ticks both believed they had asked this owner");
+
+  const rows = r.d1.rows<Record<string, unknown>>(`SELECT * FROM "connect_nudges"`);
+  assert.equal(rows.length, 1, "one owner, one app, one row");
+  assert.equal(rows[0].sent_at, NOW);
+  assert.equal(rows[0].state, "asked");
+
+  // THE LOSER IS QUIET, AND NAMED. Not "hold" and not "no-verdict": nothing
+  // about this owner was wrong, another tick simply got there first, and a
+  // sweep report that cannot count that separately cannot tell an overlap from
+  // a policy refusing.
+  const loser = both.find((o) => !o.sent)!;
+  assert.equal(loser.cause, "lost-race",
+    `the tick that lost reported ${loser.cause}: ${loser.reason}`);
+  assert.equal(loser.decision, "ask");
+});
+
+await check("TWO TICKS, TWO DIFFERENT APPS, ONE OWNER: one text", async () => {
+  // THE HOLE THE PER-APP LEASE LEFT OPEN, driven 2026-09-06 (round-2 finding 1).
+  // The lease above is keyed (user_id, toolkit) — it is a promise about ONE
+  // ROW. The 7-day cap it sits under is a promise about a PERSON, across all
+  // their apps. Two ticks about DIFFERENT apps therefore claim DIFFERENT rows,
+  // and neither predicate is false: both read an ask history in which nobody
+  // has been sent anything, both clear the cap because neither has written
+  // yet, both win their own row's lease, and one person gets two connect texts
+  // with two live links.
+  //
+  // The sequential version of this is already pinned ("a second ask, straight
+  // after the first, does not go out"), and it passed throughout — which is
+  // the point: the cap was true under sequence and false under overlap, and
+  // Cloudflare overlaps five-minute invocations.
+  //
+  // TWO DIFFERENT TRIGGERS on purpose, so the winner is not decided by the
+  // policy: `in_task` (0.8) and `laptop_closed` (1.0) both clear level 0's
+  // 0.5, so both ticks reach the lease and exactly one of them may pass it.
+  reset();
+  const r = d1Rig();
+  const both = await Promise.all([
+    sendConnectAsk(r.env, OWNER, SLUG_A, "in_task", r.deps),
+    sendConnectAsk(r.env, OWNER, SLUG_B, "laptop_closed", r.deps),
+  ]);
+  for (const d of r.drafted) tokenOf(d.link);
+
+  assert.equal(calls.length, 1,
+    `${calls.length} connect texts left the Worker for one owner in one moment: the 7-day `
+      + "cap is global across all apps and the lease that enforces it is not");
+  assert.equal(both.filter((o) => o.sent).length, 1,
+    "two ticks about two apps both believed they had spent this owner's week");
+
+  // AND THE LOSER IS THE SAME KIND OF QUIET as a same-app overlap: nothing
+  // about this owner or this moment was wrong, so it is neither `hold` nor
+  // `no-verdict`.
+  const lost = both.find((o) => !o.sent)!;
+  assert.equal(lost.cause, "lost-race", `the tick that lost reported ${lost.cause}: ${lost.reason}`);
+  assert.equal(lost.decision, "ask");
+
+  // ONE ROW CARRIES A sent_at, AND ONLY ONE. The loser must not leave a row
+  // saying it asked — that would spend a second week of this owner's silence
+  // for a text nobody received.
+  const sent = r.d1.rows<Record<string, unknown>>(
+    `SELECT * FROM "connect_nudges" WHERE "sent_at" IS NOT NULL`);
+  assert.equal(sent.length, 1,
+    `${sent.length} rows say an ask went out and only one text did`);
+  assert.equal(sent[0].state, "asked");
+
+  // AND THE LOSER MINTED NOTHING IT LEFT LYING AROUND that a person could be
+  // handed later: the link it minted before the lease is unreachable, and the
+  // one link anybody was given is the winner's.
+  assert.equal((await r.store.linksForOwner(OWNER)).length, 2,
+    "the loser's link was minted before the lease, which is the known cost of "
+      + "ordering the copy before the claim; if that changes, say so here");
+});
+
+await check("CONTROL: the weekly budget is one PERSON's, so two owners at once get two texts",
+  async () => {
+    // The predicate that closes the check above is a `NOT EXISTS` over
+    // `connect_nudges`. Written without its `user_id` bound — or bound to the
+    // wrong column — it becomes a cap over the whole FLEET: the first owner
+    // asked in any week silences everybody else, and every check above still
+    // passes because they all use one owner.
+    //
+    // TWO DIFFERENT APPS, and this is not incidental. The predicate also reads
+    // `toolkit <> ?`, so two owners asked about the SAME app would pass a
+    // fleet-wide cap by accident — measured: that version of this check let a
+    // dropped `user_id` survive. Different owner AND different app is the only
+    // shape in which the owner scoping is the thing being asked about.
+    reset();
+    const r = d1Rig();
+    const both = await Promise.all([
+      sendConnectAsk(r.env, OWNER, SLUG_A, "in_task", r.deps),
+      sendConnectAsk(r.env, STRANGER, SLUG_B, "in_task", r.deps),
+    ]);
+    for (const d of r.drafted) tokenOf(d.link);
+    assert.equal(both.filter((o) => o.sent).length, 2,
+      `one owner's ask silenced another owner's: ${both.map((o) => `${o.cause}:${o.reason}`).join(" | ")}`);
+    assert.equal(calls.length, 2, "two different people, two texts");
+    const rows = r.d1.rows<Record<string, unknown>>(
+      `SELECT * FROM "connect_nudges" WHERE "sent_at" IS NOT NULL ORDER BY "user_id"`);
+    assert.equal(rows.length, 2);
+    assert.deepEqual(rows.map((x) => x.user_id).sort(), [OWNER, STRANGER].sort(),
+      "both rows belong to one owner");
+  });
+
+await check("the lease still holds over a live table missing its optional columns", async () => {
+  // THE LIVE TABLE IS THE AUTHORITY, NOT schema.sql — on 2026-09-05 the live
+  // `events` table was missing two columns this repo declared and every write
+  // became a D1 1101. `d1ClaimAsk` answers that by projecting onto whatever
+  // columns exist, which means the statement's parameter NUMBERS shift with the
+  // table: the row is ?1..?n, the row predicate is ?n+1 and ?n+2, and the
+  // budget is ?n+3..?n+5. Get that arithmetic wrong on a narrower table and the
+  // predicate silently compares the wrong values — a lease that is a decoration
+  // on exactly the databases most likely to be skewed.
+  reset();
+  const r = d1Rig();
+  for (const gone of ["trigger", "acted_at", "channel"]) {
+    r.d1.db.exec(`ALTER TABLE "connect_nudges" DROP COLUMN "${gone}"`);
+  }
+  // THE CROSS-APP RACE, run over the narrower table: the budget predicate is
+  // the one whose parameters sit furthest from ?1, so it is the one a shifted
+  // `n` breaks first, and an overlap is the only shape in which it decides
+  // anything (sequentially the policy refuses before the lease is reached).
+  const both = await Promise.all([
+    sendConnectAsk(r.env, OWNER, SLUG_A, "in_task", r.deps),
+    sendConnectAsk(r.env, OWNER, SLUG_B, "laptop_closed", r.deps),
+  ]);
+  for (const d of r.drafted) tokenOf(d.link);
+  assert.equal(both.filter((o) => o.sent).length, 1,
+    `a table missing three columns sent ${both.filter((o) => o.sent).length} texts: `
+      + both.map((o) => `${o.cause}:${o.reason}`).join(" | "));
+  assert.equal(calls.length, 1);
+  const rows = r.d1.rows<Record<string, unknown>>(
+    `SELECT * FROM "connect_nudges" WHERE "sent_at" IS NOT NULL`);
+  assert.equal(rows.length, 1, "the loser recorded an ask nobody received");
+  assert.equal(rows[0].sent_at, NOW, "the ask was recorded with the wrong parameter");
+  assert.equal(rows[0].state, "asked");
+});
+
+await check("CONTROL: the budget ENDS, and the lease and the policy end it at the same instant",
+  async () => {
+    // The other direction, and the one a floor gets wrong silently: a cap with
+    // no upper edge is the feature switched off, and nobody would notice for a
+    // week at a time. `shouldAsk` holds while `now - lastAsk < 7 days`, so an
+    // ask EXACTLY seven days old is licensed — and the lease's own predicate is
+    // `sent_at > now - 7 days`, which is false at exactly that instant. The two
+    // have to agree to the millisecond or the lease refuses asks the policy
+    // allowed and reports them as an overlap that never happened.
+    for (const [why, age, sent] of [
+      ["a day inside the week", DAY, false],
+      ["exactly seven days old", GLOBAL_ASK_INTERVAL_DAYS * DAY, true],
+      ["eight days old", 8 * DAY, true],
+    ] as [string, number, boolean][]) {
+      reset();
+      const r = d1Rig();
+      // A DIFFERENT app, which is the only kind of row the budget predicate
+      // looks at, carrying the last ask this owner had.
+      r.d1.db.prepare(
+        `INSERT INTO "connect_nudges"
+           ("user_id","toolkit","state","level","snooze_until","trigger","sent_at","acted_at","channel")
+         VALUES (?, ?, 'declined', 1, NULL, 'in_task', ?, NULL, 'sms')`,
+      ).run(OWNER, SLUG_B, NOW - age);
+      const out = await sendConnectAsk(r.env, OWNER, SLUG_A, "laptop_closed", r.deps);
+      for (const d of r.drafted) tokenOf(d.link);
+      assert.equal(out.sent, sent,
+        `an ask ${why} answered ${out.cause}: ${out.reason}`);
+      if (sent) {
+        assert.equal(calls.length, 1, `${why}: the ask was licensed and no text went out`);
+      } else {
+        // AND IT IS THE POLICY THAT REFUSED, not the lease: an ask inside the
+        // week must never reach the claim, or the report cannot tell somebody
+        // being protected from two ticks colliding.
+        assert.equal(out.cause, "hold", `${why} answered ${out.cause}`);
+        assert.match(out.reason, /across all apps/);
+        assert.equal(calls.length, 0);
+      }
+    }
+  });
+
 await check("nothing is minted until the policy, the catalog and the number all answer", async () => {
   const cases: [string, Partial<NudgeDeps>, NudgeMoment | undefined, string][] = [
     ["a held moment", {}, goodMoment({ taskInFlight: true }), "hold"],
@@ -887,6 +1177,99 @@ await check("a store missing a method is a wiring fault, not a text", async () =
     assert.equal(out.sent, false, `a wiring with no ${missing} still sent a text`);
     assert.equal(calls.length, 0);
   }
+});
+
+await check("TWO TICKS ON A ROW THAT ALREADY SAYS asked: still one text", async () => {
+  // THE CASE THE `state` HALF OF THE LEASE CANNOT SEE. This owner was asked
+  // twenty days ago and never answered, so the silence has matured into a
+  // decline and the snooze it earned has run out. Both ticks read a row whose
+  // state is `asked` — and the row they each want to write says `asked` too,
+  // so a predicate on the state alone matches for both of them. Only `sent_at`
+  // tells the ask that was sent from the ask that is being sent.
+  reset();
+  const r = d1Rig();
+  r.d1.db.prepare(
+    `INSERT INTO "connect_nudges"
+       ("user_id","toolkit","state","level","snooze_until","trigger","sent_at","acted_at","channel")
+     VALUES (?, ?, 'asked', 0, NULL, 'in_task', ?, NULL, 'sms')`,
+  ).run(OWNER, SLUG_A, NOW - 20 * DAY);
+
+  const both = await Promise.all([
+    sendConnectAsk(r.env, OWNER, SLUG_A, "laptop_closed", r.deps),
+    sendConnectAsk(r.env, OWNER, SLUG_A, "laptop_closed", r.deps),
+  ]);
+  for (const d of r.drafted) tokenOf(d.link);
+
+  assert.equal(both.filter((o) => o.sent).length, 1,
+    `neither or both ticks sent: ${both.map((o) => `${o.cause}:${o.reason}`).join(" | ")}`);
+  assert.equal(calls.length, 1, `${calls.length} texts left the Worker for one owner`);
+  assert.equal(both.find((o) => !o.sent)!.cause, "lost-race");
+
+  // AND THE DECLINE THE SILENCE EARNED SURVIVED the re-ask: the winner wrote
+  // level 1, not level 0.
+  const rows = r.d1.rows<Record<string, unknown>>(`SELECT * FROM "connect_nudges"`);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].sent_at, NOW);
+  assert.equal(rows[0].level, 1, "the re-ask erased the decline the silence earned");
+});
+
+await check("a NO that lands while the ask is being written is not written over", async () => {
+  // The sweep is not the only writer of `connect_nudges`: routes/connect.ts
+  // `/skip` records a decline the moment somebody taps it, and it does not
+  // touch `sent_at` on a row nobody has ever been sent. So a lease that
+  // compared only `sent_at` would still hold — and this ask would overwrite a
+  // "no" this owner had just given, with `state: "asked"`.
+  //
+  // The decline is injected from inside the writer, which is where the real
+  // gap is: the read happened three awaits ago and the send has not happened
+  // yet.
+  reset();
+  let landed = false;
+  const r = d1Rig({
+    write: (input) => {
+      if (!landed) {
+        landed = true;
+        r.d1.db.prepare(
+          `INSERT INTO "connect_nudges"
+             ("user_id","toolkit","state","level","snooze_until","trigger","sent_at","acted_at","channel")
+           VALUES (?, ?, 'declined', 1, ?, NULL, NULL, ?, NULL)`,
+        ).run(OWNER, SLUG_A, NOW + 14 * DAY, NOW);
+      }
+      const i = input as { evidence: { link: string }; meta: ToolkitMeta; moment: string };
+      r.drafted.push({ link: i.evidence.link, slug: i.meta.slug, moment: i.moment });
+      return goodDraft(i.evidence.link);
+    },
+  });
+
+  const out = await sendConnectAsk(r.env, OWNER, SLUG_A, "in_task", r.deps);
+  for (const d of r.drafted) tokenOf(d.link);
+  assert.equal(landed, true, "the decline never landed, so this check measured nothing");
+  assert.equal(out.sent, false, "a text went out over a no this owner had just given");
+  assert.equal(out.cause, "lost-race", `the ask answered ${out.cause}: ${out.reason}`);
+  assert.equal(calls.length, 0);
+
+  const rows = r.d1.rows<Record<string, unknown>>(`SELECT * FROM "connect_nudges"`);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].state, "declined", "the ask overwrote the decline");
+  assert.equal(rows[0].level, 1, "the decline ladder was reset by an ask nobody received");
+});
+
+await check("nothing to claim the ask with is silence, not a text", async () => {
+  reset();
+  const r = rig();
+  // The store brings no lease of its own and this env has no D1 binding, so
+  // there is no way to tell whether another tick is already sending. A floor
+  // with no verdict refuses.
+  const store = { ...r.store } as Record<string, unknown>;
+  delete store.claimAsk;
+  const out = await sendConnectAsk(
+    r.env, OWNER, SLUG_A, "in_task", { ...r.deps, store: store as never },
+  );
+  assert.equal(out.sent, false, "an ask nothing could claim went out anyway");
+  assert.equal(out.cause, "no-lease", `unclaimable ask answered ${out.cause}`);
+  assert.equal(calls.length, 0);
+  assert.equal(await r.store.readNudge(OWNER, SLUG_A), null,
+    "a row was written for a text nobody received");
 });
 
 await check("a draft that breaks a rule is refused, not repaired, and no text goes out", async () => {
@@ -1167,7 +1550,7 @@ await check("askMessage exists only because the two link constants disagree", ()
 // anchored on a string that occurs EXACTLY ONCE in that file (the script
 // refuses to run otherwise, because a regex that silently fails to match
 // produces a false "it is tested" reading — that mistake was made twice on
-// 2026-09-05). All twenty went RED; the check each one killed is named.
+// 2026-09-05). All twenty-nine went RED; the check each one killed is named.
 //
 //   1  `if (since < GLOBAL_ASK_INTERVAL_DAYS * DAY_MS) {` -> `if (false) {`
 //      -> "the 7-day cap is global across ALL apps, and skew does not open it"
@@ -1179,7 +1562,7 @@ await check("askMessage exists only because the two link constants disagree", ()
 //      -> "THE ONLY URL IN THE MESSAGE IS OURS"
 //   5  `const before = maturedBySilence(row, now);` -> `const before = row;`
 //      -> "a re-ask after 72 hours of silence does not erase the decline"
-//   6  the hand-back `await deps.store.putNudge(before);` -> `void before;`
+//   6  the hand-back `await claim(asked, before);` -> `void before;`
 //      -> "a send that fails hands the ask back"
 //   7  quiet hours `>= QUIET_HOURS_START` -> `> QUIET_HOURS_START`
 //      -> "the moment floors: mid-step, before the result, quiet hours, no evidence"
@@ -1201,7 +1584,7 @@ await check("askMessage exists only because the two link constants disagree", ()
 //      -> "no exclamation marks, and no consent-form stiffness"
 //  16  `if (to === "") {` -> `if (false) {`
 //      -> "nothing is minted until the policy, the catalog and the number all answer"
-//  17  `await deps.store.putNudge(asked);` made conditional on `0`
+//  17  the lease write `won = await claim(row, asked);` made conditional on `0`
 //      -> "THE CONTROL: a well-evidenced post-result moment sends exactly one text"
 //  18  `if (!Array.isArray(history)) {` -> `if (false) {`
 //      -> "an unreadable ask history refuses rather than guessing at the cap"
@@ -1209,6 +1592,62 @@ await check("askMessage exists only because the two link constants disagree", ()
 //      -> "a minted link is dead ten minutes later, and dead to a stranger now"
 //  20  `user_id: who,` in the minted row -> a hardcoded stranger's id
 //      -> "the mint and the route's own redeem agree: mint, tap, spent"
+//
+// THE LEASE (section 3b), added 2026-09-06 when overlapping ticks were driven
+// and two texts went to one owner. Nine more, all RED:
+//
+//  21  `if (!won) {` -> `if (false) {`
+//      -> "TWO TICKS AT ONCE: one text, one row, and the loser says so"
+//  22  the whole `WHERE … state IS … AND … sent_at IS …` predicate deleted,
+//      leaving the plain upsert this replaced
+//      -> "TWO TICKS AT ONCE: one text, one row, and the loser says so"
+//  23  the STATE half of that predicate deleted
+//      -> "a NO that lands while the ask is being written is not written over"
+//  24  the SENT_AT half inverted (`IS` -> `IS NOT`)
+//      -> "TWO TICKS ON A ROW THAT ALREADY SAYS asked: still one text"
+//  25  `Number(res.meta?.changes ?? 0) === 1` -> `>= 0`
+//      -> "TWO TICKS AT ONCE: one text, one row, and the loser says so"
+//  26  `if (claim === null) {` -> `if (false as boolean) {`
+//      -> "nothing to claim the ask with is silence, not a text"
+//  27  `await claim(asked, before)` -> `await claim(before, asked)`
+//      -> "a send that fails hands the ask back, so the interruption is not spent"
+//  28  `won = await claim(row, asked)` -> `claim(asked, asked)`
+//      -> "THE CONTROL: a well-evidenced post-result moment sends exactly one text"
+//  29  `ON CONFLICT(…) DO UPDATE SET` -> `DO NOTHING`
+//      -> "TWO TICKS AT ONCE: one text, one row, and the loser says so"
+//
+// THE WEEK (the `AskBudget` half of the lease), added 2026-09-06 when the
+// round-2 audit found that the lease above is keyed (user_id, toolkit) while
+// the cap it enforces is keyed by PERSON. Eight more, all RED, each anchored on
+// a literal src/connections/nudge.ts carries exactly once (an anchor matching
+// anything other than once refused to patch):
+//
+//  30  `if (budget !== null) {` -> `if (false as boolean) {`
+//      -> "TWO TICKS, TWO DIFFERENT APPS, ONE OWNER: one text"
+//  31  the budget's `b."user_id" = ?` made a tautology (a FLEET-wide cap)
+//      -> "CONTROL: the weekly budget is one PERSON's, so two owners at once
+//         get two texts"
+//  32  the budget dropped from the INSERT half, kept in DO UPDATE — the shape
+//      that misses the commonest race, two ticks about an owner with no rows
+//      -> "TWO TICKS, TWO DIFFERENT APPS, ONE OWNER: one text"
+//  33  `b."sent_at" > ?` -> `>=`, so the lease and the policy disagree by a
+//      millisecond at the window's edge
+//      -> "CONTROL: the budget ENDS, and the lease and the policy end it at
+//         the same instant"
+//  34  `noAskSince: now - GLOBAL_ASK_INTERVAL_DAYS * DAY_MS` -> `now`
+//      -> "TWO TICKS, TWO DIFFERENT APPS, ONE OWNER: one text"
+//  35  the same -> `0`, a window with no end
+//      -> "CONTROL: the budget ENDS, and the lease and the policy end it at
+//         the same instant"
+//  36  `b."toolkit" <> ?` -> `=`, so the budget looks at the app it is about
+//      -> "TWO TICKS, TWO DIFFERENT APPS, ONE OWNER: one text"
+//  37  the ROW predicate deleted and the budget kept
+//      -> "TWO TICKS AT ONCE: one text, one row, and the loser says so"
+//
+// A NINTH SURVIVED FIRST TIME and is recorded because the check it should have
+// killed was wrong, not the code: #31 lived through a two-owner control that
+// used the SAME app for both, where the budget's own `toolkit <> ?` clause
+// hides a missing `user_id`. The control now uses two owners AND two apps.
 // ---------------------------------------------------------------------------
 
 console.log = realLog;

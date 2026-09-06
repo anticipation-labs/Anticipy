@@ -268,13 +268,19 @@ class FakeD1:
     SAID to the database, not about what the database said back.
     """
 
-    def __init__(self, tables=(), connections=None, rows=None, fail_on=None):
+    def __init__(self, tables=(), connections=None, rows=None, fail_on=None,
+                 asked=None, due=0):
         self.tables = list(tables)
         self.connections = connections or {"rows_n": 0, "owners_n": 0}
         self.statements = []
         self.stored = dict(rows) if rows else {}
         self.fail_on = fail_on or ()
         self.deleted = []
+        # LEG 11. `asked` is the connect_nudges answer: None means the table
+        # answered nothing at all (which the gate must read as UNPROVEN, not as
+        # zero), and a dict is `{"asked_n": n, "newest": ms}`.
+        self.asked = asked
+        self.due = due
 
     def __call__(self, sql):
         self.statements.append(sql)
@@ -298,14 +304,20 @@ class FakeD1:
             return []
         if "count(*) AS n FROM \"connect_links\"" in sql:
             return [{"n": 1 if self.stored.get("row") else 0}]
+        if "asked_n" in sql:
+            return [] if self.asked is None else [dict(self.asked)]
+        if "due_n" in sql:
+            return [{"due_n": self.due}]
         if "FROM \"connections\"" in sql:
             return [dict(self.connections)]
         return []
 
 
 def d1_with_a_working_connect_links(now_ms=None):
-    """A FakeD1 whose four tables exist and whose connect_links behaves."""
-    return FakeD1(tables=M.TABLES, connections={"rows_n": 2, "owners_n": 1})
+    """A FakeD1 whose four tables exist, whose connect_links behaves, and which
+    has actually asked somebody — leg 11's green needs a row, not a config."""
+    return FakeD1(tables=M.TABLES, connections={"rows_n": 2, "owners_n": 1},
+                  asked={"asked_n": 3, "newest": float((now_ms or 0) - 3_600_000)})
 
 
 def _row_from_insert(sql):
@@ -367,16 +379,23 @@ def _declared_routes():
                       text, re.S).group(1)
     declared = dict(re.findall(r'(\w+):\s*"(/[^"]+)"', paths))
     methods = dict(re.findall(r'(\w+):\s*"(GET|POST)"', verbs))
-    assert len(declared) == 6 and len(methods) == 6, (declared, methods)
+    # NOT A MAGIC NUMBER ANY MORE. It read `== 6` until 2026-09-06, when a
+    # SEVENTH route (`/me/connections/skip`, the one that carries a person's
+    # "no" off the glass and onto the ladder) was added to the Worker and this
+    # assertion failed with a count instead of a name. The count that means
+    # something is the gate's own list: a route the Worker declares and the gate
+    # does not ask about is a route no leg measures, and that is what the next
+    # two assertions compare.
+    assert len(declared) == len(methods) >= len(M.CONNECTIONS_ROUTES), (declared, methods)
     return declared, methods
 
 
-def test_the_gate_asks_for_the_six_routes_the_worker_declares():
+def test_the_gate_asks_for_every_route_the_worker_declares():
     """THREE BOOKS, ONE TRUTH. connections_api.ts declares the paths and the
-    verbs, ConnectedAppsClient.swift reads the same six, and this gate asks
-    production about them. A seventh added to the Worker without this list is a
-    route no leg measures, and a path typed wrong here is a leg that measures
-    the router's 404 forever."""
+    verbs, ConnectedAppsClient.swift reads the same ones, and this gate asks
+    production about them. A route added to the Worker without this list is a
+    route no leg measures — which happened on 2026-09-06 with `/skip` — and a
+    path typed wrong here is a leg that measures the router's 404 forever."""
     declared, methods = _declared_routes()
     assert {p for _n, _m, p in M.CONNECTIONS_ROUTES} == set(declared.values())
     for name, method, path in M.CONNECTIONS_ROUTES:
@@ -403,11 +422,11 @@ def test_a_deployed_route_and_a_missing_one_are_not_the_same_answer():
     assert M.classify_connections_response(*NOT_A_LEG)[0] == "not-a-leg"
 
 
-def test_the_six_are_asked_with_their_own_verbs_and_no_credential():
+def test_every_route_is_asked_with_its_own_verb_and_no_credential():
     """`connectionsApiRoute` checks the METHOD before the credential, so a GET
     on /link is a 405 that never reaches the 401 this leg reads — asking with
-    the wrong verb would report four deployed routes as unreadable. And none of
-    the six probes may carry a credential: an authenticated probe would reach
+    the wrong verb would report four deployed routes as unreadable. And no
+    probe may carry a credential: an authenticated probe would reach
     the store, the vendor and the model, and would be measuring a signed-in path
     rather than the deployment."""
     worker = a_deployed_worker()
@@ -1208,6 +1227,7 @@ def test_the_measured_state_of_2026_09_06_at_0408():
         M.OK,     # 8 the vendor key
         M.INFO,   # 9 the connections table could not be counted
         M.BAD,    # 10 the webhook route is not deployed either
+        M.INFO,   # 11 connect_nudges could not be counted either
     ], details(rows)
     assert code == M.RED
 
@@ -1240,7 +1260,7 @@ def test_everything_working_is_the_only_way_to_exit_zero():
                        vendor=vendor_answering(), owner="sxkotd1h02qb6gw",
                        credential="an-owner-token", now_ms=now,
                        webhook=a_webhook_secret())
-    assert marks(rows) == [M.OK] * 10, details(rows)
+    assert marks(rows) == [M.OK] * 11, details(rows)
     assert code == M.GREEN
 
 
@@ -1254,6 +1274,258 @@ def test_one_unmeasured_leg_is_enough_to_withhold_green():
                        owner="sxkotd1h02qb6gw", credential="an-owner-token", now_ms=now)
     assert code == M.UNPROVEN
     assert marks(rows)[8] == M.INFO
+
+
+# ===========================================================================
+# LEG 11 — is anybody actually being ASKED
+# ===========================================================================
+# Legs 1-10 all measure whether somebody who WANTS to connect an app can. This
+# one measures the other half of the spec — the half that was written, tested
+# and called by nothing: does anything ever OFFER?
+#
+# The four states below all look identical from outside (no text arrived) and
+# every one of them is a different repair. That is the leg.
+
+
+def _run_with(asked=None, due=0, **over):
+    """One run against a working deployment, with leg 11's two counts set."""
+    now = over.pop("now_ms", 1_757_000_000_000)
+    fake = FakeD1(tables=M.TABLES, connections={"rows_n": 2, "owners_n": 1},
+                  asked=asked, due=due)
+    return M.run(http=a_deployed_worker(now_ms=now), sql=fake,
+                 vendor=vendor_answering(), owner="sxkotd1h02qb6gw",
+                 credential="an-owner-token", now_ms=now,
+                 webhook=a_webhook_secret(), **over), fake
+
+
+def test_an_ask_row_on_live_d1_is_the_only_thing_that_turns_leg_11_green():
+    """A ROW IS THE ONLY PROOF THAT SURVIVES A STALE DEPLOY. Production has
+    served old code at least twice (HARNESS-LAWS law 3), so a gate that read the
+    repo's own wrangler.jsonc and called it green would report the checkout, not
+    the deployment. `connect_nudges` rows were written by the Worker that is
+    actually running, on a tick that actually fired."""
+    now = 1_757_000_000_000
+    (code, rows), _ = _run_with(asked={"asked_n": 2, "newest": float(now - 7_200_000)},
+                                now_ms=now)
+    assert marks(rows)[10] == M.OK, details(rows)
+    assert "asks are going out" in rows[10][2]
+    assert code == M.GREEN
+
+
+def test_nobody_due_is_unproven_not_green_and_not_red():
+    """THE SAME RULE AS LEG 9, and the reason is the same. The day before the
+    first person is asked, zero is the correct state of a working feature; red
+    would train the reader to skip the board, and green would let a feature
+    whose senses were never wired read as done. It is neither."""
+    (code, rows), _ = _run_with(asked={"asked_n": 0, "newest": None}, due=0)
+    assert marks(rows)[10] == M.INFO, details(rows)
+    assert code == M.UNPROVEN
+    assert "nobody is due" in rows[10][2]
+
+
+def test_nobody_due_names_the_two_doors_that_would_change_it():
+    """A gate that says "nothing to report" teaches nothing. This one names the
+    two ingest doors that produce a MOMENT, because those are the two pieces of
+    work between here and an ask."""
+    (_code, rows), _ = _run_with(asked={"asked_n": 0, "newest": None}, due=0)
+    for word in ("observer", "said", "signals.ts"):
+        assert word in rows[10][2], rows[10][2]
+
+
+def test_owners_due_and_nothing_ever_sent_is_red_and_counts_them():
+    """The state that must never read as quiet: the evidence is there, the
+    schedule is there, the wiring is there, and not one text has gone."""
+    (code, rows), _ = _run_with(asked={"asked_n": 0, "newest": None}, due=6)
+    assert marks(rows)[10] == M.BAD, details(rows)
+    assert "6 owner(s)" in rows[10][2]
+    assert code == M.RED
+
+
+def test_a_connect_nudges_table_that_cannot_be_counted_claims_nothing():
+    """`asked is None` is "the database did not answer", which is NOT zero. The
+    two are opposite facts and conflating them is how a missing migration reads
+    as a quiet night."""
+    (code, rows), _ = _run_with(asked=None)
+    assert marks(rows)[10] == M.INFO, details(rows)
+    assert code == M.UNPROVEN
+    # AND THE SENTENCE HAS TO SAY WHICH. `nobody-due` is also UNPROVEN and also
+    # INFO, so a mark alone cannot tell the two apart — and they are opposite
+    # facts: one is a quiet night, the other is a database that did not answer.
+    # This assertion exists because the mutation that collapses them survived a
+    # check on the mark alone.
+    assert M.ask_state(True, True, 0, None) == "unreadable"
+    assert "could not be counted" in rows[10][2], rows[10][2]
+    assert "nobody is due" not in rows[10][2], rows[10][2]
+
+
+def test_leg_11_is_not_attempted_when_its_table_is_missing():
+    """No connect_nudges on live D1 means leg 2 already said so. Leg 11 must not
+    then report a count of zero as though it had asked."""
+    fake = FakeD1(tables=[t for t in M.TABLES if t != "connect_nudges"])
+    code, rows = M.run(http=a_deployed_worker(), sql=fake, vendor=vendor_answering(),
+                       owner="sxkotd1h02qb6gw", read_only=True)
+    assert marks(rows)[10] == M.INFO, details(rows)
+    assert not any("asked_n" in st for st in fake.statements), \
+        "the gate counted asks over a table leg 2 said was missing"
+
+
+DUE_TS = os.path.join(REPO, "migration", "workers", "src", "connections", "due.ts")
+
+
+def _due_source():
+    return open(DUE_TS, encoding="utf-8").read()
+
+
+def test_the_due_count_is_due_ts_own_statement_and_not_a_copy_of_it():
+    """THE FINDING OF 2026-09-06, PINNED SO IT CANNOT RETURN.
+
+    `DUE_COUNT_SQL` was a hand-written copy of `candidateSql()`. due.ts deleted
+    `AND s."weight" > 0` (a predicate no code path could make false) and
+    replaced `WHERE "pick" = 1` with a per-owner row budget; the copy did not
+    move, so the one leg every fixer names as the law-3 proof was counting
+    owners against a shape the shipped code no longer had.
+
+    There is no copy now. The gate reads due.ts's own statement out of the file
+    and binds its placeholders, so the two cannot disagree — the only failure
+    left is a read that stops working, and that one is UNPROVEN by
+    construction rather than a wrong number."""
+    statement = M.due_statement(_due_source())
+    assert statement, "due.ts's candidate statement could not be read at all"
+    built = M.due_count_sql(M.NOW_FOR_SELF_TEST)
+    assert built and statement.split("${")[0].strip()[:40] in built, built
+    # And the mirror is DELETED rather than renamed: a module-level SQL constant
+    # for this query is the thing that drifted, and its absence is the fix.
+    assert not hasattr(M, "DUE_COUNT_SQL")
+
+
+def test_a_comment_quoting_a_predicate_is_not_the_predicate():
+    """WHY THE OLD DRIFT CHECK PASSED OVER THE DRIFT, which is the part worth
+    keeping. It asserted `clause in due_ts` over the WHOLE FILE — and due.ts
+    still carries the sentence "This file used to write `AND s."weight" > 0`
+    and call that the aliveness test". A substring check over a source file
+    cannot tell code from prose, so the book that had changed read as agreeing
+    with the copy, in the words of its own changelog.
+
+    This is that shape, driven: a due.ts whose comment quotes a predicate its
+    statement does not carry."""
+    prose_only = M._fake_due_ts("")
+    assert 's."weight" > 0' in prose_only, "the fixture is not the shape being tested"
+    assert "weight" not in (M.due_statement(prose_only) or "weight"), \
+        "the reader picked a predicate out of a COMMENT, which is how the drift hid"
+    # THE CONTROL, the other way round: put the predicate in the STATEMENT and
+    # the gate's SQL carries it, unasked. That is what "not a mirror" means.
+    in_the_sql = M._fake_due_ts('AND s."weight" > 0\n')
+    assert 's."weight" > 0' in (M.due_statement(in_the_sql) or "")
+    # And today's real statement carries no weight BOUND — it selects the column
+    # and orders by it, which is not the same thing and is why this asks for a
+    # comparator rather than for the word. due.ts's ALIVE section says why: the
+    # one boundary is `ALIVE_WEIGHT_FLOOR` and it is stated once, in TypeScript.
+    live = M.due_statement(_due_source()) or ""
+    assert re.search(r'"weight"\s*(?:<=|>=|<>|=|<|>)', live) is None, \
+        "due.ts's statement has grown a weight predicate again — read its ALIVE section"
+
+
+def test_the_gate_binds_by_name_and_never_by_the_order_of_a_bind_call():
+    """due.ts binds `?${pNow}`, `?${pCutoff}`, `?${pRows}`, `?${pCap}` and
+    `${inList}` positionally, in ONE call, in an order this gate cannot see.
+    Binding by name means a reordered `.bind(...)` in due.ts cannot silently
+    hand this gate a cutoff where it expected a clock — which would open the
+    7-day cap for the whole table and report it as owners being due."""
+    now = M.NOW_FOR_SELF_TEST
+    built = M.due_count_sql(now)
+    cutoff = now - M.GLOBAL_ASK_INTERVAL_DAYS * 86_400_000
+    assert str(now) in built and str(cutoff) in built
+    assert "${" not in built and not re.search(r"\?\d", built), built
+    assert "'observer', 'said'" in built
+    # A placeholder this gate has no value for refuses the whole count rather
+    # than running a statement it does not fully understand against production.
+    assert M.due_count_sql(now, source=M._fake_due_ts('AND s."x" > ?${pMystery}\n')) is None
+
+
+def test_a_due_ts_that_names_other_moments_refuses_rather_than_undercounting():
+    """The `IN (…)` list is the gate's own, so a third moment source in due.ts
+    would have the gate counting fewer owners than the code considers — and
+    fewer owners is a quiet night, which is the one answer nobody investigates.
+    It refuses instead, and `due-unknown` is UNPROVEN."""
+    third = M._fake_due_ts("").replace(
+        '  said: "user_named_it",\n', '  said: "user_named_it",\n  mx: "in_task",\n')
+    assert M.due_moment_sources(third) == ("observer", "said", "mx")
+    assert M.due_count_sql(M.NOW_FOR_SELF_TEST, source=third) is None
+    assert M.ask_state(True, True, None, 0) == "due-unknown"
+    # THE CONTROL: the real file's moments ARE the gate's, so the refusal above
+    # is about disagreement and not about the reader being broken.
+    assert M.due_moment_sources(_due_source()) == M.MOMENT_SOURCES == ("observer", "said")
+
+
+def test_an_unreadable_checkout_costs_the_count_and_never_invents_one():
+    """Every way the reader can fail lands on `None`, and `None` is
+    `due-unknown` — never zero. Zero is "nobody is due", which is a claim about
+    production; this is a claim about this checkout."""
+    now = M.NOW_FOR_SELF_TEST
+    assert M.due_count_sql(now, root=os.path.join(REPO, "overnight")) is None
+    assert M.due_count_sql(now, source="// due.ts, but not as this reader knows it") is None
+    assert M.due_statement(None) is None
+    assert M.due_moment_sources(None) is None
+    assert M.bind_due_statement(None, sources=("observer",), now_ms=now, cutoff_ms=0) is None
+
+
+def test_the_count_is_over_owners_because_the_cap_is_per_owner():
+    """`GLOBAL_ASK_INTERVAL_DAYS` is one ask per OWNER per seven days across all
+    apps, so two candidate rows for one owner are one candidate. The statement
+    hands back rows; the count this leg reads is over distinct `user_id`."""
+    built = M.due_count_sql(M.NOW_FOR_SELF_TEST)
+    assert 'SELECT DISTINCT "user_id"' in built and "count(*) AS due_n" in built
+    # THREE BOOKS on the interval itself: the gate computes the cutoff from its
+    # own constant, and nudge.ts is where the number actually lives.
+    nudge = open(os.path.join(REPO, "migration", "workers", "src", "connections",
+                              "nudge.ts"), encoding="utf-8").read()
+    assert ("export const GLOBAL_ASK_INTERVAL_DAYS = %d;"
+            % M.GLOBAL_ASK_INTERVAL_DAYS) in nudge, \
+        "nudge.ts retuned the global ask cap and this gate's cutoff did not move"
+
+
+def test_the_red_says_which_owners_it_counted_and_what_it_could_not_see():
+    """The number is an UPPER BOUND on `due()`: everything `dueCandidates` does
+    after the statement — the owner-id check, the empty-toolkit drop, the
+    source-names-no-moment drop, the decayed-weight floor, the dedupe, the cap —
+    can only remove owners. So zero PROVES a quiet night, and above zero does
+    not prove a break. The red has to say so, or it sends a reader hunting a
+    failure that is really six months of silence."""
+    red = M.leg_ask(True, True, 4, 0, None, M.NOW_FOR_SELF_TEST)
+    assert red[0] == M.RED and "4 owner(s)" in red[2]
+    assert "decayed-weight floor" in red[2], red[2]
+    quiet = M.leg_ask(True, True, 0, 0, None, M.NOW_FOR_SELF_TEST)
+    assert quiet[0] == M.UNPROVEN
+    assert "only DROPS candidates" in quiet[2], quiet[2]
+
+
+def test_the_two_literals_leg_11_reads_out_of_the_repo_still_match():
+    """A RED LEG FROM A BROKEN INSTRUMENT IS WORSE THAN NO LEG. Leg 11 explains
+    a zero by reading two strings out of this checkout — the cron schedule and
+    the wiring call — and either of them silently ceasing to match would have
+    the gate reporting "not registered" forever while production ran it."""
+    registered, wired = M.ask_config(REPO)
+    assert registered is True, "wrangler.jsonc no longer registers " + M.ASK_CRON
+    assert wired is True, "src/cron.ts no longer calls " + M.WIRING_CALL
+    # THE CONTROL: the same reader over a directory with neither file must say
+    # "unreadable" and not "missing" — those are different claims.
+    assert M.ask_config(os.path.join(REPO, "overnight")) == (None, None)
+
+
+def test_the_config_half_can_never_produce_a_green_on_its_own():
+    """The repo agreeing with itself is not evidence about production. Whatever
+    wrangler.jsonc and cron.ts say, leg 11 without a row is never a pass."""
+    for registered in (True, False, None):
+        for wired in (True, False, None):
+            code, _mark, _s = M.leg_ask(registered, wired, 0, 0, None,
+                                        M.NOW_FOR_SELF_TEST)
+            assert code != M.GREEN, (registered, wired)
+
+
+def test_rows_outrank_a_checkout_that_disagrees_with_them():
+    """And the other direction: a working deployment plus a checkout that has
+    since removed the schedule is still green, because the rows happened."""
+    assert M.leg_ask(False, False, 0, 5, None, M.NOW_FOR_SELF_TEST)[0] == M.GREEN
 
 
 def test_red_outranks_unproven():
@@ -1332,3 +1604,101 @@ def test_the_mint_probe_lands_in_a_real_d1(tmp_path):
 
     left = local('SELECT count(*) AS n FROM "connect_links"')
     assert int(float(left[0]["n"])) == 0, "the probe row was not cleaned up"
+
+
+@pytest.mark.skipif(shutil.which("npx") is None, reason="no npx on this machine")
+@pytest.mark.skipif(not os.path.exists(WRANGLER_CONFIG), reason="no wrangler config")
+def test_the_due_count_statement_runs_on_a_real_d1(tmp_path):
+    """THE STATEMENT LEG 11 POINTS AT PRODUCTION HAS NEVER BEEN RUN ANYWHERE.
+
+    It is due.ts's own text — a `ROW_NUMBER() OVER (PARTITION BY …)` inside two
+    nested subqueries — wrapped in a count this gate composes. That wrapper is
+    the one thing in it nobody else executes, and "it should parse" is exactly
+    the sentence this file exists to refuse. So the four tables are stood up in
+    a scratch LOCAL D1 from schema.sql's own DDL, seeded with one row for each
+    reason a candidate is excluded, and the real statement is run through the
+    real `d1_query`.
+
+    NOT A LAW-3 PROOF and it does not pretend to be one: production is measured
+    by running the gate. This proves the instrument works before it is pointed
+    at anybody."""
+    scratch = str(tmp_path / "d1due")
+
+    def local(sql):
+        return M.d1_query(sql, remote=False, config=WRANGLER_CONFIG,
+                          persist_to=scratch, timeout=180)
+
+    try:
+        local("; ".join(_section5_ddl()))
+    except M.D1Unavailable as exc:
+        pytest.skip(f"local D1 is unavailable here: {exc}")
+
+    now = M.NOW_FOR_SELF_TEST
+    day = 86_400_000
+    # Fifteen characters each, because the table CHECKs it — the one failure
+    # this whole feature is shaped around is a connection bound to a name.
+    due, connected, laddered, asked_recently, no_moment, snoozed = (
+        "duexownerxaaaa1", "connxownerxaaa1", "levelxownerxaa1",
+        "recentxownerxa1", "signalxownerxa1", "snoozexownerxa1")
+    rows = []
+    # THE ONE OWNER WHO IS DUE, and two rows for them, so the count proves it
+    # counts OWNERS and not evidence. Two apps, neither of which is an app.
+    rows += [(due, "quorbex", "observer"), (due, "vantorel", "said")]
+    rows += [(connected, "quorbex", "observer")]        # already connected
+    rows += [(laddered, "quorbex", "said")]             # end of the decline ladder
+    rows += [(asked_recently, "quorbex", "observer")]   # inside the 7-day global cap
+    rows += [(no_moment, "quorbex", "mx")]              # weight, but names no moment
+    rows += [(snoozed, "quorbex", "observer")]          # mid-snooze
+    local("; ".join(
+        'INSERT INTO "app_usage_signals" ("user_id","toolkit","source","alias",'
+        '"weight","last_seen_at") VALUES (\'%s\',\'%s\',\'%s\',\'\',3,%d)'
+        % (who, app, src, now - day) for who, app, src in rows))
+    local("; ".join([
+        'INSERT INTO "connections" ("connected_account_id","user_id","toolkit","alias",'
+        '"status","writes_enabled","last_used_at") '
+        'VALUES (\'ca_local_probe\',\'%s\',\'quorbex\',\'\',\'connected\',0,NULL)'
+        % connected,
+        'INSERT INTO "connect_nudges" ("user_id","toolkit","state","level","snooze_until",'
+        '"trigger","sent_at","acted_at","channel") '
+        'VALUES (\'%s\',\'quorbex\',\'declined\',3,NULL,NULL,NULL,NULL,NULL)' % laddered,
+        'INSERT INTO "connect_nudges" ("user_id","toolkit","state","level","snooze_until",'
+        '"trigger","sent_at","acted_at","channel") '
+        'VALUES (\'%s\',\'anotherapp\',\'asked\',0,NULL,NULL,%d,NULL,NULL)'
+        % (asked_recently, now - day),
+        'INSERT INTO "connect_nudges" ("user_id","toolkit","state","level","snooze_until",'
+        '"trigger","sent_at","acted_at","channel") '
+        'VALUES (\'%s\',\'quorbex\',\'declined\',1,%d,NULL,NULL,NULL,NULL)'
+        % (snoozed, now + 14 * day),
+    ]))
+
+    statement = M.due_count_sql(now)
+    assert statement, "the gate could not build the statement at all"
+    counted = local(statement)
+    assert int(float(counted[0]["due_n"])) == 1, (
+        "the statement did not count exactly the one owner who is due: "
+        + str(counted))
+
+    # AND THE ANSWER DOES NOT DEPEND ON THE ROW BUDGET. `DUE_ROWS_PER_OWNER` is
+    # 1 where due.ts binds 5, and the whole justification for that is that a
+    # count over DISTINCT `user_id` cannot see the difference — an owner with
+    # any candidate row has a `pick = 1` row. The owner who is due here holds
+    # TWO apps, so a count that had slipped back to counting rows answers 2 at a
+    # budget of 5 and 1 at a budget of 1.
+    wide = M.due_count_sql(now, rows_per_owner=5)
+    assert int(float(local(wide)[0]["due_n"])) == 1, (
+        "the due count changed with the row budget, so it is counting evidence "
+        "rows and not owners — and the 7-day cap is per OWNER")
+
+    # THE CONTROL, so the 1 above is the query discriminating and not the seed
+    # being thin: give the connected owner a second app nobody has connected and
+    # the count moves. A statement that answered 1 either way would be measuring
+    # nothing.
+    local('INSERT INTO "app_usage_signals" ("user_id","toolkit","source","alias",'
+          '"weight","last_seen_at") '
+          'VALUES (\'%s\',\'vantorel\',\'observer\',\'\',3,%d)'
+          % (connected, now - day))
+    counted = local(statement)
+    assert int(float(counted[0]["due_n"])) == 2, (
+        "an owner whose OTHER app is connected was still excluded, so the "
+        "connections anti-join is joined on the owner and not on the pair: "
+        + str(counted))

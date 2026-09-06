@@ -43,14 +43,34 @@
  *
  * What this file enforces is the same bar over the only evidence it may read:
  * AT LEAST ONE `app_usage_signals` row for this (owner, app) that is a moment
- * (see below) and whose weight has not decayed to nothing. An owner with no
- * such row is not handed to the policy at all. So the bar is checked twice, in
- * the two places that can see it, and neither one is load-bearing alone.
+ * (see below) and that is still ALIVE. An owner with no such row is not handed
+ * to the policy at all. So the bar is checked twice, in the two places that can
+ * see it, and neither one is load-bearing alone.
  *
- * `weight > 0` and not `>= 0`: the column's own CHECK admits exactly 0, and
- * the schema says why — "a very old row decayed across many half-lives can
- * legitimately underflow to exactly 0.0". That row is an app they stopped
- * using, which is precisely what decay exists to say.
+ * ── ALIVE, AND WHY THE QUERY NO LONGER DECIDES IT ────────────────────────
+ *
+ * This file used to write `AND s."weight" > 0` and call that the aliveness
+ * test, quoting the schema's own sentence about a row "decayed across many
+ * half-lives" underflowing to zero. IT WAS NEVER TRUE, and it was driven on
+ * 2026-09-06: signals.ts decays on READ (`decayedWeight`, thirty-day
+ * half-life) and the STORED column only ever moves when a NEW signal arrives
+ * for that (owner, app, source, alias) — which raises it. So the stored number
+ * never falls, `weight > 0` never became false for anybody, and a signal
+ * nobody had refreshed in four hundred days produced a real text through the
+ * shipped cron.
+ *
+ * The decay is signals.ts's and it stays there: `decayedWeight` is an
+ * exponential and SQLite has no exponential, so a copy of it in SQL would be a
+ * SECOND definition of alive, in a language that cannot express the first.
+ * THE QUERY SELECTS AND THIS FILE FILTERS. The statement below carries no
+ * weight predicate of any kind — deliberately, because the one boundary is
+ * `ALIVE_WEIGHT_FLOOR` and it is stated exactly once, in TypeScript, next to
+ * the `decayedWeight` call that uses it.
+ *
+ * WHAT THAT COSTS AND WHY IT IS PAID: the query has to hand back more rows
+ * than it used to (`SIGNAL_ROWS_PER_OWNER` per owner, not one), because the
+ * heaviest STORED row can be the deadest one and dropping an owner on account
+ * of it would be this file over-excluding — a person nobody asks.
  *
  * ── THE TRIGGER, AND WHY ONLY TWO OF THE FIVE ────────────────────────────
  *
@@ -94,32 +114,35 @@
  * anything; `toolkit` is a column that is read and passed on. The test runs
  * the whole path on two slugs that exist in no catalog.
  *
- * ── LAW 3 — TWO THINGS STAND BETWEEN THIS FILE AND A PERSON ──────────────
+ * ── LAW 3 — WHAT STANDS BETWEEN THIS FILE AND A PERSON ───────────────────
  *
- * Both measured 2026-09-06, both OUTSIDE this file, and both written down
- * here rather than left in a conversation:
+ * Both of the two things this note used to name are CLOSED, on 2026-09-06 and
+ * in the same diff as this sentence:
  *
- *   1. NOTHING CALLS `installNudgeWiring`. src/cron.ts now dispatches
- *      `connectNudgeSweep` on the five-minute tick, and until a `NudgeDeps` is
- *      installed that sweep logs "no wiring installed; nobody was asked
- *      anything" and returns. The wiring is one line —
- *      `due: createDue(env)` beside the store, the catalog, the writer, the
- *      moment and the phone.
+ *   `installNudgeWiring` has a caller — src/cron.ts installs
+ *   src/connections/wiring.ts's `nudgeWiring` at module load, so the sweep has
+ *   a `NudgeDeps` and this file's `createDue` is the `due` port in it.
  *
- *   2. PRODUCTION DOES NOT REGISTER THE FIVE-MINUTE TICK. wrangler.jsonc
- *      carries `"crons": ["17 4 * * *"]` and nothing else; only
- *      wrangler.dev.jsonc has `"*\/5 * * * *"` (escaped, because this is a
- *      block comment). It was removed ON PURPOSE, and the reason is written
- *      beside it in that file: PocketBase's own sweep is still
- *      running against its own database, and two sweeps means the team gets
- *      every reminder twice. So the whole five-minute leg — the HQ reminders
- *      as well as this — is dispatched by code production never invokes. The
- *      fix is the cutover wrangler.jsonc already names, not a second home for
- *      this sweep on the nightly trigger: an ask that lands at 04:17 UTC is
- *      the 3am text this policy exists to prevent.
+ *   wrangler.jsonc registers `"*\/5 * * * *"` beside the nightly trigger
+ *   (escaped, because this is a block comment), so the five-minute case in
+ *   src/cron.ts is dispatched by code production actually invokes. The
+ *   PocketBase sweep that made two schedules unsafe was stopped on 2026-09-05.
  *
- * test/connections-due.test.ts pins (2) as the CURRENT state and goes red the
- * day somebody enables the trigger, which is the day this note gets deleted.
+ * WHAT IS STILL NOT DONE, so nobody reads the above as the feature working:
+ *
+ *   1. NO DEPLOY HAS BEEN VERIFIED. Everything here is repo-green. The leg goes
+ *      green when a tick is observed on api.anticipy.ai — overnight/
+ *      is_connect_live.py leg 11 reads it from the rows the sweep leaves, which
+ *      is the only half of it a gate can see without a `wrangler tail`.
+ *
+ *   2. THE TWO MOMENT SOURCES HAVE NO PRODUCTION WRITER. `observer` needs the
+ *      browser hand to report the host a run ended on, and `said` needs a
+ *      `ToolkitVerdict` from wherever the owner's words are read
+ *      (src/connections/text_commands.ts is one such reader, wired into the
+ *      inbound SMS path on 2026-09-06). Until one of them writes rows, this
+ *      query correctly returns nobody and NOBODY IS ASKED ANYTHING — which
+ *      reads exactly like a working quiet night, and is why leg 11 reports it
+ *      as UNPROVEN rather than green.
  */
 
 /// <reference types="@cloudflare/workers-types" />
@@ -138,6 +161,12 @@ import {
   type SignalSource,
   type StoreEnv,
 } from "./store.ts";
+import {
+  DEFAULT_HALF_LIFE_MS,
+  SOURCE_DECAYS,
+  WEIGHT_MEDIUM,
+  decayedWeight,
+} from "./signals.ts";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -200,6 +229,76 @@ export const DUE_CANDIDATES_PER_ASK = 5;
 export const DUE_CANDIDATE_CAP = MAX_ASKS_PER_SWEEP * DUE_CANDIDATES_PER_ASK;
 
 // ---------------------------------------------------------------------------
+// ALIVE — the one boundary, stated once
+// ---------------------------------------------------------------------------
+
+/**
+ * How long a signal may go unrefreshed before it stops being evidence, in
+ * signals.ts's own unit: half-lives. Six of them is a hundred and eighty days.
+ *
+ * WHY IT IS A NUMBER HERE AT ALL. signals.ts decays and RANKS; it never has to
+ * say where the bottom is, because a caller taking the top of a sorted list
+ * does not care what the last entry is worth. This file does have to say,
+ * because there is nothing below it: the answer is "text this person" or
+ * "text nobody", and `decayedWeight` reaches exactly zero only through float
+ * underflow, which takes about a thousand half-lives — eighty-eight years. A
+ * floor of "greater than zero" would therefore be the old bug with extra
+ * arithmetic.
+ *
+ * SIX, and the spec's own sentence is the argument: "Signals decay so an app
+ * you stopped using stops coming up." Six months of not once opening an app,
+ * not once naming it, and not once having a browser run end on it is the
+ * plainest reading of "stopped using it" this table can express. The cost is
+ * stated in signals.ts and is the same trade: the payroll thing used once a
+ * quarter falls off, and the `repeated_use` trigger is what catches it, at the
+ * moment it is actually used.
+ */
+export const DEAD_AFTER_HALF_LIVES = 6;
+
+/**
+ * THE BOUNDARY. Below this a signal is an app they stopped using, and this
+ * file hands nobody to the policy on account of it.
+ *
+ * DERIVED, NEVER TYPED: it is what the WEAKEST thing `app_usage_signals` can
+ * hold — one Medium signal — is worth after `DEAD_AFTER_HALF_LIVES` of
+ * silence, computed by signals.ts's own `decayedWeight`. Retune the half-life
+ * there and this moves with it; there is no second copy of the arithmetic and
+ * no second copy of the number. The SQL below states no weight bound at all,
+ * which is what makes "stated once" true rather than claimed.
+ */
+export const ALIVE_WEIGHT_FLOOR =
+  decayedWeight(WEIGHT_MEDIUM, 0, DEAD_AFTER_HALF_LIVES * DEFAULT_HALF_LIFE_MS);
+
+/**
+ * How many of ONE owner's signal rows the statement hands back so that the
+ * decay can be applied to them out here.
+ *
+ * NOT ONE. The row with the heaviest STORED weight can be the deadest row an
+ * owner has — that is the whole shape of the defect this section exists to
+ * close — so a query that returned only the top row per owner would hand back
+ * a corpse and this file would drop an owner whose second row is alive and
+ * fresh. Five is `DUE_CANDIDATES_PER_ASK` and the same reasoning: enough that
+ * the common case has somewhere to fall back to, small enough that one owner
+ * cannot fill a tick.
+ */
+export const SIGNAL_ROWS_PER_OWNER = DUE_CANDIDATES_PER_ASK;
+
+/**
+ * A row's weight AS OF `now`, which is the only weight that means anything.
+ *
+ * Both halves are signals.ts's and neither is re-derived: which sources go
+ * stale at all (`SOURCE_DECAYS` — a connection that exists and an ask that was
+ * answered are as true a year later) and what staleness costs
+ * (`decayedWeight`). This function is the seam, not a second opinion.
+ */
+function weightNow(weight: unknown, lastSeenAt: unknown, source: string, now: number): number {
+  const stored = Number(weight);
+  if (!Number.isFinite(stored)) return 0;
+  if (!SOURCE_DECAYS[source as SignalSource]) return stored;
+  return decayedWeight(stored, Number(lastSeenAt), now, DEFAULT_HALF_LIFE_MS);
+}
+
+// ---------------------------------------------------------------------------
 // THE SCHEMA GUARD
 // ---------------------------------------------------------------------------
 
@@ -238,6 +337,10 @@ interface CandidateRow {
   user_id: unknown;
   toolkit: unknown;
   source: unknown;
+  /** As STORED — the weight as of this row's own `last_seen_at`, which is not
+   *  the weight now. `weightNow` is what turns it into an answer. */
+  weight: unknown;
+  last_seen_at: unknown;
 }
 
 /**
@@ -245,30 +348,35 @@ interface CandidateRow {
  * NULL` so that a duplicate row on either side cannot multiply the evidence
  * rows and re-order the pick.
  *
- * `ROW_NUMBER() … PARTITION BY user_id` is what makes an owner appear ONCE.
- * The alternative — every (owner, app) pair — hands the policy the same owner
- * five times, and the 7-day global cap means at most one of those five could
- * ever be sent, so the other four are reads and a model call spent to be told
- * "this owner was asked about some app 0d ago". The sweep also carries its own
- * `askedThisTick` guard; belt and braces is cheap when the failure is a person
- * receiving three texts in one minute. The construct is neither new to this
- * Worker nor unproven on D1: `evidenceCap` in src/cron.ts ships the same
- * `ROW_NUMBER() OVER (PARTITION BY …)` shape on the `17 4 * * *` leg, which is
- * the one trigger production DOES register.
+ * `ROW_NUMBER() … PARTITION BY user_id` is what bounds an owner to
+ * `SIGNAL_ROWS_PER_OWNER` rows. Without it, every (owner, app, source) pair
+ * comes back and one busy owner fills the whole tick; with `pick = 1` — which
+ * is what this said until 2026-09-06 — a single dead row at the top of an
+ * owner's list silences an owner whose next row is alive. `dueCandidates`
+ * decays what comes back and keeps ONE candidate per owner, so the guarantee
+ * the sweep depends on is unchanged: the 7-day global cap means at most one
+ * ask per owner could ever be sent, so a second candidate for the same owner
+ * is a read and a model call spent to be told "asked 0d ago". The sweep also
+ * carries its own `askedThisTick` guard; belt and braces is cheap when the
+ * failure is a person receiving three texts in one minute. The construct is
+ * neither new to this Worker nor unproven on D1: `evidenceCap` in src/cron.ts
+ * ships the same `ROW_NUMBER() OVER (PARTITION BY …)` shape on the
+ * `17 4 * * *` leg, which is the one trigger production DOES register.
  *
- * WHICH ONE OF THE OWNER'S APPS WINS: the heaviest evidence, then the most
- * recent, then the slug and the source alphabetically so the answer is
- * deterministic rather than "whatever the b-tree walked into first". The
- * second app is offered the moment the first is connected, declined into a
- * snooze, or decays below the others — every one of which changes this order.
+ * NO WEIGHT PREDICATE, AND THAT IS THE POINT. Which of an owner's apps wins,
+ * and whether any of them is alive at all, are both decided out in
+ * `dueCandidates` from the DECAYED weight — see ALIVE above. The ordering in
+ * here is the STORED weight, and it does one job only: deciding which rows a
+ * bounded read brings back when the table is bigger than one tick.
  */
 function candidateSql(): string {
   const inList = MOMENT_SOURCES.map((_, i) => `?${i + 1}`).join(", ");
   const pNow = MOMENT_SOURCES.length + 1;
   const pCutoff = MOMENT_SOURCES.length + 2;
-  const pCap = MOMENT_SOURCES.length + 3;
+  const pRows = MOMENT_SOURCES.length + 3;
+  const pCap = MOMENT_SOURCES.length + 4;
   return `
-    SELECT "user_id", "toolkit", "source" FROM (
+    SELECT "user_id", "toolkit", "source", "weight", "last_seen_at" FROM (
       SELECT s."user_id"      AS "user_id",
              s."toolkit"      AS "toolkit",
              s."source"       AS "source",
@@ -281,7 +389,6 @@ function candidateSql(): string {
              ) AS "pick"
         FROM "app_usage_signals" s
        WHERE s."source" IN (${inList})
-         AND s."weight" > 0
          AND NOT EXISTS (
                SELECT 1 FROM "connections" c
                 WHERE c."user_id" = s."user_id"
@@ -300,7 +407,7 @@ function candidateSql(): string {
                   AND g."sent_at" IS NOT NULL
                   AND g."sent_at" > ?${pCutoff})
     )
-     WHERE "pick" = 1
+     WHERE "pick" <= ?${pRows}
      ORDER BY "weight" DESC, "last_seen_at" DESC, "user_id" ASC
      LIMIT ?${pCap}`;
 }
@@ -338,11 +445,17 @@ export async function dueCandidates(
   await requireTables(env);
 
   const cutoff = now - GLOBAL_ASK_INTERVAL_DAYS * DAY_MS;
+  // `cap` counts OWNERS, as it always has; the row budget is that many owners'
+  // worth of rows, because the decay that decides which of an owner's rows is
+  // alive cannot be run inside the statement.
+  const owners = Math.floor(cap);
   const res = await env.DB.prepare(candidateSql())
-    .bind(...MOMENT_SOURCES, now, cutoff, Math.floor(cap))
+    .bind(...MOMENT_SOURCES, now, cutoff, SIGNAL_ROWS_PER_OWNER, owners * SIGNAL_ROWS_PER_OWNER)
     .all<CandidateRow>();
 
-  const out: NudgeCandidate[] = [];
+  /** One readable row, with the only weight that means anything attached. */
+  interface Live { candidate: NudgeCandidate; weight: number; seen: number }
+  const live: Live[] = [];
   for (const row of res.results ?? []) {
     // Re-checked on the way out, not trusted on the way in. The database's own
     // CHECK already refuses a `user_id` that is not 15 characters, but this is
@@ -371,13 +484,59 @@ export async function dueCandidates(
       console.log(`connect nudge due: dropped a row whose source names no moment: ${source}`);
       continue;
     }
-    out.push({
-      owner,
-      toolkit: toolkit as Toolkit,
-      trigger: MOMENT_TRIGGER[source] as NudgeTrigger,
+    // THE ALIVENESS TEST, and the only one there is. `>` and not `>=`, matching
+    // the direction the old SQL predicate pointed: a row sitting exactly on the
+    // floor has run out its silence.
+    const seen = Number(row?.last_seen_at);
+    const weight = weightNow(row?.weight, seen, source, now);
+    if (!(weight > ALIVE_WEIGHT_FLOOR)) continue;
+
+    live.push({
+      candidate: {
+        owner,
+        toolkit: toolkit as Toolkit,
+        trigger: MOMENT_TRIGGER[source] as NudgeTrigger,
+      },
+      weight,
+      seen: Number.isFinite(seen) ? seen : 0,
     });
   }
+
+  // ONE TOTAL ORDER, then one pass. Sorting by the decayed weight and walking
+  // it taking the first row for each owner gives both answers at once: which
+  // of an owner's apps is offered (their heaviest LIVE evidence) and which
+  // owners a bounded tick spends itself on. The tail of the comparator is the
+  // slug and the source so the answer is deterministic rather than "whatever
+  // the b-tree walked into first", and the owner id last so that two owners
+  // whose evidence is identical still come back in a stable order.
+  live.sort((a, b) =>
+    b.weight - a.weight
+    || b.seen - a.seen
+    || cmp(a.candidate.toolkit, b.candidate.toolkit)
+    || cmp(a.candidate.trigger, b.candidate.trigger)
+    || cmp(String(a.candidate.owner), String(b.candidate.owner)));
+
+  const out: NudgeCandidate[] = [];
+  const taken = new Set<string>();
+  for (const entry of live) {
+    // Checked BEFORE the push, not after, so a cap of zero returns nobody
+    // rather than one. The statement's own LIMIT already makes that
+    // unreachable today; a bound that depends on another bound to be correct
+    // is the kind that stops being correct when somebody tunes the other one.
+    if (out.length >= owners) break;
+    const who = String(entry.candidate.owner);
+    if (taken.has(who)) continue;
+    taken.add(who);
+    out.push(entry.candidate);
+  }
   return out;
+}
+
+/** Code-unit order, never `localeCompare`: collation depends on the ICU data
+ *  the runtime was built with, so two deploys of the same code could order the
+ *  same owners differently. signals.ts `rankRows` draws the same line. */
+function cmp(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
 }
 
 /**

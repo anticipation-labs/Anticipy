@@ -43,7 +43,18 @@
  *   is collected and scanned for it at the end of the file.
  *
  *   THE REGISTER. "Composio", "authorize", "permissions", "integration", "API",
- *   "OAuth" — the same collected bodies are scanned for all of them.
+ *   "OAuth" — the same collected bodies are scanned for all of them, over
+ *   words.ts's own list rather than a copy of it. The one thing lifted out
+ *   first is a third party's registered product name on that app's own page
+ *   ("Moderation API"), because the scan is about the words THIS PRODUCT says
+ *   and a proper noun is not one of them; the exemption is claimed per body,
+ *   never globally, and the refusal pages claim none.
+ *
+ *   THE OVER-REFUSAL. Screening the catalog display name against that whole
+ *   list made three live catalog rows unconnectable — 409, no button, no way
+ *   forward, because their own makers put "API" in the name. Round two, finding
+ *   1: the name is screened against the PROMISE half only (the vendor's name),
+ *   and the register half is a rule about our own sentences.
  *
  * MUTATIONS THIS FILE MUST GO RED ON (run, not asserted — see the report):
  *   the session check moved after the store read in `locate`; the used-token and
@@ -51,6 +62,32 @@
  *   made to trust the query string; the owner comparison in it dropped; the
  *   lease taken as a receipt (no `release` on a failed write); /go accepting
  *   GET; the cross-site refusal deleted; `writes_enabled` defaulting true.
+ *
+ * TEN MORE WERE RUN ON 2026-09-06 for the decline leg, each anchored on a
+ * literal occurring EXACTLY ONCE in src/routes/connect.ts (the harness refuses
+ * to patch otherwise, because a regex that silently fails to match reads as a
+ * pass). ALL TEN WENT RED, and the check that killed each is named:
+ *
+ *   /skip accepting GET ................ Skip RECORDS the decline
+ *   the cross-site refusal on /skip .... a cross-site POST cannot record one
+ *   the wrong-user refusal in
+ *     `connectPageSkip` ................ a stranger cannot decline for the owner
+ *   the already-declined short circuit . a second Skip does NOT walk L1 to L2
+ *   the connected guard ................ an app already connected has nothing
+ *                                        to decline
+ *   every skip seeded as onboarding .... Skip RECORDS the decline (7 days, not 14)
+ *   the seed forgetting the setup card . the onboarding skip is SEVEN days
+ *   the tap recorded as `silence` ...... Skip RECORDS the decline (acted_at)
+ *   an unwritten decline drawn as a
+ *     written one ...................... a decline that could NOT be written is
+ *                                        never drawn as one that was
+ *   Skip back to a GET form ............ the page's own Skip control is the POST
+ *   the session ignored in
+ *     `connectPageSkip` ................ signed out, five tokens give ONE answer
+ *                                        on /skip
+ *   `whoIsAsking` handed the leg's own
+ *     path instead of the link's ....... a browser that proved itself with a
+ *                                        PHONE CODE can decline
  */
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
@@ -61,10 +98,17 @@ import { FakeD1, asD1 } from "./fake-d1.ts";
 import { issueToken } from "../src/pb/auth.ts";
 import {
   connectRoute, tokenHandle, callbackUrl, connectWiringInstalled,
-  CALLBACK_WINDOW_MS, LINK_TTL_MS, SESSION_COOKIE,
+  installConnectSessionReader, promiseTermIn, whoIsSignedIn,
+  CALLBACK_WINDOW_MS, CONNECT_METHOD, LINK_TTL_MS, REGISTER_TERMS, SESSION_COOKIE,
   type ClaimOutcome, type ConnectDeps, type ConnectEnv, type ConnectLinkStore,
   type Connection, type StoredLink, type ToolkitMeta,
 } from "../src/routes/connect.ts";
+// The list the exemption above is carved out of, and the matcher the one in
+// connect.ts has to agree with. Imported rather than retyped: this file used to
+// hold its own copy of FORBIDDEN_TERMS for the register scan, which is two
+// copies of a list and no way to notice when they part company.
+import { FORBIDDEN_TERMS, forbiddenTermIn } from "../src/connections/words.ts";
+import type { ConnectNudge } from "../../../spike/two-hands/src/connections/contract.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const SOURCE = readFileSync(join(here, "..", "src", "routes", "connect.ts"), "utf8");
@@ -77,10 +121,17 @@ async function check(what: string, fn: () => void | Promise<void>): Promise<void
 }
 
 // Every body every check produces, for the two whole-suite scans at the end.
-const BODIES: { where: string; text: string }[] = [];
-async function bodyOf(res: Response, where: string): Promise<string> {
+//
+// `quoting` is the ONE string a body was entitled to print verbatim even though
+// the register scan would otherwise trip on it: a third party's registered
+// product name, on that app's own consent page. It is passed by hand, at the
+// four call sites that draw such a page, and nowhere else — a scan that
+// exempted a word globally would exempt it on the refusal pages too, which is
+// exactly where a leak would matter.
+const BODIES: { where: string; text: string; quoting?: string }[] = [];
+async function bodyOf(res: Response, where: string, quoting?: string): Promise<string> {
   const text = await res.text();
-  BODIES.push({ where, text });
+  BODIES.push({ where, text, quoting });
   return text;
 }
 
@@ -146,6 +197,40 @@ class MemoryStore implements ConnectLinkStore {
     this.rows.set(handle, next);
     return { won: true, row: { ...next } };
   }
+
+  // -- connect_nudges, which is where a NO goes ----------------------------
+  //
+  // Keyed (owner, app), like the real table's primary key, and scoped by BOTH on
+  // the read — a fake that answered any row for any owner would let the suite
+  // call a cross-owner write a pass. `putNudge` is deliberately dumb: the
+  // production store's own CHECKs are exercised in connections-api.test.ts
+  // against real SQLite, and this fake's job is only to remember.
+  nudges = new Map<string, ConnectNudge>();
+  /** Set by a check that wants the write to fail, which is the one path where
+   *  the page must NOT claim the person's answer was kept. */
+  nudgeWriteFails = false;
+
+  private nudgeKey(user: string, toolkit: string): string { return `${user}::${toolkit}`; }
+
+  async readNudge(user: string, toolkit: string): Promise<ConnectNudge | null> {
+    this.reads++;
+    const row = this.nudges.get(this.nudgeKey(String(user), toolkit));
+    return row ? { ...row } : null;
+  }
+
+  async putNudge(row: ConnectNudge): Promise<void> {
+    this.reads++;
+    if (this.nudgeWriteFails) throw new Error("D1_ERROR: connect_nudges did not accept the row");
+    this.nudges.set(this.nudgeKey(String(row.user_id), row.toolkit), { ...row });
+  }
+}
+
+/** A store with the LINK half and nothing else — the shape a narrower wiring
+ *  hands this file, and the one that must never be able to draw a page saying a
+ *  decline was recorded. */
+class LinkOnlyStore extends MemoryStore {
+  override readNudge = undefined as unknown as MemoryStore["readNudge"];
+  override putNudge = undefined as unknown as MemoryStore["putNudge"];
 }
 
 /** Two invented apps. NOTHING in the Worker knows these names — that is the
@@ -161,6 +246,72 @@ const APPS: Record<string, ToolkitMeta> = {
     description: null, appUrl: null, scopes: ["mail.read"],
   },
 };
+
+/**
+ * CATALOG ROWS WHOSE OWN NAME IS THE ONE WORD THIS PRODUCT PROMISED NOBODY
+ * WOULD EVER READ.
+ *
+ * Not invented: both are live catalog rows, read 2026-09-06. `describable`
+ * already screens the catalog's DESCRIPTION; the name was rendered unscreened,
+ * so the one screen the register rule exists for could print the one word the
+ * spec treats not as a preference but as a promise.
+ */
+const VENDOR_NAMED: readonly { slug: string; name: string }[] = [
+  { slug: "composio", name: "Composio" },
+  { slug: "composio_search", name: "Composio Search" },
+];
+
+/**
+ * CATALOG ROWS WHOSE OWN NAME CARRIES A REGISTER WORD AND IS NOT OURS TO
+ * ARGUE WITH — the over-correction this round exists to undo.
+ *
+ * All three are live catalog rows, read 2026-09-06. The first version of the
+ * name screen ran the display name against the whole of `FORBIDDEN_TERMS`, so
+ * all three answered 409 with no button and no way forward: three real apps
+ * somebody might genuinely want, permanently unconnectable, because their own
+ * makers put "API" in the name. The register is a rule about the sentences THIS
+ * PRODUCT writes. A proper noun is not this product writing.
+ */
+const NOT_OURS: readonly { slug: string; name: string }[] = [
+  { slug: "aiml_api", name: "AI/ML API" },
+  { slug: "api_labz", name: "API Labz" },
+  { slug: "moderation_api", name: "Moderation API" },
+];
+
+/**
+ * CATALOG ROWS WITH NO DISPLAY NAME AT ALL, one of them with the vendor's word
+ * in its slug.
+ *
+ * These do not reach `viewPage` in the shipped wiring and the suite says so out
+ * loud rather than dressing the guard up as behaviour a person can hit:
+ * connections/provider.ts `readToolkitMeta` returns null for a nameless row so
+ * `toolkit()` throws and this leg answers 503, and connections/words.ts
+ * `metaProblem` refuses to write permission sentences for one. What they pin is
+ * this file's own render floor — a third port wired tomorrow cannot make it draw
+ * "Connect your " over a Connect button, and cannot make it print a vendor
+ * primary key as somebody's app name. That floor REPLACED a slug fallthrough
+ * whose comment claimed behaviour nothing executed (round-2 finding 2).
+ */
+const NAMELESS: readonly { slug: string; name: string }[] = [
+  { slug: "composio_manage_connections", name: "   " },
+  { slug: "blanknamed_notes", name: "   " },
+];
+
+for (const { slug, name } of [...VENDOR_NAMED, ...NOT_OURS, ...NAMELESS]) {
+  APPS[slug] = { slug, name, logo: null, description: null, appUrl: null, scopes: ["thing.read"] };
+}
+
+/** THE BOUNDARY CONTROL, and it is the reason the screen is whole-word.
+ *  "Rapid Capital" carries "api" twice as a SUBSTRING and is an ordinary name;
+ *  refusing it would be an outage dressed as a rule. */
+APPS.rapid_capital = {
+  slug: "rapid_capital", name: "Rapid Capital", logo: null,
+  description: null, appUrl: null, scopes: ["thing.read"],
+};
+
+/** The apps that have a name this product may print. Every one of them must
+ *  render the whole consent page from catalog metadata alone. */
+const RENDERABLE: readonly string[] = ["zellibrix", "quandle_mail", "rapid_capital"];
 
 interface ProviderLog {
   authorize: { user: string; toolkit: string; callbackUrl: string; alias: unknown }[];
@@ -191,6 +342,9 @@ interface RigOpts {
   now?: () => number;
   expiresAt?: number;
   usedAt?: number | null;
+  /** A narrower store than production's, for the one check that proves an
+   *  unrecordable decline is never drawn as a recorded one. */
+  store?: MemoryStore;
 }
 
 async function b64urlToken(): Promise<string> {
@@ -211,7 +365,7 @@ async function rig(opts: RigOpts = {}): Promise<Rig> {
   } as unknown as ConnectEnv;
 
   const slug = opts.toolkit ?? "zellibrix";
-  const store = new MemoryStore();
+  const store = opts.store ?? new MemoryStore();
   const token = await b64urlToken();
   store.put({
     token_handle: await tokenHandle(token),
@@ -424,6 +578,20 @@ await check("signed out, five different tokens give ONE answer on /go — and sp
     assert.equal(live.r.store.rows.get(await tokenHandle(live.token))!.used_at, null);
   });
 
+await check("signed out, five different tokens give ONE answer on /skip — and record nothing",
+  async () => {
+    const seen = new Set<string>();
+    for (const { label, r, token } of await fiveTokens()) {
+      const res = await connectRoute(postReq(`/c/${token}/skip`), r.env, r.deps);
+      seen.add(normalise(await fingerprint(res, `anon skip ${label}`), token));
+      assert.equal(r.store.reads, 0,
+        `the store was read on an anonymous /skip (${label}) — the decline leg must not be `
+        + "the one place a stranger can sort real tokens from invented ones");
+      assert.equal(r.store.nudges.size, 0, "an anonymous POST recorded a decline");
+    }
+    assert.equal(seen.size, 1, "an anonymous skip can tell the five states apart");
+  });
+
 await check("signed out, five different tokens give ONE answer on /done", async () => {
   const seen = new Set<string>();
   for (const { label, r, token } of await fiveTokens()) {
@@ -633,13 +801,25 @@ await check("the page shows the three sentences, the optional line and one Conne
       "connecting is always optional and every ask says so in one sentence");
     assert.match(html, new RegExp(`<form method="post" action="/c/${r.token}/go">`),
       "one button, pointed at our own /go");
-    assert.equal((html.match(/<button/g) ?? []).length, 1, "exactly one button");
+    // TWO buttons since Skip became a POST of its own (the page used to carry
+    // one and a link): exactly one that connects and exactly one that declines.
+    // Counted separately rather than as a total, because "two buttons" would
+    // stay true if the second one were a second Connect.
+    assert.equal((html.match(/<button/g) ?? []).length, 2, "exactly two buttons");
+    assert.equal((html.match(/<button class="go"/g) ?? []).length, 1,
+      "exactly one button connects");
+    assert.equal((html.match(/<button class="later"/g) ?? []).length, 1,
+      "exactly one button declines");
     assert.match(html, /Skip for now/);
     assert.match(html, /ten minutes/, "the person is told the link is short-lived");
   });
 
 await check("NO APP IS HARDCODED — the whole flow runs on two invented slugs", async () => {
-  for (const slug of Object.keys(APPS)) {
+  // The apps whose own name this product may say, which is what "renders from
+  // catalog metadata alone" means. The rest of APPS are the rows whose name is a
+  // word the register bans, and they have their own section below: a page that
+  // rendered one of THOSE from catalog metadata alone would be the defect.
+  for (const slug of RENDERABLE) {
     const r = await rig({ toolkit: slug });
     const html = await bodyOf(
       await connectRoute(getReq(`/c/${r.token}`, asHeader(r.ownerToken)), r.env, r.deps),
@@ -689,6 +869,194 @@ await check("an https logo IS drawn — the control for the check above", async 
     await connectRoute(getReq(`/c/${r.token}`, asHeader(r.ownerToken)), r.env, r.deps),
     "view logo");
   assert.match(html, /<img class="logo" src="https:\/\/cdn\.example\.invalid\/z\.png"/);
+});
+
+// ===========================================================================
+// THE NAME ON THE PAGE
+// ---------------------------------------------------------------------------
+// TWO RULES WEARING ONE NAME, AND THIS SECTION IS WHERE THEY COME APART.
+//
+// words.ts's `FORBIDDEN_TERMS` holds both, and its own comment says so about the
+// entry that is not like the others: the vendor's name is "the one word in this
+// list that is not a register problem but a promise". Everything else in it is
+// the REGISTER — the vocabulary of a consent screen written by a legal team,
+// applied to the sentences THIS PRODUCT writes.
+//
+// A catalog display name is neither of those things: it is a proper noun
+// somebody else registered, and the page can only quote it (the description can
+// be dropped, a name cannot — it is the subject of the only sentence on this
+// page that matters, and rewriting it is what a phishing page does). So the
+// PROMISE half refuses the page and the REGISTER half does not, and both halves
+// have their own checks below plus the control that kills the other mistake.
+// ===========================================================================
+
+/** One consent page, asked for by an owner holding their own live link. Returns
+ *  the response and the visible text of it. `quoting` is passed only where the
+ *  page is entitled to print a third party's registered name — see `bodyOf`. */
+async function drawn(slug: string, quoting?: string):
+    Promise<{ r: Rig; res: Response; visible: string; html: string }> {
+  const r = await rig({ toolkit: slug });
+  const res = await connectRoute(getReq(`/c/${r.token}`, asHeader(r.ownerToken)), r.env, r.deps);
+  const html = await bodyOf(res, `name screen ${slug}`, quoting);
+  return { r, res, visible: html.replace(/<[^>]*>/g, " ").toLowerCase(), html };
+}
+
+await check("a toolkit named after the vendor cannot put that word on the page", async () => {
+  for (const { slug, name } of VENDOR_NAMED) {
+    const { r, res, visible, html } = await drawn(slug);
+    assert.equal(res.status, 409,
+      `${slug}: a consent page was drawn for a name this product may not say`);
+    assert.ok(!visible.includes(name.trim().toLowerCase()),
+      `${slug}: ${JSON.stringify(name)} reached the page`);
+    assert.ok(!visible.includes(slug.toLowerCase()),
+      `${slug}: the slug reached the page`);
+    // No button, so nothing can be consented to and nothing can be tapped.
+    assert.ok(!html.includes("<form"), `${slug}: a Connect button over a name we cannot print`);
+    // And the refusal costs the owner nothing: the link is still theirs to tap
+    // once somebody gives that toolkit a display name in the catalog.
+    assert.equal(r.store.rows.get(await tokenHandle(r.token))!.used_at, null,
+      `${slug}: the refusal spent the owner's single-use link`);
+    assert.equal(r.log.authorize.length, 0, `${slug}: the vendor was asked for a link anyway`);
+  }
+});
+
+await check("an app somebody else called \"Moderation API\" can still be connected", async () => {
+  // THE OVER-CORRECTION, PINNED. Three live catalog rows whose own makers put a
+  // register word in the name. Screening the name against all of
+  // FORBIDDEN_TERMS made every one of them unconnectable: 409, no button, and a
+  // page that does not even say why. The person must end up with a way to
+  // connect them, and this is it.
+  for (const { slug, name } of NOT_OURS) {
+    const { r, res, html } = await drawn(slug, name);
+    assert.equal(res.status, 200,
+      `${slug}: somebody else's app is unconnectable because of a word in its own name`);
+    assert.ok(html.includes(`<h1>Connect your ${name}</h1>`), `${slug}: no heading`);
+    assert.ok(html.includes(`>Connect ${name}</button>`), `${slug}: no Connect button`);
+    assert.ok(html.includes(`/c/${r.token}/go`), `${slug}: the button goes nowhere`);
+  }
+});
+
+await check("a name carrying BOTH halves is refused for the promise, not waved through", async () => {
+  // The trap in composing this out of `forbiddenTermIn`: it returns the FIRST
+  // term in list order and the vendor's name is LAST, so "Composio API" answers
+  // "api" — which the register exemption waves through, putting the promised-away
+  // word on the page. The screen asks over the promise terms alone.
+  APPS.both_halves = {
+    slug: "both_halves", name: "Composio API", logo: null,
+    description: null, appUrl: null, scopes: ["thing.read"],
+  };
+  const { res, visible, html } = await drawn("both_halves");
+  assert.equal(res.status, 409, "a register word in front of the vendor's name unlocked the page");
+  assert.ok(!visible.includes("composio"), "the promised-away word reached the page");
+  assert.ok(!html.includes("<form"), "a Connect button over a name we cannot print");
+});
+
+await check("a catalog row with no display name is never drawn, and never draws its slug",
+  async () => {
+    // The render floor. Not reachable through the shipped wiring — provider.ts
+    // and words.ts both refuse a nameless row first — so what this pins is that
+    // this file cannot be made to head a consent page with a vendor primary key,
+    // or with nothing at all, by a port wired later. See NAMELESS.
+    for (const { slug, name } of NAMELESS) {
+      assert.equal(name.trim(), "", `${slug}: the fixture stopped being a nameless one`);
+      const { r, res, visible, html } = await drawn(slug);
+      assert.equal(res.status, 409, `${slug}: a consent page was drawn with no app name on it`);
+      assert.ok(!visible.includes(slug.toLowerCase()),
+        `${slug}: the slug was printed as the app's name`);
+      assert.ok(!html.includes("<form"), `${slug}: a Connect button over a blank heading`);
+      assert.ok(!html.includes("Connect your </h1>"), `${slug}: a heading with nothing in it`);
+      assert.equal(r.store.rows.get(await tokenHandle(r.token))!.used_at, null,
+        `${slug}: the refusal spent the owner's single-use link`);
+    }
+  });
+
+await check("the refusal names nothing: the vendor's own name and a nameless row draw one page",
+  async () => {
+    const a = await drawn(VENDOR_NAMED[0]!.slug);
+    const b = await drawn(NAMELESS[1]!.slug);
+    assert.equal(
+      normalise(a.html, a.r.token), normalise(b.html, b.r.token),
+      "the page a refused app draws differs by app — something about it leaked through",
+    );
+  });
+
+await check("CONTROL: an ordinary catalog name still renders the whole consent page", async () => {
+  for (const [slug, heading] of [["zellibrix", "Zellibrix"], ["quandle_mail", "Quandle Mail"]]) {
+    const { res, html } = await drawn(slug!);
+    assert.equal(res.status, 200, `${slug}: an ordinary app stopped rendering`);
+    assert.ok(html.includes(`<h1>Connect your ${heading}</h1>`), `${slug}: no heading`);
+    assert.ok(html.includes("<form"), `${slug}: no Connect button`);
+  }
+});
+
+await check("CONTROL: the screen is whole-word — an ordinary name that CONTAINS one renders",
+  async () => {
+    // "Rapid Capital" carries "api" twice as a substring. A screen written with
+    // `includes` refuses it, and refusing a real app's real name is an outage
+    // wearing the costume of a rule. This one holds for the promise half too:
+    // the boundary rule lives in `promiseTermIn`, not only in words.ts.
+    const { res, html } = await drawn("rapid_capital");
+    assert.equal(res.status, 200, "a whole-word screen became a substring screen");
+    assert.ok(html.includes("<h1>Connect your Rapid Capital</h1>"));
+  });
+
+await check("the exemption is derived from words.ts, and what is left over is the promise", () => {
+  // THE DRIFT PIN. `REGISTER_TERMS` is a second copy of most of a list that
+  // lives next door, and a copy nothing compares is a copy that rots. Two
+  // things have to hold: every exempted term must still be a forbidden one (an
+  // exemption for a word nobody bans exempts nothing and reads as if it did),
+  // and the residue — what the name screen actually refuses — must be exactly
+  // the promise the spec's title makes.
+  for (const term of REGISTER_TERMS) {
+    assert.ok(FORBIDDEN_TERMS.includes(term),
+      `connect.ts exempts ${JSON.stringify(term)}, which words.ts does not forbid`);
+  }
+  assert.deepEqual(
+    FORBIDDEN_TERMS.filter((t) => !REGISTER_TERMS.has(t)), ["composio"],
+    "the half of FORBIDDEN_TERMS the name screen refuses is no longer just the vendor's name",
+  );
+});
+
+await check("the two matchers agree on the boundary, term for term and case for case", () => {
+  // `promiseTermIn` re-states words.ts's boundary rule because words.ts keeps
+  // its own matcher private. Two matchers that disagree about the same string
+  // are how this exemption would become a hole, so they are compared here on
+  // strings built from the promise terms alone — where `forbiddenTermIn` can
+  // only be answering about the same term.
+  const promise = FORBIDDEN_TERMS.filter((t) => !REGISTER_TERMS.has(t));
+  assert.ok(promise.length > 0, "there is nothing left for the name screen to refuse");
+  let matched = 0;
+  for (const term of promise) {
+    for (const shape of [
+      term, term.toUpperCase(), `${term[0]!.toUpperCase()}${term.slice(1)}`,
+      `The ${term} Company`, `${term}-Labs`, `[${term}]`, `${term}.`, `${term} Search`,
+      // …and the shapes a whole-word rule must NOT match.
+      `${term}x`, `x${term}`, `x${term}x`, `${term}9`, `9${term}`,
+    ]) {
+      assert.equal(promiseTermIn(shape), forbiddenTermIn(shape),
+        `the two matchers disagree about ${JSON.stringify(shape)}`);
+      if (promiseTermIn(shape) !== null) matched += 1;
+    }
+  }
+  assert.ok(matched >= promise.length * 8, "the corpus stopped exercising the matching direction");
+});
+
+await check("the name screen is at the render site, exactly once", () => {
+  // The mutation anchor: one literal, one occurrence. A second copy of this
+  // check somewhere else in the file is two answers to one question.
+  const anchor = "const unsayable = promiseTermIn(name);";
+  assert.equal(occurrences(SOURCE, anchor), 1,
+    `connect.ts contains ${occurrences(SOURCE, anchor)} copies of the name screen`);
+  // And it is the PROMISE half it runs, not the whole list: the register screen
+  // belongs on the description, which is prose we are quoting rather than a name.
+  assert.equal(occurrences(SOURCE, "forbiddenTermIn(name)"), 0,
+    "the name is screened against the register again — the over-refusal is back");
+  // Both screens run BEFORE anything is drawn: the heading is built from `name`,
+  // so a screen placed after it has already put the word in a string.
+  assert.ok(SOURCE.indexOf(anchor) < SOURCE.indexOf("<h1>Connect your ${esc(name)}"),
+    "the name screen runs after the heading is built");
+  assert.ok(SOURCE.indexOf('if (name === "") {') < SOURCE.indexOf(anchor),
+    "the nameless floor runs after the promise screen, so a blank name reaches a regex first");
 });
 
 await check("no sentences means no consent page — never a button over a blank list", async () => {
@@ -895,7 +1263,10 @@ await check("THE CHAIN: the state on the page is the state that reaches the vend
     const html = await bodyOf(await connectRoute(
       getReq(`/c/${r.token}?state=ATTEMPT-1234`, asHeader(r.ownerToken)), r.env, r.deps),
       "view carries the state");
-    assert.equal(occurrences(html, '<input type="hidden" name="state" value="ATTEMPT-1234">'), 1,
+    // ONCE PER FORM, and both of them: the page now posts to /go and to /skip,
+    // and an attempt id that survives Connect but dies on Skip is the same lost
+    // handoff one button over.
+    assert.equal(occurrences(html, '<input type="hidden" name="state" value="ATTEMPT-1234">'), 2,
       "the consent page dropped the attempt id the browser arrived with");
 
     // Posted back exactly as the page rendered it — read out of the HTML rather
@@ -1135,6 +1506,300 @@ await check("a stranger's callback is refused before the vendor is asked anythin
 });
 
 // ===========================================================================
+// SAYING NO — /c/{token}/skip
+//
+// THE DEFECT THESE CHECKS REPRODUCE, and it is the whole decline half of the
+// spec: "Skip for now" was a BARE ANCHOR to the marketing site. It navigated
+// away and wrote nothing. `recordDecline` (connections/nudge.ts) had no caller
+// anywhere in the Worker, so the snooze ladder — 14 days, then 45, then stop —
+// could not be entered by any human action, and the person who tapped Skip was
+// asked again at the next moment that scored high enough. Forever.
+//
+// Every check reads the ROW the store now holds. "It answered 200" is not the
+// property being tested; "the system now knows they said no" is.
+// ===========================================================================
+
+const DAY = 24 * 60 * 60 * 1000;
+
+/** The nudge row this rig's store holds for the owner and the app the link was
+ *  minted for, read outside the code under test. */
+const nudgeFor = (r: Rig, toolkit = "zellibrix"): ConnectNudge | undefined =>
+  r.store.nudges.get(`${OWNER}::${toolkit}`);
+
+/** A POST to the Skip form, exactly as the page's own form makes one. */
+const skipReq = (
+  token: string, who: Who, opts?: { form?: Record<string, string>; origin?: string | null;
+                                    fetchSite?: string },
+): Request => postReq(`/c/${token}/skip`, who, opts);
+
+await check("Skip RECORDS the decline — the row exists, and it is level 1", async () => {
+  const r = await rig();
+  assert.equal(nudgeFor(r), undefined, "nothing is declined before the tap");
+
+  const res = await connectRoute(skipReq(r.token, asHeader(r.ownerToken)), r.env, r.deps);
+  assert.equal(res.status, 200);
+  const html = await bodyOf(res, "skip noted");
+  assert.match(html, /Noted\./, "the person is told their answer was kept");
+
+  const row = nudgeFor(r)!;
+  assert.ok(row, "the tap wrote nothing: nobody can say no");
+  assert.equal(row.user_id, OWNER);
+  assert.equal(row.toolkit, "zellibrix");
+  assert.equal(row.state, "declined");
+  assert.equal(row.level, 1);
+  assert.equal(row.acted_at, NOW,
+    "acted_at is what separates a tap from 72 hours of silence, and the spec's timers "
+    + "are tuned off the difference");
+  assert.equal((row.snooze_until as number) - NOW, 14 * DAY,
+    "a decline on the connect page is the spec's level 1: fourteen days");
+
+  // A DECLINE COSTS NOBODY A VENDOR ROUND TRIP. Saying no must be the cheapest
+  // thing in the product.
+  assert.equal(r.log.authorize.length, 0);
+  assert.equal(r.log.toolkit.length, 0);
+});
+
+await check("the page's own Skip control is the POST that records it", async () => {
+  const r = await rig();
+  const html = await bodyOf(
+    await connectRoute(getReq(`/c/${r.token}`, asHeader(r.ownerToken)), r.env, r.deps),
+    "view skip form");
+  assert.equal(CONNECT_METHOD.skip, "POST",
+    "a leg that writes may not be a GET, whatever the page draws");
+  assert.match(html, new RegExp(`<form class="later" method="post" action="/c/${r.token}/skip">`),
+    "Skip is a bare anchor again — an anchor navigates away and records nothing, "
+    + "which is the whole defect");
+  assert.equal(occurrences(html, "Skip for now"), 1);
+});
+
+await check("a GET on /skip is refused — a prefetcher must not decline for the owner",
+  async () => {
+    const r = await rig();
+    const res = await connectRoute(
+      getReq(`/c/${r.token}/skip`, asHeader(r.ownerToken)), r.env, r.deps);
+    assert.equal(res.status, 405);
+    assert.equal(res.headers.get("allow"), "POST");
+    assert.equal(nudgeFor(r), undefined,
+      "a link prefetcher, an <img> tag or an address-bar preload silenced an app "
+      + "nobody turned down");
+
+    // THE CONTROL: the same link, POSTed, still records. A guard that refuses
+    // both is an outage, not a guard.
+    const ok = await connectRoute(skipReq(r.token, asHeader(r.ownerToken)), r.env, r.deps);
+    assert.equal(ok.status, 200);
+    await bodyOf(ok, "skip GET control");
+    assert.equal(nudgeFor(r)!.level, 1);
+  });
+
+await check("a cross-site POST cannot record a decline", async () => {
+  const r = await rig();
+  for (const opts of [{ origin: "https://evil.example.invalid" }, { fetchSite: "cross-site" }]) {
+    const res = await connectRoute(skipReq(r.token, asHeader(r.ownerToken), opts), r.env, r.deps);
+    assert.equal(res.status, 403, JSON.stringify(opts));
+    await bodyOf(res, "skip cross-site");
+    assert.equal(nudgeFor(r), undefined,
+      "a hidden form on any site could snooze an app the owner never turned down");
+  }
+  // THE CONTROL: our own page's POST, with our own Origin, still records.
+  const ok = await connectRoute(skipReq(r.token, asHeader(r.ownerToken)), r.env, r.deps);
+  assert.equal(ok.status, 200);
+  await bodyOf(ok, "skip same-site control");
+  assert.equal(nudgeFor(r)!.state, "declined");
+});
+
+await check("a signed-out Skip records nothing and is the same door as every other leg",
+  async () => {
+    const r = await rig();
+    const res = await connectRoute(skipReq(r.token, null), r.env, r.deps);
+    assert.equal(res.status, 401);
+    const html = await bodyOf(res, "skip signed out");
+    assert.equal(nudgeFor(r), undefined);
+    assert.doesNotMatch(html, /Zellibrix/i,
+      "a caller who has proved nothing must not be told which app the link is for");
+    assert.match(html, new RegExp(`/c/${r.token}/code`), "the way forward is still offered");
+  });
+
+await check("a stranger cannot decline on the owner's behalf", async () => {
+  const r = await rig();
+  const res = await connectRoute(skipReq(r.token, asHeader(r.strangerToken)), r.env, r.deps);
+  assert.equal(res.status, 403);
+  const html = await bodyOf(res, "skip stranger");
+  assert.doesNotMatch(html, /Zellibrix/i);
+  assert.equal(r.store.nudges.size, 0,
+    "somebody else's session silenced an app for an owner who never said a word");
+});
+
+await check("an expired link cannot record a decline", async () => {
+  const r = await rig({ expiresAt: NOW - 1 });
+  const res = await connectRoute(skipReq(r.token, asHeader(r.ownerToken)), r.env, r.deps);
+  assert.equal(res.status, 410);
+  await bodyOf(res, "skip expired");
+  assert.equal(r.store.nudges.size, 0);
+});
+
+await check("a second Skip does NOT walk somebody from L1 to L2", async () => {
+  const r = await rig();
+  await bodyOf(await connectRoute(skipReq(r.token, asHeader(r.ownerToken)), r.env, r.deps),
+    "skip once");
+  const first = { ...nudgeFor(r)! };
+  await bodyOf(await connectRoute(skipReq(r.token, asHeader(r.ownerToken)), r.env, r.deps),
+    "skip twice");
+  const second = nudgeFor(r)!;
+  assert.equal(second.level, 1,
+    "a refresh, a double tap or a retried POST climbed the ladder — three of them would "
+    + "reach level 3, which stops the asks for ten years over one finger");
+  assert.equal(second.snooze_until, first.snooze_until);
+});
+
+await check("Skip does NOT spend the link — changing your mind still works", async () => {
+  const r = await rig();
+  await bodyOf(await connectRoute(skipReq(r.token, asHeader(r.ownerToken)), r.env, r.deps),
+    "skip then connect");
+  assert.equal(r.store.rows.get(await tokenHandle(r.token))!.used_at, null,
+    "a decline is not a redemption");
+  const go = await connectRoute(postReq(`/c/${r.token}/go`, asHeader(r.ownerToken)),
+    r.env, r.deps);
+  assert.equal(go.status, 303, "somebody who taps Skip and thinks better of it inside the "
+    + "ten minutes must still be able to connect");
+});
+
+await check("THE ROW'S OWN MOMENT decides the snooze, not the surface that asked", async () => {
+  // Onboarding: the ask engine wrote `trigger: onboarding`, so this is the
+  // spec's seven-day SOFT snooze rather than a real decline (page 21).
+  const soft = await rig();
+  soft.store.nudges.set(`${OWNER}::zellibrix`, {
+    user_id: OWNER as never, toolkit: "zellibrix" as never, state: "asked", level: 0,
+    snooze_until: null, trigger: "onboarding", sent_at: NOW - 1000, acted_at: null,
+    channel: "sms",
+  });
+  await bodyOf(await connectRoute(skipReq(soft.token, asHeader(soft.ownerToken)),
+    soft.env, soft.deps), "skip soft");
+  const softRow = nudgeFor(soft)!;
+  assert.equal(softRow.level, 1);
+  assert.equal((softRow.snooze_until as number) - NOW, 7 * DAY,
+    "a skipped setup card is not a real decline and must not carry a real decline's snooze");
+
+  // THE CONTROL, AND THE POINT: any other moment is the fourteen-day L1. The two
+  // are different rows and conflating them is what the spec forbids in one line.
+  const real = await rig();
+  real.store.nudges.set(`${OWNER}::zellibrix`, {
+    user_id: OWNER as never, toolkit: "zellibrix" as never, state: "asked", level: 0,
+    snooze_until: null, trigger: "in_task", sent_at: NOW - 1000, acted_at: null,
+    channel: "sms",
+  });
+  await bodyOf(await connectRoute(skipReq(real.token, asHeader(real.ownerToken)),
+    real.env, real.deps), "skip real");
+  const realRow = nudgeFor(real)!;
+  assert.equal((realRow.snooze_until as number) - NOW, 14 * DAY);
+  assert.notEqual(softRow.snooze_until, realRow.snooze_until);
+});
+
+await check("an app this owner already has connected has nothing to decline", async () => {
+  const r = await rig();
+  const connected: ConnectNudge = {
+    user_id: OWNER as never, toolkit: "zellibrix" as never, state: "connected", level: 0,
+    snooze_until: null, trigger: "in_task", sent_at: NOW - DAY, acted_at: NOW - DAY,
+    channel: "sms",
+  };
+  r.store.nudges.set(`${OWNER}::zellibrix`, connected);
+  const res = await connectRoute(skipReq(r.token, asHeader(r.ownerToken)), r.env, r.deps);
+  assert.equal(res.status, 200);
+  const html = await bodyOf(res, "skip already connected");
+  assert.doesNotMatch(html, /Noted\./);
+  assert.equal(nudgeFor(r)!.state, "connected",
+    "declining an app they already have would stop the router using a live connection");
+});
+
+await check("a decline that could NOT be written is never drawn as one that was", async () => {
+  // A store with no nudge half at all — a narrower wiring than production's.
+  const narrow = await rig({ store: new LinkOnlyStore() });
+  const res = await connectRoute(skipReq(narrow.token, asHeader(narrow.ownerToken)),
+    narrow.env, narrow.deps);
+  assert.equal(res.status, 500);
+  const html = await bodyOf(res, "skip unrecordable");
+  assert.doesNotMatch(html, /Noted\./,
+    "a page saying the answer was kept over a row that does not exist is the same "
+    + "defect this leg was built to close, with better manners");
+  assert.match(html, /note that/i, "the honest failure page, not a claim the answer was kept");
+
+  // And the same when the store is there and the WRITE fails.
+  const failing = new MemoryStore();
+  failing.nudgeWriteFails = true;
+  const broken = await rig({ store: failing });
+  const res2 = await connectRoute(skipReq(broken.token, asHeader(broken.ownerToken)),
+    broken.env, broken.deps);
+  assert.equal(res2.status, 500);
+  assert.doesNotMatch(await bodyOf(res2, "skip write failed"), /Noted\./);
+  assert.equal(broken.store.nudges.size, 0);
+});
+
+await check("a browser that proved itself with a PHONE CODE can decline", async () => {
+  // THE POPULATION THIS PRODUCT ACTUALLY TEXTS. That browser holds no account
+  // cookie; the only thing that makes it somebody is the code cookie
+  // routes/connect_auth.ts mints, and `connectSession` honours one ONLY on the
+  // link it was minted for — reading the link out of the REQUEST PATH with a
+  // regex of its own that lists this file's leg names.
+  //
+  // Measured on 2026-09-06: that regex did not know `/skip`, so the same person
+  // could tap Connect and could NOT tap Skip. Saying yes worked and saying no
+  // answered "sign in to finish", which is the exact asymmetry the decline leg
+  // exists to remove. `whoIsAsking` now asks about `/c/{token}` on every leg, so
+  // this check runs the OTHER file's own regex — read out of its source — over
+  // the path the reader was actually handed.
+  const authSource = readFileSync(join(here, "..", "src", "routes", "connect_auth.ts"), "utf8");
+  const after = authSource.split("function tokenFromPath")[1] ?? "";
+  const literal = /const m = (\/\^[^\n]+?\/)\.exec\(pathname\);/.exec(after);
+  assert.ok(literal, "connect_auth.ts's tokenFromPath moved; this check is stale rather than green");
+  const theirs = new RegExp((literal![1] as string).slice(1, -1));
+
+  const r = await rig();
+  const seen: { path: string; auth: string | null }[] = [];
+  installConnectSessionReader(async (req, env) => {
+    const u = new URL(req.url);
+    seen.push({ path: u.pathname, auth: req.headers.get("Authorization") });
+    // Answer only if the credential survived the hop, so a fabricated request
+    // that dropped the header would read as signed out and fail below.
+    return await whoIsSignedIn(req, env);
+  });
+  try {
+    const res = await connectRoute(skipReq(r.token, asHeader(r.ownerToken)), r.env, r.deps);
+    assert.equal(res.status, 200);
+    await bodyOf(res, "skip via session reader");
+    assert.equal(nudgeFor(r)!.state, "declined");
+  } finally {
+    // Back to the default behaviour: the narrow reader connect.ts falls back to.
+    installConnectSessionReader((req, env) => whoIsSignedIn(req, env));
+  }
+
+  assert.equal(seen.length, 1, "the session was not read exactly once");
+  assert.ok(seen[0]!.auth, "the credential did not survive the hop into the reader");
+  const bound = theirs.exec(seen[0]!.path);
+  assert.ok(bound,
+    `the installed session reader was handed ${seen[0]!.path}, which connect_auth.ts's own `
+    + "tokenFromPath cannot bind to a link — so a code cookie answers for Connect and not "
+    + "for Skip, and the person who wants to say no is the one who cannot");
+  assert.equal(bound![1], r.token, "it bound to a different link than the request is on");
+});
+
+await check("the way back into the app is offered only when the app started it", async () => {
+  const withState = await rig();
+  const html = await bodyOf(await connectRoute(
+    skipReq(withState.token, asHeader(withState.ownerToken), { form: { state: "ATTEMPT-99" } }),
+    withState.env, withState.deps), "skip deep link");
+  assert.match(html, /anticipy:\/\/connected\/zellibrix\?state=ATTEMPT-99&amp;status=cancelled/,
+    "the phone already parses `cancelled`; a skip is not a failure and must not say it is");
+
+  // A browser that arrived from a TEXT has no attempt id, and ConnectHandoff
+  // refuses a callback it cannot bind to one — so offering the link there is
+  // offering a dead end.
+  const noState = await rig();
+  const plain = await bodyOf(await connectRoute(
+    skipReq(noState.token, asHeader(noState.ownerToken)), noState.env, noState.deps),
+    "skip no deep link");
+  assert.ok(!plain.includes("anticipy://"));
+});
+
+// ===========================================================================
 // WIRING
 // ===========================================================================
 
@@ -1171,23 +1836,37 @@ await check("the vendor's URL never appears in a response body, anywhere", () =>
 
 await check("the product's register holds in every body: no Composio, no authorize, no API",
   () => {
-    // spike/two-hands/src/connections/words.ts FORBIDDEN_TERMS, whole-word and
-    // case-insensitive so "capital" does not trip "api".
-    const forbidden = [
-      "authorize", "authorise", "authorization", "authorisation",
-      "grant access", "grants access", "granting access", "granted access",
-      "permission", "permissions", "integration", "integrations",
-      "api", "apis", "oauth", "composio",
-    ];
-    for (const { where, text } of BODIES) {
-      const visible = text.replace(/<[^>]*>/g, " ");
-      for (const term of forbidden) {
+    // words.ts's own FORBIDDEN_TERMS, whole-word and case-insensitive so
+    // "capital" does not trip "api".
+    //
+    // WHAT `quoting` TAKES OUT, AND WHY IT IS NOT A HOLE. The scan is over the
+    // words THIS PRODUCT says. On the consent page for an app whose maker
+    // registered it as "Moderation API", the product is quoting a proper noun,
+    // and a scan that refused that is the over-refusal one layer up wearing a
+    // test's clothes. So exactly one string is removed from exactly the bodies
+    // that were entitled to print it — the app's own name, on that app's own
+    // page — and everything else in those bodies is scanned as normal:
+    // "authorize your Moderation API" still fails on "authorize", and the
+    // refusal pages, which pass no `quoting`, are scanned whole.
+    let quoted = 0;
+    for (const { where, text, quoting } of BODIES) {
+      let visible = text.replace(/<[^>]*>/g, " ");
+      if (quoting !== undefined) {
+        assert.ok(visible.includes(quoting),
+          `${where} was exempted for ${JSON.stringify(quoting)} and never printed it`);
+        visible = visible.split(quoting).join(" ");
+        quoted += 1;
+      }
+      for (const term of FORBIDDEN_TERMS) {
         const re = new RegExp(`\\b${term.replace(/ /g, "\\s+")}\\b`, "i");
         assert.ok(!re.test(visible),
           `"${term}" reached a person's screen (${where}) — the spec's register is `
           + '"connect your Notion", never a consent screen written by a legal team');
       }
     }
+    assert.ok(quoted >= 3,
+      "no body claimed the third-party-name exemption, so the scan is proving it unused rather "
+      + "than proving it narrow");
   });
 
 await check("the source itself never says the vendor's name to a person", () => {
@@ -1205,6 +1884,53 @@ await check("the source itself never says the vendor's name to a person", () => 
   assert.ok(!/composio/i.test(code),
     "connect.ts carries the vendor's name outside a comment — the product never says it");
 });
+
+// ===========================================================================
+// MUTATION REPORT — the name screen in src/routes/connect.ts.
+//
+// ROUND ONE, 2026-09-06: six mutations, all six killed, and the screen they
+// were run against was still wrong. Every one of them asked "is the rule still
+// there", and none of them asked "does the rule refuse more than it should" —
+// which is how a screen that made three real apps unconnectable passed a
+// mutation report. Two of those six are gone below because what they pinned is
+// gone: N2 ran the screen on `v.toolkit.name` instead of the printed `name`,
+// and the slug fallthrough that distinction existed for was a branch nothing
+// executed (round-2 finding 2), so the distinction went with it.
+//
+// ROUND TWO, 2026-09-06: NINE mutations, ALL NINE KILLED, run after the split.
+// Each is anchored on a literal occurring EXACTLY ONCE in the file, and the
+// harness aborts on an anchor that does not: a patch that silently fails to
+// apply reads as "it is tested", which is how three false green readings were
+// produced on this feature in one day. Four of the nine point at the
+// OVER-refusal, because that is the direction round one could not see.
+//
+//   M1  `const unsayable = promiseTermIn(name)` -> `null`, the screen gone
+//       -> 5 checks, first: "a toolkit named after the vendor cannot put that
+//          word on the page"
+//   M2  the register exemption removed — the name screened against all of
+//       FORBIDDEN_TERMS again, which is the round-one defect exactly
+//       -> 2 checks, first: "an app somebody else called \"Moderation API\" can
+//          still be connected"
+//   M3  the nameless floor deleted
+//       -> 2 checks, first: "a catalog row with no display name is never drawn"
+//   M4  `promiseTermIn` composed out of `forbiddenTermIn` with the exemption
+//       applied to its FIRST match — the trap, since the vendor's name is last
+//       in the list and "Composio API" would answer "api"
+//       -> 2 checks, first: "a name carrying BOTH halves is refused for the
+//          promise, not waved through"
+//   M5  the whole-word boundary in `promiseTermIn` made a substring test
+//       -> "the two matchers agree on the boundary, term for term"
+//   M6  the exemption widened until it swallowed the promise as well
+//       -> 6 checks, including the drift pin over words.ts's own list
+//   M7  the promise refusal answering 200 instead of 409
+//       -> 2 checks
+//   M8  the refusal page rewritten to name the app it refused
+//       -> 2 checks, including the two refusals drawing one page
+//   M9  our OWN fine print rewritten in permissions language, with the
+//       third-party-name exemption in place — the check that the exemption is
+//       narrow rather than a hole in the register scan
+//       -> the whole-suite register scan
+// ===========================================================================
 
 console.log(`connect-routes: ${passes} checks passed, ${failures} failed`);
 if (failures) process.exit(1);

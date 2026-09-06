@@ -369,6 +369,23 @@ export interface AskEvidence {
   tasksThatWouldHaveUsedIt?: number;
   /** What the browser hand cost, in ms. */
   browserMs?: number;
+  /**
+   * THE SPEC'S THIRD WRITER INPUT: "the user's own phrasing history" (page 22).
+   * Lines this owner actually said, for the model to match a voice against.
+   *
+   * NOTHING IN THIS FILE READS IT. It is carried, not judged: no check below
+   * looks at it, no refusal quotes it, and the register rules are applied to
+   * what the model WROTE and never to what the owner said. That is deliberate
+   * — a rule that read these lines would be a pattern-match over a human's
+   *  words deciding what our sentence may say, which is the law-1 violation
+   * this whole area exists to avoid.
+   *
+   * IT IS THIS OWNER'S OWN WORDS OR IT IS ABSENT. There is no third option and
+   * no default: binding one person's transcript to another person's message is
+   * the single worst failure this product has. `nudgeMomentFor` in wiring.ts
+   * reads them from `events` rows filtered by that owner's `owner_ref`.
+   */
+  phrasing?: readonly string[];
 }
 
 /** "Write the one text that asks." */

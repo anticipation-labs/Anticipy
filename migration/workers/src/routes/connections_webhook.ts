@@ -35,6 +35,63 @@
  * This file flips two state fields and stops.
  *
  * ---------------------------------------------------------------------------
+ * AND NOBODY IS TOLD. WHY NOT, MEASURED RATHER THAN ASSUMED (2026-09-06)
+ * ---------------------------------------------------------------------------
+ * The sentence above — "this file flips two state fields and stops" — was
+ * written as a division of labour and is being read as a feature. An audit on
+ * 2026-09-06 recorded the other half of it: the phone half of this surface is
+ * live (Settings reads `connections.status`) and the TEXT half reaches nobody.
+ * The spec's surface table gives the words for this row VERBATIM — "Your [app]
+ * connection needs a quick refresh, tap when convenient. Until then I'll use the
+ * browser." (docs/spec-connections.txt, PDF page 41, the document's own page
+ * 21) — and today no code path in this Worker can produce them.
+ *
+ * IT IS NOT A LINE MISSING FROM THIS FILE. `sendConnectAsk` is the one pipeline
+ * that mints a link, writes the lease, calls the model and sends the text, and
+ * three separate things in it refuse a reconnect, none of them in a file this
+ * one may edit:
+ *
+ *   1. THERE IS NO MOMENT TO NAME. Every ask carries a `NudgeTrigger`, and the
+ *      contract declares five: in_task, repeated_use, laptop_closed,
+ *      user_named_it, onboarding. A credential dying at the far end is none of
+ *      them, and the spec agrees — its state machine (PDF page 44, document
+ *      page 24) gives the five a right-time SCORE and
+ *      gives needs_reconnect a cadence instead ("one gentle ask, then weekly
+ *      max"), because a reconnect is not scored against a moment. But
+ *      `shouldAsk`'s own input guard (`whatIsMissing`) rejects a context whose
+ *      trigger is not in `TRIGGER_SCORE`, and `askMessage` refuses the draft for
+ *      the same reason — so the one branch written for reconnects can only be
+ *      reached by naming a moment that did not happen. Passing one of the five
+ *      would feed `MOMENT_SENTENCE` to the model as "what just happened", and a
+ *      message written from a fact nobody observed is the failure this whole
+ *      tree is shaped around. This file will not do it.
+ *
+ *   2. THE EVIDENCE FLOOR RUNS FIRST. `shouldAsk` holds on
+ *      `tasksThatWouldHaveUsedIt === 0` at step 4, before the reconnect branch
+ *      at step 6 — and `nudgeMomentFor` counts that from `app_usage_signals`
+ *      rows whose source is `observer` or `said`, neither of which has a
+ *      production writer yet (connections/due.ts says so in its own header). So
+ *      every reconnect ask would hold on "no task has needed this app yet" even
+ *      with a moment to name. For a repair of a connection this owner already
+ *      chose, that floor is pointing the wrong way.
+ *
+ *   3. THE PROMPT IS FOR A FIRST CONNECTION. connections/ask.ts tells the model
+ *      it is offering to connect one of somebody's apps and that "connecting
+ *      only makes it instant". A reconnect needs its own `MOMENT_SENTENCE`
+ *      entry at minimum, or it writes the wrong message correctly.
+ *
+ * NO SEAM WAS ADDED HERE FOR IT, ON PURPOSE. A `tell` port on this file's deps
+ * that nothing fills is the repo's own named failure — `installConnectWiring`
+ * had zero callers for a day and every /c/ leg answered 503 while the tests were
+ * green. So what this file does instead is refuse to let the gap read as
+ * success: the `marked` log line says in one clause that the owner has not been
+ * told and what is missing, and test/connections-webhook.test.ts carries a pin
+ * that goes RED the day a sixth moment exists — which is the day the two lines
+ * that call `sendConnectAsk` belong here. That pin is a WAKE-UP, not a law-2
+ * expiry: there is no tape in this file, and nothing about it goes green by
+ * being deleted.
+ *
+ * ---------------------------------------------------------------------------
  * WHY THE VERIFICATION IS THE WHOLE FILE
  * ---------------------------------------------------------------------------
  * An unauthenticated POST that could mark a connection expired is a remote
@@ -736,9 +793,20 @@ export async function connectionsWebhook(
 
   switch (outcome.state) {
     case "marked":
+      // THE SECOND CLAUSE IS THE POINT, and it is not decoration. The first
+      // clause says the row moved, which is the half that PROTECTS this owner —
+      // the router stops handing steps to a dead credential. The half that
+      // TALKS to them has not happened and cannot happen from here, and a line
+      // that stopped at "needs reconnect" would read, to whoever is watching a
+      // log, exactly like the surface working. This repo has shipped that
+      // failure twice; the ears were deaf for 30 hours behind a leg printing a
+      // reassuring sentence. See AND NOBODY IS TOLD in this file's header for
+      // the three reasons and the one change that closes them.
       console.log(
         `connections/events 200: ${outcome.owner} ${outcome.toolkit} needs reconnect `
-          + `(${shortId(event.accountId)}, webhook-id ${webhookId})`,
+          + `(${shortId(event.accountId)}, webhook-id ${webhookId}); the browser hand takes `
+          + "over, and NOBODY HAS BEEN TOLD — the text half of this surface has no moment a "
+          + "reconnect can be asked from, so no connect ask is sent",
       );
       return json(200, { ok: true, marked: "needs_reconnect" });
     case "not-held":

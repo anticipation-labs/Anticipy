@@ -79,9 +79,73 @@
  *     -> "worker.fetch routes /c/{token} and /c/{token}/code, and neither is a 404"
  *   the `/c/` branch no longer chaining connectAuthRoute before connectRoute
  *     -> "worker.fetch routes /c/{token} and /c/{token}/code, and neither is a 404"
+ *
+ * SECTION 9 (2026-09-06) closes four findings from the Connections audits.
+ * Every check there went RED against the code as it stood before its fix, and
+ * SIXTEEN MUTATIONS were run against src/connections/wiring.ts afterwards —
+ * 16 killed, 0 survivors, each anchored on a literal the source carries
+ * exactly once (an anchor matching anything other than once refused to patch,
+ * because a regex that silently missed has produced three false "it is
+ * tested" readings in this repo):
+ *   the twin never recording the link; the row taken BEFORE the send;
+ *   `sent_at` left null; `needs_reconnect` overwritten as `asked`; the decline
+ *   ladder reset by a solicited link; every reply stamped `ignore` again; a
+ *   question not marked as one; the claim dropped entirely; the age bound
+ *   removed from `unfinished`; stranded rows still counted by
+ *   `resultDelivered`; the two-sentence log collapsed back into one; the bound
+ *   widened to 100000 days; the account picked by row order again; the
+ *   ambiguity refusing silently instead of asking; the refusal widened until
+ *   it also refuses an owner with ONE account; the new sentence dropped from
+ *   `textReplySentences`.
+ *
+ * SECTION 10 (2026-09-06) is the round-2 audit ON SECTION 9's OWN FIX. Writing
+ * the twin's link down was right; writing it down as `state: 'asked'` said a
+ * thing that is not true of it, and 72 hours later `maturedBySilence` turned an
+ * errand somebody TEXTED US FOR into a decline against them. Over-correction is
+ * a defect. Four mutations against src/connections/wiring.ts, all KILLED, each
+ * anchored on a literal the source carries exactly once:
+ *   the solicited row saying `asked` again (section 9's shape)
+ *     -> "ROUND 2 FINDING 2: an unfinished link the owner asked for is not a
+ *        decline" (and the three section-9 checks)
+ *   an outstanding push carried through untouched
+ *     -> "ROUND 2 FINDING 2: asking for a link ANSWERS the push that was
+ *        already out"
+ *   `sent_at` no longer stamped
+ *     -> "ROUND 2 FINDING 3: a link the owner asked for DOES spend the weekly
+ *        budget"
+ *   the trigger no longer naming who asked
+ *     -> "FINDING 1: a link the owner asked for is written down"
+ *
+ * SECTION 11 (2026-09-06, round 2) closes ONE finding of its own:
+ * `nudgeMomentFor`'s evidence query still carried `AND "weight" > 0`, the
+ * predicate src/connections/due.ts had just deleted as "an aliveness test no
+ * code path can make false". The fix had been applied in one of the two places
+ * that had it. Three checks went RED against the code as it stood; SEVEN
+ * MUTATIONS were run afterwards, 7 killed, 0 survivors, each anchored on a
+ * literal wiring.ts carries exactly once:
+ *   the aliveness filter deleted outright; the floor back to `> 0`; the decay
+ *   skipped so the STORED weight decides; `ALIVE_WEIGHT_FLOOR` typed here
+ *   instead of imported; the whole decay seam re-implemented locally; the
+ *   deleted SQL predicate put back; a junk weight coerced to a live one.
+ *
+ * TWO OF THE SEVEN SURVIVED THEIR FIRST DRAFT, and both were checks that read
+ * as evidence and were not. "the floor is imported" asked only whether the
+ * NAME appeared, so a local `const ALIVE_WEIGHT_FLOOR = 0.00625` passed it;
+ * and the no-weight-predicate check grepped the whole file, so it failed on
+ * the COMMENT above the fixed query. That second one is the same shape that
+ * let overnight/is_connect_live.py's hand-copy of due.ts's candidate query
+ * drift for a round while a whole-file substring check called it agreement —
+ * a substring check over a source file cannot tell code from prose. Both now
+ * read the statement and the import line rather than the words around them.
+ *
+ * LAW 3: everything in sections 9, 10 and 11 is REPO-GREEN. No deploy has
+ * carried any of it, and until one has, none of it is fixed in the sense law 3
+ * means.
  */
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { FakeD1, asD1, type FakeStatement } from "./fake-d1.ts";
 import { issueToken } from "../src/pb/auth.ts";
 import {
@@ -89,8 +153,9 @@ import {
   type ConnectEnv, type Connection,
 } from "../src/routes/connect.ts";
 import {
-  connectAuthWiring, connectDeps, connectWiring, makeSentenceWriter, SENTENCE_ATTEMPTS,
-  type ConnectWiringEnv,
+  connectAuthWiring, connectDeps, connectWiring, handleInboundText, makeSentenceWriter,
+  nudgeMomentFor, runTextCommandPlan, textReplySentences, SENTENCE_ATTEMPTS, TEXT_REPLY,
+  type ConnectWiringEnv, type NudgeWiringEnv,
 } from "../src/connections/wiring.ts";
 import {
   connectAuthRoute, connectAuthWiringInstalled, type ConnectAuthEnv,
@@ -98,11 +163,22 @@ import {
 import {
   ComposioConnections, connectionsFromEnv, resetConnectionsProvider, COMPOSIO_BASE_URL,
 } from "../src/connections/provider.ts";
-import { MAX_SENTENCE_CHARS, PermissionWordsRefused, permissionSentences }
+import { MAX_SENTENCE_CHARS, PermissionWordsRefused, permissionSentences, forbiddenTermIn }
   from "../src/connections/words.ts";
 import {
-  createD1Store, createMemoryStore, CrossOwnerWrite, type ConnectionsStore,
+  createD1Store, createMemoryStore, CrossOwnerWrite, ownerId, type ConnectionsStore,
 } from "../src/connections/store.ts";
+// THE POLICY THE TWIN'S ROW IS READ BY. Section 10 asserts what a row the twin
+// writes MEANS, and meaning is not a column: it is what `maturedBySilence` and
+// `shouldAsk` do with it three days later. Importing them is the only way to
+// measure that rather than to assert a string.
+import {
+  GLOBAL_ASK_INTERVAL_DAYS, SILENCE_IS_A_SOFT_NO_HOURS, SNOOZE_DAYS,
+  maturedBySilence, shouldAsk,
+} from "../src/connections/nudge.ts";
+import type { ConnectNudge, NudgeContext }
+  from "../../../spike/two-hands/src/connections/contract.ts";
+import { SENDBLUE_BASE } from "../src/messaging.ts";
 // THE LINK UNDER TEST, twice over. Loading the Worker's entry point is what
 // installs the wiring, and if either install line is deleted the first check
 // below goes red. The DEFAULT EXPORT is the other half: section 7 drives
@@ -1270,6 +1346,840 @@ await check("the wiring names no app, no logo and no scope word", async () => {
   // never appear where a page could print it.
   assert.ok(!/composio/i.test(code.replace(/COMPOSIO_API_KEY/g, "")),
     "wiring.ts carries the vendor's name outside a comment");
+});
+
+// ===========================================================================
+// 9. THE NUDGE HALF AND THE TEXT TWIN — four defects, each reproduced first
+//
+// Three adversarial audits read the Connections round on 2026-09-06. These
+// four are the ones that could reach a PERSON: a second text nobody asked
+// for, an ask that can never stop holding, a question stamped as answered,
+// and an account disconnected by coin flip. Every check below was written to
+// go RED against the code as it stood, and each carries its CONTROL — the
+// good case, in the same check, so a fix that buys silence by refusing
+// everything cannot pass.
+//
+// WHY THEY LIVE HERE and not beside the rest of the twin's checks in
+// connections-endtoend.test.ts: this suite owns src/connections/wiring.ts,
+// and the four defects are all wiring.ts's own — the moment query, the
+// executor's two branches, and the event claim.
+// ===========================================================================
+
+/** 15 lowercase alphanumerics, the shape D1 mints and the only shape the
+ *  owner-id rule accepts. Its own owner, so nothing in sections 1-8 can be
+ *  read by these checks or written by them. */
+const TWIN_OWNER = "ownertwinaaa111";
+const TWIN_PHONE = "+15557770123";
+const TWIN_NOW = Date.now();
+const HOUR_MS = 60 * 60 * 1000;
+const DAY_MS = 24 * HOUR_MS;
+
+/**
+ * A fixed-offset zone in which this owner's local hour right now is 14:00.
+ * COMPUTED, NEVER NAMED: quiet hours are owner-local, and a hardcoded zone is
+ * a suite that passes all morning and fails every evening.
+ */
+function awakeZone(): string {
+  const utcHour = new Date(TWIN_NOW).getUTCHours();
+  const offset = ((14 - utcHour) % 24 + 24) % 24;
+  return offset <= 14 ? `Etc/GMT-${offset}` : `Etc/GMT+${24 - offset}`;
+}
+
+interface TwinSocket {
+  calls: FetchCall[];
+  /** What the vendor's catalog search answers. Empty is the shape that makes
+   *  `planTextCommand` return `ask_which_app`, which is finding 2's subject. */
+  search: Record<string, unknown>[];
+  /** What the command judge answers. The match judge is never reached while
+   *  `search` is empty, which is why there is one knob and not two. */
+  command: unknown;
+  restore: () => void;
+}
+
+/** The one fake: `globalThis.fetch`. Three hosts — the vendor's catalog, the
+ *  carrier, and the model — and everything between this file and that socket
+ *  is the shipped Worker. */
+function twinSocket(): TwinSocket {
+  const real = globalThis.fetch;
+  const s: TwinSocket = {
+    calls: [],
+    search: [],
+    command: { kind: "none" },
+    restore: () => { globalThis.fetch = real; },
+  };
+  globalThis.fetch = (async (input: unknown, init?: { body?: unknown }) => {
+    const url = String((input as { url?: string })?.url ?? input);
+    const body = String(init?.body ?? "");
+    s.calls.push({ url, body });
+    const json = (status: number, value: unknown): Response =>
+      new Response(JSON.stringify(value), {
+        status, headers: { "content-type": "application/json" },
+      });
+    if (url.startsWith(COMPOSIO_BASE_URL)) {
+      if (url.includes("/toolkits?search=")) return json(200, { items: s.search });
+      if (url.includes("/toolkits/")) return json(200, APP);
+      return json(200, {});
+    }
+    if (url.startsWith(SENDBLUE_BASE)) {
+      return json(200, { message_handle: "mh-wiring", status: "QUEUED" });
+    }
+    // WHICH OF OUR OWN PROMPTS IS THIS? Matched against a string THIS REPO
+    // wrote into its own system prompt, never against anything a person said.
+    const answer = body.includes("list_connected") ? s.command : { kind: "unclear" };
+    return json(200, { choices: [{ message: { content: JSON.stringify(answer) } }] });
+  }) as typeof globalThis.fetch;
+  resetConnectionsProvider();
+  return s;
+}
+
+interface TwinRig { d1: FakeD1; env: NudgeWiringEnv; }
+
+/** A Worker configured the way a deployed one is, plus the carrier the twin
+ *  replies through. */
+function twinRig(): TwinRig {
+  const d1 = new FakeD1();
+  d1.db.prepare(
+    `INSERT INTO owners (id, created, updated, email, emailVisibility, verified,
+       password, tokenKey, phone, legacy_uuid) VALUES (?,?,?,?,0,0,'',?,?,'')`,
+  ).run(TWIN_OWNER, PB_NOW, PB_NOW, `${TWIN_OWNER}@anticipy-test.invalid`,
+        "key-twin", TWIN_PHONE);
+  d1.db.prepare(
+    `INSERT INTO owner_profile (id, created, updated, owner_id, phone, name, first_name,
+       last_name, email, birthday, facts, owner_ref, timezone)
+     VALUES (?,?,?,?,?,'','','','','','',?,?)`,
+  ).run("proftwinaaa1111", PB_NOW, PB_NOW, TWIN_OWNER, TWIN_PHONE, TWIN_OWNER, awakeZone());
+  const env = {
+    DB: asD1(d1),
+    ANTICIPY_AUTH_SECRET: "connections-wiring-test-secret",
+    COMPOSIO_API_KEY: "ck_test_not_a_real_key",
+    OPENROUTER_API_KEY: "or_test_not_a_real_key",
+    SENDBLUE_API_KEY_ID: "sbkid-test",
+    SENDBLUE_API_SECRET_KEY: "sbsecret-test",
+    SENDBLUE_FROM_NUMBER: "+15550009999",
+  } as unknown as NudgeWiringEnv;
+  return { d1, env };
+}
+
+function twinJob(r: TwinRig, id: string, status: string, touchedAt: number): void {
+  const at = new Date(touchedAt).toISOString();
+  r.d1.db.prepare(
+    `INSERT INTO jobs (id, created, updated, goal, status, owner_ref)
+     VALUES (?,?,?,'a small errand',?,?)`,
+  ).run(id, at, at, status, TWIN_OWNER);
+}
+
+function twinSignal(
+  r: TwinRig, toolkit: string, alias = "",
+  over: { seenAt?: number; weight?: number } = {},
+): void {
+  // THE AGE IS A PARAMETER because the stored weight is not the weight: a row
+  // is worth `weight * 2^(-age / 30 days)` to everything that reads it, and the
+  // default here — an hour old — is the one age at which a wrong reader and a
+  // right one give the same answer.
+  r.d1.db.prepare(
+    `INSERT INTO app_usage_signals (user_id, toolkit, source, alias, weight, last_seen_at)
+     VALUES (?,?,'observer',?,?,?)`,
+  ).run(TWIN_OWNER, toolkit, alias, over.weight ?? 3, over.seenAt ?? TWIN_NOW - HOUR_MS);
+}
+
+function twinConnection(
+  r: TwinRig, id: string, toolkit: string, alias: string | null, status = "connected",
+): void {
+  r.d1.db.prepare(
+    `INSERT INTO connections (connected_account_id, user_id, toolkit, alias, status,
+       writes_enabled, last_used_at) VALUES (?,?,?,?,?,0,NULL)`,
+  ).run(id, TWIN_OWNER, toolkit, alias ?? "", status);
+}
+
+function twinNudge(r: TwinRig, toolkit: string, over: {
+  state?: string; level?: number; snooze_until?: number | null; sent_at?: number | null;
+  trigger?: string | null;
+} = {}): void {
+  r.d1.db.prepare(
+    `INSERT INTO connect_nudges (user_id, toolkit, state, level, snooze_until, trigger,
+       sent_at, acted_at, channel) VALUES (?,?,?,?,?,?,?,NULL,NULL)`,
+  ).run(TWIN_OWNER, toolkit, over.state ?? "never_asked", over.level ?? 0,
+        over.snooze_until ?? null, over.trigger ?? null, over.sent_at ?? null);
+}
+
+const twinNudgeRow = (r: TwinRig, toolkit: string): Record<string, unknown> | undefined =>
+  r.d1.rows<Record<string, unknown>>(
+    `SELECT * FROM connect_nudges WHERE user_id = ? AND toolkit = ?`, TWIN_OWNER, toolkit)[0];
+
+const twinTexts = (s: TwinSocket): string[] =>
+  s.calls.filter((c) => c.url.startsWith(SENDBLUE_BASE)).map((c) => {
+    try { return String((JSON.parse(c.body) as { content?: unknown }).content ?? ""); }
+    catch { return ""; }
+  });
+
+/** Run something with console.log captured, and hand back every line. The
+ *  three findings below all turn on what an operator can SEE, and a log line
+ *  nobody asserts is a log line that gets reworded into uselessness. */
+async function withLogs<T>(fn: () => Promise<T>): Promise<{ value: T; lines: string[] }> {
+  const lines: string[] = [];
+  const real = console.log;
+  console.log = ((...a: unknown[]) => { lines.push(a.map(String).join(" ")); }) as typeof console.log;
+  try { return { value: await fn(), lines }; }
+  finally { console.log = real; }
+}
+
+const WIRING_SRC = readFileSync(
+  fileURLToPath(new URL("../src/connections/wiring.ts", import.meta.url)), "utf8");
+
+/** Anchor on a literal the source carries EXACTLY ONCE, and assert the count.
+ *  An anchor that matches nothing — or matches two places — has produced
+ *  several false "it is tested" readings in this repo this week. */
+function anchoredOnce(literal: string): void {
+  assert.equal(WIRING_SRC.split(literal).length - 1, 1,
+    `the anchor ${JSON.stringify(literal)} does not occur exactly once in wiring.ts, so `
+      + "the check that leans on it proves nothing");
+}
+
+// ---------------------------------------------------------------------------
+// FINDING 1 — the twin's own sends escaped the seven-day cap
+// ---------------------------------------------------------------------------
+
+await check("FINDING 1: a link the owner asked for is written down, so the sweep can see it",
+  async () => {
+    // THE DEFECT. The twin minted a link, texted it, and wrote NO
+    // connect_nudges row. `sendConnectAsk` reads `connect_nudges.sent_at` for
+    // the spec's "one connect ask per user per 7 days across all apps", so an
+    // owner who texted "connect <app>" at 9am could be interrupted by the
+    // sweep about a DIFFERENT app at 10am. The row is also what the 72-hour
+    // soft-no and the decline ladder read, so without it a link nobody tapped
+    // is invisible to both.
+    const s = twinSocket();
+    const r = twinRig();
+    const before = Date.now();
+    const outcome = await runTextCommandPlan(
+      { kind: "connect", owner: ownerId(TWIN_OWNER), toolkit: APP.slug, appName: APP.name },
+      r.env);
+    assert.equal(outcome.replied, true, `the twin did not reply: ${outcome.detail}`);
+    assert.equal(twinTexts(s).length, 1, "the owner got no link");
+
+    const row = twinNudgeRow(r, APP.slug);
+    assert.ok(row, "the twin texted a connect link and wrote no connect_nudges row, so the "
+      + "seven-day cap, the 72-hour soft-no and the decline ladder are all blind to it");
+    // AND IT SAYS `never_asked`, WHICH IS THE TRUE SENTENCE. Round 2 (section
+    // 10) found the original `asked` here: that word means "we pushed a link
+    // and are waiting", and 72 hours of quiet on it is a soft no. We have not
+    // asked this owner about this app — they asked us. `sent_at` and the
+    // trigger below are what say a link went, and who wanted it.
+    assert.equal(row.state, "never_asked",
+      "a link the owner asked for is recorded as an ask WE pushed, so ignoring it for three "
+        + "days will be read as a decline");
+    assert.ok(typeof row.sent_at === "number" && row.sent_at >= before,
+      "the row carries no sent_at, which is the only column the seven-day cap reads");
+    assert.equal(row.channel, "sms");
+    assert.equal(row.trigger, "user_named_it",
+      "the trigger must say the owner named it themselves, because that is what happened");
+
+    // AND THE LINK IS REAL: one row in connect_links, bound to this owner.
+    assert.equal(
+      r.d1.rows(`SELECT * FROM connect_links WHERE user_id = ?`, TWIN_OWNER).length, 1,
+      "the reply's link is not in connect_links, so it cannot redeem");
+    s.restore();
+  });
+
+await check("FINDING 1 CONTROL: the twin still serves an owner the ladder has already stopped",
+  async () => {
+    // THE OTHER DIRECTION, and the one that matters more. The spec's own words
+    // for decline level 3 are "stop asking — user must bring it up (\"connect
+    // <app>\") or Settings". A recorded ask must never become a reason to
+    // refuse the person's own request: the twin reads no policy at all, and
+    // this is what says so.
+    const s = twinSocket();
+    const r = twinRig();
+    twinNudge(r, APP.slug, {
+      state: "declined", level: 3, snooze_until: TWIN_NOW + 3000 * DAY_MS,
+      sent_at: TWIN_NOW - HOUR_MS, trigger: "in_task",
+    });
+    const outcome = await runTextCommandPlan(
+      { kind: "connect", owner: ownerId(TWIN_OWNER), toolkit: APP.slug, appName: APP.name },
+      r.env);
+    assert.equal(outcome.replied, true,
+      `a level-3 decline stopped the owner's OWN request: ${outcome.detail}`);
+    assert.equal(twinTexts(s).length, 1, "the owner asked for a link and did not get one");
+
+    // AND THE DECLINE IS NOT ERASED. The level and the snooze the ladder
+    // earned survive; only the ask half of the row is rewritten.
+    const row = twinNudgeRow(r, APP.slug);
+    assert.equal(row?.level, 3, "the solicited link reset the decline ladder to zero");
+    // AND THE WORD `declined` SURVIVES TOO, not just the number. routes/
+    // connect.ts `recordSkip` reads this exact state to recognise a tap it has
+    // already counted ("a refresh, a double tap or a retried POST must not walk
+    // somebody from ask me in a fortnight to never ask me again"); a solicited
+    // link that rewrote it would hand that guard a row it cannot recognise.
+    assert.equal(row?.state, "declined",
+      "a link the owner asked for erased the state their own three declines earned");
+    assert.ok(typeof row?.snooze_until === "number" && row.snooze_until > TWIN_NOW,
+      "the snooze the ladder earned was dropped");
+    s.restore();
+  });
+
+await check("FINDING 1: a solicited link never retires the weekly reconnect cadence", async () => {
+  // `needs_reconnect` is not a rung on the decline ladder — it is a live
+  // connection that broke — and stamping it `asked` would quietly end the
+  // spec's "one gentle ask, then weekly max" (page 24) for a connection this
+  // owner already chose once. The row keeps its state and gains the timestamp,
+  // which is the true statement: the reconnect WAS raised, just now.
+  const s = twinSocket();
+  const r = twinRig();
+  twinNudge(r, APP.slug, { state: "needs_reconnect", sent_at: TWIN_NOW - 30 * DAY_MS });
+  const outcome = await runTextCommandPlan(
+    { kind: "connect", owner: ownerId(TWIN_OWNER), toolkit: APP.slug, appName: APP.name },
+    r.env);
+  assert.equal(outcome.replied, true, outcome.detail);
+  const row = twinNudgeRow(r, APP.slug);
+  assert.equal(row?.state, "needs_reconnect",
+    "a repair link the owner asked for turned a broken connection into an ordinary ask, "
+      + "and the weekly reconnect cadence stopped");
+  assert.ok(typeof row?.sent_at === "number" && row.sent_at > TWIN_NOW - DAY_MS,
+    "the reconnect was raised and the row does not say when");
+  s.restore();
+});
+
+await check("FINDING 1: a reply that never went out spends nothing", async () => {
+  // The row is written AFTER the send, not before, and this is the reason: a
+  // carrier failure must not leave an owner holding a decline for a link they
+  // were never given. `sendConnectAsk` takes the lease first because an
+  // unwritten SWEEP ask gets re-sent; here the failure direction is reversed.
+  const s = twinSocket();
+  const r = twinRig();
+  const real = globalThis.fetch;
+  globalThis.fetch = (async (input: unknown, init?: { body?: unknown }) => {
+    const url = String((input as { url?: string })?.url ?? input);
+    if (url.startsWith(SENDBLUE_BASE)) {
+      return new Response(JSON.stringify({ error_code: 400 }), { status: 500 });
+    }
+    return real(input as never, init as never);
+  }) as typeof globalThis.fetch;
+  const outcome = await runTextCommandPlan(
+    { kind: "connect", owner: ownerId(TWIN_OWNER), toolkit: APP.slug, appName: APP.name },
+    r.env);
+  globalThis.fetch = real;
+  assert.equal(outcome.replied, false, "the carrier refused and the twin thought it replied");
+  assert.equal(twinNudgeRow(r, APP.slug), undefined,
+    "a text that never left the building spent this owner's weekly interruption and "
+      + "started a 72-hour decline clock against them");
+  s.restore();
+});
+
+// ---------------------------------------------------------------------------
+// FINDING 2 — a clarifying question stamped as handled
+// ---------------------------------------------------------------------------
+
+await check("FINDING 2: a question the twin asked is not stamped 'ignore'", async () => {
+  // THE DEFECT. `if (outcome.replied) await claimEvent(...)` stamped
+  // decision='ignore' for EVERY reply, including `ask_which_app` — the one
+  // plan whose whole purpose is to be answered. 'ignore' is the brain's own
+  // word for "nothing further is needed for this line", and that is false of
+  // a line the product has just asked a question about.
+  const s = twinSocket();
+  s.command = { kind: "command", command: "connect_app" };
+  const r = twinRig();
+  r.d1.db.prepare(
+    `INSERT INTO events (id, created, updated, device_id, kind, text, speaker, owner_ref)
+     VALUES (?,?,?,'phone','sms_reply',?,'owner',?)`,
+  ).run("evtwinaaaaaaa01", PB_NOW, PB_NOW, "set up that thing for me", TWIN_OWNER);
+
+  const outcome = await handleInboundText(
+    r.env, TWIN_OWNER, "set up that thing for me", "evtwinaaaaaaa01");
+  assert.equal(outcome.kind, "ask_which_app",
+    `the fixture did not produce the plan under test: ${outcome.kind} (${outcome.detail})`);
+  assert.equal(outcome.replied, true, "the twin asked nothing");
+  assert.equal(twinTexts(s)[0], TEXT_REPLY.whichApp);
+
+  const row = r.d1.rows<Record<string, unknown>>(
+    `SELECT * FROM events WHERE id = 'evtwinaaaaaaa01'`)[0];
+  assert.notEqual(row.decision, "ignore",
+    "the twin asked the owner a question and stamped their message 'ignore' — the row "
+      + "says handled while the product is still waiting for the answer");
+  // 'ask' is the brain's own vocabulary for this row's decision column
+  // (schema.sql: ignore|act|ask), and it is the true one here.
+  assert.equal(row.decision, "ask");
+  s.restore();
+});
+
+await check("FINDING 2 CONTROL: an answered message is still claimed, so nobody is texted twice",
+  async () => {
+    // The claim must not be lost in the fix. brain/worker.py `fetch_unprocessed`
+    // polls `kind="sms_reply" && decision=""`, so a row left blank is answered
+    // a second time by a brain that knows nothing about connections.
+    const s = twinSocket();
+    s.command = { kind: "command", command: "list_connected" };
+    const r = twinRig();
+    r.d1.db.prepare(
+      `INSERT INTO events (id, created, updated, device_id, kind, text, speaker, owner_ref)
+       VALUES (?,?,?,'phone','sms_reply',?,'owner',?)`,
+    ).run("evtwinaaaaaaa02", PB_NOW, PB_NOW, "what have I got set up", TWIN_OWNER);
+
+    const outcome = await handleInboundText(
+      r.env, TWIN_OWNER, "what have I got set up", "evtwinaaaaaaa02");
+    assert.equal(outcome.kind, "list_connections", outcome.detail);
+    assert.equal(outcome.replied, true);
+    const row = r.d1.rows<Record<string, unknown>>(
+      `SELECT * FROM events WHERE id = 'evtwinaaaaaaa02'`)[0];
+    assert.equal(row.decision, "ignore",
+      "a message the twin fully answered was left unclaimed, so the brain answers it too "
+        + "and one text gets two replies");
+    s.restore();
+  });
+
+// ---------------------------------------------------------------------------
+// FINDING 3 — a stranded job held the ask forever
+// ---------------------------------------------------------------------------
+
+await check("FINDING 3: a job nobody has touched in months no longer holds the ask", async () => {
+  // THE DEFECT. `taskInFlight` counted every jobs row not done/failed/
+  // cancelled, over ALL TIME with no age bound — and `resultDelivered` reads
+  // the same count — so ONE stranded row silenced this owner's connect ask
+  // for the rest of their life, and the hold read exactly like a healthy busy
+  // moment in the log.
+  const s = twinSocket();
+  const r = twinRig();
+  twinSignal(r, APP.slug);
+  twinJob(r, "jobtwindone001", "done", TWIN_NOW - HOUR_MS);
+  twinJob(r, "jobtwinstuck01", "running", TWIN_NOW - 200 * DAY_MS);
+
+  const { value: moment, lines } = await withLogs(() =>
+    nudgeMomentFor(r.env)(ownerId(TWIN_OWNER), APP.slug, "in_task", TWIN_NOW));
+  assert.ok(moment, "the moment could not be established at all");
+  assert.equal(moment.taskInFlight, false,
+    "a job stranded since two hundred days ago still reads as a step in progress, so this "
+      + "owner can never be asked anything again");
+  assert.equal(moment.resultDelivered, true,
+    "the same stranded row also holds `resultDelivered` false forever, so bounding only "
+      + "taskInFlight would leave the ask held by the second floor");
+
+  // AND THE LOG SAYS WHICH IT IS. "busy right now" and "stuck since March"
+  // were the same sentence, which is why nobody found this for a month.
+  const said = lines.join("\n");
+  assert.ok(said.includes("stranded, holding nothing"),
+    `the log does not name the stranded rows: ${said}`);
+  assert.ok(said.includes("not touched since 20"),
+    `the log does not say since when, which is the whole difference: ${said}`);
+  anchoredOnce("stranded, holding nothing");
+  s.restore();
+});
+
+await check("FINDING 3 CONTROL: a job running right now still holds the ask, and says so",
+  async () => {
+    // The floor the bound must not remove: "an ask must never land mid-step".
+    const s = twinSocket();
+    const r = twinRig();
+    twinSignal(r, APP.slug);
+    twinJob(r, "jobtwindone002", "done", TWIN_NOW - HOUR_MS);
+    twinJob(r, "jobtwinbusy001", "running", TWIN_NOW - HOUR_MS);
+
+    const { value: moment, lines } = await withLogs(() =>
+      nudgeMomentFor(r.env)(ownerId(TWIN_OWNER), APP.slug, "in_task", TWIN_NOW));
+    assert.equal(moment?.taskInFlight, true,
+      "a job that moved an hour ago read as stranded — the bound is wrong in the one "
+        + "direction that texts somebody mid-errand");
+    assert.equal(moment?.resultDelivered, false);
+    const said = lines.join("\n");
+    assert.ok(said.includes("busy now, the ask holds"),
+      `the log does not say the owner is genuinely busy: ${said}`);
+    anchoredOnce("busy now, the ask holds");
+    s.restore();
+  });
+
+await check("FINDING 3: an owner with nothing open is not logged about at all", async () => {
+  // A line per candidate per tick about nothing is how a log stops being read.
+  const s = twinSocket();
+  const r = twinRig();
+  twinSignal(r, APP.slug);
+  twinJob(r, "jobtwindone003", "done", TWIN_NOW - HOUR_MS);
+  const { value: moment, lines } = await withLogs(() =>
+    nudgeMomentFor(r.env)(ownerId(TWIN_OWNER), APP.slug, "in_task", TWIN_NOW));
+  assert.equal(moment?.taskInFlight, false);
+  assert.deepEqual(lines.filter((l) => l.includes("the ask holds")), []);
+  s.restore();
+});
+
+// ---------------------------------------------------------------------------
+// FINDING 4 — the account picked by row order
+// ---------------------------------------------------------------------------
+
+await check("FINDING 4: two accounts and no alias is a question, never a coin flip", async () => {
+  // THE DEFECT. `rows.find((r) => r.alias === plan.alias) ?? rows[0]` labelled
+  // whichever row D1 happened to return first. That row is the one the router
+  // then uses for everything the owner calls "work" — a real mailbox, chosen
+  // by row order.
+  const s = twinSocket();
+  const r = twinRig();
+  twinConnection(r, "ca_twin_one", APP.slug, null);
+  twinConnection(r, "ca_twin_two", APP.slug, null);
+
+  const outcome = await runTextCommandPlan(
+    { kind: "choose_account", owner: ownerId(TWIN_OWNER), toolkit: APP.slug,
+      appName: APP.name, alias: "work" },
+    r.env);
+  assert.equal(outcome.replied, true, `the twin said nothing at all: ${outcome.detail}`);
+
+  const labelled = r.d1.rows<Record<string, unknown>>(
+    `SELECT * FROM connections WHERE user_id = ? AND alias = 'work'`, TWIN_OWNER);
+  assert.deepEqual(labelled, [],
+    "one of two indistinguishable accounts was labelled 'work' by row order, and the "
+      + "router will now send this owner's work mail from whichever one D1 listed first");
+  assert.equal(twinTexts(s)[0], TEXT_REPLY.whichAccount(APP.name),
+    "ambiguity must ASK. Silence and a guess are the two wrong answers");
+  s.restore();
+});
+
+await check("FINDING 4 CONTROL: one account, or a named one, is still labelled at once",
+  async () => {
+    // The good case, twice, because a refusal that refuses everything is not a
+    // fix. ONE account is unambiguous — "use my work <app>" says that this is
+    // the work one. And an account already carrying the alias is the row the
+    // owner named, whatever else is beside it.
+    const s = twinSocket();
+    const only = twinRig();
+    twinConnection(only, "ca_twin_solo", APP.slug, null);
+    const first = await runTextCommandPlan(
+      { kind: "choose_account", owner: ownerId(TWIN_OWNER), toolkit: APP.slug,
+        appName: APP.name, alias: "work" },
+      only.env);
+    assert.equal(first.replied, true, first.detail);
+    assert.equal(
+      only.d1.rows(`SELECT * FROM connections WHERE user_id = ? AND alias = 'work'`,
+        TWIN_OWNER).length,
+      1, "an owner with exactly one account was asked which one they meant");
+    assert.equal(twinTexts(s)[0], TEXT_REPLY.accountSet(APP.name, "work"));
+
+    const named = twinRig();
+    twinConnection(named, "ca_twin_work", APP.slug, "work");
+    twinConnection(named, "ca_twin_home", APP.slug, "personal");
+    const second = await runTextCommandPlan(
+      { kind: "choose_account", owner: ownerId(TWIN_OWNER), toolkit: APP.slug,
+        appName: APP.name, alias: "work" },
+      named.env);
+    assert.equal(second.replied, true, second.detail);
+    const rows = named.d1.rows<Record<string, unknown>>(
+      `SELECT * FROM connections WHERE user_id = ? AND alias = 'work'`, TWIN_OWNER);
+    assert.equal(rows.length, 1, "the row the owner named was not the one that was kept");
+    assert.equal(rows[0].connected_account_id, "ca_twin_work");
+    s.restore();
+  });
+
+await check("FINDING 4: the question the twin asks about an account clears words.ts", () => {
+  // It is a sentence this repo signs, so it goes through the same audit every
+  // other one does — and it is added to `textReplySentences`, which is what
+  // connections-endtoend.test.ts scans, so it cannot be forgotten there.
+  const lines = textReplySentences(APP.name, "https://api.anticipy.ai/c/x");
+  assert.ok(lines.includes(TEXT_REPLY.whichAccount(APP.name)),
+    "the new sentence is not in the audit list, so no suite scans it");
+  for (const line of [TEXT_REPLY.whichAccount(APP.name)]) {
+    assert.equal(forbiddenTermIn(line), null, `the account question carries: ${line}`);
+    assert.ok(!line.includes("!"), "the account question shouts");
+    assert.ok(line.length <= 320, "the account question is longer than one text");
+  }
+});
+
+// ---------------------------------------------------------------------------
+// SECTION 10 — ROUND 2: what the row the twin writes actually MEANS
+//
+// Section 9 closed the hole where the twin wrote no row at all. It closed it by
+// writing the row every sweep ask writes — `state: 'asked'` — and that is a
+// sentence about a different fact. `asked` means "we put a connect link in
+// front of this person and are waiting"; 72 hours of silence on it is a soft
+// no, and the ladder advances. A link somebody TEXTED US FOR and did not
+// finish that week is not a no about anything.
+//
+// Both checks below drive the real `runTextCommandPlan` over the real D1 store
+// and then hand the row it wrote to the real policy. The CONTROL differs from
+// the row under test in exactly ONE field — the one the fix changes — so what
+// is measured is that field and nothing else.
+// ---------------------------------------------------------------------------
+
+/** The row the twin wrote, read back through the shipped store rather than as
+ *  a raw SQLite record: what the policy sees is what is asserted. */
+async function twinNudgeOf(r: TwinRig, toolkit: string): Promise<ConnectNudge> {
+  const row = await createD1Store(r.env as never).readNudge(TWIN_OWNER, toolkit);
+  assert.ok(row, "the twin wrote no connect_nudges row at all");
+  return row;
+}
+
+/** A well-evidenced, post-result, wide-awake moment — the one shape the policy
+ *  is allowed to send in. Everything under test below is therefore the row, not
+ *  the moment. */
+function twinCtx(over: Partial<NudgeContext> = {}): NudgeContext {
+  return {
+    now: TWIN_NOW,
+    trigger: "in_task",
+    localHour: 14,
+    taskInFlight: false,
+    resultDelivered: true,
+    tasksThatWouldHaveUsedIt: 3,
+    lastAskAnyAppAt: null,
+    ...over,
+  };
+}
+
+await check("ROUND 2 FINDING 2: an unfinished link the owner asked for is not a decline",
+  async () => {
+    // THE DEFECT. Somebody texts "connect zellibrix", gets the link, and does
+    // not finish it that week. `recordSolicitedAsk` wrote `state: 'asked'`, so
+    // 72 hours later `maturedBySilence` reads their own errand as a soft no,
+    // stamps decline level 1 and snoozes the next REAL moment for a fortnight.
+    // The 72-hour rule exists so we "do not re-send into a void" (page 24). A
+    // person who texted us is not a void.
+    const s = twinSocket();
+    const r = twinRig();
+    const outcome = await runTextCommandPlan(
+      { kind: "connect", owner: ownerId(TWIN_OWNER), toolkit: APP.slug, appName: APP.name },
+      r.env);
+    assert.equal(outcome.replied, true, `the twin did not reply: ${outcome.detail}`);
+    assert.equal(twinTexts(s).length, 1, "the owner got no link");
+
+    const row = await twinNudgeOf(r, APP.slug);
+    assert.ok(typeof row.sent_at === "number", "the row carries no sent_at to age");
+    // Three days and an hour of silence — past the soft-no line by an hour.
+    const later = row.sent_at + (SILENCE_IS_A_SOFT_NO_HOURS + 1) * HOUR_MS;
+
+    const aged = maturedBySilence(row, later);
+    assert.equal(aged.level, 0,
+      "an errand the owner asked for and did not finish advanced the decline ladder to "
+        + `level ${aged.level}`);
+    assert.equal(aged.state, row.state, "silence rewrote the state of a link the owner asked for");
+    assert.equal(aged.snooze_until, null,
+      "an unfinished errand snoozed this owner's next real moment");
+
+    // AND THE POLICY AGREES, which is the half that reaches a person: a real
+    // in-task moment for this app, three days later, is not fenced off by a
+    // decline nobody made.
+    const verdict = shouldAsk(aged, twinCtx({ now: later, lastAskAnyAppAt: null }),
+                              { owner: ownerId(TWIN_OWNER), toolkit: APP.slug });
+    assert.equal(verdict.decision, "ask",
+      `a real moment three days later was refused: ${verdict.reason}`);
+
+    // THE CONTROL, and it differs from the row above in ONE FIELD. A link the
+    // product PUSHED — `state: 'asked'`, which is what `sendConnectAsk` writes
+    // — must still mature into a soft no, or the 72-hour rule is gone.
+    const pushed = maturedBySilence({ ...row, state: "asked" }, later);
+    assert.equal(pushed.state, "declined",
+      "silence on a link WE pushed no longer counts as a soft no");
+    assert.equal(pushed.level, 1);
+    assert.equal(pushed.snooze_until, later - HOUR_MS + SNOOZE_DAYS[1] * DAY_MS,
+      "the pushed ask's snooze does not start when the silence matured");
+    s.restore();
+  });
+
+await check("ROUND 2 FINDING 2: asking for a link ANSWERS the push that was already out",
+  async () => {
+    // THE OTHER HALF OF THE SAME DEFECT, and the one a fresh owner cannot show.
+    // We pushed a link for this app two hours ago, so the row says `asked` and
+    // its 72-hour clock is running. The owner then TEXTS for the link — which
+    // is them answering, in the only direction that matters. If the twin
+    // carries `asked` through, the clock simply restarts and matures three days
+    // later into a decline nobody made; the push is no longer outstanding, and
+    // the row has to stop saying that it is.
+    const s = twinSocket();
+    const r = twinRig();
+    twinNudge(r, APP.slug, { state: "asked", sent_at: TWIN_NOW - 2 * HOUR_MS,
+                             trigger: "in_task" });
+    const outcome = await runTextCommandPlan(
+      { kind: "connect", owner: ownerId(TWIN_OWNER), toolkit: APP.slug, appName: APP.name },
+      r.env);
+    assert.equal(outcome.replied, true, `the twin did not reply: ${outcome.detail}`);
+
+    const row = await twinNudgeOf(r, APP.slug);
+    assert.equal(row.state, "never_asked",
+      "the push we had out is still recorded as outstanding, so the owner answering it will "
+        + "mature into a decline three days from now");
+    assert.equal(row.level, 0, "the ladder moved");
+
+    const aged = maturedBySilence(row, (row.sent_at as number) + (SILENCE_IS_A_SOFT_NO_HOURS + 1) * HOUR_MS);
+    assert.equal(aged.level, 0,
+      "answering our push by asking for the link was recorded as declining it");
+    assert.equal(aged.snooze_until, null);
+    s.restore();
+  });
+
+await check("ROUND 2 FINDING 3: a link the owner asked for DOES spend the weekly budget",
+  async () => {
+    // THE DECISION, made deliberately and stated here so the next reader does
+    // not have to infer it from a column. See `recordSolicitedAsk` in
+    // src/connections/wiring.ts for the reasoning; this is the executable half.
+    //
+    //   SPENDS THE 7-DAY BUDGET: every connect link that reaches this owner's
+    //   phone, whoever asked for it. One link is one decision to make, and the
+    //   cap is a promise about the person's attention, not about our intent.
+    //
+    //   DOES NOT ENTER THE DECLINE LADDER: only links the product pushed. The
+    //   ladder measures whether we are welcome; a link somebody requested says
+    //   we are.
+    //
+    // The cost of the first half is real and is the reason this check names it:
+    // for one week after texting "connect <app>", even a laptop-closed moment
+    // (score 1.0, the strongest trigger in the product) is held. That is the
+    // cap working — it is the same week any pushed ask would have spent.
+    const s = twinSocket();
+    const r = twinRig();
+    await runTextCommandPlan(
+      { kind: "connect", owner: ownerId(TWIN_OWNER), toolkit: APP.slug, appName: APP.name },
+      r.env);
+    const row = await twinNudgeOf(r, APP.slug);
+    assert.ok(typeof row.sent_at === "number",
+      "the solicited link left no sent_at, which is the only column the 7-day cap reads");
+
+    // A DIFFERENT app, the strongest moment there is, one day later.
+    const other = { ...row, toolkit: "otherapp", state: "never_asked" as const,
+                    level: 0 as const, snooze_until: null, trigger: null, sent_at: null };
+    const held = shouldAsk(
+      other,
+      twinCtx({ now: row.sent_at + DAY_MS, trigger: "laptop_closed", lastAskAnyAppAt: row.sent_at }),
+      { owner: ownerId(TWIN_OWNER), toolkit: "otherapp" });
+    assert.equal(held.decision, "hold",
+      "a solicited link spent nothing, so the sweep may interrupt this owner again this week");
+    assert.match(held.reason, /across all apps/);
+
+    // AND IT IS A WEEK, not forever: the same moment on day 8 goes through.
+    const later = shouldAsk(
+      other,
+      twinCtx({
+        now: row.sent_at + (GLOBAL_ASK_INTERVAL_DAYS + 1) * DAY_MS,
+        trigger: "laptop_closed",
+        lastAskAnyAppAt: row.sent_at,
+      }),
+      { owner: ownerId(TWIN_OWNER), toolkit: "otherapp" });
+    assert.equal(later.decision, "ask", `day 8 was still held: ${later.reason}`);
+    s.restore();
+  });
+
+// ===========================================================================
+// 11. FINDING 5 — the aliveness test due.ts deleted was still one file over
+// ============================================================================
+// THE DEFECT. `nudgeMomentFor`'s evidence query carried `AND "weight" > 0` —
+// the exact predicate src/connections/due.ts deleted on 2026-09-06 as "an
+// aliveness test no code path can make false". signals.ts decays on READ and
+// the stored column only ever RISES, so `weight > 0` was true for a row nobody
+// had refreshed in four hundred days, and `tasksThatWouldHaveUsedIt` — the
+// spec's own bar, "we do not ask about an app on a hunch" — counted it.
+//
+// The fix was applied in one of the two places that had it. This is the other,
+// and it goes through the SAME seam: `decayedWeight` from signals.ts and
+// `ALIVE_WEIGHT_FLOOR` from due.ts, imported rather than re-derived, so the
+// boundary is stated once and the two files cannot disagree about who is alive.
+
+await check("FINDING 5: a signal nobody has refreshed in a year is not evidence", async () => {
+  const s = twinSocket();
+  const r = twinRig();
+  // FOUR HUNDRED DAYS, which is thirteen half-lives: this row is worth about a
+  // ten-thousandth of what it was stored at, and due.ts's own candidate query
+  // would never hand this owner to the policy at all.
+  twinSignal(r, APP.slug, "", { seenAt: TWIN_NOW - 400 * DAY_MS });
+  twinJob(r, "jobtwindone010", "done", TWIN_NOW - HOUR_MS);
+
+  const moment = await nudgeMomentFor(r.env)(
+    ownerId(TWIN_OWNER), APP.slug, "in_task", TWIN_NOW);
+  assert.ok(moment, "the moment could not be established at all");
+  assert.equal(moment.tasksThatWouldHaveUsedIt, 0,
+    "an app this owner has not touched in over a year still counts as a task that would "
+      + "have used it, so the spec's one evidence bar passes on a corpse and somebody gets "
+      + "a text about an app they stopped using last spring");
+  anchoredOnce("return alive > ALIVE_WEIGHT_FLOOR;");
+  s.restore();
+});
+
+await check("FINDING 5 CONTROL: the same row, fresh, is still evidence", async () => {
+  // The floor must not have eaten the feature. Same weight, same source, same
+  // owner — only the age differs, which is the whole of what decay is.
+  const s = twinSocket();
+  const r = twinRig();
+  twinSignal(r, APP.slug, "", { seenAt: TWIN_NOW - 2 * DAY_MS });
+  twinJob(r, "jobtwindone011", "done", TWIN_NOW - HOUR_MS);
+
+  const moment = await nudgeMomentFor(r.env)(
+    ownerId(TWIN_OWNER), APP.slug, "in_task", TWIN_NOW);
+  assert.equal(moment?.tasksThatWouldHaveUsedIt, 1,
+    "a browser run two days ago no longer counts as evidence — the floor is eating live "
+      + "signals, which is the direction that asks nobody anything ever again");
+  s.restore();
+});
+
+await check("FINDING 5: a dead row's account label does not name the connection", async () => {
+  // `alias` is read off the same rows, and it becomes the account a connection
+  // is BOUND to. An alias carried by evidence too stale to justify the ask is
+  // the wrong mailbox chosen by a row nobody has touched in a year.
+  const s = twinSocket();
+  const r = twinRig();
+  twinSignal(r, APP.slug, "work", { seenAt: TWIN_NOW - 400 * DAY_MS });
+  twinJob(r, "jobtwindone012", "done", TWIN_NOW - HOUR_MS);
+
+  const moment = await nudgeMomentFor(r.env)(
+    ownerId(TWIN_OWNER), APP.slug, "in_task", TWIN_NOW);
+  assert.equal(moment?.alias, null,
+    "a dead signal still names the account the ask would bind, so the row that decides "
+      + "which real mailbox this is has not been touched since last spring");
+
+  // THE CONTROL, so the null above is the AGE and not the alias being dropped.
+  const fresh = twinRig();
+  twinSignal(fresh, APP.slug, "work", { seenAt: TWIN_NOW - 2 * DAY_MS });
+  twinJob(fresh, "jobtwindone013", "done", TWIN_NOW - HOUR_MS);
+  const live = await nudgeMomentFor(fresh.env)(
+    ownerId(TWIN_OWNER), APP.slug, "in_task", TWIN_NOW);
+  assert.equal(live?.alias, "work", "a live signal's account label was dropped too");
+  s.restore();
+});
+
+await check("FINDING 5: a row whose weight is not a number is not evidence", async () => {
+  // A hand-written row or a bad backfill. SQLite's REAL affinity keeps a text
+  // weight as text and `CHECK ("weight" >= 0)` accepts it, so the database is
+  // not the guard here. The seam is: `decayedWeight` answers 0 for a weight it
+  // cannot read, and 0 is under the floor. This file adds no second opinion
+  // about that — it just must not wave the row through.
+  const s = twinSocket();
+  const r = twinRig();
+  r.d1.db.prepare(
+    `INSERT INTO app_usage_signals (user_id, toolkit, source, alias, weight, last_seen_at)
+     VALUES (?,?,'observer','','not-a-number',?)`,
+  ).run(TWIN_OWNER, APP.slug, TWIN_NOW - HOUR_MS);
+  twinJob(r, "jobtwindone014", "done", TWIN_NOW - HOUR_MS);
+
+  const moment = await nudgeMomentFor(r.env)(
+    ownerId(TWIN_OWNER), APP.slug, "in_task", TWIN_NOW);
+  assert.equal(moment?.tasksThatWouldHaveUsedIt, 0,
+    "a row carrying a weight nothing can read counted as a task that would have used "
+      + "the app, so one malformed row is enough to justify texting somebody");
+  s.restore();
+});
+
+await check("FINDING 5: the floor is due.ts's, imported, and there is only one of it", () => {
+  // ONE DEFINITION, and this is what "the same seam" means in a diff rather
+  // than in a sentence. wiring.ts states no number of its own: it imports the
+  // boundary from due.ts and the arithmetic from signals.ts, so retuning the
+  // half-life moves both readers at once. A second copy here is how the two
+  // files came to disagree in the first place.
+  // IMPORTED, AND NOT MERELY MENTIONED. A mutation that typed
+  // `const ALIVE_WEIGHT_FLOOR = 0.00625` here instead of importing it survived
+  // the first draft of this check, which only asked whether the name appeared.
+  // The number is derived in due.ts from signals.ts's own half-life; a copy of
+  // its VALUE stops moving the day either is retuned, which is precisely how
+  // this file and due.ts came to disagree about `weight > 0`.
+  assert.match(WIRING_SRC, /import \{[^}]*\bALIVE_WEIGHT_FLOOR\b[^}]*\} from "\.\/due\.ts";/,
+    "wiring.ts does not import due.ts's floor, so it is deciding aliveness itself");
+  assert.match(WIRING_SRC,
+    /import \{[^}]*\bdecayedWeight\b[^}]*\} from "\.\/signals\.ts";/,
+    "wiring.ts does not use signals.ts's decay, so it has a second opinion about age");
+  for (const name of ["ALIVE_WEIGHT_FLOOR", "DEFAULT_HALF_LIFE_MS", "SOURCE_DECAYS"]) {
+    assert.equal(new RegExp(`(?:const|let|function)\\s+${name}\\b`).test(WIRING_SRC), false,
+      `wiring.ts declares its own ${name}, which is a second definition of alive`);
+  }
+  // AND THE PREDICATE IS READ OUT OF THE STATEMENT, not grepped for in the
+  // file. This check's first draft scanned WIRING_SRC and failed on the COMMENT
+  // above the fixed query, which quotes the predicate it deleted — the same
+  // shape that let overnight/is_connect_live.py's copy of due.ts's query drift
+  // for a round while a whole-file substring check called it agreement.
+  assert.equal(WIRING_SRC.split('FROM "app_usage_signals"').length - 1, 1,
+    "there is more than one read of app_usage_signals in wiring.ts, so slicing to the "
+      + "first one proves nothing about the other");
+  const read = WIRING_SRC.split('FROM "app_usage_signals"')[1] ?? "";
+  const statement = read.slice(0, read.indexOf("`"));
+  assert.equal(/"weight"\s*(?:<=|>=|<>|=|<|>)/.test(statement), false,
+    `the weight predicate is back in the evidence query — it is true for every row that `
+      + `has ever existed, because the stored column only ever rises: ${statement}`);
 });
 
 console.log(`connections-wiring: ${passes} checks passed, ${failures} failed`);

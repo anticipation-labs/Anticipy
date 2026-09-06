@@ -170,24 +170,49 @@
   // NOT harmless for the sweep, which sends reminders. Confirm the Railway
   // container's TZ before cutover.
   // --------------------------------------------------------------------------
-  // THE SWEEP TRIGGER IS DELIBERATELY OFF UNTIL CUTOVER.
+  // THE SWEEP TRIGGER, RE-ENABLED 2026-09-06. Read the history before touching
+  // it, because it was off for a week and the reason was a good one.
   //
-  // "*/5 * * * *" is the HQ sweep and it is now fully implemented — it really
-  // does send. Production's PocketBase sweep is ALSO still running every five
-  // minutes against its own database. Enabling both means the team gets every
-  // reminder, nudge and digest TWICE, from two systems, with nothing on either
-  // side saying why.
-  //
-  // Leaving it enabled but starving it of TWILIO_*/RESEND_API_KEY is not the
-  // safe middle: the passes stamp their claim BEFORE they send, so a sweep
-  // that cannot send still consumes remind_sent_at and followup_sent_at. Those
-  // reminders would then never fire after cutover, silently. (Observed: one
+  // WHY IT WAS OFF. "*/5 * * * *" is the HQ sweep and it really does send.
+  // Production's PocketBase sweep was ALSO running every five minutes against
+  // its own database, and enabling both meant the team got every reminder,
+  // nudge and digest TWICE, from two systems, with nothing on either side
+  // saying why. Starving this one of TWILIO_*/RESEND_API_KEY was not the safe
+  // middle either: the passes stamp their claim BEFORE they send, so a sweep
+  // that cannot send still consumes remind_sent_at and followup_sent_at, and
+  // those reminders then never fire after cutover, silently. (Observed: one
   // manual run consumed 9 follow-up claims.)
   //
-  // AT CUTOVER: add "*/5 * * * *" back HERE and remove PocketBase's in the
-  // same change. Exactly one sweep may own a database.
+  // WHY IT IS ON NOW. That file said "AT CUTOVER: add \"*/5 * * * *\" back HERE
+  // and remove PocketBase's in the same change. Exactly one sweep may own a
+  // database." The cutover happened: Railway was stopped on 2026-09-05 with
+  // `railway down` on both services after all 2,092 PocketBase rows were
+  // upserted into D1, and the PocketBase health URL answers 404 — re-measured
+  // on 2026-09-06 immediately before this edit, beside api.anticipy.ai/api/health
+  // answering 200. PocketBase's sweep is gone, so exactly one sweep owns this
+  // database and it is src/cron.ts's.
+  //
+  // WHAT TURNING IT ON STARTS. Two legs, and BOTH of them text people:
+  //   1. `sweep(env)`             the HQ reminders and follow-ups. These have
+  //                               not fired anywhere since 2026-09-05, so this
+  //                               is a repair, not a new behaviour — but the
+  //                               first tick after a deploy may drain a backlog
+  //                               of claims that came due while nothing ran.
+  //   2. `connectAsks(env)`       the connect ask (src/connections/nudge.ts).
+  //                               Bounded hard by its own policy: one ask per
+  //                               owner per SEVEN DAYS across all apps, never
+  //                               mid-step, never before a result, never in
+  //                               quiet hours, and at most MAX_ASKS_PER_SWEEP
+  //                               per tick. It also sends NOTHING at all until
+  //                               `app_usage_signals` has rows, and that table
+  //                               was empty in production when this was written.
+  //
+  // THE ROLLBACK IS THIS LINE. Removing "*/5 * * * *" stops both legs; it does
+  // not need a code change. Do not instead move the connect ask onto the
+  // nightly trigger — an ask that lands at 04:17 UTC is the 3am text the policy
+  // exists to prevent.
   "triggers": {
-    "crons": ["17 4 * * *"]
+    "crons": ["*/5 * * * *", "17 4 * * *"]
   },
 
   // --------------------------------------------------------------------------

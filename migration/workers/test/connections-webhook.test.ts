@@ -60,7 +60,7 @@ import {
   createD1Store, forgetLiveColumns,
   type StoredConnection, type StoredNudge,
 } from "../src/connections/store.ts";
-import { FORBIDDEN_TERMS } from "../src/connections/words.ts";
+import { FORBIDDEN_TERMS, TRIGGER_SCORE } from "../src/connections/words.ts";
 import {
   connectionsWebhook,
   webhookDeps,
@@ -123,6 +123,12 @@ const OTHER_ACCOUNT = "ca_OTHER_zellibrix";
 const UNKNOWN_ACCOUNT = "ca_NOBODY_HOLDS_THIS";
 
 const URL = `https://api.anticipy.ai${CONNECTIONS_WEBHOOK_PATH}`;
+
+/** The clause that keeps a marked expiry from reading as a finished surface.
+ *  One literal, one occurrence in the route — a phrase that appears twice is a
+ *  second answer, and a phrase that appears zero times is a check that passes
+ *  because its regex quietly stopped matching. */
+const UNTOLD = "NOBODY HAS BEEN TOLD";
 
 const conn = (over: Partial<StoredConnection> = {}): StoredConnection => ({
   user_id: OWNER as never, toolkit: APP, connected_account_id: OWNER_ACCOUNT,
@@ -873,7 +879,93 @@ await check("a row that vanishes mid-flight is a quiet 200", async () => {
 });
 
 // ===========================================================================
-// 5. THE WIRING, THE REGISTRATION, AND THE REGISTER
+// 5. THE HALF THAT IS NOT BUILT
+// ---------------------------------------------------------------------------
+// The phone half of the needs-reconnect surface is live: Settings reads
+// `connections.status`. The TEXT half reaches nobody, and cannot from here —
+// three things in the ask pipeline refuse a reconnect and none of them lives in
+// a file this route may edit (see AND NOBODY IS TOLD in the route's header).
+// What this section pins is that the gap cannot read as success and cannot be
+// forgotten.
+// ===========================================================================
+
+/** Everything the code under test logged while `fn` ran. */
+async function logsOf(fn: () => Promise<unknown>): Promise<string[]> {
+  const lines: string[] = [];
+  const real = console.log;
+  console.log = (...args: unknown[]): void => { lines.push(args.map((a) => String(a)).join(" ")); };
+  try { await fn(); } finally { console.log = real; }
+  return lines;
+}
+
+await check("a marked expiry does not read as success: the log says nobody was told",
+  async () => {
+    // THE FAILURE THIS CATCHES IS A LOG LINE, and this repo has been bitten by
+    // that exact shape twice: the ears were deaf for 30 hours behind a leg that
+    // printed a reassuring sentence. "needs reconnect" alone is the row moving;
+    // the surface is two halves and only one of them happened.
+    const r = await rig();
+    const lines = await logsOf(() => post(r));
+    const marked = lines.filter((l) => l.includes("needs reconnect"));
+    assert.equal(marked.length, 1, `the marked outcome logged ${marked.length} lines`);
+    assert.ok(marked[0]!.includes(UNTOLD),
+      `the log reads as a working surface: ${JSON.stringify(marked[0])}`);
+    // CONTROL: it is still the line that says WHAT moved, for WHOM. A warning
+    // that lost the fact is not an improvement.
+    assert.ok(marked[0]!.includes(OWNER) && marked[0]!.includes(APP),
+      "the log stopped naming the owner and the app it moved");
+  });
+
+await check("CONTROL: an outcome that changed nothing does not claim anybody was untold",
+  async () => {
+    // The warning belongs to the one outcome that leaves a person waiting to be
+    // told. An ignored event has nobody to tell.
+    const r = await rig();
+    const lines = await logsOf(() => post(r, {
+      body: expired({ metadata: { connected_account_id: UNKNOWN_ACCOUNT, user_id: OWNER } }),
+    }));
+    assert.ok(lines.length > 0, "the ignored event logged nothing at all");
+    for (const line of lines) {
+      assert.ok(!line.includes(UNTOLD), `an ignored event warned about somebody: ${line}`);
+    }
+  });
+
+await check("PIN: the day a reconnect has a moment to name, this file gets wired", () => {
+  // NOT A LAW-2 EXPIRY, and the difference matters: there is no tape in the
+  // route, and nothing here goes green by being deleted. This is a WAKE-UP. It
+  // goes red the day `TRIGGER_SCORE` grows a sixth moment — which is the day
+  // `shouldAsk`'s reconnect branch becomes reachable honestly, and the day the
+  // two lines that hand a marked expiry to `sendConnectAsk` belong in the route.
+  //
+  // Read the failure message, then read AND NOBODY IS TOLD in
+  // src/routes/connections_webhook.ts. Do not "fix" this by editing the list.
+  assert.deepEqual(
+    Object.keys(TRIGGER_SCORE).sort(),
+    ["in_task", "laptop_closed", "onboarding", "repeated_use", "user_named_it"],
+    "the moments an ask may be tied to have changed. If one of them can name a "
+      + "credential expiring, wire connections_webhook.ts to sendConnectAsk and delete "
+      + "this pin; if not, update the list and leave the pin standing.",
+  );
+});
+
+await check("the gap is written down where the next reader stands", () => {
+  // HARNESS-LAWS law 4: a conclusion that lives only in a conversation gets
+  // re-derived, wrong, by the next session. Anchored on a literal that occurs
+  // EXACTLY ONCE in the route.
+  const anchor = "AND NOBODY IS TOLD. WHY NOT, MEASURED RATHER THAN ASSUMED";
+  const n = SOURCE.split(anchor).length - 1;
+  assert.equal(n, 1, `the route records the gap ${n} times`);
+  const warnings = SOURCE.split(UNTOLD).length - 1;
+  assert.equal(warnings, 1, `the route carries ${warnings} copies of the untold warning`);
+  // And the three blockers are named rather than gestured at, so the next
+  // reader can check them instead of trusting them.
+  for (const named of ["whatIsMissing", "tasksThatWouldHaveUsedIt", "MOMENT_SENTENCE"]) {
+    assert.ok(SOURCE.includes(named), `the note does not name ${named}`);
+  }
+});
+
+// ===========================================================================
+// 6. THE WIRING, THE REGISTRATION, AND THE REGISTER
 // ===========================================================================
 
 await check("webhookDeps refuses to build without a DB binding", () => {
@@ -1043,6 +1135,33 @@ await check("no response body this suite produced carries a forbidden term", () 
 //  38  `v.length === 1` -> `v.length >= 1`, so a two-name array resolves to
 //      whoever the vendor listed first
 //      -> same check
+//
+// 2026-09-06, SECOND PASS — section 5, the half that is not built. Five more
+// mutations, ALL FIVE KILLED, same harness and same one-anchor-one-occurrence
+// rule.
+//
+//  39  the untold clause dropped from the `marked` log line, leaving the
+//      sentence this file shipped with — the one that reads as the surface
+//      working while the text half reaches nobody
+//      -> 2 checks, first: "a marked expiry does not read as success"
+//  40  the same warning printed on EVERY event, before the type is read
+//      -> "CONTROL: an outcome that changed nothing does not claim anybody was
+//         untold" — a warning on an ignored event is noise that trains an
+//         operator to skip the line that matters
+//  41  the `marked` line stopped naming the owner and the app
+//      -> "a marked expiry does not read as success" (its CONTROL half: a
+//         warning that lost the fact is not an improvement)
+//  42  the header's AND NOBODY IS TOLD note deleted
+//      -> "the gap is written down where the next reader stands" (law 4: a
+//         finding that lives only in a chat is re-derived, wrong)
+//  43  the note kept but the three blockers replaced by a gesture
+//      -> same check: `whatIsMissing`, `tasksThatWouldHaveUsedIt` and
+//         `MOMENT_SENTENCE` are named so the next reader can CHECK them
+//
+// AND ONE MUTATION OF ANOTHER FILE, to prove the wake-up pin is a pin: a sixth
+// entry added to `TRIGGER_SCORE` in src/connections/words.ts (restored
+// immediately) turns "PIN: the day a reconnect has a moment to name…" red. A
+// pin that cannot be shown to fire is a comment.
 // ===========================================================================
 
 console.log(`\n${passes} passed, ${failures} failed`);

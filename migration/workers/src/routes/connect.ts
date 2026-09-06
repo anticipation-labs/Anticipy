@@ -9,9 +9,32 @@
  *                          sentences, all read from the catalog at run time.
  *   POST /c/{token}/go     the tap: mints the vendor's link, spends our token,
  *                          redirects. THE ONLY PLACE A VENDOR URL IS PRODUCED.
+ *   POST /c/{token}/skip   the other answer: "Skip for now", which is a WRITE
+ *                          and is the only way a person's NO is ever recorded.
  *   GET  /c/{token}/done   the vendor's callback, which is the ONLY signal a
  *                          connection exists — Composio publishes no success
  *                          webhook, only `expired`.
+ *
+ * NOBODY COULD SAY NO, AND THAT IS WHY /skip EXISTS. Until 2026-09-06 this page
+ * offered "Skip for now" as a BARE ANCHOR to the marketing site. It navigated
+ * away and wrote nothing: `recordDecline` (connections/nudge.ts) had no caller
+ * anywhere in the Worker, the snooze ladder the spec spends a page on (14 days,
+ * then 45, then stop — page 24) could not be ENTERED by a human action, and the
+ * person who tapped it was asked again at the next moment that scored high
+ * enough. Forever. The decline half of the state machine was a diagram.
+ *
+ * IT IS A POST, FOR THE SAME REASON /go IS. A GET that writes is a write a link
+ * prefetcher, an `<img>` tag or an address-bar preload performs on the person's
+ * behalf — and a decline fired by a prefetcher silences an app nobody refused.
+ * So /skip takes POST only, answers 405 with `Allow: POST` on anything else,
+ * and runs the same cross-site refusal /go runs before it reads a session.
+ *
+ * IT DOES NOT SPEND THE LINK. A decline is not a redemption: somebody who taps
+ * Skip and thinks better of it inside the ten minutes must still be able to tap
+ * Connect. Exactly-once comes from the LADDER instead — a second POST onto a
+ * row that is already declined and still snoozed is a no-op, so a double tap, a
+ * refresh or a retry cannot walk somebody from L1 to L3 and stop the asks for
+ * ten years.
  *
  * AND THE WAY OUT OF THE WALL. Every leg here needs a signed-in session, and the
  * browser that matters arrived by tapping a text and holds nothing — so what a
@@ -97,10 +120,35 @@
  * 2026-09-05, page 26.
  */
 import { verifyToken, type AuthEnv } from "../pb/auth.ts";
-import { forbiddenTermIn } from "../connections/words.ts";
+import { FORBIDDEN_TERMS, forbiddenTermIn } from "../connections/words.ts";
 import {
   waitBudgetMs, waitForConnection, type WaitEnv,
 } from "../connections/wait.ts";
+/**
+ * THE LADDER, IMPORTED AND NEVER RE-IMPLEMENTED.
+ *
+ * `recordDecline` is the spec's state machine on page 24 — level 1 then 2 then
+ * 3, 14 days then 45 then stop, and the onboarding exception that makes a
+ * skipped setup card a SEVEN-day soft snooze instead of a real decline. It is
+ * pure, it is nudge.ts's, and it stays nudge.ts's: a second copy of those
+ * numbers in this file would be a second answer to "how long did they ask to be
+ * left alone for", and the two would disagree the first time either was tuned.
+ *
+ * THE IMPORT RUNS BACKWARDS THROUGH AN EXISTING EDGE, deliberately and with the
+ * reason written down. connections/nudge.ts already imports THIS file for the
+ * token plumbing (`tokenHandle`, `connectUrl`, `LINK_TTL_MS`, `TOKEN_CHARS`),
+ * so this line closes a cycle. It is safe because every one of nudge.ts's uses
+ * of this file is INSIDE a function body — no top-level constant there is
+ * computed from one of ours — so whichever module the entry point reaches
+ * first, both are fully evaluated before any request runs. The suite loads
+ * connect.ts first and nudge.ts first, in two different files, which is what
+ * makes that a measured fact rather than a hope.
+ */
+import { recordDecline } from "../connections/nudge.ts";
+// TYPE ONLY, and erased before this file is bundled or run — the same choice
+// nudge.ts and store.ts make. `connect_nudges` rows have exactly one declared
+// shape and it is the contract's.
+import type { ConnectNudge } from "../../../../spike/two-hands/src/connections/contract.ts";
 
 // ---------------------------------------------------------------------------
 // ENV
@@ -193,6 +241,11 @@ const APP_CALLBACK_HOST = "connected";
  *  language: our page writes them and our app parses them. */
 const APP_STATUS_CONNECTED = "connected";
 const APP_STATUS_FAILED = "failed";
+/** And the third one the phone already understands: `ConnectHandoff.parseDone`
+ *  maps `status=cancelled` to `.cancelled`, so the Skip page can hand somebody
+ *  who arrived from the app a way back into it with no iOS change at all. It is
+ *  never "failed": a person answering "not now" did not hit an error. */
+const APP_STATUS_CANCELLED = "cancelled";
 
 // ---------------------------------------------------------------------------
 // THE SEAM — what this file must NOT own
@@ -246,7 +299,31 @@ export interface ClaimOutcome {
  * JavaScript and writing it back is not an implementation of this interface —
  * it is the double-redeem bug with extra steps.
  */
-export interface ConnectLinkStore {
+/**
+ * THE DECLINE HALF OF THE STORE, and the only two methods in this file that
+ * touch a table that is not `connect_links`.
+ *
+ * BOTH ARE OPTIONAL, and read the polarity before changing it. The store the
+ * production wiring hands this file is `createD1Store(env)` (see
+ * connections/wiring.ts `connectDeps`), which is the whole `ConnectionsStore`
+ * and HAS both of these — so on a real Worker they are present and a Skip is
+ * recorded. They are declared optional because this interface is also
+ * implemented by narrower fakes (the suite's link-only store,
+ * routes/connect_auth.ts's `links` port), and a required method would make
+ * those a type error for a capability they have no business having.
+ *
+ * A STORE WITHOUT THEM RECORDS NOTHING AND SAYS SO. `recordSkip` answers
+ * `not-recorded`, the page tells the person their answer was not saved rather
+ * than claiming it was, and the log line names the wiring. That is the honest
+ * direction: the failure this whole leg exists to fix is a Skip that LOOKS
+ * recorded and is not.
+ */
+export interface DeclineStore {
+  readNudge?(user: OwnerId | string, toolkit: string): Promise<ConnectNudge | null>;
+  putNudge?(row: ConnectNudge): Promise<void>;
+}
+
+export interface ConnectLinkStore extends DeclineStore {
   read(handle: string): Promise<StoredLink | null>;
   /** THE SINGLE-USE GATE. One statement, no read-then-write:
    *    UPDATE connect_links SET used_at = ?1
@@ -481,15 +558,28 @@ export function callbackUrl(
   return state ? `${url}?state=${encodeURIComponent(state)}` : url;
 }
 
-export type ConnectLeg = "view" | "go" | "done";
+export type ConnectLeg = "view" | "go" | "skip" | "done";
 
 export interface ConnectRoute {
   leg: ConnectLeg;
   token: string;
 }
 
+/** Which verb each leg takes. `go` and `skip` are the two that WRITE, and both
+ *  are POST for the same reason: a GET that changes something is a change a
+ *  prefetcher, an `<img>` tag or an address-bar preload makes on the person's
+ *  behalf. Declared as a table rather than typed at each handler so a fourth
+ *  leg cannot be added without answering the question. */
+export const CONNECT_METHOD: Record<ConnectLeg, "GET" | "POST"> = {
+  view: "GET",
+  go: "POST",
+  skip: "POST",
+  done: "GET",
+};
+
 /**
- * `/c/{token}` → view, `/c/{token}/go` → go, `/c/{token}/done` → done.
+ * `/c/{token}` → view, `/c/{token}/go` → go, `/c/{token}/skip` → skip,
+ * `/c/{token}/done` → done.
  *
  * Anchored at both ends and restricted to the token alphabet, so `/c/../../x`
  * and a token with a slash in it are not routes at all. Returns null rather
@@ -497,9 +587,12 @@ export interface ConnectRoute {
  */
 export function parseConnectPath(pathname: unknown): ConnectRoute | null {
   if (typeof pathname !== "string") return null;
-  const m = /^\/c\/([A-Za-z0-9_-]{43})(?:\/(go|done))?$/.exec(pathname);
+  const m = /^\/c\/([A-Za-z0-9_-]{43})(?:\/(go|skip|done))?$/.exec(pathname);
   if (!m) return null;
-  const leg: ConnectLeg = m[2] === "go" ? "go" : m[2] === "done" ? "done" : "view";
+  const leg: ConnectLeg = m[2] === "go" ? "go"
+    : m[2] === "skip" ? "skip"
+    : m[2] === "done" ? "done"
+    : "view";
   return { leg, token: m[1] as string };
 }
 
@@ -866,6 +959,189 @@ export async function connectPageGo(
   return { state: "ok", redirectUrl, owner: link.user_id, toolkit: link.toolkit };
 }
 
+/**
+ * ===========================================================================
+ * THE DECLINE — "Skip for now", which is the only NO this product can hear.
+ * ===========================================================================
+ */
+
+/**
+ * What a decline does to the ladder, in four states, because "recorded",
+ * "already recorded", "there was nothing to decline" and "we could not write it
+ * down" are four different facts about somebody's answer and a boolean carries
+ * two of them.
+ *
+ * `soft` is the spec's onboarding exception surfaced rather than inferred: page
+ * 21 says a skipped setup card records a seven-day snooze and is "not a real
+ * decline", and page 24 gives a real one fourteen days. They are different rows
+ * and the caller must be able to tell which one it just wrote.
+ */
+export type DeclineOutcome =
+  | { state: "recorded"; level: 1 | 2 | 3; snooze_until: number; soft: boolean }
+  /** The ladder was already at this rung and the snooze is still running. A
+   *  second tap, a refresh or a retry lands here and writes NOTHING. */
+  | { state: "already-declined"; level: 1 | 2 | 3; snooze_until: number }
+  /** This owner already has this app connected, so there is no ask to refuse.
+   *  Declining here would replace a live `connected` row with `declined` and
+   *  the router would stop using a connection the person still has. */
+  | { state: "nothing-to-decline" }
+  /** Nothing was written and the person must be told so. `why` is for the log
+   *  and never for a page: it names our own wiring, not their account. */
+  | { state: "not-recorded"; why: string };
+
+/** The seed for an owner who has never been asked about this app at all —
+ *  Settings' "Add an app", or an onboarding card for something no ask was ever
+ *  sent about. `onboarding` is the SURFACE the skip came from, which is a fact
+ *  about which screen was on the glass and not a reading of anything anybody
+ *  said; it is the only thing that can make a seeded row a soft one. */
+function seedNudge(user: OwnerId, toolkit: string, onboarding: boolean): ConnectNudge {
+  return {
+    user_id: user as ConnectNudge["user_id"],
+    toolkit: toolkit as ConnectNudge["toolkit"],
+    state: "never_asked",
+    level: 0,
+    snooze_until: null,
+    trigger: onboarding ? "onboarding" : null,
+    sent_at: null,
+    acted_at: null,
+    channel: null,
+  };
+}
+
+/**
+ * WRITE THE NO. One function, two surfaces — the connect page's Skip button and
+ * the phone's own skip route (routes/connections_api.ts), which calls this
+ * rather than repeating it. Two writers would be two ladders.
+ *
+ * THE MOMENT ON THE STORED ROW WINS, ALWAYS. `recordDecline` reads
+ * `nudge.trigger` to decide whether this is the seven-day soft snooze or the
+ * fourteen-day L1, and that trigger is what the ASK ENGINE wrote when it
+ * decided to ask — never anything a client claimed. `onboarding` below can only
+ * seed a row that does not exist yet; it cannot restamp one that does. That
+ * asymmetry is the whole guard: without it a client could send `onboarding` on
+ * every skip and shorten every snooze it ever wrote, which is an ask that comes
+ * back sooner than the person asked for.
+ *
+ * AND THE OWNER IS AN ARGUMENT, NOT A FIELD ON THE ROW WE READ. The row that
+ * comes back is compared to the owner it was asked for and to the app it was
+ * asked about: a store that answered with a neighbouring row would otherwise
+ * record one person's "no" against another person's app.
+ */
+export async function recordSkip(
+  store: DeclineStore,
+  who: { user_id: OwnerId; toolkit: string; at: number },
+  opts: { onboarding: boolean },
+): Promise<DeclineOutcome> {
+  if (typeof store?.readNudge !== "function" || typeof store?.putNudge !== "function") {
+    // A configuration failure, and it must never wear the costume of a recorded
+    // decline. See DeclineStore.
+    return {
+      state: "not-recorded",
+      why: "the store wired into this Worker cannot read or write a nudge row, so a "
+        + "person's no has nowhere to go",
+    };
+  }
+
+  let row: ConnectNudge | null;
+  try {
+    row = await store.readNudge(who.user_id, who.toolkit);
+  } catch {
+    return { state: "not-recorded", why: "the nudge row could not be read" };
+  }
+
+  if (row !== null && row !== undefined) {
+    if (!constantTimeEqual(String(row.user_id ?? ""), who.user_id)) {
+      return { state: "not-recorded", why: "the store answered with another owner's row" };
+    }
+    if (String(row.toolkit ?? "") !== who.toolkit) {
+      return { state: "not-recorded", why: "the store answered with another app's row" };
+    }
+  }
+
+  const current = row ?? seedNudge(who.user_id, who.toolkit, opts.onboarding);
+
+  if (current.state === "connected") return { state: "nothing-to-decline" };
+
+  // ALREADY SAID, STILL STANDING. The ladder advances once per ask, not once
+  // per tap: a refresh, a double tap or a retried POST must not walk somebody
+  // from "ask me in a fortnight" to "never ask me again".
+  if (
+    current.state === "declined"
+    && current.acted_at !== null
+    && typeof current.snooze_until === "number"
+    && Number.isFinite(current.snooze_until)
+    && who.at < current.snooze_until
+    && current.level >= 1
+  ) {
+    return {
+      state: "already-declined",
+      level: current.level as 1 | 2 | 3,
+      snooze_until: current.snooze_until,
+    };
+  }
+
+  // "said_no", never "silence". They are different facts about a person and the
+  // spec's timers get tuned from the difference: this one stamps `acted_at`
+  // because somebody actually touched the glass.
+  const next = recordDecline(current, who.at, "said_no");
+  try {
+    await store.putNudge(next);
+  } catch {
+    // The store refused the row — a bad level, an unreadable state, a missing
+    // column. Nothing was written and the page must not pretend otherwise.
+    return { state: "not-recorded", why: "the nudge row could not be written" };
+  }
+  return {
+    state: "recorded",
+    level: next.level as 1 | 2 | 3,
+    snooze_until: Number(next.snooze_until),
+    soft: next.trigger === "onboarding",
+  };
+}
+
+/**
+ * POST /c/{token}/skip.
+ *
+ * The same four refusals as every other leg and in the same order, because the
+ * order IS the privacy model: a caller who has proved nothing gets
+ * `sign-in-required` for every token there is, and expiry is settled before the
+ * owner so a real-but-expired token never answers "wrong-user".
+ *
+ * THE USED BIT IS NOT CONSULTED. A link the owner already spent on Connect is
+ * still their link, and a person who went to the vendor, backed out and came
+ * back to tap Skip is telling us something we asked for. The idempotence that
+ * matters is on the LADDER, not on the token.
+ */
+export type ConnectPageSkip =
+  | { state: "noted"; toolkit: string; outcome: DeclineOutcome }
+  | { state: "sign-in-required" }
+  | { state: "expired" }
+  | { state: "wrong-user" };
+
+export async function connectPageSkip(
+  token: string,
+  opts: { signedInAs: unknown; store: ConnectLinkStore; now: number },
+): Promise<ConnectPageSkip> {
+  const found = await locate(token, opts.signedInAs, opts.now, opts.store, ttlDeadline);
+  if (found.kind === "dead") return { state: "expired" };
+  if (found.kind === "signed-out") return { state: "sign-in-required" };
+  if (found.kind === "wrong-user") return { state: "wrong-user" };
+
+  // THE OWNER AND THE APP COME OFF THE STORED ROW. There is no parameter on
+  // this function through which a caller could name either.
+  // NOT THE SETUP CARD, and this page can never claim to be one: onboarding's
+  // own Skip is a card in the app and posts to its own route. A link minted FOR
+  // an onboarding ask still gets the seven-day soft snooze — but because the
+  // nudge row the ask engine wrote carries `trigger: onboarding`, not because
+  // anything here said so. The row is the record of the moment; this is a page.
+  const outcome = await recordSkip(
+    opts.store,
+    { user_id: found.row.user_id, toolkit: found.row.toolkit, at: opts.now },
+    { onboarding: false },
+  );
+  return { state: "noted", toolkit: found.row.toolkit, outcome };
+}
+
 /** GET /c/{token}/done — the vendor's callback, and the ONLY moment we ever
  *  learn that a connection exists. */
 export type ConnectPageDone =
@@ -1116,8 +1392,48 @@ export function installConnectSessionReader(reader: ConnectSessionReader): void 
   SESSION_READER = reader;
 }
 
-async function whoIsAsking(request: Request, env: ConnectEnv): Promise<OwnerId | null> {
-  return SESSION_READER ? SESSION_READER(request, env) : whoIsSignedIn(request, env);
+/**
+ * THE QUESTION IS ABOUT THE LINK, NOT ABOUT THE LEG, and this function makes
+ * that structural rather than hoped for.
+ *
+ * The installed reader is `connectSession` (routes/connect_auth.ts), which
+ * honours a phone-code cookie ONLY on the link it was minted for — and it takes
+ * that link from the REQUEST PATH, with a regex of its own that lists this
+ * file's leg names. That is a second answer to "what does a /c/ path look
+ * like", living in a file that cannot see this one's route table, and it drifts
+ * the moment a leg is added here: measured on 2026-09-06, `/c/{token}/skip`
+ * was not in its list, so a browser that arrived by TAPPING A TEXT — the one
+ * that holds nothing but a code cookie, which is the whole population this
+ * product texts — could tap Connect and could NOT tap Skip. Saying yes worked
+ * and saying no answered "sign in to finish". That asymmetry is the exact harm
+ * the decline leg was built to remove.
+ *
+ * So the reader is asked about `/c/{token}`, the one shape every /c/ path is
+ * built on, with the query string dropped: nothing any reader needs to identify
+ * a browser lives in a leg name or a query — the account token is a header or a
+ * cookie, and the code cookie is bound to the TOKEN. The headers are carried
+ * verbatim, which is the whole of what is being asked about. A leg added
+ * tomorrow inherits this for free.
+ *
+ * IT IS NOT A WIDENING. The token in the fabricated URL is the one this request
+ * is already on (it came out of `parseConnectPath`), so a cookie minted for
+ * another link is refused exactly as before; the only thing removed is a
+ * dependency on somebody else's spelling of our own paths.
+ */
+function asLinkRequest(request: Request, token: string): Request {
+  const url = new URL(request.url);
+  url.pathname = `/c/${token}`;
+  url.search = "";
+  // GET, no body: this is an identity question, and reading the body here would
+  // consume the one the form post still needs.
+  return new Request(url.toString(), { headers: request.headers });
+}
+
+async function whoIsAsking(
+  request: Request, env: ConnectEnv, token: string,
+): Promise<OwnerId | null> {
+  if (!SESSION_READER) return whoIsSignedIn(request, env);
+  return SESSION_READER(asLinkRequest(request, token), env);
 }
 
 export async function whoIsSignedIn(request: Request, env: ConnectEnv): Promise<OwnerId | null> {
@@ -1204,7 +1520,16 @@ const esc = (raw: unknown): string =>
  *  permission sentences are the consent; the description is decoration, and a
  *  page that silently paraphrases somebody else's blurb is inventing a claim
  *  about their product. The page reads fine without it — the app's name and
- *  logo are already there. */
+ *  logo are already there.
+ *
+ *  AND IT KEEPS THE WHOLE LIST WHILE THE NAME SCREEN TAKES HALF, deliberately.
+ *  A description is PROSE, so a register word inside it reads as this page
+ *  talking in permissions language, and the cost of being wrong is one dropped
+ *  paragraph. A name is a proper noun with no substitute, and the cost of being
+ *  wrong is the whole app — see `REGISTER_TERMS`. The price of the asymmetry,
+ *  said out loud so nobody reads it as an oversight: an app whose own name
+ *  carries a register word probably describes itself with it too, so its page
+ *  arrives with a name, a logo and three sentences and no blurb. */
 function describable(raw: unknown): string {
   const text = String(raw ?? "").trim();
   if (!text) return "";
@@ -1258,8 +1583,16 @@ function page(status: number, title: string, bodyHtml: string): Response {
   ul { padding-left: 1.1rem; margin: 1rem 0; }
   li { margin: .4rem 0; }
   p.fine { opacity: .7; font-size: .9rem; }
-  button { font: inherit; font-weight: 600; padding: .85rem 1.25rem; width: 100%;
+  button.go { font: inherit; font-weight: 600; padding: .85rem 1.25rem; width: 100%;
            border: 0; border-radius: 12px; cursor: pointer; }
+  /* The decline is a BUTTON because it writes, and it is drawn as the quiet
+     twin of the Connect button rather than as a second call to action: the
+     spec's rule is one Connect button and a Skip that is "always visible and
+     never buried" (page 25), which is neither shouting nor hiding. */
+  button.later { font: inherit; font-weight: 400; background: none; border: 0;
+           padding: .6rem 0; width: auto; margin-top: 1rem; cursor: pointer;
+           color: inherit; text-decoration: underline; }
+  form.later { margin: 0; }
   a.later { display: inline-block; margin-top: 1rem; }
 </style>
 ${bodyHtml}
@@ -1281,6 +1614,100 @@ ${bodyHtml}
 }
 
 /**
+ * THE HALF OF `FORBIDDEN_TERMS` THAT IS ONLY A REGISTER PROBLEM.
+ *
+ * words.ts's list does two different jobs under one name, and its own comment
+ * says so about the one entry that is not like the others: the vendor's name is
+ * "the one word in this list that is not a register problem but a promise".
+ * Everything else in it is the vocabulary of a consent screen written by a legal
+ * team — a rule about how THIS PRODUCT talks, applied to sentences this product
+ * writes ("connect your Notion", never "authorize the Notion integration").
+ *
+ * Screening the catalog's display name against the whole list conflated the two
+ * and cost real apps their consent page. Measured against the live catalog on
+ * 2026-09-06: "AI/ML API", "API Labz" and "Moderation API" are somebody else's
+ * registered product names, and all three answered 409 with no way forward. An
+ * app whose own name contains "API" is not this product saying "API"; it is this
+ * product quoting a proper noun, which is the only honest thing a consent page
+ * can call an app (see the REWRITE THE NAME paragraph above
+ * `UNSAYABLE_HEADING`, which is why dropping or rephrasing it is not on offer).
+ *
+ * WHICH WAY THE DEFAULT POINTS. This set is the EXEMPTION, so a term added to
+ * `FORBIDDEN_TERMS` and not to this set refuses a name carrying it. A second
+ * broker's name added over there therefore starts refusing here on the day it
+ * lands, with nobody having to remember this file; a new register word added
+ * over there costs an over-refusal until somebody adds it here, which is the
+ * cheap failure and the visible one. Getting that polarity backwards would make
+ * a promise the product could quietly stop keeping.
+ *
+ * Exported so the suite can hold it against `FORBIDDEN_TERMS` itself — every
+ * entry here must exist there, and what is left over must be the promise. A copy
+ * of a list is a list that drifts unless something compares them.
+ *
+ * THE SPLIT IS NOT FINISHED, AND THIS IS THE ONLY SURFACE IT REACHED. Two
+ * screens outside this file still run the whole list over copy that NAMES the
+ * app, and both belong to somebody else: connections/words.ts `styleProblem`
+ * (via `permissionSentences`), so a permission sentence that names "Moderation
+ * API" is refused and this page answers 503 instead; and connections/nudge.ts
+ * `askMessage`, so the text that offers to connect it — the spec's own wording
+ * is "Connect [app] and next time it is instant" — cannot be sent at all. So
+ * such an app is connectable HERE, from Settings' Add-an-app and from a text
+ * command, and Anticipy will never be the one to bring it up. Written down
+ * rather than reached across for: the fix is theirs to make.
+ */
+export const REGISTER_TERMS: ReadonlySet<string> = new Set([
+  "authorize",
+  "authorise",
+  "authorization",
+  "authorisation",
+  "grant access",
+  "grants access",
+  "granting access",
+  "granted access",
+  "permission",
+  "permissions",
+  "integration",
+  "integrations",
+  "api",
+  "apis",
+  "oauth",
+]);
+
+/** What is left of `FORBIDDEN_TERMS` once the register is taken out: the words a
+ *  person was PROMISED they would never read. Derived, never typed — the vendor's
+ *  name does not appear in this file's code, and the whole-suite scan over this
+ *  source is what keeps it that way. */
+const PROMISE_TERMS: readonly string[] = FORBIDDEN_TERMS.filter((t) => !REGISTER_TERMS.has(t));
+
+/**
+ * The promised-away word in a name, or null.
+ *
+ * WHY THIS IS NOT `forbiddenTermIn` WITH A FILTER ON THE RESULT. That function
+ * returns the FIRST term in list order, and "composio" is last in it: a toolkit
+ * called "Composio API" answers "api", which the register exemption would wave
+ * through, and the page would print the one word this product promised never to
+ * say. The question has to be asked over the promise terms alone, so it is.
+ *
+ * The boundary is words.ts's, character for character — "not a letter or a
+ * digit" rather than `\b`, so "API-key" trips "api" while "capital" does not —
+ * because the two matchers answering differently about the same string is the
+ * only way this exemption could become a hole. words.ts keeps its matcher
+ * private, so the suite pins the two against each other on a shared corpus
+ * instead.
+ *
+ * Law 1: this reads a string the CATALOG registered, not a human's words, and it
+ * decides what our own page may print rather than what anybody meant.
+ */
+export function promiseTermIn(text: string): string | null {
+  const hay = String(text ?? "").replace(/\s+/g, " ").trim().toLowerCase();
+  for (const term of PROMISE_TERMS) {
+    const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    if (new RegExp(`(?<![a-z0-9])${escaped}(?![a-z0-9])`, "i").test(hay)) return term;
+  }
+  return null;
+}
+
+/**
  * The one page that matters.
  *
  * Everything visible comes from the catalog row and the injected sentences:
@@ -1290,7 +1717,53 @@ ${bodyHtml}
  */
 function viewPage(token: string, v: Extract<ConnectPageView, { state: "ok" }>,
                   state: string | null): Response {
-  const name = v.toolkit.name?.trim() ? v.toolkit.name : v.toolkit.slug;
+  // NO NAME, NO PAGE — and no fallback to the slug either. A slug is a vendor
+  // primary key, not a display name, and a consent screen headed "Connect your
+  // crm_manage_connections" over a button that hands somebody a key to their own
+  // account is not a page anybody should be shown.
+  //
+  // This is a FLOOR on this file's own render contract and nothing more: it is
+  // not reachable through the shipped wiring, and saying so is the point.
+  // Both injected ports refuse a nameless row before this line runs, and
+  // between them they cover both shapes of one: connections/provider.ts
+  // `readToolkitMeta` returns null when `name` is absent or empty ("no name, or
+  // no slug ... fatal to a row rather than cosmetic") so `toolkit()` throws and
+  // this leg answers 503, and connections/words.ts `metaProblem` refuses to
+  // write permission sentences for a name that is only whitespace, which the
+  // provider's own `asString` lets through. What this guard buys is that a
+  // THIRD port, wired tomorrow, cannot make this function draw a blank heading.
+  // It replaced a slug fallthrough whose comment claimed behaviour no caller
+  // could reach (round-2 finding 2, 2026-09-06).
+  const name = typeof v.toolkit.name === "string" ? v.toolkit.name.trim() : "";
+  if (name === "") {
+    console.log(
+      `connect view: the catalog row for ${JSON.stringify(v.toolkit.slug)} has no display `
+        + "name, so there is nothing to head the page with. No page was drawn and the link "
+        + "was not spent.",
+    );
+    return plainPage(409, UNSAYABLE_HEADING, UNSAYABLE_LINE);
+  }
+
+  // THE NAME IS SCREENED, AND NOT AGAINST THE SAME LIST THE DESCRIPTION IS.
+  // The whole argument is above `UNSAYABLE_HEADING`; the short version is that
+  // the register half of `FORBIDDEN_TERMS` is a rule about WORDS THIS PRODUCT
+  // WRITES, and an app's own registered name is not this product writing. Only
+  // the promise half — the words a person was told they would never read —
+  // costs somebody their consent page.
+  const unsayable = promiseTermIn(name);
+  if (unsayable !== null) {
+    // The slug and the term, for the one person who can fix it, and the fix is
+    // a display name on the CATALOG ROW. A name typed into this file would be
+    // the thing this file's header forbids.
+    console.log(
+      `connect view: the catalog draws ${JSON.stringify(v.toolkit.slug)} as `
+        + `${JSON.stringify(name)}, which carries ${JSON.stringify(unsayable)} — a word this `
+        + "screen may not print. No page was drawn and the link was not spent. Give that "
+        + "toolkit a display name in the catalog.",
+    );
+    return plainPage(409, UNSAYABLE_HEADING, UNSAYABLE_LINE);
+  }
+
   const logo = httpsOnly(v.toolkit.logo);
   const which = v.alias ? ` (your ${esc(v.alias)} account)` : "";
   const body = `<body>
@@ -1302,9 +1775,11 @@ ${describable(v.toolkit.description) ? `<p>${esc(describable(v.toolkit.descripti
 ${v.sentences.map((s) => `  <li>${esc(s)}</li>`).join("\n")}
 </ul>
 <form method="post" action="/c/${esc(token)}/go">
-${state ? `  <input type="hidden" name="state" value="${esc(state)}">\n` : ""}  <button type="submit">Connect ${esc(name)}</button>
+${state ? `  <input type="hidden" name="state" value="${esc(state)}">\n` : ""}  <button class="go" type="submit">Connect ${esc(name)}</button>
 </form>
-<a class="later" href="https://anticipy.ai/">Skip for now</a>
+<form class="later" method="post" action="/c/${esc(token)}/skip">
+${state ? `  <input type="hidden" name="state" value="${esc(state)}">\n` : ""}  <button class="later" type="submit">Skip for now</button>
+</form>
 <p class="fine">This is optional — Anticipy works fine without it. You can turn it off any time in Settings. This link works for ten minutes and only for you.</p>
 </body>`;
   return page(200, `Connect your ${name}`, body);
@@ -1366,6 +1841,96 @@ const USED_LINE = "Each link works once. Ask Anticipy for a new one and it'll se
 const WRONG_USER_HEADING = "You're signed in as someone else";
 const WRONG_USER_LINE =
   "This link was made for a different Anticipy account. Sign in as that account and open it again.";
+
+/**
+ * THE SIXTH REFUSAL, AND THE ONLY ONE THAT IS ABOUT THE APP RATHER THAN THE
+ * LINK: the catalog's name for this toolkit is a word this product PROMISED a
+ * person would never read, so the screen is not drawn. It is also the page a
+ * catalog row with no display name at all gets, for the reason in `viewPage`.
+ *
+ * MEASURED, NOT HYPOTHETICAL. The live catalog on 2026-09-06 holds toolkits
+ * whose OWN names are the vendor's name and that name plus a word. The
+ * catalog's DESCRIPTION was already screened (`describable`) and the NAME was
+ * not, so the one screen the register rule exists for could print the one word
+ * the spec treats not as a preference but as a promise: the person never hears
+ * it.
+ *
+ * AND IT IS ONLY THAT WORD. The first version of this refusal screened the name
+ * against all of `FORBIDDEN_TERMS`, which is two rules wearing one name, and it
+ * took the wrong one out on real apps: "AI/ML API", "API Labz" and "Moderation
+ * API" are live catalog rows, and all three became unconnectable — 409, no
+ * button, no way forward, for the crime of a name their own makers chose. The
+ * register is a rule about the sentences THIS PRODUCT writes; it was never a
+ * rule about proper nouns. `REGISTER_TERMS` above is where that line is drawn
+ * and the suite is what holds the two halves apart. An over-refusal on this page
+ * is not a safe failure: it is an app somebody wanted, permanently unreachable,
+ * with a page that does not even say why.
+ *
+ * THREE ANSWERS WERE AVAILABLE AND THIS IS THE THIRD.
+ *
+ *   DROP THE NAME, the way the description is dropped. Refused: the description
+ *   is decoration and the name is the subject of the only sentence on the page
+ *   that matters. "Connect your ___" over a button that hands somebody's key to
+ *   an unnamed thing is not a consent screen, it is a trick, and it looks
+ *   exactly like a page that finished loading — which is the same failure
+ *   `checkedSentences` refuses for the permission list.
+ *
+ *   REWRITE THE NAME. The worst of the three, and worth naming because it is the
+ *   one that looks helpful. A consent page presenting somebody's app under a
+ *   name its own maker does not use is the shape of a phishing page; and
+ *   choosing that name is a meaning question, which HARNESS-LAWS law 1 reserves
+ *   for a model with full context and forbids to a rule in a render function.
+ *
+ *   DON'T DRAW THE PAGE. What is left, and it is honest at every layer. Nothing
+ *   is consumed — the view leg never spends the token, so the same link works
+ *   the moment the catalog row is fixed — nothing is written, no vendor call is
+ *   made, and the person reads one plain sentence instead of a screen carrying
+ *   the word we promised they would never read. The cost is real and it is the
+ *   small one: this app cannot be connected today, and connecting was never the
+ *   product — the browser hand does the job either way, which is the sentence
+ *   every ask in this system already carries.
+ *
+ * THE WAY OUT IS THE CATALOG, NEVER THIS FILE. A toolkit that needs a different
+ * display name gets one where its name lives. A list of app names here is the
+ * exact thing this file's header and the spec's register rule both forbid, and
+ * the invented-toolkit tests in the suite are the pin on that.
+ *
+ * WHY 409 AND NOT 503. A 503 promises a retry, and no retry can help: the name
+ * will be the same name next minute. 409 is the one code in this file's
+ * vocabulary that says the request was fine and the state it landed in is not,
+ * and it keeps this refusal countable in a log separately from the catalog blip
+ * two functions up, which really is a retry.
+ */
+const UNSAYABLE_HEADING = "Anticipy can't set this one up";
+const UNSAYABLE_LINE =
+  "Something's off with how this app is listed, so nothing has changed on your account. "
+  + "Anticipy will keep doing this in your browser, which works fine.";
+
+/**
+ * WHAT A PERSON READS WHEN THEY SAY NO, and it is a promise this Worker has to
+ * keep. It may only be shown over a decline that was actually WRITTEN — the
+ * whole defect being closed here is a Skip that looked like it landed and did
+ * not, so a page saying "I won't ask again" over an unwritten row would be the
+ * same failure with better manners.
+ */
+const SKIPPED_HEADING = "Noted.";
+const SKIPPED_LINE =
+  "I won't bring this one up again for a while. You can set it up whenever you like — "
+  + "just ask me, or find it in Settings.";
+/** The app is already connected, so there was no ask to refuse. Said plainly
+ *  rather than as a decline, because nothing was written and claiming otherwise
+ *  would be a lie about their own account. */
+const NOTHING_HEADING = "That one's already set up";
+const NOTHING_LINE =
+  "This app is connected already, so there's nothing to turn down. You can switch it off "
+  + "any time in Settings.";
+/** THE HONEST FAILURE. The person said no and we could not write it down; they
+ *  are owed that fact, because the consequence lands on them the next time
+ *  Anticipy opens its mouth. */
+const NOT_NOTED_HEADING = "I couldn't note that";
+const NOT_NOTED_LINE =
+  "Your answer didn't save just now, so I might ask again. Try once more in a moment, or "
+  + "tell me and I'll leave it alone.";
 
 /**
  * The door out of the signed-out page: the phone-code offer, carrying the
@@ -1460,10 +2025,12 @@ export async function connectRoute(
   if (!route) return plainPage(404, "Not found", "There's nothing at this address.");
 
   const method = request.method === "HEAD" ? "GET" : request.method;
-  const wants = route.leg === "go" ? "POST" : "GET";
+  const wants = CONNECT_METHOD[route.leg];
   // A GET on /go would let a link prefetcher, an <img> tag or a browser's
   // address-bar preload SPEND the owner's single-use link before they ever tap
-  // it. A POST on the page itself is not a route at all.
+  // it; a GET on /skip would let the same three RECORD A DECLINE nobody made,
+  // silencing an app the person never turned down. A POST on the page itself is
+  // not a route at all.
   if (method !== wants) {
     return new Response(null, { status: 405, headers: { allow: wants, "cache-control": "no-store" } });
   }
@@ -1484,6 +2051,7 @@ export async function connectRoute(
   if (route.leg === "go") {
     return await handleGo(request, env, wired, route.token, now, baseUrl, ctx);
   }
+  if (route.leg === "skip") return await handleSkip(request, env, wired, route.token, now);
   return await handleDone(request, env, wired, route.token, now, state, url);
 }
 
@@ -1491,7 +2059,7 @@ async function handleView(
   request: Request, env: ConnectEnv, deps: ConnectDeps,
   token: string, now: number, state: string | null,
 ): Promise<Response> {
-  const who = await whoIsAsking(request, env);
+  const who = await whoIsAsking(request, env, token);
   let view: ConnectPageView;
   try {
     view = await connectPageView(token, {
@@ -1589,6 +2157,13 @@ function startWaiting(
   ctx.waitUntil(task);
 }
 
+/** The one sentence a POST from somebody else's page gets, on either writing
+ *  leg. One copy, so the two cannot drift into two answers. */
+function refuseCrossSite(): Response {
+  return plainPage(403, "That didn't come from here",
+    "Open your Anticipy link again and tap the button on the page itself.");
+}
+
 async function handleGo(
   request: Request, env: ConnectEnv, deps: ConnectDeps,
   token: string, now: number, baseUrl: string, ctx?: ConnectBackground,
@@ -1596,11 +2171,10 @@ async function handleGo(
   // Before the session is even read, and long before the compare-and-set.
   if (isCrossSitePost(request)) {
     console.log(`connect go: ${await tokenFingerprint(token)} refused — cross-site POST`);
-    return plainPage(403, "That didn't come from here",
-      "Open your Anticipy link again and tap Connect on the page itself.");
+    return refuseCrossSite();
   }
 
-  const who = await whoIsAsking(request, env);
+  const who = await whoIsAsking(request, env, token);
   // The hidden field the page rendered, carrying the phone's attempt id. Read
   // from the body rather than the query so it survives the form post; anything
   // that is not the phone's opaque-token shape is dropped rather than reflected.
@@ -1641,11 +2215,64 @@ async function handleGo(
   return refusalPage(go.state, token, state);
 }
 
+/**
+ * "Skip for now" — the tap that records a no.
+ *
+ * THE SAME THREE GUARDS /go RUNS, IN THE SAME ORDER: cross-site first, then the
+ * session, then the row. A decline is a write, and every reason /go is defended
+ * applies to it — with one extra: a decline fired by somebody else's page
+ * SILENCES an app, and silence is the failure nobody reports.
+ *
+ * NO DEEP LINK WITHOUT AN ATTEMPT ID. `ConnectHandoff.parseDone` refuses a
+ * callback carrying no `state` (it cannot bind it to the attempt it started),
+ * so offering `anticipy://` to a browser that arrived from a text — which has
+ * no state — would be a link that lands on an error. The text browser gets the
+ * page and nothing else, which is all it needs.
+ */
+async function handleSkip(
+  request: Request, env: ConnectEnv, deps: ConnectDeps,
+  token: string, now: number,
+): Promise<Response> {
+  if (isCrossSitePost(request)) {
+    console.log(`connect skip: ${await tokenFingerprint(token)} refused — cross-site POST`);
+    return refuseCrossSite();
+  }
+
+  const who = await whoIsAsking(request, env, token);
+  // From the BODY, like /go's, so it survives the form post: the state is the
+  // phone's attempt id and it is how the app knows this attempt is over.
+  const state = checkedState(await formField(request, "state"));
+
+  const skipped = await connectPageSkip(token, {
+    signedInAs: who, store: deps.store, now,
+  });
+  if (skipped.state !== "noted") return refusalPage(skipped.state, token, state);
+
+  const outcome = skipped.outcome;
+  const back = state
+    ? { href: appLink(skipped.toolkit, APP_STATUS_CANCELLED, { state }), label: "Back to Anticipy" }
+    : undefined;
+
+  if (outcome.state === "not-recorded") {
+    // LOUD, because this is a wiring failure and the person just paid for it
+    // with an answer nobody kept.
+    console.log(`connect skip: ${await tokenFingerprint(token)} NOT recorded — ${outcome.why}`);
+    return plainPage(500, NOT_NOTED_HEADING, NOT_NOTED_LINE, back);
+  }
+  if (outcome.state === "nothing-to-decline") {
+    console.log(`connect skip: ${await tokenFingerprint(token)} had nothing to decline`);
+    return plainPage(200, NOTHING_HEADING, NOTHING_LINE, back);
+  }
+  console.log(`connect skip: ${await tokenFingerprint(token)} ${outcome.state} at level `
+    + `${outcome.level}`);
+  return plainPage(200, SKIPPED_HEADING, SKIPPED_LINE, back);
+}
+
 async function handleDone(
   request: Request, env: ConnectEnv, deps: ConnectDeps,
   token: string, now: number, state: string | null, url: URL,
 ): Promise<Response> {
-  const who = await whoIsAsking(request, env);
+  const who = await whoIsAsking(request, env, token);
   const done = await connectPageDone(token, {
     status: url.searchParams.get("status"),
     connectedAccountId: url.searchParams.get("connected_account_id"),

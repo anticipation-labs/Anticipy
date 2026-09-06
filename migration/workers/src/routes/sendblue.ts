@@ -33,6 +33,7 @@
  * is looked at; nothing is logged but the ids and the last six digits.
  */
 import { landInboundText, last6, type Landing } from "../pb/sender.ts";
+import { handleInboundText, type TextCommandEnv } from "../connections/wiring.ts";
 
 const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), {
@@ -41,7 +42,12 @@ const json = (status: number, body: unknown) =>
 const text = (status: number, body: string) =>
   new Response(body, { status, headers: { "content-type": "text/plain" } });
 
-export interface SendblueEnv {
+/**
+ * A SUPERSET of what the signature half needs, for the same reason routes/
+ * sms.ts's `SmsEnv` is one: the text twin runs on this request too, and the
+ * two carriers must not be able to differ in what an inbound message reaches.
+ */
+export interface SendblueEnv extends Partial<TextCommandEnv> {
   DB: D1Database;
   /** The dashboard's webhook secret. Unset = 503, never 403. */
   SENDBLUE_WEBHOOK_SECRET?: string;
@@ -65,7 +71,9 @@ function secretEqual(a: string, b: string): boolean {
   return diff === 0;
 }
 
-export async function sendblueInbound(req: Request, env: SendblueEnv): Promise<Response> {
+export async function sendblueInbound(
+  req: Request, env: SendblueEnv, ctx?: ExecutionContext,
+): Promise<Response> {
   const secret = env.SENDBLUE_WEBHOOK_SECRET || "";
   // Unset is a CONFIGURATION problem and says so. "Silent failures: zero,
   // ever" -- the only other symptom would be Sendblue's dashboard showing
@@ -165,6 +173,17 @@ export async function sendblueInbound(req: Request, env: SendblueEnv): Promise<R
   const landed: Landing = await landInboundText(
     { DB: env.DB }, "sms/sendblue", "message_handle",
     { from, text: content, externalId: handle });
+
+  // THE TEXT TWIN, the identical call routes/sms.ts makes and for the identical
+  // reasons — after the row and never instead of it, the owner from the stored
+  // row `landInboundText` resolved, the message verbatim with no pre-filter in
+  // front of it. Both carriers land the same events row (src/pb/sender.ts), and
+  // this is what stops them landing in different products.
+  if (landed.kind === "written") {
+    const run = handleInboundText(
+      env as unknown as TextCommandEnv, landed.owner_ref, content, landed.id);
+    if (ctx) ctx.waitUntil(run); else await run;
+  }
 
   switch (landed.kind) {
     case "written":         return json(200, { ok: true });

@@ -18,8 +18,17 @@
  * THE FAILURES THIS FILE EXISTS TO CATCH:
  *
  *   THE ADVERTISEMENT. An ask about an app on a hunch. The evidence bar is
- *   pinned from three directions — no signal row at all, a row decayed to
- *   weight 0, and a row whose source is not a moment anybody had.
+ *   pinned from four directions — no signal row at all, a row with nothing
+ *   left in it, a row nobody has refreshed since long past the half-life, and
+ *   a row whose source is not a moment anybody had.
+ *
+ *   THE DEAD SIGNAL THAT STILL TEXTS. `AND s."weight" > 0` was this file's
+ *   aliveness test and NO CODE PATH COULD EVER MAKE IT FALSE: signals.ts
+ *   decays on READ and the stored column only ever goes up. A four-hundred-day
+ *   -old signal produced a real send. The boundary is now `ALIVE_WEIGHT_FLOOR`,
+ *   applied out here with signals.ts's own `decayedWeight`, and it is stated in
+ *   ONE place — a check below reads the shipped SQL and fails if the statement
+ *   grows a weight predicate of its own.
  *
  *   ASKING SOMEBODY FOR SOMETHING THEY ALREADY GAVE. A connected app, and a
  *   nudge row that already says connected.
@@ -49,13 +58,22 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 import {
+  ALIVE_WEIGHT_FLOOR,
+  DEAD_AFTER_HALF_LIVES,
   DUE_CANDIDATES_PER_ASK,
   DUE_CANDIDATE_CAP,
   MOMENT_SOURCES,
   MOMENT_TRIGGER,
+  SIGNAL_ROWS_PER_OWNER,
   createDue,
   dueCandidates,
 } from "../src/connections/due.ts";
+import {
+  DEFAULT_HALF_LIFE_MS,
+  WEIGHT_HIGH,
+  WEIGHT_MEDIUM,
+  decayedWeight,
+} from "../src/connections/signals.ts";
 import {
   GLOBAL_ASK_INTERVAL_DAYS,
   MAX_ASKS_PER_SWEEP,
@@ -203,16 +221,99 @@ await check("an owner with no evidence at all is not a candidate", async () => {
   assert.deepEqual(await due(r), []);
 });
 
-await check("evidence decayed to weight 0 is not evidence", async () => {
+await check("evidence with nothing left in it is not evidence", async () => {
   const r = rig();
   signal(r, OWNER, SLUG_A, "observer", 0);
   assert.deepEqual(await due(r), [],
-    "a signal that decayed to exactly 0 is an app they stopped using");
+    "a row worth nothing at all is an app they stopped using");
+
+  // EXACTLY ON THE FLOOR IS OFF: `>` and not `>=`, which is the direction the
+  // predicate this replaced pointed. Stamped at NOW so no decay stands between
+  // the stored number and the number that decides — this is the boundary
+  // itself, not a number near it.
+  signal(r, OTHER, SLUG_A, "observer", ALIVE_WEIGHT_FLOOR, NOW);
+  assert.deepEqual(await due(r), [], "a signal sitting exactly on the floor was asked about");
+
   // THE CONTROL, same row, one number different.
-  signal(r, OTHER, SLUG_A, "observer", 0.001);
-  const out = await due(r);
-  assert.equal(out.length, 1);
+  const ok = rig();
+  signal(ok, OTHER, SLUG_A, "observer", ALIVE_WEIGHT_FLOOR * 2, NOW);
+  const out = await due(ok);
+  assert.equal(out.length, 1, "a signal above the floor stopped being a candidate");
   assert.equal(out[0].owner, OTHER);
+});
+
+await check("the aliveness boundary is stated ONCE, and the SQL states none of it", () => {
+  // 1. THE NUMBER IS DERIVED, not typed: what the weakest thing this table can
+  //    hold is worth after the stated silence, through signals.ts's own decay.
+  assert.equal(
+    ALIVE_WEIGHT_FLOOR,
+    decayedWeight(WEIGHT_MEDIUM, 0, DEAD_AFTER_HALF_LIVES * DEFAULT_HALF_LIFE_MS),
+    "the floor and the half-life have drifted apart",
+  );
+  assert.ok(ALIVE_WEIGHT_FLOOR > 0, "a floor of zero is the defect this closed, restated");
+  assert.ok(ALIVE_WEIGHT_FLOOR < WEIGHT_MEDIUM,
+    "a floor at or above one fresh Medium signal makes every candidate dead on arrival");
+
+  // 2. AND THE STATEMENT SAYS NOTHING ABOUT WEIGHT. A predicate in the SQL is a
+  //    second definition of alive, in a language with no exponential — which is
+  //    exactly how the first one came to be false for four months. Comments are
+  //    stripped: prose is allowed to quote the predicate it deleted.
+  const code = DUE_SOURCE
+    .replace(/\/\*[\s\S]*?\*\//g, " ")
+    .replace(/(^|[^:])\/\/[^\n]*/g, "$1");
+  assert.equal(/"weight"\s*[<>=]/.test(code), false,
+    "the query decides aliveness again, and SQLite cannot compute the decay that defines it");
+  // The half-life is signals.ts's alone: a second copy of 30 days in here is a
+  // second definition waiting to drift.
+  assert.equal(code.includes("DEFAULT_HALF_LIFE_MS *"), false);
+});
+
+await check("the sweep sees a candidate at every age up to the boundary, and none past it", async () => {
+  const half = DEFAULT_HALF_LIFE_MS;
+  for (const lives of [0, 1, 3, DEAD_AFTER_HALF_LIVES - 1]) {
+    const r = rig();
+    signal(r, OWNER, SLUG_A, "observer", WEIGHT_HIGH, NOW - lives * half);
+    assert.equal((await due(r)).length, 1,
+      `a High signal ${lives} half-lives old stopped being a candidate`);
+  }
+  for (const lives of [DEAD_AFTER_HALF_LIVES + 1, 10, 20]) {
+    const r = rig();
+    signal(r, OWNER, SLUG_A, "observer", WEIGHT_HIGH, NOW - lives * half);
+    assert.deepEqual(await due(r), [],
+      `a High signal ${lives} half-lives old still produced a candidate`);
+  }
+});
+
+await check("evidence nobody has refreshed in a year is dead, however heavy it was", async () => {
+  const r = rig();
+  // FOUR HUNDRED DAYS: more than thirteen of signals.ts's thirty-day
+  // half-lives, so `decayedWeight` prices this row at about a ten-thousandth
+  // of a fresh one. The STORED column never moved, because signals.ts decays
+  // on READ and only a NEW signal for the same (owner, app, source) rewrites
+  // it — so a predicate over the stored number can never see this.
+  signal(r, OWNER, SLUG_A, "observer", 0.7, NOW - 400 * DAY);
+  assert.deepEqual(await due(r), [],
+    "a signal the module's own ranked read calls dead still produced a real text");
+
+  // THE CONTROL: the same row, the same weight, seen an hour ago.
+  signal(r, OTHER, SLUG_A, "observer", 0.7, NOW - HOUR);
+  const out = await due(r);
+  assert.equal(out.length, 1, "a fresh signal stopped being a candidate");
+  assert.equal(out[0].owner, OTHER);
+});
+
+await check("a dead heaviest app does not silence an owner's live one", async () => {
+  // The row that would have won the per-owner pick on stored weight is the
+  // dead one. Dropping the owner because of it would be this file
+  // over-excluding, which its own header forbids: a candidate this file omits
+  // is a person nobody asks.
+  const r = rig();
+  signal(r, OWNER, SLUG_A, "observer", 9, NOW - 400 * DAY);
+  signal(r, OWNER, SLUG_B, "said", 0.7, NOW - HOUR);
+  const out = await due(r);
+  assert.equal(out.length, 1, "the owner's live evidence was thrown away with the dead row");
+  assert.equal(out[0].toolkit, SLUG_B);
+  assert.equal(out[0].trigger, "user_named_it");
 });
 
 await check("a source that names no moment is weight, never a candidate", async () => {
@@ -661,36 +762,12 @@ await check("src/cron.ts gives the connect ask its own waitUntil", () => {
     "the reminder leg is registered first so it is already running whatever the second does");
 });
 
-await check("THE GAP: production does not register the tick this leg lives on", () => {
-  // HARNESS-LAWS law 3, as a check rather than a promise. Everything above is
-  // repo-green; NONE of it runs on api.anticipy.ai, and the reason is one line
-  // in a config file this task does not own.
-  //
-  // `*/5 * * * *` was removed from wrangler.jsonc ON PURPOSE — PocketBase's
-  // own sweep still runs against its own database and two sweeps would send
-  // the team every reminder twice — so the whole five-minute case in
-  // src/cron.ts, the HQ reminders included, is dispatched by code production
-  // never invokes.
-  //
-  // THIS CHECK GOES RED THE DAY SOMEBODY ENABLES IT, which is the day the gap
-  // closes: delete this check, and delete the LAW 3 note in
-  // src/connections/due.ts with it.
-  const prod = readFileSync(join(here, "..", "wrangler.jsonc"), "utf8");
-  const dev = readFileSync(join(here, "..", "wrangler.dev.jsonc"), "utf8");
-  assert.ok(/"crons"\s*:\s*\[[^\]]*"\*\/5 \* \* \* \*"/.test(dev),
-    "wrangler.dev.jsonc no longer registers the five-minute tick, so not even a dev run "
-      + "reaches connectAsks");
-  assert.equal(/"crons"\s*:\s*\[[^\]]*"\*\/5 \* \* \* \*"/.test(prod), false,
-    "wrangler.jsonc now registers \"*/5 * * * *\" — the connect ask is live, and this check "
-      + "plus the LAW 3 note in src/connections/due.ts should be deleted in the same diff");
-});
-
 // ---------------------------------------------------------------------------
 // MUTATIONS RUN AGAINST src/connections/due.ts AND src/cron.ts, 2026-09-06.
 // Every one is anchored on a string that occurs EXACTLY ONCE in the file it
 // mutates (the script refuses to run otherwise, because a regex that silently
 // fails to match produces a false "it is tested" reading — that mistake was
-// made twice on 2026-09-05). All fifteen went RED; the check each one killed
+// made twice on 2026-09-05). All twenty-two went RED; the check each one killed
 // is named.
 //
 // NUMBER 11 SURVIVED THE FIRST RUN, and the reason is worth keeping: the
@@ -698,8 +775,8 @@ await check("THE GAP: production does not register the tick this leg lives on", 
 // due.ts moved the test's own idea of what a moment is and the loop skipped
 // it. It is typed here now.
 //
-//   1  `AND s."weight" > 0` -> `AND s."weight" >= 0`
-//      -> "evidence decayed to weight 0 is not evidence"
+//   1  `if (!(weight > ALIVE_WEIGHT_FLOOR)) continue;` -> `>=`
+//      -> "evidence with nothing left in it is not evidence"
 //   2  `AND c."status" = 'connected')` -> `AND c."status" = 'nothing')`
 //      -> "an owner who already connected that app is not a candidate"
 //   3  the `n."snooze_until" > ?` disjunct deleted
@@ -708,9 +785,9 @@ await check("THE GAP: production does not register the tick this leg lives on", 
 //      -> "the 7-day cap holds ACROSS APPS"
 //   5  `AND g."sent_at" > ?${pCutoff})` -> `AND g."sent_at" < ?${pCutoff})`
 //      -> "the cap bites at every hour inside the window, and skew does not open it"
-//   6  `WHERE "pick" = 1` -> `WHERE "pick" >= 1`
+//   6  `if (taken.has(who)) continue;` -> `if (false) continue;`
 //      -> "an owner with two well-evidenced apps appears once, heaviest first"
-//   7  `LIMIT ?${pCap}` deleted
+//   7  `if (out.length >= owners) break;` -> `if (false) break;`
 //      -> "a backlog is bounded at the cap and drains over ticks"
 //   8  `if (typeof now !== "number" || !Number.isFinite(now)) {` -> `if (false) {`
 //      -> "a clock that is not a clock refuses, because a NaN cutoff opens the cap"
@@ -729,6 +806,26 @@ await check("THE GAP: production does not register the tick this leg lives on", 
 //      -> "a malformed owner id is dropped, not thrown on, and never asked"
 //  15  `ORDER BY s."weight" DESC` -> `ASC`
 //      -> "an owner with two well-evidenced apps appears once, heaviest first"
+//
+// ALIVENESS, added 2026-09-06 when `AND s."weight" > 0` was found to be an
+// aliveness test no code path could ever make false. Seven more, all RED:
+//
+//  16  `if (!(weight > ALIVE_WEIGHT_FLOOR)) continue;` -> `if (false) continue;`
+//      -> "evidence with nothing left in it is not evidence"
+//  17  `export const DEAD_AFTER_HALF_LIVES = 6;` -> `= 60;`
+//      -> "the sweep sees a candidate at every age up to the boundary, and none past it"
+//  18  `WHERE "pick" <= ?${pRows}` -> `WHERE "pick" = 1`
+//      -> "a dead heaviest app does not silence an owner's live one"
+//  19  `if (!SOURCE_DECAYS[source as SignalSource]) return stored;` deleted, so
+//      nothing decays
+//      -> "the sweep sees a candidate at every age up to the boundary, and none past it"
+//  20  `decayedWeight(stored, Number(lastSeenAt), now, DEFAULT_HALF_LIFE_MS)`
+//      -> `stored`
+//      -> "the sweep sees a candidate at every age up to the boundary, and none past it"
+//  21  a `weight > 0` predicate put back into the statement
+//      -> "the aliveness boundary is stated ONCE, and the SQL states none of it"
+//  22  `ALIVE_WEIGHT_FLOOR` hand-typed as `0.001` instead of derived
+//      -> "the aliveness boundary is stated ONCE, and the SQL states none of it"
 // ---------------------------------------------------------------------------
 
 console.log = realLog;

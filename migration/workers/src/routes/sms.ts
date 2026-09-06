@@ -25,6 +25,7 @@
  * Base64 of the digest is the signature.
  */
 import { landInboundText, last6 } from "../pb/sender.ts";
+import { handleInboundText, type TextCommandEnv } from "../connections/wiring.ts";
 
 const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), {
@@ -38,7 +39,14 @@ const twiml = () =>
   new Response("<?xml version='1.0' encoding='UTF-8'?><Response></Response>",
     { status: 200, headers: { "content-type": "application/xml" } });
 
-export interface SmsEnv {
+/**
+ * `SmsEnv` is deliberately a SUPERSET of what the signature half needs: the
+ * text twin (src/connections/text_commands.ts) runs on the same request and
+ * wants the store, the vendor, the model and a way to reply. Every one of
+ * those is optional here and checked at the seam — a Worker missing one logs
+ * that the twin is not wired and lands the message exactly as before.
+ */
+export interface SmsEnv extends Partial<TextCommandEnv> {
   DB: D1Database;
   TWILIO_AUTH_TOKEN?: string;
   TWILIO_ACCOUNT_SID?: string;
@@ -74,7 +82,9 @@ function safeUrl(url: string): string {
   return cut < 0 ? url : url.slice(0, cut) + "?<query redacted>";
 }
 
-export async function smsInbound(req: Request, env: SmsEnv): Promise<Response> {
+export async function smsInbound(
+  req: Request, env: SmsEnv, ctx?: ExecutionContext,
+): Promise<Response> {
   // "Silent failures: zero, ever" (MVP spec §09). Every refusal says which
   // check refused, because the only symptom of the last inbound outage lived
   // on Twilio's side of the wire as error 11200 (sms.pb.js:74-80).
@@ -145,6 +155,33 @@ export async function smsInbound(req: Request, env: SmsEnv): Promise<Response> {
     { from, text: body, externalId: messageSid });
   if (landed.kind === "unknown") return text(500, "temporary routing failure");
   if (landed.kind === "failed") return text(500, "could not persist the message");
+
+  // THE TEXT TWIN. The spec's rule for the whole connections area is one line:
+  // "everything here has a text twin", and until this call existed nothing
+  // anywhere read an inbound message for one — "disconnect slack" reached
+  // nobody who understood it.
+  //
+  // AFTER THE ROW, NEVER INSTEAD OF IT. The event is already written above, so
+  // the brain sees this message exactly as it always has whatever the twin
+  // decides; the twin only ever ADDS a reply, and on most messages it adds
+  // nothing (`not_for_us`).
+  //
+  // THE OWNER COMES FROM THE STORED ROW `landInboundText` resolved by phone
+  // number, never from a body field. `body` is handed over verbatim: any
+  // "does this look like a connections message" test in front of this call
+  // would be the law-1 violation the module exists to avoid.
+  //
+  // waitUntil, NOT await. Twilio wants the TwiML promptly and the twin spends
+  // a model call; without it a Worker cancels background work the moment the
+  // response is returned, which is the failure connections-wait.ts already
+  // prints for /c/{token}/go. With no ctx it is awaited instead, so a caller
+  // that cannot pass one still gets the behaviour rather than silence.
+  if (landed.kind === "written") {
+    const run = handleInboundText(
+      env as unknown as TextCommandEnv, landed.owner_ref, body, landed.id);
+    if (ctx) ctx.waitUntil(run); else await run;
+  }
+
   // Dropped, already handled, written: all 200 with the empty TwiML, as the
   // oracle answers. The log line is the only place the difference shows, on
   // purpose -- Twilio must not retry a text that was refused for a reason.

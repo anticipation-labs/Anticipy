@@ -57,6 +57,18 @@
  * a budget refusal that recorded its own attempt, which turns an hour of
  * cooldown into a permanent one for whoever keeps tapping — and the window
  * check was rewritten to keep tapping for exactly that reason.
+ *
+ * FIVE MORE on 2026-09-06 for `/skip`, the leg that lets a person say no. All
+ * five went red, and the check that killed each is named:
+ *
+ *   skip accepting GET ................. a skip RECORDS the decline
+ *   every skip claiming the setup card . a skip RECORDS the decline (7 not 14)
+ *   a malformed `onboarding` guessed at  an onboarding flag that is not a
+ *                                        boolean is a 400
+ *   the body allowed to name the owner . a stranger cannot decline on somebody
+ *                                        else's behalf
+ *   a failed write answering ok:true ... a database that cannot write the
+ *                                        decline says so
  */
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
@@ -315,17 +327,37 @@ function writesFlag(db: FakeD1, account: string): number {
 // THE CONTRACT — read out of the client that already calls these
 // ===========================================================================
 
-await check("the six paths are the six the phone's client declares", () => {
-  // ConnectedAppsClient.Route. The phone builds every URL from these literals
-  // and nothing else; a route renamed on either side must be red here rather
-  // than a 404 on somebody's phone.
+/**
+ * THE CENSUS, AND THE ONE DECLARED GAP IN IT.
+ *
+ * ConnectedAppsClient.Route. The phone builds every URL from these literals and
+ * nothing else; a route renamed on either side must be red here rather than a
+ * 404 on somebody's phone.
+ *
+ * `/me/connections/skip` is served and is NOT yet on the phone, and that gap is
+ * written down rather than papered over: the Worker half of the onboarding Skip
+ * landed on 2026-09-06 and the Swift half is another change's. The day
+ * `ConnectedAppsClient.Route` declares it, THIS CHECK GOES RED and the
+ * exception below is deleted — which is the only kind of exception worth
+ * having, one that expires by going off.
+ */
+const NOT_YET_ON_THE_PHONE: readonly string[] = ["/me/connections/skip"];
+
+await check("every path the phone's client declares is a path this Worker serves", () => {
   const declared = [...CLIENT_SWIFT.matchAll(/static let \w+ = "(me\/connections[^"]*)"/g)]
     .map((m) => "/" + (m[1] as string));
   assert.equal(declared.length, 6,
     "ConnectedAppsClient.Route no longer declares six routes; this file's census is stale");
   const served = Object.values(R).slice().sort();
-  assert.deepEqual(declared.slice().sort(), served,
-    "the phone's routes and this Worker's routes have drifted apart");
+  for (const path of declared) {
+    assert.ok(served.includes(path),
+      `the phone calls ${path} and this Worker does not serve it`);
+  }
+  const extra = served.filter((p) => !declared.includes(p));
+  assert.deepEqual(extra, NOT_YET_ON_THE_PHONE.slice().sort(),
+    "the phone's routes and this Worker's routes have drifted apart in a way nobody "
+    + "wrote down — either the client gained a route this Worker does not serve, or "
+    + "this Worker gained one and NOT_YET_ON_THE_PHONE was not updated");
 });
 
 await check("the two query names are the phone's own", () => {
@@ -1285,6 +1317,226 @@ await check("a database that cannot mint says so, and answers no url", async () 
   const body = await jsonOf(res, "link db down");
   assert.ok(!("url" in body));
   assert.equal(storedLinks(r.db).length, 0);
+});
+
+// ===========================================================================
+// 7. POST /me/connections/skip — SAYING NO, AND THE LADDER IT ENTERS
+//
+// THE DEFECT THIS SECTION REPRODUCES, measured before the route existed: no
+// user action anywhere in the system recorded a decline. Onboarding's Skip
+// wrote a flag into UserDefaults on the device, so `connect_nudges` never
+// moved, the snooze table (14 / 45 / stop) could not be ENTERED by a human
+// action, and the same person was asked again at the next scoring moment — on
+// a second phone, or after a reinstall, from the first minute.
+//
+// Every check below reads the row out of SQLite outside the code under test.
+// "It answered 200" is not the property; "the database now says no" is.
+// ===========================================================================
+
+/** `connect_nudges` as SQLite holds it, read outside the code under test. */
+function storedNudges(db: FakeD1): Record<string, unknown>[] {
+  return db.rows(`SELECT * FROM "connect_nudges" ORDER BY "toolkit"`);
+}
+const DAY_MS = 24 * 60 * 60 * 1000;
+/** A slug nothing in the catalog, the seed or the Worker has ever heard of. */
+const UNASKED = "plindle_docs";
+
+await check("a skip RECORDS the decline — the row exists, and it is level 1", async () => {
+  const r = await rig();
+  assert.equal(storedNudges(r.db).length, 0, "no nudge row exists before the skip");
+
+  const res = await connectionsApiRoute(
+    postReq(R.skip, r.ownerToken, { toolkit: UNASKED }), r.env, r.deps);
+  assert.equal(res.status, 200);
+  const body = await jsonOf(res, "skip records");
+  assert.equal(body.ok, true);
+  assert.equal(body.state, "recorded");
+  assert.equal(body.level, 1);
+
+  const rows = storedNudges(r.db);
+  assert.equal(rows.length, 1, "the skip wrote nothing into connect_nudges");
+  assert.equal(rows[0]!.user_id, OWNER);
+  assert.equal(rows[0]!.toolkit, UNASKED);
+  assert.equal(rows[0]!.state, "declined");
+  assert.equal(Number(rows[0]!.level), 1);
+  assert.equal(Number(rows[0]!.acted_at), NOW,
+    "acted_at is what separates a tap from 72 hours of silence");
+  assert.equal(Number(rows[0]!.snooze_until) - NOW, 14 * DAY_MS,
+    "an ordinary decline is the spec's fourteen days");
+
+  // A DECLINE COSTS NOBODY A VENDOR ROUND TRIP. Saying no must be the cheapest
+  // thing in the product, or it is the thing that gets rate-limited away.
+  assert.equal(r.log.toolkit.length, 0);
+  assert.equal(r.log.connections.length, 0);
+});
+
+await check("the onboarding skip is the SEVEN-day soft snooze, and it is a different row",
+  async () => {
+    const soft = await rig();
+    const softRes = await connectionsApiRoute(
+      postReq(R.skip, soft.ownerToken, { toolkit: UNASKED, onboarding: true }),
+      soft.env, soft.deps);
+    assert.equal(softRes.status, 200);
+    await bodyOf(softRes, "skip onboarding");
+    const softRow = storedNudges(soft.db)[0]!;
+    assert.equal(softRow.trigger, "onboarding",
+      "the row must SAY it was a setup card, or nothing downstream can tell the two apart");
+    assert.equal(Number(softRow.snooze_until) - NOW, 7 * DAY_MS);
+
+    // THE CONTROL, AND THE POINT: the same tap without the setup card is the
+    // real decline. Conflating them is what page 21 forbids in one sentence.
+    const real = await rig();
+    const realRes = await connectionsApiRoute(
+      postReq(R.skip, real.ownerToken, { toolkit: UNASKED, onboarding: false }),
+      real.env, real.deps);
+    await bodyOf(realRes, "skip not onboarding");
+    const realRow = storedNudges(real.db)[0]!;
+    assert.equal(realRow.trigger, null);
+    assert.equal(Number(realRow.snooze_until) - NOW, 14 * DAY_MS);
+    assert.notEqual(Number(softRow.snooze_until), Number(realRow.snooze_until));
+  });
+
+await check("an absent onboarding flag is the LONGER quiet, never the shorter one", async () => {
+  const r = await rig();
+  await bodyOf(await connectionsApiRoute(
+    postReq(R.skip, r.ownerToken, { toolkit: UNASKED }), r.env, r.deps), "skip no flag");
+  assert.equal(Number(storedNudges(r.db)[0]!.snooze_until) - NOW, 14 * DAY_MS,
+    "not-stated must never be read as the setup card: that would shorten a snooze "
+    + "nobody asked to shorten");
+});
+
+await check("an onboarding flag that is not a boolean is a 400 and writes nothing", async () => {
+  for (const bad of ["true", 1, "yes", {}, []]) {
+    const r = await rig();
+    const res = await connectionsApiRoute(
+      postReq(R.skip, r.ownerToken, { toolkit: UNASKED, onboarding: bad }), r.env, r.deps);
+    assert.equal(res.status, 400, JSON.stringify(bad));
+    await bodyOf(res, "skip bad flag");
+    assert.equal(storedNudges(r.db).length, 0,
+      "a malformed claim about the surface must not be guessed at in either direction");
+  }
+});
+
+await check("a second tap does NOT walk somebody from L1 to L2", async () => {
+  const r = await rig();
+  const first = await jsonOf(await connectionsApiRoute(
+    postReq(R.skip, r.ownerToken, { toolkit: UNASKED }), r.env, r.deps), "skip once");
+  assert.equal(first.state, "recorded");
+  const second = await jsonOf(await connectionsApiRoute(
+    postReq(R.skip, r.ownerToken, { toolkit: UNASKED }), r.env, r.deps), "skip twice");
+  assert.equal(second.state, "already-declined",
+    "a refresh, a double tap or a retried POST must not climb the ladder");
+  assert.equal(second.level, 1);
+  const rows = storedNudges(r.db);
+  assert.equal(rows.length, 1);
+  assert.equal(Number(rows[0]!.level), 1);
+  assert.equal(Number(rows[0]!.snooze_until) - NOW, 14 * DAY_MS,
+    "the second tap must not have pushed the snooze out either");
+});
+
+await check("THE CONTROL: a decline after a NEW ask does climb — L2 is 45 days", async () => {
+  const r = await rig();
+  const store = createD1Store(r.env as never);
+  await bodyOf(await connectionsApiRoute(
+    postReq(R.skip, r.ownerToken, { toolkit: UNASKED }), r.env, r.deps), "ladder L1");
+  // The ask engine asks again once the snooze has run out. That is the only
+  // thing that reopens the ladder, and it must still reopen it — a rung nobody
+  // can climb is a product that stops asking after one no, which is the OTHER
+  // failure and just as wrong.
+  const asked = { ...storedNudges(r.db)[0]! } as Record<string, unknown>;
+  await store.putNudge({
+    ...(asked as never),
+    state: "asked", sent_at: NOW + 20 * DAY_MS, acted_at: null, snooze_until: null,
+  } as never);
+  // The same database, twenty days later: only the clock moves.
+  const res = await connectionsApiRoute(
+    postReq(R.skip, r.ownerToken, { toolkit: UNASKED }), r.env,
+    { ...r.deps, now: () => NOW + 20 * DAY_MS });
+  const body = await jsonOf(res, "ladder L2");
+  assert.equal(body.state, "recorded");
+  assert.equal(body.level, 2);
+  assert.equal(Number(storedNudges(r.db)[0]!.snooze_until) - (NOW + 20 * DAY_MS), 45 * DAY_MS);
+});
+
+await check("an app this owner already has connected has nothing to decline", async () => {
+  const r = await rig();
+  const store = createD1Store(r.env as never);
+  await store.putNudge({
+    user_id: OWNER as never, toolkit: "zellibrix" as never, state: "connected", level: 0,
+    snooze_until: null, trigger: null, sent_at: NOW - DAY_MS, acted_at: NOW - DAY_MS,
+    channel: "sms",
+  } as never);
+  const body = await jsonOf(await connectionsApiRoute(
+    postReq(R.skip, r.ownerToken, { toolkit: "zellibrix" }), r.env, r.deps), "skip connected");
+  assert.equal(body.state, "nothing-to-decline");
+  const row = storedNudges(r.db).find((n) => n.toolkit === "zellibrix")!;
+  assert.equal(row.state, "connected",
+    "declining an app they already have would stop the router using a live connection");
+  assert.equal(storedConnections(r.db).length, 3, "and it must not touch the connections table");
+});
+
+await check("a signed-out skip records nothing at all", async () => {
+  const r = await rig();
+  const res = await connectionsApiRoute(
+    postReq(R.skip, null, { toolkit: UNASKED }), r.env, r.deps);
+  assert.equal(res.status, 401);
+  await bodyOf(res, "skip signed out");
+  assert.equal(storedNudges(r.db).length, 0);
+});
+
+await check("a stranger cannot decline on somebody else's behalf", async () => {
+  const r = await rig();
+  // Every shape a caller could reach for: an owner on the body, and a whole
+  // second session. Neither may put a row under OWNER.
+  const res = await connectionsApiRoute(
+    postReq(R.skip, r.strangerToken, { toolkit: UNASKED, user_id: OWNER, owner: OWNER }),
+    r.env, r.deps);
+  assert.equal(res.status, 200, "the stranger may decline for THEMSELVES");
+  await bodyOf(res, "skip stranger");
+  const rows = storedNudges(r.db);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0]!.user_id, STRANGER,
+    "a body field named an owner and the row followed it — that is the wrong-person failure");
+});
+
+await check("a skip with no toolkit is a 400 and writes nothing", async () => {
+  const r = await rig();
+  for (const bad of [{}, { toolkit: "" }, { toolkit: "   " }, { toolkit: 7 }]) {
+    const res = await connectionsApiRoute(postReq(R.skip, r.ownerToken, bad), r.env, r.deps);
+    assert.equal(res.status, 400, JSON.stringify(bad));
+    await bodyOf(res, "skip bad slug");
+  }
+  assert.equal(storedNudges(r.db).length, 0);
+});
+
+await check("a GET on /skip is 405 — a prefetcher must not decline for somebody", async () => {
+  const r = await rig();
+  const res = await connectionsApiRoute(getReq(R.skip, r.ownerToken), r.env, r.deps);
+  assert.equal(res.status, 405);
+  assert.equal(res.headers.get("allow"), "POST");
+  assert.equal(storedNudges(r.db).length, 0);
+  await bodyOf(res, "skip GET");
+
+  // THE CONTROL: the same route, POSTed, still records. A guard that refuses
+  // both is an outage, not a guard.
+  const ok = await connectionsApiRoute(
+    postReq(R.skip, r.ownerToken, { toolkit: UNASKED }), r.env, r.deps);
+  assert.equal(ok.status, 200);
+  await bodyOf(ok, "skip GET control");
+  assert.equal(storedNudges(r.db).length, 1);
+});
+
+await check("a database that cannot write the decline says so — never { ok: true }", async () => {
+  const r = await rig();
+  r.db.failOn = (sql) => sql.startsWith(`INSERT INTO "connect_nudges"`);
+  const res = await connectionsApiRoute(
+    postReq(R.skip, r.ownerToken, { toolkit: UNASKED }), r.env, r.deps);
+  assert.equal(res.status, 503);
+  const body = await jsonOf(res, "skip db down");
+  assert.notEqual(body.ok, true,
+    "a phone told its skip landed will not send it again, and the server never heard it");
+  r.db.failOn = undefined;
+  assert.equal(storedNudges(r.db).length, 0);
 });
 
 // ===========================================================================

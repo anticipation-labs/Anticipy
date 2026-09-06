@@ -207,14 +207,18 @@ export default {
     // Twilio's inbound webhook. TWILIO_AUTH_TOKEN is the only thing that can
     // validate X-Twilio-Signature -- there is no API-key equivalent.
     if (path === "/sms/inbound" && method === "POST") {
-      return smsInbound(request, env as unknown as SmsEnv);
+      // ctx IS LOAD-BEARING, as it is for /c/{token}/go. The text twin
+      // (src/connections/wiring.ts handleInboundText) spends a model call
+      // AFTER the row is written and after the carrier has its answer; without
+      // waitUntil a Worker cancels that work the moment the TwiML is returned.
+      return smsInbound(request, env as unknown as SmsEnv, ctx);
     }
     // Sendblue's webhook: inbound iMessage/SMS AND status updates for texts we
     // sent, on one URL, proven by the dashboard's secret in sb-signing-secret.
     // It lands the same events row /sms/inbound lands (src/pb/sender.ts), so
     // the brain cannot tell the carriers apart.
     if (path === "/sms/sendblue" && method === "POST") {
-      return sendblueInbound(request, env as unknown as SendblueEnv);
+      return sendblueInbound(request, env as unknown as SendblueEnv, ctx);
     }
     if (path === "/transcription/token" && method === "POST") {
       return transcriptionToken(request, env as unknown as SmsEnv);

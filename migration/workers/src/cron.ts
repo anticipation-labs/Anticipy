@@ -28,7 +28,36 @@
  */
 import { newRecordId, pbNow } from "./pb/wire.ts";
 import { sendText, type MessagingEnv } from "./messaging.ts";
-import { connectNudgeSweep } from "./connections/nudge.ts";
+import { connectNudgeSweep, installNudgeWiring } from "./connections/nudge.ts";
+import { nudgeWiring } from "./connections/wiring.ts";
+import { sweepConnectedSignals } from "./connections/signals.ts";
+
+/**
+ * THE CONNECT-ASK WIRING, installed once when this module loads.
+ *
+ * WHY IT EXISTS AT ALL, MEASURED. On 2026-09-06 `installNudgeWiring` had ZERO
+ * callers, so `connectNudgeSweep` logged "no wiring installed; nobody was asked
+ * anything" on every tick that reached it — the same shape as
+ * `installConnectWiring` a day earlier, where every /c/ leg answered 503 to
+ * every token there had ever been while five tested modules sat behind it. A
+ * part nothing calls is not a feature.
+ *
+ * WHY HERE AND NOT src/index.ts, where the connect half is installed. This
+ * module is the ONLY caller of `connectNudgeSweep`, and index.ts imports it at
+ * module load for `scheduled`, so an install here is in place for the request
+ * path as well — a route that later wants to send an in-task ask gets the same
+ * wiring with no second line to remember. Installing it beside the sweep it
+ * serves is also what makes the pair readable: the dispatch and the thing being
+ * dispatched are eight lines apart.
+ *
+ * IT IS A FUNCTION OF env, not a built object, because a Worker's bindings do
+ * not exist when a module is evaluated — they arrive per tick. See
+ * src/connections/wiring.ts for what each of the six ports is, and for why a
+ * Worker missing the DB binding, the vendor secret, a model key or a messaging
+ * provider installs this anyway and then asks nobody, loudly, instead of
+ * texting a link it cannot honour.
+ */
+installNudgeWiring(nudgeWiring);
 
 /**
  * The Twilio names stay required here because index.ts Env extends this and
@@ -64,7 +93,16 @@ export async function scheduled(
       ctx.waitUntil(sweep(env));
       ctx.waitUntil(connectAsks(env));
       return;
-    case "17 4 * * *":  ctx.waitUntil(prune(env)); return;
+    // THE NIGHTLY LEG CARRIES TWO THINGS, and the second one SENDS NOTHING.
+    // `connectedSignals` writes evidence rows and never a text, which is why
+    // 04:17 UTC is the right home for it and the wrong home for the ask above:
+    // it costs nobody an interruption at 3am, and one sweep a day is the right
+    // cadence for a fact that changes when somebody connects an app.
+    // Independent waitUntil calls for the reason the five-minute case gives.
+    case "17 4 * * *":
+      ctx.waitUntil(prune(env));
+      ctx.waitUntil(connectedSignals(env));
+      return;
     default:
       console.log(`cron: no handler for schedule ${JSON.stringify(event.cron)}`);
   }
@@ -80,13 +118,20 @@ export async function scheduled(
 // src/connections/due.ts, which is wired in through `installNudgeWiring`; with
 // no wiring installed the sweep logs that it asked nobody and returns.
 //
-// NOT LIVE YET, AND NOT BECAUSE OF THIS LINE. `wrangler.jsonc` registers only
-// `17 4 * * *`; `*/5 * * * *` is commented out there with its reason (two
-// sweeps against one database would send the team every reminder twice), and
-// only wrangler.dev.jsonc carries it. So THIS WHOLE CASE — the HQ reminder
-// sweep included — is dead in production until the cutover that file
-// describes. Do not answer that by hanging the connect ask off the nightly
-// `17 4 * * *` leg: an ask that lands at 04:17 UTC is the 3am text the policy
+// REGISTERED IN wrangler.jsonc SINCE 2026-09-06 — and note the wording: it is
+// live in production from the NEXT DEPLOY of this Worker and not before, so
+// HARNESS-LAWS law 3 is unmet until a tick is seen on api.anticipy.ai.
+//
+// For the week before that, `wrangler.jsonc` carried only `17 4 * * *`, because
+// PocketBase's own five-minute sweep was still running against its own database
+// and two sweeps would have sent the team every reminder twice. That ended when
+// Railway was stopped on 2026-09-05 (`railway down`, both services; the health
+// URL 404s, re-measured 2026-09-06 before this line was written), which is the
+// cutover wrangler.jsonc named as the precondition. Exactly one sweep owns this
+// database now, and it is this one.
+//
+// DO NOT ANSWER A FUTURE OUTAGE BY HANGING THE CONNECT ASK OFF THE NIGHTLY
+// `17 4 * * *` LEG. An ask that lands at 04:17 UTC is the 3am text the policy
 // in src/connections/nudge.ts exists to prevent.
 //
 // WHY THIS WRAPPER EXISTS, rather than passing the sweep to waitUntil
@@ -111,6 +156,48 @@ async function connectAsks(env: CronEnv): Promise<void> {
     await connectNudgeSweep(env);
   } catch (err) {
     console.log(`connect nudge sweep: failed, the rest of the tick continues: ${String(err)}`);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// THE EVIDENCE SWEEP — src/connections/signals.ts sweepConnectedSignals.
+//
+// `app_usage_signals` had ZERO ROWS in production when this line was written,
+// and an empty table is a `due()` that returns nobody, which is a
+// `connectNudgeSweep` that asks nobody, forever, with a green log. Of the six
+// ingest doors signals.ts declares, exactly ONE has an input this backend
+// already produces: the `connections` rows the /c/ routes have been filling.
+// This turns each of those into the `certain` signal, with the alias, so the
+// table stops being empty and `rankedApps` has something to order.
+//
+// IT SENDS NOTHING. It reads `connections` and writes `app_usage_signals`; no
+// text, no email, no vendor call. That is what makes the nightly trigger the
+// right home — see the case above.
+//
+// IT DOES NOT BY ITSELF BUY AN ASK, and saying so here is not pessimism:
+// due.ts selects only the two MOMENT-bearing sources (`observer`, `said`), and
+// this door writes `connected`. What it buys is a non-empty table, a working
+// ranking, and the alias the ask needs to name the right account. The ask
+// starts when the observer door (the browser hand's post-run host) or the said
+// door (a model resolving the owner's own words) is wired — signals.ts's
+// header names both by their exact call.
+//
+// Same wrapper, same two reasons as `connectAsks`: a synchronous throw and a
+// rejected promise both mark the invocation failed, and a failed `17 4 * * *`
+// invocation is a candidate for being run again — which re-runs `prune`.
+// ---------------------------------------------------------------------------
+
+async function connectedSignals(env: CronEnv): Promise<void> {
+  try {
+    const report = await sweepConnectedSignals(env, Date.now());
+    console.log(
+      `connect signals sweep: ${report.scanned} connected row(s) scanned, `
+        + `${report.recorded} evidence row(s) written, ${report.dropped} unreadable row(s) dropped`,
+    );
+  } catch (err) {
+    console.log(
+      `connect signals sweep: failed, the rest of the tick continues: ${String(err)}`,
+    );
   }
 }
 

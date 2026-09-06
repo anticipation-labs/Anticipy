@@ -103,8 +103,8 @@ import type {
   ToolkitMeta,
 } from "../../../../spike/two-hands/src/connections/contract.ts";
 
-import { ownerId } from "./store.ts";
-import type { StoredLink } from "./store.ts";
+import { ConnectionsSchemaMissing, liveColumns, ownerId } from "./store.ts";
+import type { StoredLink, StoreEnv } from "./store.ts";
 import {
   CONNECT_URL_BASE,
   LINK_TTL_MS,
@@ -239,9 +239,30 @@ export interface NudgeEnv extends MessagingEnv {
 export interface NudgeStore {
   readNudge(user: OwnerId | string, toolkit: Toolkit): Promise<ConnectNudge | null>;
   nudgesForOwner(user: OwnerId | string): Promise<ConnectNudge[]>;
+  /** The unconditional upsert. NOT on the send path any more — `claimAsk`
+   *  below is, because an unconditional write cannot tell a first ask from a
+   *  second one. It stays declared because it is the ask's view of what a
+   *  nudge store must be able to do, and a wiring that cannot write a nudge
+   *  row at all is broken however the lease is taken. */
   putNudge(row: ConnectNudge): Promise<void>;
   /** Insert. MUST reject a handle that already exists rather than overwrite. */
   put(row: StoredLink): Promise<void>;
+  /**
+   * THE LEASE, WHEN THE STORE OWNS ONE. Optional today because store.ts has no
+   * conditional write on `connect_nudges` — see `d1ClaimAsk`, which is the one
+   * this Worker uses until it does. A store that implements it wins: it is
+   * closer to the rows, and a store that is not backed by `env.DB` (the
+   * in-memory one) has no other way to be safe.
+   *
+   * AN IMPLEMENTATION THAT IGNORES THE THIRD ARGUMENT IS BROKEN, and TypeScript
+   * will not say so — a two-parameter function is assignable here. The budget
+   * is the only thing keeping the 7-day cap true when two ticks are in flight
+   * about two different apps, and a store that enforces only the row half hands
+   * one owner two texts. If you write one, honour both predicates in ONE
+   * statement, and prove it with two concurrent apps rather than two sequential
+   * ones — the sequential case passed throughout the defect.
+   */
+  claimAsk?: AskClaim;
 }
 
 /**
@@ -270,6 +291,19 @@ export interface NudgeMoment {
   whatHappened?: string;
   /** What the browser hand cost, in ms. */
   browserMs?: number;
+  /**
+   * THE SPEC'S THIRD WRITER INPUT: lines THIS owner said, in their own words,
+   * so the ask can match their voice (page 22). Passed straight to the writer
+   * and never read here — no policy below scores it, and none may: it is a
+   * human's sentences, and a rule that branched on them would be exactly the
+   * pattern-match law 1 forbids.
+   *
+   * It arrives on the MOMENT rather than being fetched by the writer because
+   * `AskInput` carries no owner, and a writer that went looking for "the owner
+   * we were last asked about" would bind one person's words to another
+   * person's text the first time this loop is parallelised.
+   */
+  phrasing?: readonly string[];
 }
 
 /** One (owner, app, moment) the sweep should consider. */
@@ -1148,6 +1182,203 @@ export async function askMessage(
 }
 
 // ===========================================================================
+// 3b. THE LEASE — one ask, claimed before the text goes
+// ===========================================================================
+
+/**
+ * WHY THIS EXISTS, and it is not theoretical: it was driven on 2026-09-06.
+ *
+ * The sweep READS who is due, then decides, then writes. Two five-minute ticks
+ * in flight together — Cloudflare may overlap invocations, and a hand-run
+ * sweep beside the scheduled one certainly does — both read the same absent
+ * `connect_nudges` row, and BOTH CLEAR THE SEVEN-DAY CAP, because that cap is
+ * computed from `sent_at` on rows neither of them has written yet. Two texts
+ * with two live links land in one person's hand, and because `putNudge` is an
+ * upsert on (user_id, toolkit) there is ONE row afterwards: nothing in the
+ * database can ever say it happened.
+ *
+ * THE MECHANISM IS THE ONE THIS WORKER ALREADY HAS, not a second one.
+ * routes/connect.ts `connectPageDone` and connections/wait.ts both write a
+ * connection under a single conditional statement on `connect_links`
+ * (`store.complete`: `UPDATE … WHERE completed_at IS NULL`, `won = changes
+ * === 1`), and the loser does nothing and says which. This is that, on the
+ * row the ask is about: ONE statement, no read between the check and the
+ * write, `won = changes === 1`, and a loser that sends NOTHING.
+ *
+ * THE EXPECTATION IS THE ROW AS IT WAS READ, in two columns — `state` and
+ * `sent_at`. They are the two the lease is about (an ask is out, and when),
+ * and `IS` rather than `=` so that a NULL `sent_at` compares as a value: with
+ * `=` the fresh-owner case never matches and every tick loses forever, which
+ * is the same feature switched off.
+ *
+ * AND THE ROW IS NOT THE WHOLE PROMISE — round-2 finding 1, driven 2026-09-06
+ * on the fix above. A lease keyed (user_id, toolkit) closes the same-app race
+ * and leaves the cross-app one wide open: two ticks about DIFFERENT apps for
+ * ONE owner take DIFFERENT rows, so neither predicate is false; both read an
+ * ask history in which nothing has been sent, both clear the 7-day cap because
+ * neither has written yet, and the owner gets two texts. The cap the spec
+ * states is "one connect ask per user per 7 days ACROSS ALL APPS" (page 24),
+ * and a per-row promise cannot make that sentence true. So the claim carries a
+ * SECOND predicate, an `AskBudget`, evaluated in the same statement: no OTHER
+ * app of this owner's may carry a `sent_at` inside the window. Two ticks, two
+ * apps, one text — and the loser is `lost-race`, not `hold`, because nothing
+ * about it was wrong.
+ *
+ * IT IS THE SAME NUMBER `shouldAsk` USED, recomputed from the same `now` at
+ * the call site rather than passed down from the policy: a floor that drifts
+ * from the policy it enforces refuses asks the policy licensed, and reports
+ * them as overlaps that never happened.
+ *
+ * A ROW THAT DOES NOT EXIST YET is the INSERT half of the same statement, and
+ * that is the whole reason it is an upsert rather than an UPDATE: the
+ * commonest race by far is two ticks about an owner with no row at all, where
+ * an UPDATE would change nothing, report `changes === 0`, and both ticks would
+ * read themselves as the loser — silence instead of a double text, which is
+ * safer but is still wrong.
+ *
+ * WHERE THIS BELONGS IN THE END. In store.ts, as a conditional `putNudge`
+ * beside `claim`, `complete` and `release`, so that the in-memory store gets
+ * the same guarantee and no module outside store.ts writes SQL. That file is
+ * another agent's this session; `NudgeStore.claimAsk` is the seam it takes
+ * over through, and the day it does, everything below `askClaimFor` is
+ * deleted and nothing else changes.
+ */
+
+/**
+ * THE OWNER'S WEEKLY BUDGET, AS A CONDITION ON THE WRITE.
+ *
+ * The row lease below is a promise about ONE ROW. The 7-day cap is a promise
+ * about a PERSON, across every app they have — and a per-row lease cannot keep
+ * it, which is exactly what happened: two ticks about DIFFERENT apps claimed
+ * different rows, neither predicate was false, and one owner got two texts
+ * (round-2 finding 1, driven 2026-09-06). Anything implementing `AskClaim`
+ * must therefore refuse when this owner's week is already spent, IN THE SAME
+ * STATEMENT as the row check — a read followed by a write is the hole.
+ */
+export interface AskBudget {
+  /** Whose week is being spent. Never taken from a row: it is the owner the
+   *  caller has already validated. */
+  owner: OwnerId;
+  /** REFUSE if any OTHER app of this owner's carries a `sent_at` strictly
+   *  after this instant. Strictly, to match `shouldAsk`'s own `since <
+   *  GLOBAL_ASK_INTERVAL_DAYS * DAY_MS` exactly: a lease that disagreed with
+   *  the policy by a millisecond would refuse asks the policy licensed and
+   *  report them as an overlap that never happened. */
+  noAskSince: number;
+}
+
+/** Write `write` if, and only if, the stored row still looks like `expect` AND
+ *  this owner's weekly budget is unspent. `true` means this caller may send the
+ *  one text; `false` means somebody else already did, and this caller sends
+ *  nothing.
+ *
+ *  `budget: null` is NOT "no cap" as a convenience — it is the HAND-BACK, and
+ *  it is the only call that may pass it. Releasing a lease after a failed send
+ *  must not be refused by the `sent_at` this same call is trying to erase. */
+export type AskClaim = (
+  expect: ConnectNudge,
+  write: ConnectNudge,
+  budget: AskBudget | null,
+) => Promise<boolean>;
+
+/** Every column a nudge row is written with, in a fixed order. Names from the
+ *  contract's own shape, never from a caller, so nothing here is interpolated
+ *  user input. */
+const NUDGE_COLUMNS: readonly string[] = [
+  "user_id", "toolkit", "state", "level", "snooze_until", "trigger", "sent_at", "acted_at",
+  "channel",
+];
+
+/** The columns without which a lease means nothing: the key it is taken on,
+ *  and the two the predicate compares. The rest are written when the live
+ *  table has them and skipped when it does not — store.ts's own discipline,
+ *  and for its own measured reason (2026-09-05: the live `events` table was
+ *  missing two columns schema.sql declared and every write became a D1 1101). */
+const NUDGE_LEASE_REQUIRED: readonly string[] = [
+  "user_id", "toolkit", "state", "level", "snooze_until", "sent_at",
+];
+
+function col(name: string): string {
+  return `"${name}"`;
+}
+
+/**
+ * The lease over a live D1. ONE statement, and there is no read in it.
+ *
+ * It THROWS on a schema fault rather than answering `false`, because "the
+ * table is not migrated" and "another tick got there first" are opposite facts
+ * and the caller reports them as different outcomes.
+ *
+ * TWO PREDICATES, IN BOTH HALVES OF THE UPSERT. The row half (`state`,
+ * `sent_at`) is the same-app lease. The budget half — "no OTHER app of this
+ * owner's has been sent anything since `noAskSince`" — is the cross-app one,
+ * and it must appear in the INSERT half as well as in the DO UPDATE half or it
+ * misses the commonest race there is: two ticks about two apps for an owner
+ * with NO rows at all, where nothing conflicts and `ON CONFLICT … WHERE` never
+ * runs. That is why the values arrive through a `SELECT … WHERE 1` rather than
+ * a `VALUES` list: a `VALUES` insert has nowhere to put a condition.
+ */
+async function d1ClaimAsk(
+  env: NudgeEnv,
+  expect: ConnectNudge,
+  write: ConnectNudge,
+  budget: AskBudget | null,
+): Promise<boolean> {
+  const store = env as unknown as StoreEnv;
+  const live = await liveColumns(store, "connect_nudges");
+  const missing = NUDGE_LEASE_REQUIRED.filter((c) => !live.has(c));
+  // An EMPTY set is the table not existing at all, which `filter` reports as
+  // every required column missing — the same error, naming the same migration.
+  if (missing.length > 0) throw new ConnectionsSchemaMissing("connect_nudges", missing);
+
+  const cols = NUDGE_COLUMNS.filter((c) => live.has(c));
+  const vals = cols.map((c) => (write as unknown as Record<string, unknown>)[c] ?? null);
+  const setters = cols
+    .filter((c) => c !== "user_id" && c !== "toolkit")
+    .map((c) => `${col(c)} = excluded.${col(c)}`)
+    .join(", ");
+  // ?1..?n are the row. ?n+1 and ?n+2 are the row predicate. ?n+3..?n+5 are
+  // the budget, bound only when there is one.
+  const n = cols.length;
+  const capArgs: unknown[] = [];
+  let cap = "";
+  if (budget !== null) {
+    // `b."toolkit" <> ?` so this predicate says ONE thing — "some OTHER app of
+    // theirs was asked about this week" — and can never fight the row lease
+    // above it over this owner's own row.
+    cap = ` AND NOT EXISTS (SELECT 1 FROM "connect_nudges" AS b `
+      + `WHERE b."user_id" = ?${n + 3} AND b."toolkit" <> ?${n + 5} `
+      + `AND b."sent_at" IS NOT NULL AND b."sent_at" > ?${n + 4})`;
+    capArgs.push(budget.owner, budget.noAskSince, write.toolkit);
+  }
+  const res = await store.DB.prepare(
+    `INSERT INTO "connect_nudges" (${cols.map(col).join(", ")}) `
+      // `SELECT … WHERE 1` rather than `VALUES (…)`: the budget has to be able
+      // to refuse the INSERT, and SQLite wants the SELECT's own WHERE present
+      // so that the upsert clause after it is unambiguous.
+      + `SELECT ${cols.map((_, i) => `?${i + 1}`).join(", ")} WHERE 1${cap} `
+      + `ON CONFLICT("user_id", "toolkit") DO UPDATE SET ${setters} `
+      + `WHERE "connect_nudges"."state" IS ?${n + 1} `
+      + `AND "connect_nudges"."sent_at" IS ?${n + 2}${cap}`,
+  ).bind(...vals, expect.state, expect.sent_at, ...capArgs).run();
+  return Number(res.meta?.changes ?? 0) === 1;
+}
+
+/**
+ * Which lease this ask is taken under, or `null` when there is none.
+ *
+ * NULL IS A REFUSAL, NOT A SHRUG. A sweep that cannot claim an ask cannot know
+ * whether another tick is already sending one, and the direction that failure
+ * is allowed to go is silence.
+ */
+function askClaimFor(env: NudgeEnv, deps: NudgeDeps): AskClaim | null {
+  const own = deps?.store?.claimAsk;
+  if (typeof own === "function") return (e, w, b) => own.call(deps.store, e, w, b);
+  if (env && (env as { DB?: D1Database }).DB) return (e, w, b) => d1ClaimAsk(env, e, w, b);
+  return null;
+}
+
+// ===========================================================================
 // 4. THE ASK, END TO END
 // ===========================================================================
 
@@ -1168,7 +1399,9 @@ export type AskCause =
   | "no-link"
   | "refused-copy"
   | "not-delivered"
-  | "store-failed";
+  | "store-failed"
+  | "no-lease"
+  | "lost-race";
 
 export interface AskOutcome {
   sent: boolean;
@@ -1205,13 +1438,15 @@ function outcome(cause: AskCause, reason: string, decision: NudgeDecision | null
  * and if the hand-back write ALSO fails, the row stays `asked` and the owner
  * stays quiet, which is the direction a floor is allowed to be wrong in.
  *
- * WHAT IS NOT CLOSED, written down rather than left for somebody to find: two
- * sweeps running at once could both read `never_asked` and both send, because
- * `putNudge` is a plain upsert with no compare-and-set — the store interface
- * has no conditional write for `connect_nudges` the way it has for
- * `connect_links`. Cloudflare does not overlap a Cron Trigger with itself, so
- * the exposure is a manual sweep run beside the scheduled one. The fix is a
- * conditional `putNudge` in store.ts, which this file does not own.
+ * TWO SWEEPS AT ONCE CANNOT BOTH SEND, and this used to be the paragraph that
+ * said they could. Both ticks read the same absent row, both clear the 7-day
+ * cap because neither has written, and before 2026-09-06 both sent — one owner,
+ * two live links, ONE row afterwards because the upsert collapsed them, so
+ * nothing could ever tell. The write is now a LEASE: one conditional statement
+ * on the row as it was read (`askClaimFor`, section 3b), `won = changes === 1`,
+ * and the tick that loses sends nothing and reports `lost-race`. It is the same
+ * mechanism `store.complete` gives the connect callback and the completion
+ * poll, on the row this half is about.
  */
 export async function sendConnectAsk(
   env: NudgeEnv,
@@ -1364,6 +1599,9 @@ export async function sendConnectAsk(
     whatHappened: moment.whatHappened,
     tasksThatWouldHaveUsedIt: ctx.tasksThatWouldHaveUsedIt,
     browserMs: moment.browserMs,
+    // Carried from THIS moment, which was established for THIS owner one call
+    // ago. Never cached, never defaulted, absent when the caller has none.
+    phrasing: moment.phrasing,
   };
   const copy = await askMessage(trigger, meta, evidence, deps.write, { base: baseOf(env, deps) });
   if (!copy.ok) {
@@ -1377,8 +1615,20 @@ export async function sendConnectAsk(
     return outcome("refused-copy", copy.refusal, "ask");
   }
 
-  // 8. THE ASK RECORD, taken as a lease BEFORE the send. `maturedBySilence` is
-  //    what stops a re-ask from erasing the decline the previous silence earned.
+  // 8. THE LEASE ON THIS ASK, TAKEN BEFORE THE TEXT GOES — one conditional
+  //    write, on the row as it was READ, so that two ticks in flight together
+  //    cannot both believe they are the one asking. `maturedBySilence` is what
+  //    stops a re-ask from erasing the decline the previous silence earned.
+  const claim = askClaimFor(env, deps);
+  if (claim === null) {
+    return outcome(
+      "no-lease",
+      "nothing can claim this ask: the store has no conditional nudge write and this Worker has "
+        + "no D1 binding, so two ticks could each believe they are the one asking. Silence is the "
+        + "direction that failure is allowed to go.",
+      "ask",
+    );
+  }
   const before = maturedBySilence(row, now);
   const asked: ConnectNudge = {
     ...before,
@@ -1388,13 +1638,43 @@ export async function sendConnectAsk(
     acted_at: null,
     channel: "sms",
   };
+  let won: boolean;
   try {
-    await deps.store.putNudge(asked);
+    // `row`, not `before`: the expectation is the row as the STORE answered,
+    // because that is what the other tick would have to have changed.
+    //
+    // AND THE WEEK, IN THE SAME STATEMENT. `lastAskAnyAppAt` above was read
+    // three awaits ago, and between that read and this write another tick can
+    // have spent this owner's week on a DIFFERENT app — a different row, so
+    // the row lease sees nothing. The floor is the same one `shouldAsk`
+    // applied, recomputed from the same clock so the two cannot disagree.
+    won = await claim(row, asked, {
+      owner: who,
+      noAskSince: now - GLOBAL_ASK_INTERVAL_DAYS * DAY_MS,
+    });
   } catch (err) {
     return outcome(
       "store-failed",
       "could not record the ask, so it was not sent: an ask nobody wrote down is an ask that "
         + "gets sent again on the next sweep. " + String((err as Error)?.message ?? err),
+      "ask",
+    );
+  }
+  if (!won) {
+    // NOT a hold and NOT a no-verdict: nothing about this owner or this moment
+    // was wrong. Another tick got to the row first and is sending the one text,
+    // and a report that cannot count this separately cannot tell an overlap
+    // from the policy refusing.
+    //
+    // ONE CAUSE FOR BOTH PREDICATES on purpose. "Another tick claimed this row"
+    // and "another tick spent this owner's week on a different app" are the
+    // same fact to everybody downstream — an overlap, one text, this one
+    // silent — and splitting them would invite a caller to retry one of them.
+    return outcome(
+      "lost-race",
+      "another sweep got there first — either to this row, or to this owner's one ask this "
+        + "week about some other app; the one text is already going out and this tick sends "
+        + "nothing",
       "ask",
     );
   }
@@ -1404,9 +1684,14 @@ export async function sendConnectAsk(
   const res = await sendText(env, to, copy.text, { tag: "connect ask" });
   if (!res.ok) {
     // HAND THE LEASE BACK, so a real interruption is not spent on a message
-    // nobody received.
+    // nobody received — and conditionally, exactly as `store.release` does it,
+    // so a slow hand-back cannot reopen the window under an ask a later tick
+    // has since sent for real.
     try {
-      await deps.store.putNudge(before);
+      // NO BUDGET ON THE WAY BACK. The only `sent_at` inside the window is the
+      // one this call is erasing, so a budget here would refuse every hand-back
+      // and leave a week spent on a text nobody received.
+      await claim(asked, before, null);
     } catch {
       // Nothing to add. The row stays `asked`, this owner stays quiet for a
       // week, and quiet is the safe direction.
@@ -1452,7 +1737,8 @@ export interface SweepReport {
   quiet: number;
   /** The model's draft broke a rule, or the send failed. */
   refused: number;
-  /** Over the per-tick budget, or this owner already got one this tick. */
+  /** Over the per-tick budget, this owner already got one this tick, or another
+   *  tick held the lease and this one stood down. */
   skipped: number;
 }
 
@@ -1526,6 +1812,10 @@ export async function connectNudgeSweep(
       askedThisTick.add(key);
     } else if (out.cause === "hold" || out.cause === "never-again" || out.cause === "no-verdict") {
       report.quiet += 1;
+    } else if (out.cause === "lost-race") {
+      // Counted with the budget skips, not with the refusals: nothing was
+      // wrong with this owner, this tick simply was not the one asking.
+      report.skipped += 1;
     } else {
       report.refused += 1;
     }

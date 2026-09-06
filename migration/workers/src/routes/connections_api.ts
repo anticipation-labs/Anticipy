@@ -1,11 +1,11 @@
 /**
- * src/routes/connections_api.ts — the six routes Settings → Connected Apps
- * calls, and the last link in the connect chain.
+ * src/routes/connections_api.ts — the routes Settings → Connected Apps and
+ * onboarding call, and the last link in the connect chain.
  *
  * THE CLIENT IS THE SPEC. Every path, every query name, every field name below
  * is read off app/ios/Anticipy/Backend/ConnectedAppsClient.swift, which was
  * written first and declares its own contract at lines 38-61. That file is not
- * edited to fit this one; this one is written to satisfy it. Until these six
+ * edited to fit this one; this one is written to satisfy it. Until these
  * existed, every call it makes failed the way an unreachable server fails, and
  * the screen showed "I couldn't read your connected apps" to everybody.
  *
@@ -17,6 +17,23 @@
  *                                               "revoke_unavailable", "app_name" }
  *   POST /me/connections/sentences         -> { "sentences": [ …, …, … ] }
  *   POST /me/connections/link              -> { "url": "https://…/c/{token}" }
+ *   POST /me/connections/skip              -> { "ok": true, "state", "level",
+ *                                               "snooze_until" }
+ *
+ * ── AND THE SEVENTH IS THE ONE NOBODY COULD REACH ───────────────────────────
+ *
+ * `/skip` is new on 2026-09-06 and it exists because a person could not say no.
+ * Onboarding's own Skip wrote a flag into UserDefaults ON THE DEVICE, so the
+ * server never heard it: the ask engine's `connect_nudges` row stayed exactly
+ * as it was, the snooze ladder was never entered, and the same person was asked
+ * again at the next moment that scored high enough — on a second phone, or
+ * after a reinstall, from the first minute. A refusal that lives only on the
+ * glass is not a refusal; it is a preference the product cannot read.
+ *
+ * IT IS THE SAME WRITE THE CONNECT PAGE MAKES. `recordSkip` is imported from
+ * routes/connect.ts rather than repeated, so the browser's "Skip for now" and
+ * the phone's Skip walk one ladder. Two writers would be two ladders, and the
+ * one nobody was looking at would be the wrong one.
  *
  * ── THE OWNER COMES FROM THE TOKEN. ALWAYS. ─────────────────────────────────
  *
@@ -87,6 +104,15 @@
  *    holds the account, so the next disconnect takes the stale-row branch and
  *    clears it — and closing it properly needs an UPDATE-only method on the
  *    store, which is not this change's file.
+ * 5. `/skip` IS UNBUDGETED, and deliberately so for now. It is one D1 read and
+ *    at most one upsert of the caller's OWN row, keyed (user_id, toolkit), and
+ *    the second call in a snooze window writes nothing at all — so hammering it
+ *    costs a row that already exists and reaches nobody else. What a budget
+ *    would buy here is protection from an authenticated owner spending their
+ *    own quota, and what it would risk is a person's "no" being refused because
+ *    their client retried; between those two, refusing a decline is the worse
+ *    failure. The shape to copy if that changes is `handleLink`'s, which counts
+ *    rows in D1 rather than in an isolate.
  */
 import { verifyToken, type AuthEnv } from "../pb/auth.ts";
 import {
@@ -109,6 +135,7 @@ import {
   type NudgeDeps,
   type NudgeEnv,
 } from "../connections/nudge.ts";
+import { recordSkip, type DeclineStore } from "./connect.ts";
 import type {
   Connection,
   DisconnectResult,
@@ -153,6 +180,7 @@ export const CONNECTIONS_API_ROUTES = {
   disconnect: "/me/connections/disconnect",
   sentences: "/me/connections/sentences",
   link: "/me/connections/link",
+  skip: "/me/connections/skip",
 } as const;
 
 export type ConnectionsApiLeg = keyof typeof CONNECTIONS_API_ROUTES;
@@ -172,6 +200,10 @@ const METHOD: Record<ConnectionsApiLeg, "GET" | "POST"> = {
   disconnect: "POST",
   sentences: "POST",
   link: "POST",
+  // A GET here would let a link prefetcher or an address-bar preload record a
+  // decline nobody made, and a decline is the one write whose failure mode is
+  // SILENCE — an app quietly snoozed for a fortnight and nobody to notice.
+  skip: "POST",
 };
 
 /** Anchored exactly, so `/me/connectionsX` and `/me/connections/link/extra` are
@@ -296,10 +328,14 @@ function spendSearch(owner: string, now: number): boolean {
 // THE SEAM
 // ---------------------------------------------------------------------------
 
-/** The store methods these six routes touch, and no others. Narrowed on
- *  purpose: nothing in this file can record a signal, spend a token or write a
- *  nudge. `createD1Store(env)` satisfies it structurally. */
-export interface ConnectionsApiStore {
+/** The store methods these routes touch, and no others. Still narrowed: nothing
+ *  in this file can record a usage signal or spend a token. It CAN now read and
+ *  write this owner's `connect_nudges` row, and only through `recordSkip` — the
+ *  two methods arrive from `DeclineStore` (routes/connect.ts), which is the one
+ *  declaration of that capability, so widening it here would widen it there
+ *  too and a reviewer looking at either sees the whole of it.
+ *  `createD1Store(env)` satisfies all of this structurally. */
+export interface ConnectionsApiStore extends DeclineStore {
   connectionsForOwner(user: OwnerId | string): Promise<StoredConnection[]>;
   readConnection(user: OwnerId | string, accountId: string): Promise<StoredConnection | null>;
   putConnection(row: StoredConnection): Promise<void>;
@@ -308,7 +344,7 @@ export interface ConnectionsApiStore {
   put(row: StoredLink): Promise<void>;
 }
 
-/** The vendor calls these six routes make. `authorize` is deliberately absent:
+/** The vendor calls these routes make. `authorize` is deliberately absent:
  *  a vendor connect URL is produced in exactly one place in this Worker
  *  (routes/connect.ts `connectPageGo`) and this file must not be a second. */
 export interface ConnectionsApiProvider {
@@ -367,9 +403,9 @@ export interface ConnectionsApiDeps {
  *
  * ONLY `DB` IS A HARD PRECONDITION, and that is deliberate. `connectDeps`
  * refuses without the vendor secret or a model key because a connect PAGE
- * cannot be drawn without either. Three of these six routes can: listing this
- * owner's connections, flipping the write toggle and minting our own link are
- * all pure D1. Gating them on the model key would tell somebody with four
+ * cannot be drawn without either. Four of these seven routes can: listing this
+ * owner's connections, flipping the write toggle, minting our own link and
+ * recording a decline are all pure D1. Gating them on the model key would tell somebody with four
  * connected apps that Anticipy could not read them because a text-generation
  * secret was unset. Each route answers for its OWN missing configuration
  * instead — `connectionsFromEnv` returns an adapter whose every method throws
@@ -1096,6 +1132,79 @@ async function handleLink(
   return json(200, { url: minted.url, expires_at: minted.expires_at });
 }
 
+// ===========================================================================
+// 7. POST /me/connections/skip
+// ===========================================================================
+
+/**
+ * NO, RECORDED ON THE SERVER, where the ask engine can read it.
+ *
+ * The body is `{ "toolkit": "<slug>", "onboarding": true|false }`. That is the
+ * whole shape and every other field is ignored — there is no owner on it, and
+ * there is no level, no snooze and no state either: what a decline COSTS is the
+ * ladder's answer (connections/nudge.ts `recordDecline`), not a number a client
+ * may name. A client that could set the snooze could set it to zero.
+ *
+ * `onboarding` IS A SURFACE, NOT A MEANING. It says which screen the person was
+ * looking at — the setup card, or anything else — and page 21 gives the setup
+ * card a seven-day soft snooze rather than a real decline. It is read as a
+ * strict JSON boolean, exactly as `writes_enabled` is, because a string
+ * `"false"` is truthy in JavaScript and this field shortens how long somebody
+ * is left alone.
+ *
+ * ABSENT MEANS THE ORDINARY DECLINE, and that default points the safe way.
+ * Not-stated becomes the FOURTEEN-day L1, which is the longer quiet: a client
+ * that forgets the field leaves the person alone for longer than the spec
+ * requires, and the failure this route exists to fix is being asked again too
+ * soon. A field that is present and is not a boolean is a 400 rather than a
+ * guess — a malformed claim is not evidence of either answer.
+ *
+ * AND THE STORED ROW STILL WINS. `recordSkip` only ever uses `onboarding` to
+ * SEED a nudge row that does not exist yet; a row the ask engine already wrote
+ * keeps its own trigger. Without that asymmetry a client could send
+ * `onboarding` on every skip and shorten every snooze it ever wrote.
+ */
+async function handleSkip(
+  request: Request, owner: string, deps: ConnectionsApiDeps, now: number,
+): Promise<Response> {
+  const body = await jsonBody(request);
+  const slug = slugOf(body?.toolkit);
+  if (slug === null) return refuse(400, BAD_REQUEST);
+
+  const raw = body?.onboarding;
+  if (raw !== undefined && raw !== null && raw !== true && raw !== false) {
+    return refuse(400, BAD_REQUEST);
+  }
+
+  // SCOPED BY THE TOKEN'S OWNER, like every other write in this file. There is
+  // no field on the body through which a caller could decline on somebody
+  // else's behalf, and `ownerId` is called rather than assumed because the
+  // brand on `OwnerId` is erased before this line runs.
+  const outcome = await recordSkip(
+    deps.store,
+    { user_id: ownerId(owner), toolkit: slug, at: now },
+    { onboarding: raw === true },
+  );
+
+  if (outcome.state === "not-recorded") {
+    // NEVER `{ ok: true }`. A phone told its skip landed will not send it again,
+    // and the person is then asked again by a server that never heard them.
+    console.log(`me/connections/skip: nothing was written — ${outcome.why}`);
+    return refuse(503, COULD_NOT_SAVE);
+  }
+  if (outcome.state === "nothing-to-decline") {
+    // Honest and not an error: they already have this one connected, so there
+    // was no ask to turn down and no row to move.
+    return json(200, { ok: true, state: outcome.state });
+  }
+  return json(200, {
+    ok: true,
+    state: outcome.state,
+    level: outcome.level,
+    snooze_until: outcome.snooze_until,
+  });
+}
+
 /**
  * What `mintConnectLink` is handed.
  *
@@ -1190,5 +1299,6 @@ export async function connectionsApiRoute(
     case "disconnect": return await handleDisconnect(request, owner, wired);
     case "sentences": return await handleSentences(request, wired);
     case "link": return await handleLink(request, env, owner, wired, now);
+    case "skip": return await handleSkip(request, owner, wired, now);
   }
 }

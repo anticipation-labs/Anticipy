@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""CAN A PERSON ACTUALLY CONNECT AN APP? Nine legs, measured against LIVE.
+"""CAN A PERSON ACTUALLY CONNECT AN APP, AND DOES ANYTHING EVER OFFER?
+Eleven legs, measured against LIVE.
 
 Everything about the Connections feature is repo-green. The pure core in
 `migration/workers/src/routes/connect.ts` is ported from a spike with 1006
@@ -14,23 +15,31 @@ THE LEGS ARE THE CHAIN A PERSON WALKS, in that order, because the gate's own
 instruction to its reader is "work the first red leg" and that instruction is
 only true if the order is the order things happen in:
 
-    Settings -> Connected Apps        legs 1-2   the phone's six routes, the tables
+    Settings -> Connected Apps        legs 1-2   the phone's API routes, the tables
     "Add an app", and a search        leg 3      the catalog
     a link is minted and texted       leg 4      connect_links
     the person taps it                legs 5-7   the page, the wiring, the way in
     the vendor's screen               leg 8      the key that opens a session
     a connection exists               leg 9      a row on live D1
+    the vendor says it expired        leg 10     the webhook verifies
+
+AND THEN THE OTHER HALF OF THE SPEC, which legs 1-10 say nothing about. All ten
+measure whether somebody who WANTS to connect an app can. Nobody in this product
+ever ASKED. The machinery to accept a yes shipped on 2026-09-06 with nothing
+anywhere producing one:
+
+    anything ever OFFERS              leg 11     an `asked` row on live D1
 
 Legs 1, 3 and 7 were added on 2026-09-06 and THE SIX LEGS WERE RENUMBERED into
 that order — a note quoting "leg 5" from before that day means the vendor key,
 which is leg 8 now. The old order stopped at the /c/ page and had no instrument
-at all for the server half: the six routes the phone actually calls could have
+at all for the server half: every route the phone actually calls could have
 been absent from the deployed Worker and every leg here would still have been
 green.
 
 WHAT EACH LEG ANSWERS:
 
-  1. THE SIX /me/connections ROUTES EXIST. Every path in
+  1. THE /me/connections ROUTES EXIST. Every path in
      `CONNECTIONS_API_ROUTES`, asked with its own verb and NO credential. A
      deployed route answers 401 carrying connections_api.ts's own
      `{"ok":false,"message":"Sign in first."}`; an absent one falls through to
@@ -43,7 +52,7 @@ WHAT EACH LEG ANSWERS:
      hands over `/me/connections` and the `/me/connections/` prefix, and nothing
      else), so it must come back as the router's generic 404. If the control
      does not, the discriminator is uncalibrated and this leg is UNPROVEN rather
-     than green — the six 401s would then be evidence about the edge, not about
+     than green — the 401s would then be evidence about the edge, not about
      the routes.
 
   2. THE FOUR TABLES EXIST ON LIVE D1. `app_usage_signals`, `connections`,
@@ -147,6 +156,24 @@ WHAT EACH LEG ANSWERS:
      being broken, and a gate that cried failure on the day before launch would
      teach its reader to ignore it — which is how the ears went deaf for thirty
      hours next to a green scoreboard.
+
+ 11. SOMEBODY IS ACTUALLY BEING ASKED. The other half of the product, and the
+     half that had no instrument at all until 2026-09-06: `connect_nudges` rows
+     in state `asked` on live D1. It separates FOUR states that look identical
+     from outside — no text arrived — and are four different repairs:
+     the five-minute Cron Trigger is not registered (RED, nothing can ever be
+     asked); nothing calls `installNudgeWiring` (RED, the sweep asks nobody);
+     nobody is due (UNPROVEN, exactly leg 9's rule — a quiet night and a
+     feature whose senses were never wired read the same, so it is not a pass);
+     and asks are going out (GREEN).
+
+     ONLY A ROW TURNS IT GREEN. The schedule and the wiring are read out of
+     this checkout, which is a claim about a checkout and not about
+     api.anticipy.ai — law 3, in the file that exists for law 3 — so they are
+     used ONLY to explain a zero. A deployed Worker running older code reads
+     identically from here; the rows are what tell the difference, because a
+     row was written by the Worker that is actually running on a tick that
+     actually fired.
 
 THE THIRD STATE IS MANDATORY HERE, and it is copied from firmware_gate.py: exit
 2 UNPROVEN is neither pass nor fail, and it belongs to anything that was
@@ -279,12 +306,12 @@ UNWIRED_MARK = "Connecting isn't switched on here"
 ROUTER_404_MARK = '"code":404'
 
 # ---------------------------------------------------------------------------
-# LEG 1 — the six routes the phone calls
+# LEG 1 — the routes the phone calls
 # ---------------------------------------------------------------------------
 
-#: The six routes, with the verb each one takes, read off
-#: `CONNECTIONS_API_ROUTES` and `METHOD` in routes/connections_api.ts — which
-#: are themselves read off the `Route` enum in ConnectedAppsClient.swift. Three
+#: Every route in `CONNECTIONS_API_ROUTES`, with the verb each one takes, read
+#: off that table and `METHOD` in routes/connections_api.ts — which are
+#: themselves read off the `Route` enum in ConnectedAppsClient.swift. Three
 #: books, and this is the one that asks production whether the middle book is
 #: deployed.
 #:
@@ -292,6 +319,13 @@ ROUTER_404_MARK = '"code":404'
 #: the credential, so a GET on `/link` is a 405 with an `Allow` header and never
 #: reaches the 401 this leg reads. Asking with the wrong verb would report four
 #: deployed routes as unreadable.
+#:
+#: `skip` JOINED ON 2026-09-06 and is the reason this list is no longer called
+#: "the six". Onboarding's Skip used to write a flag into UserDefaults ON THE
+#: DEVICE, so a person's "no" never reached the ladder and the same person was
+#: asked again from a second phone. A route that carries a refusal is exactly
+#: the kind this leg must watch: it is invisible from the outside when it is
+#: missing, because the failure it produces is another ask.
 CONNECTIONS_ROUTES = (
     ("list", "GET", "/me/connections"),
     ("catalog", "GET", "/me/connections/catalog"),
@@ -299,6 +333,7 @@ CONNECTIONS_ROUTES = (
     ("disconnect", "POST", "/me/connections/disconnect"),
     ("sentences", "POST", "/me/connections/sentences"),
     ("link", "POST", "/me/connections/link"),
+    ("skip", "POST", "/me/connections/skip"),
 )
 
 #: THE CONTROL for leg 1. Not a route: index.ts hands `connectionsApiRoute` the
@@ -315,7 +350,7 @@ SIGN_IN_FIRST_MARK = "Sign in first."
 REFUSAL_ENVELOPE_MARK = '"ok":false'
 
 #: `NOT_A_ROUTE` in connections_api.ts — the answer for a path UNDER the prefix
-#: that is not one of the six. It means the file is deployed and its route table
+#: that is not one of them. It means the file is deployed and its route table
 #: disagrees with ours, which is a different repair from "the file is absent".
 NOT_A_LEG_MARK = "There's nothing at this address."
 
@@ -420,7 +455,7 @@ class VendorUnavailable(RuntimeError):
 
 
 # ===========================================================================
-# LEG 1 — the six routes, and the control that says a 401 means anything
+# LEG 1 — the API routes, and the control that says a 401 means anything
 # ===========================================================================
 
 def classify_connections_response(status: int, headers: dict, body: str) -> tuple[str, str]:
@@ -433,7 +468,7 @@ def classify_connections_response(status: int, headers: dict, body: str) -> tupl
                      THERE — the only thing an anonymous caller can prove.
       route-missing  the router's generic notFound(). The file is not on this
                      Worker, or index.ts does not hand it this prefix.
-      not-a-leg      the prefix IS routed and this path is not one of the six:
+      not-a-leg      the prefix IS routed and this path is not one of them:
                      connections_api.ts's own "There's nothing at this address."
                      The file is deployed and its route table disagrees with
                      ours.
@@ -467,14 +502,14 @@ def classify_connections_response(status: int, headers: dict, body: str) -> tupl
 
 
 def leg_routes(results: list, control: tuple[str, str]) -> tuple[int, str, str]:
-    """LEG 1. Are all six routes on the deployed Worker?
+    """LEG 1. Is every route in `CONNECTIONS_ROUTES` on the deployed Worker?
 
     `results` is a list of (name, method, path, kind, detail); `control` is the
     (kind, detail) for `CONNECTIONS_CONTROL_PATH`.
 
     THE CONTROL IS CHECKED FIRST and it can only ever withhold green. A Worker
     that answered 401 to every path on earth would light all six of these up,
-    and the six of them would be measuring the edge.
+    and every one of them would be measuring the edge.
     """
     control_kind, control_detail = control
     names = {name: kind for name, _m, _p, kind, _d in results}
@@ -490,7 +525,7 @@ def leg_routes(results: list, control: tuple[str, str]) -> tuple[int, str, str]:
         return UNPROVEN, INFO, (
             f"the control {CONNECTIONS_CONTROL_PATH} answered {control_detail}, and it is "
             "not a route on this Worker — so it should have been the router's generic 404. "
-            "Until it is, a 401 on the six proves nothing about whether they are deployed")
+            "Until it is, a 401 on them proves nothing about whether they are deployed")
 
     broken = [f"{n} ({k})" for n, _m, _p, k, _d in results
               if k in ("route-missing", "not-a-leg", "wrong-method")]
@@ -1184,6 +1219,410 @@ def leg_connected(owners: int | None, rows: int | None) -> tuple[int, str, str]:
 
 
 # ===========================================================================
+# LEG 11 — is anybody actually being ASKED
+# ===========================================================================
+
+#: The five-minute Cron Trigger the connect ask is dispatched on. src/cron.ts
+#: switches on this LITERAL STRING, so the text here is the routing key and not
+#: a description of one — a schedule spelled differently in wrangler.jsonc is a
+#: leg dispatched by code production never invokes.
+ASK_CRON = "*/5 * * * *"
+
+#: The line in src/cron.ts that gives `connectNudgeSweep` a `NudgeDeps`. With
+#: no caller the sweep logs "no wiring installed; nobody was asked anything" on
+#: every tick — which is the exact shape `installConnectWiring` was in on
+#: 2026-09-05, when every /c/ leg answered 503 to every token there had ever
+#: been while five tested modules sat behind it.
+WIRING_CALL = "installNudgeWiring(nudgeWiring)"
+
+#: The two `app_usage_signals.source` values due.ts turns into a MOMENT
+#: (`MOMENT_TRIGGER` in that file, and it is the whole of it). The other four —
+#: mx, link, connected, asked — add weight and cannot name the moment an ask
+#: opens with, so a table full of them is a table that produces no ask. Reading
+#: this wrong is how a full table gets mistaken for a working feature.
+MOMENT_SOURCES = ("observer", "said")
+
+#: `GLOBAL_ASK_INTERVAL_DAYS` in src/connections/nudge.ts: one ask per owner per
+#: seven days, across all apps. The candidate count below mirrors that cap, so
+#: it counts owners the policy could actually be handed rather than rows.
+GLOBAL_ASK_INTERVAL_DAYS = 7
+
+# ---------------------------------------------------------------------------
+# THE DUE COUNT — read out of due.ts, never mirrored
+# ---------------------------------------------------------------------------
+#
+# WHAT USED TO BE HERE, AND WHY IT IS GONE. This constant was a hand-written
+# copy of `candidateSql()` in src/connections/due.ts — "the same three NOT
+# EXISTS clauses, the same `weight > 0`, the same one-row-per-owner rule". On
+# 2026-09-06 due.ts deleted the weight predicate (it could never be false; the
+# stored column only ever rises) and replaced `WHERE "pick" = 1` with a
+# per-owner row budget. The copy here did not move. The one leg every fixer
+# names as the law-3 proof was therefore counting owners against a shape the
+# shipped code had stopped having.
+#
+# THE DRIFT CHECK THAT WAS SUPPOSED TO CATCH IT DID NOT, and that is the part
+# worth writing down. tests/test_is_connect_live.py asserted each clause was in
+# BOTH books — but it asked `clause in due_ts`, over the WHOLE FILE, and due.ts
+# still carries the sentence "This file used to write `AND s.\"weight\" > 0`
+# and call that the aliveness test". A substring check over a source file
+# cannot tell code from prose, so the book that had changed read as agreeing,
+# in the exact words of its own changelog.
+#
+# SO THE MIRROR IS GONE RATHER THAN RE-TIGHTENED, and the argument is not only
+# that mirrors drift. A faithful mirror is now IMPOSSIBLE: due.ts's aliveness
+# test is `decayedWeight(...) > ALIVE_WEIGHT_FLOOR`, an exponential, applied in
+# TypeScript AFTER the statement returns, and due.ts's own header refuses to
+# put a second copy of it in SQL because "SQLite has no exponential". Any SQL
+# this gate writes is a query the code does not run. What the gate CAN do
+# exactly is run due.ts's OWN statement, and that is what it does: the text
+# below is lifted out of the file, its placeholders are bound BY NAME, and a
+# rename or a failed read makes the leg UNPROVEN instead of wrong.
+#
+# WHAT THE NUMBER IS, STATED HONESTLY. It is not `due()`. It is the count of
+# owners due.ts's statement HANDS to `dueCandidates`, and everything that
+# function does afterwards — the owner-id check, the empty-toolkit drop, the
+# source-names-no-moment drop, the decayed-weight floor, the one-per-owner
+# dedupe, the cap — can only REMOVE owners. So it is an exact UPPER BOUND, and
+# the direction matters:
+#
+#   zero here PROVES nobody is due. `due() <= 0` is `due() == 0`, so the quiet
+#   night this leg reports today is now proven rather than asserted.
+#   above zero does NOT prove somebody is due — every one of those owners could
+#   be carrying evidence that has decayed under the floor. That is the one
+#   thing this gate cannot see, and leg 11's red says so in its own sentence
+#   rather than sending a reader to look for a break that is not there.
+
+#: The one file the statement comes from, and the anchor it is found by. The
+#: anchor is asserted UNIQUE before anything is cut out of it: a regex that
+#: silently matched nothing would leave this gate reporting UNPROVEN forever
+#: while production ran fine, and a broken instrument reads exactly like a
+#: broken product.
+DUE_TS_PATH = ("migration", "workers", "src", "connections", "due.ts")
+DUE_SQL_ANCHOR = "function candidateSql(): string {"
+
+#: `MOMENT_TRIGGER` in due.ts, found the same way. Read so the gate can REFUSE
+#: when its own `MOMENT_SOURCES` disagrees with the file's, rather than binding
+#: a short `IN (…)` list and quietly counting fewer owners than the code does.
+MOMENT_TRIGGER_ANCHOR = 'export const MOMENT_TRIGGER: Readonly<Record<string, NudgeTrigger>>'
+
+#: How many of one owner's rows the gate asks the statement for. ONE, where
+#: due.ts binds `SIGNAL_ROWS_PER_OWNER`, and the difference changes nothing
+#: this leg reads: the count below is over DISTINCT `user_id`, and an owner
+#: with any candidate row at all has a `pick = 1` row. Asking for one row per
+#: owner instead of five simply means the cap below bounds OWNERS rather than
+#: rows, which is the number the leg prints.
+DUE_ROWS_PER_OWNER = 1
+
+#: The gate's own bound on one read against production, and it is the gate's,
+#: not due.ts's. The leg's verdict is zero-versus-not-zero, which no cap can
+#: change; the cap only bounds how large a number the sentence can print, and
+#: it is stated so nobody reads "500 owners" as "exactly 500 owners".
+DUE_COUNT_CAP = 500
+
+
+def _read_or_none(path: str) -> str | None:
+    """A file's text, or `None` when this checkout cannot produce it. `None`
+    is a claim about the checkout and never about production, and every caller
+    turns it into UNPROVEN rather than into a verdict."""
+    try:
+        return open(path, encoding="utf-8").read()
+    except OSError:
+        return None
+
+
+def due_statement(source: str | None) -> str | None:
+    """The SQL text `candidateSql()` returns, cut out of due.ts's source.
+
+    NOT PARSED — LIFTED. Everything between the anchor's `return `` ` `` and the
+    backtick that closes it, exactly as the file has it, placeholders and all.
+    `None` means the shape this reader knows is not there any more, and every
+    caller turns that into UNPROVEN.
+    """
+    if not source or source.count(DUE_SQL_ANCHOR) != 1:
+        return None
+    body = source.split(DUE_SQL_ANCHOR, 1)[1]
+    opened = body.find("return `")
+    if opened < 0:
+        return None
+    rest = body[opened + len("return `"):]
+    closed = rest.find("`")
+    if closed < 0:
+        return None
+    statement = rest[:closed]
+    return statement if statement.strip() else None
+
+
+def due_moment_sources(source: str | None) -> tuple[str, ...] | None:
+    """The KEYS of due.ts's `MOMENT_TRIGGER`, in the order it declares them.
+
+    The keys and not the values: the value is the `NudgeTrigger` an ask opens
+    with, and this gate never renders one. The key is the `app_usage_signals`
+    source the statement's `IN (…)` list is built from, which is the only half
+    a count can be wrong about.
+    """
+    if not source or source.count(MOMENT_TRIGGER_ANCHOR) != 1:
+        return None
+    body = source.split(MOMENT_TRIGGER_ANCHOR, 1)[1]
+    end = body.find("});")
+    if end < 0:
+        return None
+    found = re.findall(r'(?m)^\s*(\w+)\s*:\s*"', body[:end])
+    return tuple(found) if found else None
+
+
+def bind_due_statement(statement: str | None, *, sources: tuple[str, ...],
+                       now_ms: int, cutoff_ms: int,
+                       rows_per_owner: int = DUE_ROWS_PER_OWNER,
+                       cap: int = DUE_COUNT_CAP) -> str | None:
+    """due.ts's statement with its own placeholders filled in, BY NAME.
+
+    due.ts writes `?${pNow}`, `?${pCutoff}`, `?${pRows}`, `?${pCap}` and
+    `${inList}`, and the names are what this binds against — never the ORDER of
+    the `.bind(...)` call, because an order is a second thing to keep in step
+    and this file has just finished paying for one of those. A name this
+    function does not know, or a placeholder left behind, returns `None`: the
+    leg would rather say "who is due could not be counted" than run a statement
+    it does not fully understand against production.
+    """
+    if not statement:
+        return None
+    values = {
+        "inList": ", ".join("'%s'" % s for s in sources),
+        "pNow": str(int(now_ms)),
+        "pCutoff": str(int(cutoff_ms)),
+        "pRows": str(int(rows_per_owner)),
+        "pCap": str(int(cap)),
+    }
+    unknown: list[str] = []
+
+    def fill(match: "re.Match[str]") -> str:
+        name = match.group(1)
+        if name not in values:
+            unknown.append(name)
+            return match.group(0)
+        return values[name]
+
+    bound = re.sub(r"\?\$\{(\w+)\}", fill, statement)
+    bound = re.sub(r"\$\{(\w+)\}", fill, bound)
+    if unknown or "${" in bound or re.search(r"\?\d", bound):
+        return None
+    return bound
+
+
+def due_count_sql(now_ms: int, root: str = ROOT, source: str | None = None,
+                  rows_per_owner: int = DUE_ROWS_PER_OWNER) -> str | None:
+    """The whole statement leg 11 runs, or `None` if it cannot be built.
+
+    THE COUNT IS OVER DISTINCT OWNERS, because that is what the 7-day global
+    cap makes a candidate: `dueCandidates` keeps one per owner and the sweep
+    could not send a second ask in the same week anyway.
+
+    `rows_per_owner` IS A TEST SEAM AND NOT A TUNABLE. The answer must not
+    depend on it — that is the whole claim `DUE_ROWS_PER_OWNER` rests on — so
+    the local-D1 proof runs the same seed at 1 and at 5 and compares.
+
+    THE THREE BOOKS ARE COMPARED HERE, not only in the self-test: if due.ts's
+    `MOMENT_TRIGGER` no longer names exactly `MOMENT_SOURCES`, this refuses.
+    Binding the gate's shorter list would count fewer owners than the code
+    considers and print the difference as a quiet night.
+    """
+    if source is None:
+        source = _read_or_none(_os.path.join(root, *DUE_TS_PATH))
+    if due_moment_sources(source) != MOMENT_SOURCES:
+        return None
+    cutoff = int(now_ms) - GLOBAL_ASK_INTERVAL_DAYS * 86_400_000
+    bound = bind_due_statement(due_statement(source), sources=MOMENT_SOURCES,
+                               now_ms=int(now_ms), cutoff_ms=cutoff,
+                               rows_per_owner=rows_per_owner)
+    if bound is None:
+        return None
+    return ('SELECT count(*) AS due_n FROM (SELECT DISTINCT "user_id" FROM ('
+            + bound + "))")
+
+#: Every ask this backend has ever sent, and when the newest one went.
+ASKED_SQL = ('SELECT count(*) AS asked_n, max("sent_at") AS newest '
+             'FROM "connect_nudges" WHERE "state" = \'asked\' AND "sent_at" IS NOT NULL')
+
+
+def ask_config(root: str = ROOT) -> tuple[bool | None, bool | None]:
+    """(is the tick registered, is the wiring installed) — from the REPO.
+
+    THESE ARE CONFIG FACTS AND THIS FUNCTION SAYS SO. `wrangler.jsonc` is what a
+    deploy WOULD carry and `src/cron.ts` is what it would run; neither is
+    evidence about `api.anticipy.ai`, and HARNESS-LAWS law 3 is explicit that
+    repo-green means nothing. So they are used ONLY to explain a zero — the leg
+    cannot go green on them, and the only thing that turns it green is rows the
+    deployed Worker wrote.
+
+    They are read rather than assumed because the two zeros they explain are
+    completely different repairs: "add a line to a config file" and "wait for
+    somebody to use an app".
+
+    `None` from either is an unreadable file, which is a claim about this
+    checkout and not about the product.
+    """
+    base = _os.path.join(root, "migration", "workers")
+    try:
+        wrangler = open(_os.path.join(base, "wrangler.jsonc"), encoding="utf-8").read()
+    except OSError:
+        wrangler = None
+    try:
+        cron = open(_os.path.join(base, "src", "cron.ts"), encoding="utf-8").read()
+    except OSError:
+        cron = None
+    registered = None
+    if wrangler is not None:
+        found = re.search(r'"crons"\s*:\s*\[([^\]]*)\]', wrangler)
+        registered = bool(found) and ('"%s"' % ASK_CRON) in found.group(1)
+    wired = None if cron is None else (WIRING_CALL in cron)
+    return registered, wired
+
+
+#: THE STATES LEG 11 CAN BE IN, as names rather than as a shape a reader has to
+#: derive from a wall of prose. They are exported in this literal form because
+#: test/connections-endtoend.test.ts pins them: that suite proves the chain in
+#: the repo and this leg proves it on production, and a leg that quietly lost a
+#: state would leave the repo half claiming an instrument that no longer exists.
+ASK_STATES = (
+    "asking",              # GREEN     rows on live D1
+    "cron-unregistered",   # RED       the tick is not registered
+    "unwired",             # RED       installNudgeWiring has no caller
+    "nobody-due",          # UNPROVEN  a quiet night, or senses nobody wired
+    "due-but-silent",      # RED       owners are due and no ask ever went
+    "due-unknown",         # UNPROVEN  the due query could not be run
+    "unreadable",          # UNPROVEN  connect_nudges could not be counted
+)
+
+
+def ask_state(registered: bool | None, wired: bool | None,
+              due: int | None, asked: int | None) -> str:
+    """Which of `ASK_STATES` this deployment is in.
+
+    SPLIT OUT FROM THE SENTENCE ON PURPOSE. The verdict and the paragraph that
+    explains it are two different things, and a self-test that has to match a
+    substring of the paragraph goes red the day somebody improves the wording —
+    which teaches the next person to loosen the check rather than read it.
+
+    THE ORDER IS THE VERDICT. `asked > 0` wins over everything, including a
+    config file that says the schedule is missing: rows on live D1 were written
+    by the Worker that is actually running, and a checkout that disagrees with
+    them is the checkout being wrong. Config beats the due count for the
+    opposite reason — a missing schedule makes every hop below it unreachable,
+    so reporting "nobody is due" there would name the wrong repair.
+    """
+    if asked is None:
+        return "unreadable"
+    if asked > 0:
+        return "asking"
+    if registered is False:
+        return "cron-unregistered"
+    if wired is False:
+        return "unwired"
+    if due is None:
+        return "due-unknown"
+    if due == 0:
+        return "nobody-due"
+    return "due-but-silent"
+
+
+def leg_ask(registered: bool | None, wired: bool | None, due: int | None,
+            asked: int | None, newest_ms: float | None,
+            now_ms: int) -> tuple[int, str, str]:
+    """LEG 11. Is the connect ask reaching anybody, and if not, WHICH hop.
+
+    FOUR STATES, AND THEY ARE FOUR DIFFERENT REPAIRS. Every one of them looks
+    identical from outside — no text arrived — and telling them apart is the
+    whole of this leg:
+
+        the cron is not registered   a line in wrangler.jsonc. Nothing can
+                                     EVER be asked; the sweep is dispatched by
+                                     code production never invokes.  RED
+        nothing is wired             `installNudgeWiring` has no caller, so the
+                                     sweep runs and asks nobody.  RED
+        nobody is due                due.ts's OWN statement, run against live
+                                     D1, returns nobody. Everything the code
+                                     does after that statement only removes
+                                     candidates, so zero here is zero due —
+                                     which is the correct state of a working
+                                     feature on a quiet night, and also the
+                                     state of a feature whose senses were never
+                                     wired. Hence UNPROVEN and not green.
+        asks are going out           `connect_nudges` holds `asked` rows on
+                                     LIVE D1. Rows are the only proof that
+                                     survives a stale deploy: they were written
+                                     by the Worker that is actually running,
+                                     on a tick that actually fired.  GREEN
+
+    NOBODY-DUE IS UNPROVEN, THE SAME SHAPE AS LEG 9, and for the same reason:
+    the day before the first person is asked, zero is the state of a working
+    feature, and reporting it red trains the reader to skip the gate. A skipped
+    gate is how the ears stayed deaf for thirty hours next to a green board.
+
+    THE CONFIG HALF NEVER PRODUCES A GREEN. `registered` and `wired` come out
+    of this checkout, not out of production, so they are read only to explain a
+    zero. A deployed Worker running older code reads exactly the same from
+    here, and the ask rows are what tell the difference.
+    """
+    state = ask_state(registered, wired, due, asked)
+    if state == "unreadable":
+        return UNPROVEN, INFO, ("connect_nudges could not be counted on live D1, so "
+                                "nothing is claimed about whether anybody is being asked")
+    if state == "asking":
+        age = ""
+        if newest_ms:
+            days = (now_ms - float(newest_ms)) / 86_400_000.0
+            age = (f", the newest {days:.1f} day(s) ago" if days >= 1
+                   else f", the newest {max(0.0, days) * 24:.1f} hour(s) ago")
+        return GREEN, OK, (f"asks are going out: {asked} `asked` row(s) on live D1{age}. "
+                           "Those rows were written by the Worker that is actually "
+                           "running, on a tick that actually fired — the whole chain from "
+                           "a signal to a text is proven by their existence")
+
+    # From here down the answer is "nobody has been asked", and the leg's job is
+    # to say WHICH hop that is. Config first, because a missing schedule makes
+    # every hop below it unreachable rather than merely quiet.
+    if state == "cron-unregistered":
+        return RED, BAD, (f"nobody has ever been asked, and wrangler.jsonc does not "
+                          f"register {ASK_CRON!r} — the tick src/cron.ts dispatches the "
+                          "connect ask on. Nothing can ever be asked: the sweep is code "
+                          "production never invokes. Add the schedule and deploy")
+    if state == "unwired":
+        return RED, BAD, (f"nobody has ever been asked, and nothing calls {WIRING_CALL} — "
+                          "so `connectNudgeSweep` logs that it asked nobody on every "
+                          "tick. A tested part nothing calls is not a feature; this is "
+                          "the shape `installConnectWiring` was in on 2026-09-05")
+    if state == "due-unknown":
+        return UNPROVEN, INFO, ("nobody has been asked, and who is DUE could not be "
+                                "counted on live D1 — so it is not known whether that is "
+                                "a quiet night or a broken chain")
+    if state == "nobody-due":
+        unknown_config = " (this checkout could not be read, so the schedule and the "\
+                         "wiring were not checked either)" if registered is None else ""
+        return UNPROVEN, INFO, (
+            "nobody is due, so nobody has been asked. due.ts's own candidate statement, "
+            "run against live D1, returns no owner at all — `app_usage_signals` holds no "
+            f"{' or '.join(MOMENT_SOURCES)} row for anybody who has not already "
+            "connected that app, been asked this week, or snoozed it. Everything the "
+            "code does after that statement only DROPS candidates, so zero here is zero "
+            "due. That is the correct state of a working feature on a quiet night AND "
+            "the state of one whose senses were never wired, so it is not a pass. Of "
+            "the six ingest doors in src/connections/signals.ts only the connected-apps "
+            "sweep has a caller; the two that name a MOMENT — the browser hand's "
+            "post-run host, and a model resolving the owner's own words — are what turn "
+            "this green" + unknown_config)
+    return RED, BAD, (f"at least {due} owner(s) are due to be asked and NOT ONE ask has ever "
+                      f"been sent. The schedule is registered and the wiring has a caller, so "
+                      "the break is below them: the moment could not be established (no "
+                      "timezone on the profile), the writer's draft was refused, the link "
+                      "could not be minted, or the send failed. `wrangler tail "
+                      "anticipy-api` and read the `connect ask:` lines. THE ONE READING "
+                      "THAT IS NOT A BREAK: that count is what due.ts's statement hands "
+                      "`dueCandidates`, and the decayed-weight floor it applies afterwards "
+                      "is an exponential no SQL this gate can write runs — so owners whose "
+                      "evidence has all gone stale are counted here and dropped there")
+
+
+# ===========================================================================
 # THE RUN
 # ===========================================================================
 
@@ -1258,7 +1697,7 @@ def run(*, read_only: bool = False, http=None, sql=None, vendor=None,
         except Exception:
             return None
 
-    # -- leg 1: the six routes, plus the control ------------------------------
+    # -- leg 1: the API routes, plus the control -----------------------------
     route_results = []
     for name, method, path in CONNECTIONS_ROUTES:
         answer = ask(path, method)
@@ -1269,7 +1708,7 @@ def run(*, read_only: bool = False, http=None, sql=None, vendor=None,
         route_results.append((name, method, path, kind, detail))
 
     # THE CONTROL, asked last so a reader of a `wrangler tail` sees it next to
-    # the six it calibrates. It is a (kind, detail) pair like every other answer.
+    # the routes it calibrates. It is a (kind, detail) pair like every other answer.
     got = ask(CONNECTIONS_CONTROL_PATH)
     control = ("unreachable", "the control request failed") if got is None \
         else classify_connections_response(*got)
@@ -1277,7 +1716,7 @@ def run(*, read_only: bool = False, http=None, sql=None, vendor=None,
     code, mark, sentence = leg_routes(route_results, control)
     routes_code = code
     codes.append(code)
-    rows.append((mark, "1  THE SIX /me/connections ROUTES EXIST", sentence))
+    rows.append((mark, "1  THE /me/connections ROUTES EXIST", sentence))
 
     # -- leg 2: the four tables ----------------------------------------------
     found: set = set()
@@ -1422,12 +1861,18 @@ def run(*, read_only: bool = False, http=None, sql=None, vendor=None,
 
     signed_result = stale_code = None
     if unsigned_code == 403 and key:
+        # NOT `found`. That name holds leg 2's set of live tables and every leg
+        # below reads it; rebinding it here made leg 11's `"connect_nudges" in
+        # found` a membership test against a webhook subscription, which throws
+        # on the None case. Caught the day leg 11 was added, in 2026-09-06's own
+        # test run — a shadow that had been harmless only because nothing had
+        # yet read `found` after this point.
         try:
-            found = (webhook or webhook_secret)(key)
+            subscription = (webhook or webhook_secret)(key)
         except VendorUnavailable:
-            found = None
-        if found:
-            secret, _sub = found
+            subscription = None
+        if subscription:
+            secret, _sub = subscription
             stamp = str(int((now_ms if now_ms else 0) / 1000) or int(time.time()))
             head = {"content-type": "application/json", "webhook-id": WEBHOOK_PROBE_ID,
                     "webhook-timestamp": stamp,
@@ -1450,6 +1895,43 @@ def run(*, read_only: bool = False, http=None, sql=None, vendor=None,
     codes.append(code)
     rows.append((mark, "10 THE EXPIRY WEBHOOK IS LIVE AND VERIFIES", sentence))
 
+    # -- leg 11: is anybody actually being asked -------------------------------
+    # THE ONE LEG THAT MEASURES THE OTHER HALF OF THE PRODUCT. Legs 1-10 all ask
+    # whether somebody who WANTS to connect an app can. This asks whether
+    # anything ever OFFERS — the half of the spec that was written, tested and
+    # called by nothing.
+    #
+    # Two counts, both read-only, both bounded, both safe against production as
+    # often as anybody likes: the owners `due()` would hand the policy, and the
+    # asks this backend has ever sent.
+    due_n = asked_n = newest = None
+    if tables_known and "connect_nudges" in found:
+        try:
+            counted = sql(ASKED_SQL)
+            if counted:
+                asked_n = int(float(counted[0].get("asked_n", 0)))
+                raw = counted[0].get("newest")
+                newest = None if raw is None else float(raw)
+        except (D1Unavailable, TypeError, ValueError, KeyError, IndexError):
+            asked_n = newest = None
+        if "app_usage_signals" in found and "connections" in found:
+            # NOT A MIRROR — due.ts's own statement, read out of the file and
+            # bound by name. A checkout this reader cannot make sense of leaves
+            # `due_n` as None, which is `due-unknown`: the leg then says who is
+            # due could not be counted instead of counting it wrong.
+            statement = due_count_sql(now_ms)
+            if statement is not None:
+                try:
+                    counted = sql(statement)
+                    if counted:
+                        due_n = int(float(counted[0].get("due_n", 0)))
+                except (D1Unavailable, TypeError, ValueError, KeyError, IndexError):
+                    due_n = None
+    registered, wired = ask_config()
+    code, mark, sentence = leg_ask(registered, wired, due_n, asked_n, newest, now_ms)
+    codes.append(code)
+    rows.append((mark, "11 SOMEBODY IS ACTUALLY BEING ASKED", sentence))
+
     return overall(codes), rows
 
 
@@ -1458,8 +1940,38 @@ def run(*, read_only: bool = False, http=None, sql=None, vendor=None,
 # ===========================================================================
 
 def _routes_all(kind: str) -> list:
-    """The six routes, every one of them answering the same way."""
+    """Every route, all of them answering the same way."""
     return [(name, method, path, kind, kind) for name, method, path in CONNECTIONS_ROUTES]
+
+
+#: The self-test's clock. Fixed, so a case that reads an AGE reads the same
+#: sentence in June as it does in December.
+NOW_FOR_SELF_TEST = 1_757_000_000_000
+
+
+def _fake_due_ts(extra_predicate: str) -> str:
+    """A due.ts-SHAPED source whose prose and whose statement disagree.
+
+    This is the 2026-09-06 drift in miniature, and it is a fixture rather than a
+    fixture file because the thing under test is a READER: the comment below
+    quotes `AND s."weight" > 0` whatever `extra_predicate` is, so a check that
+    greps the file agrees with itself while a check that reads the STATEMENT
+    tells the truth. That difference is the whole finding.
+    """
+    return (
+        ' * This file used to write `AND s."weight" > 0` and call that the aliveness\n'
+        ' * test. IT WAS NEVER TRUE.\n'
+        + MOMENT_TRIGGER_ANCHOR + " = Object.freeze({\n"
+        + '  observer: "in_task",\n  said: "user_named_it",\n});\n'
+        + DUE_SQL_ANCHOR + "\n"
+        '  const inList = MOMENT_SOURCES.map((_, i) => `?${i + 1}`).join(", ");\n'
+        "  return `\n"
+        '    SELECT s."user_id" FROM "app_usage_signals" s\n'
+        '     WHERE s."source" IN (${inList})\n'
+        "       " + extra_predicate +
+        '       AND s."last_seen_at" > ?${pCutoff}\n'
+        "       AND ?${pNow} > 0`;\n"
+        "}\n")
 
 
 def self_test() -> int:
@@ -1488,7 +2000,7 @@ def self_test() -> int:
                       classify_connections_response(*answer)[0] == want))
 
     control_ok = ("route-missing", "the router's generic 404")
-    cases.append(("leg1    2026-09-06 LIVE: six 401s beside a generic-404 control is green",
+    cases.append(("leg1    2026-09-06 LIVE: 401s beside a generic-404 control is green",
                   leg_routes(_routes_all("refused"), control_ok)[0] == GREEN))
     cases.append(("leg1    one route missing is red and names it",
                   leg_routes([("list", "GET", "/me/connections", "route-missing", "")]
@@ -1505,11 +2017,11 @@ def self_test() -> int:
     cases.append(("leg1    an unreadable route withholds green without crying red",
                   leg_routes([("link", "POST", "/me/connections/link", "unreadable", "")]
                              + _routes_all("refused")[1:], control_ok)[0] == UNPROVEN))
-    cases.append(("leg1    the six paths are the six connections_api.ts declares",
+    cases.append(("leg1    the paths are the ones connections_api.ts declares",
                   [p for _n, _m, p in CONNECTIONS_ROUTES] == [
                       "/me/connections", "/me/connections/catalog", "/me/connections/writes",
                       "/me/connections/disconnect", "/me/connections/sentences",
-                      "/me/connections/link"]))
+                      "/me/connections/link", "/me/connections/skip"]))
 
     # ---- LEG 3, the catalog ------------------------------------------------
     listed = {"status": 200, "items": 4, "message": None, "json": True}
@@ -1717,6 +2229,119 @@ def self_test() -> int:
     cases.append(("leg10   the probe names an account no owner could hold",
                   WEBHOOK_PROBE_ACCOUNT.startswith("ca_gate_probe")
                   and PROBE_OWNER in WEBHOOK_PROBE_BODY.decode()))
+
+    # ---- LEG 11 — the four states, and the one that must not be green ------
+    # A row on live D1 beats every config fact there is, because a row is what
+    # the RUNNING Worker wrote. The rest is the diagnosis of a zero.
+    cases.append(("leg11   an `asked` row on live D1 is green — the chain ran end to end",
+                  leg_ask(True, True, 0, 1, float(NOW_FOR_SELF_TEST - 3600_000),
+                          NOW_FOR_SELF_TEST)[0] == GREEN))
+    cases.append(("leg11   and green says how long ago the newest ask went",
+                  "hour(s) ago" in leg_ask(True, True, 0, 1,
+                                           float(NOW_FOR_SELF_TEST - 3600_000),
+                                           NOW_FOR_SELF_TEST)[2]))
+    cases.append(("leg11   rows beat a checkout that says the schedule is missing",
+                  leg_ask(False, False, 0, 1, None, NOW_FOR_SELF_TEST)[0] == GREEN))
+    cases.append(("leg11   2026-09-06 MEASURED: zero signals, zero asks -> UNPROVEN",
+                  leg_ask(True, True, 0, 0, None, NOW_FOR_SELF_TEST)[0] == UNPROVEN))
+    cases.append(("leg11   nobody-due is UNPROVEN, never green — the leg 9 rule",
+                  ask_state(True, True, 0, 0) == "nobody-due"
+                  and leg_ask(True, True, 0, 0, None, NOW_FOR_SELF_TEST)[0] != GREEN))
+    cases.append(("leg11   and nobody-due NAMES the two doors that would turn it green",
+                  all(w in leg_ask(True, True, 0, 0, None, NOW_FOR_SELF_TEST)[2]
+                      for w in ("observer", "said", "signals.ts"))))
+    cases.append(("leg11   an unregistered cron is RED, and it is not the same as quiet",
+                  leg_ask(False, True, 0, 0, None, NOW_FOR_SELF_TEST)[0] == RED
+                  and ASK_CRON in leg_ask(False, True, 0, 0, None, NOW_FOR_SELF_TEST)[2]))
+    cases.append(("leg11   nothing wired is RED, and it names the call that is missing",
+                  leg_ask(True, False, 0, 0, None, NOW_FOR_SELF_TEST)[0] == RED
+                  and WIRING_CALL in leg_ask(True, False, 0, 0, None, NOW_FOR_SELF_TEST)[2]))
+    cases.append(("leg11   the schedule is diagnosed BEFORE the due count",
+                  ask_state(False, True, 7, 0) == "cron-unregistered"))
+    cases.append(("leg11   owners due and no ask ever sent is RED, and counts them",
+                  leg_ask(True, True, 4, 0, None, NOW_FOR_SELF_TEST)[0] == RED
+                  and "4 owner(s)" in leg_ask(True, True, 4, 0, None,
+                                              NOW_FOR_SELF_TEST)[2]))
+    cases.append(("leg11   an uncountable connect_nudges is UNPROVEN, not a verdict",
+                  leg_ask(True, True, 5, None, None, NOW_FOR_SELF_TEST)[0] == UNPROVEN))
+    cases.append(("leg11   and it is not the same UNPROVEN as a quiet night",
+                  ask_state(True, True, 0, None) == "unreadable"
+                  and "could not be counted"
+                  in leg_ask(True, True, 0, None, None, NOW_FOR_SELF_TEST)[2]))
+    cases.append(("leg11   an uncountable due query is UNPROVEN and says which half",
+                  leg_ask(True, True, None, 0, None, NOW_FOR_SELF_TEST)[0] == UNPROVEN
+                  and "who is DUE" in leg_ask(True, True, None, 0, None,
+                                              NOW_FOR_SELF_TEST)[2]))
+    cases.append(("leg11   an unreadable checkout is UNPROVEN and admits it read nothing",
+                  leg_ask(None, None, 0, 0, None, NOW_FOR_SELF_TEST)[0] == UNPROVEN
+                  and "could not be read" in leg_ask(None, None, 0, 0, None,
+                                                     NOW_FOR_SELF_TEST)[2]))
+    cases.append(("leg11   every state ask_state can return is one of ASK_STATES",
+                  all(ask_state(*a) in ASK_STATES for a in [
+                      (True, True, 0, 1), (True, True, 0, 0), (False, True, 0, 0),
+                      (True, False, 0, 0), (True, True, 3, 0), (True, True, None, 0),
+                      (True, True, 0, None), (None, None, None, None)])))
+    # ---- LEG 11's DUE COUNT — the mirror that drifted, and its replacement --
+    # On 2026-09-06 the hand-written copy of due.ts's candidate query still
+    # carried `AND s."weight" > 0` and `WHERE "pick" = 1`, months after due.ts
+    # deleted the first and replaced the second. The check that was supposed to
+    # notice asked `clause in due_ts` over the WHOLE FILE, and due.ts still
+    # carries the sentence that quotes the predicate it deleted — so the drift
+    # read as agreement, in the words of its own changelog. There is no copy
+    # any more: the gate runs due.ts's own text. These cases are what keep that
+    # true, and every one of them fails if the two ever become two again.
+    _due_src = _read_or_none(_os.path.join(ROOT, *DUE_TS_PATH))
+    _nudge_src = _read_or_none(_os.path.join(
+        ROOT, "migration", "workers", "src", "connections", "nudge.ts"))
+    cases.append(("leg11   THE INSTRUMENT: due.ts's own statement is still readable",
+                  due_statement(_due_src) is not None))
+    cases.append(("leg11   THE INSTRUMENT: due.ts's MOMENT_TRIGGER still names ours",
+                  due_moment_sources(_due_src) == MOMENT_SOURCES))
+    cases.append(("leg11   THE INSTRUMENT: nudge.ts still caps asks at one per 7 days",
+                  "export const GLOBAL_ASK_INTERVAL_DAYS = %d;" % GLOBAL_ASK_INTERVAL_DAYS
+                  in (_nudge_src or "")))
+    _live_due = due_count_sql(NOW_FOR_SELF_TEST)
+    cases.append(("leg11   the statement it runs is fully bound and counts owners",
+                  _live_due is not None and "${" not in _live_due
+                  and not re.search(r"\?\d", _live_due)
+                  and 'count(*) AS due_n' in _live_due
+                  and 'SELECT DISTINCT "user_id"' in _live_due
+                  and str(NOW_FOR_SELF_TEST) in _live_due))
+    # THE CONTROL THAT MATTERS: the statement pointed at production is due.ts's
+    # own text, character for character, with only its placeholders filled. A
+    # scan of this file for the mirror's clauses would be defeated by the very
+    # comment explaining them, so the check is on the SQL, not on the source.
+    cases.append(("leg11   THE CONTROL: the statement run on production IS due.ts's text",
+                  _live_due is not None and bind_due_statement(
+                      due_statement(_due_src), sources=MOMENT_SOURCES,
+                      now_ms=NOW_FOR_SELF_TEST,
+                      cutoff_ms=NOW_FOR_SELF_TEST
+                      - GLOBAL_ASK_INTERVAL_DAYS * 86_400_000) in _live_due))
+    cases.append(("leg11   and the mirror constant is DELETED, not renamed",
+                  "DUE_COUNT_SQL" not in globals()))
+    cases.append(("leg11   THE CONTROL: change due.ts's SQL and the gate's SQL changes",
+                  'AND s."weight" > 0'
+                  in (due_statement(_fake_due_ts('AND s."weight" > 0\n')) or "")))
+    cases.append(("leg11   THE CONTROL: a comment quoting a predicate is not the predicate",
+                  "weight" not in (due_statement(_fake_due_ts("")) or "weight")))
+    cases.append(("leg11   a due.ts whose moments are not ours refuses, never under-counts",
+                  due_count_sql(NOW_FOR_SELF_TEST, source=_fake_due_ts("").replace(
+                      '  observer: "in_task",\n', "")) is None))
+    cases.append(("leg11   a placeholder this gate cannot name refuses the whole count",
+                  due_count_sql(NOW_FOR_SELF_TEST,
+                                source=_fake_due_ts('AND s."x" > ?${pMystery}\n')) is None))
+    cases.append(("leg11   a due.ts this reader cannot find the statement in is UNPROVEN",
+                  due_count_sql(NOW_FOR_SELF_TEST, source="// nothing here") is None
+                  and ask_state(True, True, None, 0) == "due-unknown"))
+    # THE THREE BOOKS AGREE. This leg reads two literals out of the repo, and a
+    # literal that stopped matching would report "not registered" forever while
+    # production ran it — a red leg from a broken instrument, which is worse
+    # than no leg. So the strings are checked against the files they came from.
+    _reg, _wired = ask_config()
+    cases.append(("leg11   THE INSTRUMENT: the cron literal still matches wrangler.jsonc",
+                  _reg is True))
+    cases.append(("leg11   THE INSTRUMENT: the wiring literal still matches src/cron.ts",
+                  _wired is True))
 
     # ---- The roll-up -------------------------------------------------------
     cases.append(("verdict red beats unproven", overall([GREEN, UNPROVEN, RED]) == RED))
