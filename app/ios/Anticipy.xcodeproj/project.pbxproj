@@ -100,6 +100,7 @@
 		E8695DF2F83BC3C7B287D383 /* LaunchIntro.swift in Sources */ = {isa = PBXBuildFile; fileRef = CBACE3464713E6166EC9C761 /* LaunchIntro.swift */; };
 		AE0D804E3CF0AC25739F4009 /* DashboardPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E8C5BC69A7A026AE4BFD4B0 /* DashboardPolicy.swift */; };
 		B4D963845EC6236FDE5D93A4 /* InsightsPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B465DF96D2E645792543F28 /* InsightsPolicy.swift */; };
+		BAD8D4571150792AB65F60B0 /* RingsPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = D278C4FCB768DF58397A727E /* RingsPolicy.swift */; };
 		BB680F715F9F08F778122961 /* SoundPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = E38A59A13F9DB87F2091557E /* SoundPolicy.swift */; };
 		C7D12CBB73B341FC00A9A373 /* SoundEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDFE98A2B1A5702BEC7A76F0 /* SoundEngine.swift */; };
 		E597B00B55C409D6F4440D78 /* DoneCeremonyPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE3EE622D33391C9BD3CD53E /* DoneCeremonyPolicy.swift */; };
@@ -212,6 +213,7 @@
 		CBACE3464713E6166EC9C761 /* LaunchIntro.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchIntro.swift; sourceTree = "<group>"; };
 		3E8C5BC69A7A026AE4BFD4B0 /* DashboardPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardPolicy.swift; sourceTree = "<group>"; };
 		7B465DF96D2E645792543F28 /* InsightsPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InsightsPolicy.swift; sourceTree = "<group>"; };
+		D278C4FCB768DF58397A727E /* RingsPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RingsPolicy.swift; sourceTree = "<group>"; };
 		E38A59A13F9DB87F2091557E /* SoundPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SoundPolicy.swift; sourceTree = "<group>"; };
 		DDFE98A2B1A5702BEC7A76F0 /* SoundEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SoundEngine.swift; sourceTree = "<group>"; };
 		CE3EE622D33391C9BD3CD53E /* DoneCeremonyPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DoneCeremonyPolicy.swift; sourceTree = "<group>"; };
@@ -338,6 +340,7 @@
 				CBACE3464713E6166EC9C761 /* LaunchIntro.swift */,
 				3E8C5BC69A7A026AE4BFD4B0 /* DashboardPolicy.swift */,
 				7B465DF96D2E645792543F28 /* InsightsPolicy.swift */,
+				D278C4FCB768DF58397A727E /* RingsPolicy.swift */,
 				E38A59A13F9DB87F2091557E /* SoundPolicy.swift */,
 				DDFE98A2B1A5702BEC7A76F0 /* SoundEngine.swift */,
 				CE3EE622D33391C9BD3CD53E /* DoneCeremonyPolicy.swift */,
@@ -695,6 +698,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				BAD8D4571150792AB65F60B0 /* RingsPolicy.swift in Sources */,
 				BB680F715F9F08F778122961 /* SoundPolicy.swift in Sources */,
 				C7D12CBB73B341FC00A9A373 /* SoundEngine.swift in Sources */,
 				E597B00B55C409D6F4440D78 /* DoneCeremonyPolicy.swift in Sources */,
@@ -866,7 +870,7 @@
 				CODE_SIGN_INJECT_BASE_ENTITLEMENTS = NO;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 151;
+				CURRENT_PROJECT_VERSION = 152;
 				DEVELOPMENT_TEAM = "$(DEVELOPMENT_TEAM)";
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -938,7 +942,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 151;
+				CURRENT_PROJECT_VERSION = 152;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = "$(DEVELOPMENT_TEAM)";
 				ENABLE_NS_ASSERTIONS = NO;
@@ -973,7 +977,7 @@
 				CODE_SIGN_INJECT_BASE_ENTITLEMENTS = NO;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 151;
+				CURRENT_PROJECT_VERSION = 152;
 				DEVELOPMENT_TEAM = "$(DEVELOPMENT_TEAM)";
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -1044,7 +1048,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 151;
+				CURRENT_PROJECT_VERSION = 152;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = "$(DEVELOPMENT_TEAM)";
 				ENABLE_STRICT_OBJC_MSGSEND = YES;

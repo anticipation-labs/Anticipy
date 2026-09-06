@@ -763,7 +763,29 @@ settings:
     #      Also fixes a live defect found on the way: `seenDoneJobIDs.isEmpty`
     #      meant an owner's FIRST-EVER completed errand arrived with no haptic
     #      at all, because the set is empty on the refresh that first fills it.
-    CURRENT_PROJECT_VERSION: "151"
+    # 152: STAGES 3, 4 AND 5 of the sensory audit, closing the last findings.
+    #
+    #      3, completion drive: the interview's own answered-count drawn as a
+    #      ring instead of a shrinking list. MONOTONE by construction, which is
+    #      why a ring is honest here and a streak was not — the ears went deaf
+    #      for thirty hours once and a streak would have billed that to the
+    #      owner. The second ring (connected apps) is HIDDEN rather than guessed:
+    #      Home cannot see that count, and a screen that cannot see a number must
+    #      not invent a denominator for it.
+    #
+    #      4, Settings: fourteen screens, ~3,700 lines, one animation and no
+    #      suite at all — and the place sign-out and delete-account live. Every
+    #      row now answers the thumb through the one shared style, and the first
+    #      suite this surface has ever had made FIVE destructive rows argue why
+    #      they skip confirmation rather than merely omitting it.
+    #
+    #      5, spatial continuity: the insights peek GROWS into its page. That
+    #      required moving it off .sheet — matchedGeometryEffect cannot cross a
+    #      sheet's presentation boundary, so as a sheet it could only ever be a
+    #      cut. Three circular corners made continuous, and a whole-tree motion
+    #      contract that found five more files animating without ever asking
+    #      about Reduce Motion, OnboardingView among them at fifteen.
+    CURRENT_PROJECT_VERSION: "152"
     DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: NO
@@ -815,7 +837,7 @@ targets:
         # literal from a Mac one, and two products answering "which build
         # are you holding" with different numbers is the exact disease this
         # gate exists to prevent.
-        CURRENT_PROJECT_VERSION: "151"
+        CURRENT_PROJECT_VERSION: "152"
         DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_ENTITLEMENTS: ../macos/AnticipyMac/AnticipyMac.entitlements

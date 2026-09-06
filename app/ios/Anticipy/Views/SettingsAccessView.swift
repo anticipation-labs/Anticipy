@@ -143,6 +143,14 @@ struct SettingsSourceView: View {
                 // elsewhere in Settings guard things that cannot be undone;
                 // this can be undone by asking again.
                 GroupedCard {
+                    // REVERSIBLE: no confirmation, and that is a decision.
+                    // Revoking access takes nothing away — she asks again the
+                    // next time a task needs this source, and the owner may say
+                    // yes then. Every OTHER destructive row in Settings guards
+                    // something that cannot be undone and must confirm;
+                    // run_settings_tests.sh requires a confirmation unless this
+                    // exact marker is present, so the exception has to be
+                    // argued rather than merely omitted.
                     DestructiveRow("Remove access to \(source.label.lowercased())",
                                    systemImage: "hand.raised") {
                         Haptics.engage()

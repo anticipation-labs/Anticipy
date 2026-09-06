@@ -149,7 +149,18 @@ struct GlassCTAStyle: ButtonStyle {
 /// A tap is usually shorter than 0.8s, so the band normally gets partway
 /// across and glides back. That is correct rather than a compromise: on the
 /// web the sweep also reverses the moment the pointer leaves.
+/// THE ONE THING IN THIS FILE THAT TRAVELS.
+///
+/// Every other animation here is a press state keyed on `down` — a momentary
+/// scale or tint on the thing under somebody's finger, which is what Apple's own
+/// controls keep under Reduce Motion because it is feedback rather than motion.
+/// This is different: a decorative band that crosses the whole control, and
+/// crossing the screen is precisely what the setting exists to stop.
 private struct Sweep: View {
+    /// Read here rather than at the call sites: the sweep is the only member of
+    /// this file that has to ask.
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     let sweeping: Bool
 
     var body: some View {
@@ -162,9 +173,14 @@ private struct Sweep: View {
                 .rotationEffect(.degrees(20))
                 // `right:-70px` on a 70-wide band puts its leading edge at
                 // the container's trailing edge, so the travel is -70 → width.
-                .offset(x: sweeping ? geo.size.width : -70, y: -20)
-                .opacity(sweeping ? 1 : 0)
-                .animation(.timingCurve(0.25, 0.1, 0.25, 1, duration: 0.8), value: sweeping)
+                // Under Reduce Motion the band does not travel at all — it
+                // is decoration, and the control is complete without it.
+                .offset(x: reduceMotion ? -70
+                        : (sweeping ? geo.size.width : -70), y: -20)
+                .opacity(reduceMotion ? 0 : (sweeping ? 1 : 0))
+                .animation(reduceMotion ? nil
+                           : .timingCurve(0.25, 0.1, 0.25, 1, duration: 0.8),
+                           value: sweeping)
         }
         .allowsHitTesting(false)
     }

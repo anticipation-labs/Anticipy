@@ -178,6 +178,22 @@ sh "$HERE/run_sound_tests.sh"
 # with it. Its other legs are the four lines that must never be delayed, and
 # the budget the plan compresses to fit rather than overruns.
 sh "$HERE/run_done_ceremony_tests.sh"
+# Completion drive — the honest alternative to a streak. Every ring counts
+# things the owner FINISHED, so it cannot fall because a server was down; the
+# first leg refuses the whole vocabulary of attention (opens, sessions, elapsed
+# days) because a number of that shape is the streak this product already
+# rejected on evidence.
+sh "$HERE/run_rings_tests.sh"
+# Settings — fourteen screens that had no suite at all, and the place sign-out
+# and delete-account live. Its hardest leg is that an irreversible row must say
+# what it costs and must ask; a row that is genuinely reversible has to ARGUE
+# the exception with a marker rather than merely omit the alert.
+sh "$HERE/run_settings_tests.sh"
+# The motion contract — a whole-tree rule rather than one screen's suite, for
+# the reason the theme contract is: a file that animates must have CONSIDERED
+# Reduce Motion. Home animated sixteen times and read it nowhere, and nothing
+# stopped the next screen doing the same.
+sh "$HERE/run_motion_contract_tests.sh"
 # What Home SAYS once it has placed a job — the same screen one step later. Four
 # of its sentences carry a number the phone counted: how many things are waiting
 # on a browser, how many interview answers she already holds, how long the

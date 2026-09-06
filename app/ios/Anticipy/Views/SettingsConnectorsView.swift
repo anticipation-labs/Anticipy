@@ -129,6 +129,11 @@ private struct SettingsBrowserConnectorView: View {
 
             if session.agentPaired {
                 GroupedCard {
+                    // REVERSIBLE: no confirmation, and that is a decision.
+                    // Unpairing takes nothing away that cannot be handed back —
+                    // the extension re-pairs from Settings, and no transcript,
+                    // receipt or memory is touched. The alerts elsewhere in
+                    // Settings guard things that genuinely cannot be undone.
                     DestructiveRow("Disconnect this browser",
                                    systemImage: "laptopcomputer.slash") {
                         Haptics.engage()
@@ -267,6 +272,9 @@ private struct SettingsPendantConnectorView: View {
 
             if pendant.hasPairedPendant {
                 GroupedCard {
+                    // REVERSIBLE: no confirmation, same argument as the browser
+                    // above. Forgetting a pendant drops a Bluetooth pairing and
+                    // nothing else; it pairs again from this screen.
                     DestructiveRow("Forget this pendant", systemImage: "xmark.circle") {
                         Haptics.engage()
                         pendant.forgetPendant()

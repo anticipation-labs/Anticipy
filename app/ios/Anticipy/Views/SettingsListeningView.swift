@@ -68,6 +68,13 @@ struct SettingsListeningView: View {
 
             GroupedCard {
                 if session.listener.isListening {
+                    // REVERSIBLE: no confirmation, and asking would be the
+                    // defect. Stopping the microphone is the one thing in this
+                    // app a person may need to do INSTANTLY and without being
+                    // argued with — the same reason the lock-screen capsule's
+                    // only button is this one. It is red because it is the
+                    // stop, not because it destroys anything; "Start listening"
+                    // sits in its place the moment it is off.
                     DestructiveRow("Stop listening", systemImage: "stop.circle") {
                         Haptics.engage()
                         stopNow()

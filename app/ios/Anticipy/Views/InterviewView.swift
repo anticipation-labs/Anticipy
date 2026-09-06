@@ -17,6 +17,10 @@ import SwiftUI
 struct InterviewView: View {
     @EnvironmentObject var session: AnticipySession
     @Environment(\.dismiss) private var dismiss
+    /// MOTION SENSITIVITY. Read so the animations below can stand down; the
+    /// beat is kept either way, so a flow under Reduce Motion takes the same
+    /// time and simply shows its finished frame rather than travelling to it.
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// The questions still open, captured once on appear. Recomputing from
     /// progress mid-flow would make the list shrink under the person as they
@@ -228,12 +232,12 @@ struct InterviewView: View {
                 Haptics.engage()
                 // Her wording, so what appears on screen is what she will
                 // actually recall later — not a prettier version of it.
-                withAnimation(Theme.springSlow) { learned.append(question.fact(text)) }
+                withAnimation(reduceMotion ? nil : Theme.springSlow) { learned.append(question.fact(text)) }
                 advance()
             } else {
                 // The question stays open. Telling somebody she remembered a
                 // thing she dropped is worse than telling them it failed.
-                withAnimation(Theme.spring) { failed = true }
+                withAnimation(reduceMotion ? nil : Theme.spring) { failed = true }
             }
         }
     }
@@ -241,6 +245,6 @@ struct InterviewView: View {
     private func advance() {
         answer = ""
         failed = false
-        withAnimation(Theme.springSlow) { index += 1 }
+        withAnimation(reduceMotion ? nil : Theme.springSlow) { index += 1 }
     }
 }

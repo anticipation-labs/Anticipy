@@ -138,6 +138,11 @@ struct SettingsProfileView: View {
 
             if hasSavedNumber {
                 GroupedCard {
+                    // REVERSIBLE: no confirmation, and the footnote below
+                    // already says why — "You can add a number again here
+                    // anytime." Removing a number takes away a channel, not a
+                    // record; nothing written is lost and nothing has to be
+                    // recovered.
                     DestructiveRow(
                         removingPhone ? "Removing number…" : "Remove number",
                         systemImage: "phone.down") {

@@ -14,6 +14,10 @@ struct AuthView: View {
 
     enum SignUpStep: Int, Equatable { case email, password, phone }
     enum Mode: Equatable { case signUp(SignUpStep), signIn, forgot, code, newPassword }
+    /// MOTION SENSITIVITY. Read so the animations below can stand down; the
+    /// beat is kept either way, so a flow under Reduce Motion takes the same
+    /// time and simply shows its finished frame rather than travelling to it.
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var mode: Mode = .signUp(.email)
     /// Which way the next page turn slides.
     @State private var forward = true
@@ -110,7 +114,7 @@ struct AuthView: View {
         problem = nil
         forward = !back
         DispatchQueue.main.async {
-            withAnimation(Theme.springSlow) { mode = next }
+            withAnimation(reduceMotion ? nil : Theme.springSlow) { mode = next }
         }
     }
 
