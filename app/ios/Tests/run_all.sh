@@ -87,6 +87,11 @@ sh "$HERE/run_retry_reconciliation_tests.sh"
 # reason above.
 sh "$HERE/run_first_run_copy_tests.sh"
 sh "$HERE/run_enrollment_offer_tests.sh"
+# The pendant's beat, which almost nobody walks past. Beside the other first-run
+# suites because its first two legs are about first run's hardest rules: the
+# radio is not touched until somebody asks for it, and the microphone beat stays
+# last whatever gets added in front of it.
+sh "$HERE/run_pendant_onboarding_tests.sh"
 # The opening — the four-second dot-to-mark intro in front of first run.
 # Pure timeline, walked frame by frame: the wavefront clears the corners, the
 # seed lands in the mark, the last frame IS the logo, and it never plays over

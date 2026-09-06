@@ -184,7 +184,7 @@ struct OnboardingView: View {
     }
 
     /// One beat by its absolute index. `default` is unreachable while
-    /// `FirstRunSegment.pages` only ever holds these five, which
+    /// `FirstRunSegment.pages` only ever holds these six, which
     /// `run_first_run_route_tests.sh` asserts along with `FirstRunBeat.count`.
     @ViewBuilder
     private func page(_ beat: Int) -> some View {
@@ -193,9 +193,18 @@ struct OnboardingView: View {
         case Step.tour:     tour
         case Step.name:     yourName
         case Step.computer: computerSetup
+        case Step.pendant:  pendantOffer
         case Step.mic:      micPrimer
         default:            EmptyView()
         }
+    }
+
+    /// The pendant. One screen for almost everybody — a hero, a sentence, and
+    /// "Continue without one" — with the whole pairing flow behind its quiet
+    /// second line. `PendantOnboarding` owns all of it and calls back here when
+    /// the person is done either way, so this beat has no footer of its own.
+    private var pendantOffer: some View {
+        PendantOnboarding { Task { await advance() } }
     }
 
     /// The last beat is cleared. Offer the voice invite if it can actually
@@ -958,7 +967,8 @@ struct OnboardingView: View {
 /// crash, on a stranger's first run, from a copy change.
 enum FirstRunTrack {
     static let beatNames = ["Your account", "Hello", "How I work",
-                            "Your name", "Your computer", "May I listen?"]
+                            "Your name", "Your computer", "Your pendant",
+                            "May I listen?"]
 
     static var count: Int { beatNames.count }
 

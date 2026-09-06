@@ -610,6 +610,11 @@ settings:
     #      correctly minted link, every time. Both hosts are ours and both are
     #      allowed now; the three subdomain refusals that were doing the real
     #      work are pinned separately.
+    # 137: the pendant's beat. One screen almost everybody walks past —
+    #      "Continue without one" is the PRIMARY, owning one is the quiet
+    #      second line — with wake / look / pair / wear behind it. It sits in
+    #      front of the microphone beat, which stays last for the reason the
+    #      route header gives. Hero images generated from the prototype photos.
     # 136: the stale-extension banner stopped telling anybody what to do.
     #      It had moved out of ContentView.swift and been rewritten down to
     #      "Update the browser extension. Installed version: 0.8.3." — the
@@ -619,7 +624,7 @@ settings:
     #      pushes saying "substring not found", which reads as a rotted test
     #      rather than a regressed banner; it now finds the banner wherever it
     #      lives, so a move reports as a move.
-    CURRENT_PROJECT_VERSION: "136"
+    CURRENT_PROJECT_VERSION: "137"
     DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: NO
@@ -671,7 +676,7 @@ targets:
         # literal from a Mac one, and two products answering "which build
         # are you holding" with different numbers is the exact disease this
         # gate exists to prevent.
-        CURRENT_PROJECT_VERSION: "136"
+        CURRENT_PROJECT_VERSION: "137"
         DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_ENTITLEMENTS: ../macos/AnticipyMac/AnticipyMac.entitlements

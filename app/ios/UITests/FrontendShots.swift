@@ -1,36 +1,38 @@
 import XCTest
 
-/// Every screen in the app, photographed on one build.
+/// Every screen in the app, in the order a person meets them.
 ///
-/// Three passes, because first run can only be walked once per install and the
-/// pages behind the door need an account the simulator has no backend for:
-///   1. `testPreAuth` — the opening, the welcome, the tour, and every page of
-///      the door, on a fresh install.
-///   2. `testFirstRunBehindTheDoor` — the name, computer and microphone beats,
-///      the finale, the three tips and the coach mark, reached by seeding the
-///      same defaults the real routing reads.
-///   3. `testDashboardAndSettings` — the conversation dashboard's three faces
-///      and every settings page, light and dark.
+/// Four passes, because the app cannot be in all of these states at once:
+///   1. `testOpeningAndDoor` — cold launch, the opening, the welcome, the
+///      tour, and every page of the door, on a fresh install with no server.
+///   2. `testFirstRun` — the three beats behind the door, the finale, the tips
+///      and the coach mark, reached by seeding the defaults the routing reads.
+///   3. `testDashboard` — the conversation dashboard with a day in it, served
+///      by a local stand-in backend on :8092.
+///   4. `testSettings` — every settings page, light then dark, over the same
+///      stand-in so the rows show a signed-in owner rather than an outage.
 ///
-/// The seeding is launch arguments only. There is no rig code in the app: a
-/// screenshot path that exists in the shipped binary is a screenshot of
-/// something nobody else can reach.
+/// The seeding is launch arguments only. There is no screenshot path in the
+/// shipped binary: a rig somebody else can reach is a rig that ships.
 final class FrontendShots: XCTestCase {
     private let dir = "/Users/cjxsez/.claude/jobs/c9af554c/tmp/frontend"
+
+    /// Where the stand-in backend serves one invented day.
+    private let live = "http://127.0.0.1:8092"
+    /// A port with nothing on it, for the screens that must be seen offline.
+    private let dead = "http://127.0.0.1:9"
 
     override func setUpWithError() throws { continueAfterFailure = true }
 
     private func shot(_ name: String, settle: TimeInterval = 1.3) {
         Thread.sleep(forTimeInterval: settle)
         let data = XCUIScreen.main.screenshot().pngRepresentation
-        try? FileManager.default.createDirectory(atPath: dir,
-                                                 withIntermediateDirectories: true)
+        try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
         try? data.write(to: URL(fileURLWithPath: "\(dir)/\(name).png"))
     }
 
     @discardableResult
-    private func tap(_ app: XCUIApplication, _ label: String,
-                     timeout: TimeInterval = 6) -> Bool {
+    private func tap(_ app: XCUIApplication, _ label: String, timeout: TimeInterval = 6) -> Bool {
         let b = app.buttons[label].firstMatch
         guard b.waitForExistence(timeout: timeout) else { return false }
         if b.isHittable { b.tap() }
@@ -47,11 +49,9 @@ final class FrontendShots: XCTestCase {
         return true
     }
 
-    /// A settings row is any element carrying that label; rows are not always
-    /// buttons.
+    /// A settings row is any element carrying that label; rows are not buttons.
     @discardableResult
-    private func row(_ app: XCUIApplication, _ label: String,
-                     timeout: TimeInterval = 5) -> Bool {
+    private func row(_ app: XCUIApplication, _ label: String, timeout: TimeInterval = 5) -> Bool {
         let e = app.descendants(matching: .any)
             .matching(NSPredicate(format: "label == %@", label)).firstMatch
         guard e.waitForExistence(timeout: timeout) else { return false }
@@ -66,276 +66,267 @@ final class FrontendShots: XCTestCase {
         if system.waitForExistence(timeout: 2) { system.tap() }
     }
 
-    private func fresh(_ extra: [String] = []) -> XCUIApplication {
-        let app = XCUIApplication()
-        // An unreachable backend on purpose: every screen then draws its own
-        // honest offline face rather than a spinner waiting on a server this
-        // machine does not run.
-        app.launchArguments += ["-backendURL", "http://127.0.0.1:9"] + extra
-        return app
+    /// Walk into a settings page, photograph it, come back — and verify the
+    /// return, so one page that refuses to close cannot turn the rest of the
+    /// pass into photographs of the same stuck screen. That has happened.
+    private func page(_ app: XCUIApplication, _ label: String, _ name: String,
+                      settle: TimeInterval = 1.4) {
+        guard row(app, label) else { return }
+        shot(name, settle: settle)
+        back(app)
+        _ = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "label == %@", "Settings")).firstMatch
+            .waitForExistence(timeout: 4)
     }
 
-    // MARK: - 1. In front of the door
+    private func app(_ backend: String, _ extra: [String] = []) -> XCUIApplication {
+        let a = XCUIApplication()
+        a.launchArguments += ["-backendURL", backend] + extra
+        return a
+    }
 
-    func testPreAuth() throws {
-        let app = fresh()
-        app.launch()
+    private var signedIn: [String] {
+        ["-hasSeenIntro", "YES", "-hasOnboarded", "YES",
+         "-accountID", "shots", "-authToken", "shots",
+         "-ownerFirstName", "Alex", "-ownerEmail", "alex@example.com",
+         "-ownerPhone", "+16045550123", "-home.tipsSeen", "YES"]
+    }
 
-        // The opening: a seed, a wavefront, the mark.
-        let intro = app.buttons["Anticipy"].firstMatch
+    // MARK: - 1. The opening, and the door
+
+    func testOpeningAndDoor() throws {
+        let a = app(dead)
+        a.launch()
+
+        let intro = a.buttons["Anticipy"].firstMatch
         if intro.waitForExistence(timeout: 8) {
-            shot("01-intro-early", settle: 0.6)
-            shot("02-intro-mark", settle: 1.1)
-            // The piece is four seconds and ends on its own. By now it may
-            // already have, so this is a courtesy rather than a step.
+            shot("01-opening-seed", settle: 0.55)
+            shot("02-opening-mark", settle: 1.05)
+            // Four seconds, and it ends on its own; by now it may already have.
             if intro.exists && intro.isHittable { intro.tap() }
         }
 
         shot("03-welcome", settle: 3.4)
-        tap(app, "Take a quick tour")
-        shot("04-tour-1", settle: 1.6)
-        app.swipeLeft(); shot("05-tour-2", settle: 1.2)
-        app.swipeLeft(); shot("06-tour-3", settle: 1.2)
-        tap(app, "Get started")
+        tap(a, "Take a quick tour")
+        shot("04-tour-conversations", settle: 1.7)
+        a.swipeLeft(); shot("05-tour-commitments", settle: 1.3)
+        a.swipeLeft(); shot("06-tour-follow-ups", settle: 1.3)
+        tap(a, "Get started")
 
-        shot("07-signup-email", settle: 1.4)
-        let email = app.textFields.firstMatch
+        shot("07-signup-email", settle: 1.5)
+        let email = a.textFields.firstMatch
         if email.waitForExistence(timeout: 4) {
             email.tap(); email.typeText("you@anticipy.ai")
-            shot("08-signup-email-filled", settle: 0.7)
-            tap(app, "Continue")
+            shot("08-signup-email-filled", settle: 0.8)
+            tap(a, "Continue")
         }
-        shot("09-signup-password", settle: 1.2)
-        let pw = app.secureTextFields.firstMatch
+        shot("09-signup-password", settle: 1.3)
+        let pw = a.secureTextFields.firstMatch
         if pw.waitForExistence(timeout: 4) {
             pw.tap(); pw.typeText("walkthrough123")
-            tap(app, "Continue")
+            tap(a, "Continue")
         }
-        shot("10-signup-phone", settle: 1.3)
-        let phone = app.textFields.firstMatch
+        shot("10-signup-phone", settle: 1.4)
+        let phone = a.textFields.firstMatch
         if phone.waitForExistence(timeout: 4) {
             phone.tap(); phone.typeText("6045550123")
-            shot("11-signup-phone-filled", settle: 0.8)
+            shot("11-signup-phone-filled", settle: 0.9)
         }
 
-        // The door's other rooms.
-        tap(app, "Back"); tap(app, "Back")
-        tapContaining(app, "Sign in")
-        shot("12-sign-in", settle: 1.3)
-        tapContaining(app, "Text me a code")
-        shot("13-forgot-password", settle: 1.3)
-        let fe = app.textFields.firstMatch
+        tap(a, "Back"); tap(a, "Back")
+        tapContaining(a, "Sign in")
+        shot("12-sign-in", settle: 1.4)
+        tapContaining(a, "Text me a code")
+        shot("13-forgot", settle: 1.4)
+        let fe = a.textFields.firstMatch
         if fe.waitForExistence(timeout: 4) {
             fe.tap(); fe.typeText("you@anticipy.ai")
-            tap(app, "Text me a code")
+            tap(a, "Text me a code")
         }
         shot("14-code", settle: 2.0)
-        app.typeText("512884")
+        a.typeText("512884")
         shot("15-code-filled", settle: 0.9)
-        tap(app, "Continue")
-        shot("16-new-password", settle: 1.3)
+        tap(a, "Continue")
+        shot("16-new-password", settle: 1.4)
     }
 
     // MARK: - 2. Behind the door
 
-    func testFirstRunBehindTheDoor() throws {
-        let app = fresh(["-hasSeenIntro", "YES", "-hasOnboarded", "NO",
-                         "-accountID", "shots", "-authToken", "shots",
-                         "-ownerFirstName", "Alex", "-ownerEmail", "you@anticipy.ai",
-                         "-ownerPhone", "+16045550123", "-home.tipsSeen", "NO"])
-        app.launch()
+    func testFirstRun() throws {
+        let a = app(dead, ["-hasSeenIntro", "YES", "-hasOnboarded", "NO",
+                           "-accountID", "shots", "-authToken", "shots",
+                           "-ownerFirstName", "Alex", "-ownerEmail", "you@anticipy.ai",
+                           "-ownerPhone", "+16045550123", "-home.tipsSeen", "NO"])
+        a.launch()
 
-        shot("20-your-name", settle: 2.2)
-        tap(app, "Continue")
-        shot("21-your-computer", settle: 1.5)
-        tap(app, "Continue")
-        shot("22-may-i-listen", settle: 1.5)
-
-        // THE PRIVACY SHEET IS NOT WALKED HERE. It carries detents and no
-        // close button, so it goes away only by being dragged — and the drag
-        // that dismisses it also carries the beat back a page, which quietly
-        // turned the rest of this pass into five photographs of the wrong
-        // screen. `23-microphone-promises` is captured on its own below.
-
-        tap(app, "Finish", timeout: 8)
-        shot("24-finale", settle: 1.4)
-
-        if app.buttons["Next"].firstMatch.waitForExistence(timeout: 14) {
-            shot("25-tip-1", settle: 1.0)
-            tap(app, "Next")
-            shot("26-tip-2", settle: 1.0)
-            tap(app, "Next")
-            shot("27-tip-3", settle: 1.0)
-            tap(app, "Done")
+        shot("20-your-name", settle: 2.3)
+        tap(a, "Continue")
+        shot("21-your-computer", settle: 1.6)
+        tap(a, "Continue")
+        shot("22-your-pendant", settle: 1.8)
+        // Almost everybody leaves the pendant here. Photograph the branch too.
+        if tap(a, "I have a pendant", timeout: 5) {
+            shot("22b-pendant-wake", settle: 1.8)
+            if tap(a, "Look for it", timeout: 5) {
+                shot("22c-pendant-looking", settle: 2.6)
+            }
+            tap(a, "I don't have it with me", timeout: 5)
+            Thread.sleep(forTimeInterval: 1.4)
+        } else {
+            tap(a, "Continue without one", timeout: 5)
         }
-        let coach = app.buttons["Start by tapping Listen with phone"].firstMatch
+        shot("22d-may-i-listen", settle: 1.8)
+        tap(a, "Finish", timeout: 8)
+        shot("24-finale", settle: 1.5)
+
+        if a.buttons["Next"].firstMatch.waitForExistence(timeout: 14) {
+            shot("25-tip-just-talk", settle: 1.1)
+            tap(a, "Next")
+            shot("26-tip-nothing-sends", settle: 1.1)
+            tap(a, "Next")
+            shot("27-tip-connect", settle: 1.1)
+            tap(a, "Done")
+        }
+        let coach = a.buttons["Start by tapping Listen with phone"].firstMatch
         if coach.waitForExistence(timeout: 4) {
-            shot("28-coach-mark", settle: 1.2)
+            shot("28-coach-mark", settle: 1.3)
             coach.tap()
         }
-        shot("29-home-arrived", settle: 1.6)
+        shot("29-home-first-arrival", settle: 1.8)
     }
 
-    /// The sheet behind "Learn more" on the microphone beat, on its own,
-    /// because dismissing it costs the rest of the walk.
+    /// The privacy sheet on the microphone beat, alone: it carries detents and
+    /// no close button, and the drag that dismisses it also carries the beat
+    /// back a page — which once turned a whole pass into photographs of one
+    /// stuck screen.
     func testMicrophonePromises() throws {
-        let app = fresh(["-hasSeenIntro", "YES", "-hasOnboarded", "NO",
-                         "-accountID", "shots", "-authToken", "shots",
-                         "-ownerFirstName", "Alex", "-ownerEmail", "you@anticipy.ai",
-                         "-ownerPhone", "+16045550123", "-home.tipsSeen", "NO"])
-        app.launch()
-        tap(app, "Continue", timeout: 10)
-        tap(app, "Continue", timeout: 6)
-        if tapContaining(app, "Learn more", timeout: 6) {
-            shot("23-microphone-promises", settle: 1.6)
-            app.swipeUp()
-            shot("23b-microphone-promises-rest", settle: 1.2)
+        let a = app(dead, ["-hasSeenIntro", "YES", "-hasOnboarded", "NO",
+                           "-accountID", "shots", "-authToken", "shots",
+                           "-ownerFirstName", "Alex", "-ownerEmail", "you@anticipy.ai",
+                           "-ownerPhone", "+16045550123", "-home.tipsSeen", "NO"])
+        a.launch()
+        // Two arrows to reach the microphone beat: the name, then the computer.
+        tap(a, "Continue", timeout: 12)
+        Thread.sleep(forTimeInterval: 1.2)
+        tap(a, "Continue", timeout: 8)
+        Thread.sleep(forTimeInterval: 1.2)
+        if tap(a, "Learn more", timeout: 8) {
+            shot("23-listening-promises", settle: 1.7)
+            a.swipeUp()
+            shot("23b-listening-promises-rest", settle: 1.3)
         }
     }
 
-    // MARK: - 3. The dashboard and every settings page
+    // MARK: - 3. The dashboard, with a day in it
 
-    func testDashboardAndSettings() throws {
-        let app = fresh(["-hasSeenIntro", "YES", "-hasOnboarded", "YES",
-                         "-accountID", "shots", "-authToken", "shots",
-                         "-ownerFirstName", "Alex", "-ownerEmail", "you@anticipy.ai",
-                         "-ownerPhone", "+16045550123", "-home.tipsSeen", "YES"])
-        app.launch()
+    func testDashboard() throws {
+        let a = app(live, signedIn)
+        a.launch()
 
-        shot("30-dashboard-thread", settle: 2.4)
+        shot("30-dashboard-thread", settle: 6.0)
+        a.swipeUp();  shot("31-dashboard-approval", settle: 1.7)
+        a.swipeUp();  shot("32-dashboard-done", settle: 1.7)
+        a.swipeDown(); a.swipeDown(); a.swipeDown()
+        Thread.sleep(forTimeInterval: 1.4)
 
-        // The ask bar.
-        let ask = app.textViews.firstMatch.exists ? app.textViews.firstMatch : app.textFields.firstMatch
+        if tapContaining(a, "Switch view", timeout: 6) {
+            shot("33-title-menu", settle: 1.1)
+            if tap(a, "History", timeout: 4) {
+                shot("34-history", settle: 1.7)
+                if tapContaining(a, "Switch view", timeout: 4) { tap(a, "Today", timeout: 4) }
+                Thread.sleep(forTimeInterval: 1.3)
+            }
+        }
+
+        let ask = a.textViews.firstMatch.exists ? a.textViews.firstMatch : a.textFields.firstMatch
         if ask.waitForExistence(timeout: 5) {
             ask.tap()
-            ask.typeText("Remind me to call the plumber tomorrow morning")
-            shot("31-dashboard-asking", settle: 1.0)
-            // Put the keyboard away so the next shots are of the app.
-            app.swipeDown()
-            Thread.sleep(forTimeInterval: 0.8)
+            ask.typeText("Move the dentist to Thursday at 4:15")
+            shot("35-asking", settle: 1.1)
+            a.swipeDown()
+            Thread.sleep(forTimeInterval: 0.9)
         }
 
-        // The title switch, and History behind it.
-        if tapContaining(app, "Switch view", timeout: 5) {
-            shot("32-dashboard-menu", settle: 1.0)
-            if tap(app, "History", timeout: 4) {
-                shot("33-dashboard-history", settle: 1.4)
-                if tapContaining(app, "Switch view", timeout: 4) {
-                    tap(app, "Today", timeout: 4)
-                    Thread.sleep(forTimeInterval: 1.0)
-                }
-            }
-        }
-
-        // The capture moment.
-        if tap(app, "Listen with phone", timeout: 6) {
-            let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
-            for _ in 0..<2 {
-                let allow = springboard.buttons["Allow"].firstMatch
-                let ok = springboard.buttons["OK"].firstMatch
-                if allow.waitForExistence(timeout: 6) { allow.tap() }
-                else if ok.waitForExistence(timeout: 2) { ok.tap() }
-                Thread.sleep(forTimeInterval: 1.1)
-            }
-            shot("34-capture-listening", settle: 3.0)
-            if tap(app, "Hold listening", timeout: 5) {
-                shot("35-capture-paused", settle: 1.6)
-                tap(app, "Resume listening", timeout: 4)
-                Thread.sleep(forTimeInterval: 1.0)
-            }
-            tap(app, "Done listening", timeout: 5)
-            Thread.sleep(forTimeInterval: 1.5)
-        }
-
-        // SETTINGS
-        guard tap(app, "Settings", timeout: 8) else { return }
-        shot("40-settings", settle: 1.6)
-        app.swipeUp(); shot("41-settings-scrolled", settle: 1.0); app.swipeDown()
-
-        row(app, "Listening")
-        shot("42-listening", settle: 1.3)
-        app.swipeUp(); shot("43-listening-scrolled", settle: 1.0); app.swipeDown()
-        if row(app, "Listening activity") {
-            shot("44-listening-activity", settle: 1.3)
-            back(app)
-        }
-        back(app)
-
-        if row(app, "Notifications") { shot("45-notifications", settle: 1.3); back(app) }
-
-        if row(app, "Connectors") {
-            shot("46-connectors", settle: 1.3)
-            if row(app, "Your calendar") { shot("47-calendar", settle: 1.2); back(app) }
-            if row(app, "Browser") { shot("48-browser", settle: 1.2); back(app) }
-            if row(app, "Mac app") { shot("49-mac", settle: 1.2); back(app) }
-            if row(app, "Pendant") { shot("50-pendant", settle: 1.2); back(app) }
-            back(app)
-        }
-
-        if row(app, "Profile") { shot("51-profile", settle: 1.3); back(app) }
-        if row(app, "Advanced") { shot("52-advanced", settle: 1.3); back(app) }
-
-        // The alternate appearance, exercised through the real picker.
-        if row(app, "Appearance") {
-            shot("53-appearance", settle: 1.2)
-            if row(app, "Dark") {
-                shot("54-appearance-dark", settle: 1.6)
-            }
-            back(app)
-        }
-        if row(app, "About Anticipy") { shot("55-about-dark", settle: 1.3); back(app) }
-        shot("56-settings-dark", settle: 1.2)
-        back(app)
-        shot("57-dashboard-dark", settle: 1.6)
-    }
-
-    // MARK: - 4. The dashboard with a day in it
-
-    /// The same screen, against a local stand-in backend serving one invented
-    /// day. Everything on it is sample data; the point is the shape of a
-    /// populated dashboard, which an empty one cannot show.
-    func testDashboardWithData() throws {
-        let app = XCUIApplication()
-        app.launchArguments += ["-backendURL", "http://127.0.0.1:8092",
-                                "-hasSeenIntro", "YES", "-hasOnboarded", "YES",
-                                "-accountID", "shots", "-authToken", "shots",
-                                "-ownerFirstName", "Alex", "-ownerEmail", "alex@example.com",
-                                "-ownerPhone", "+16045550123", "-home.tipsSeen", "YES"]
-        app.launch()
-
-        shot("60-dashboard-full-top", settle: 6.0)
-        // HISTORY, now that there is more than one day of conversation.
-        if tapContaining(app, "Switch view", timeout: 6) {
-            if tap(app, "History", timeout: 4) {
-                shot("70-history-populated", settle: 1.8)
-                if tapContaining(app, "Switch view", timeout: 4) { tap(app, "Today", timeout: 4) }
-                Thread.sleep(forTimeInterval: 1.2)
-            }
-        }
-        // THE CAPTURE MOMENT with things actually on it.
-        if tap(app, "Listen with phone", timeout: 6) {
+        if tap(a, "Listen with phone", timeout: 6) {
             let sb = XCUIApplication(bundleIdentifier: "com.apple.springboard")
             for _ in 0..<2 {
                 let allow = sb.buttons["Allow"].firstMatch
                 if allow.waitForExistence(timeout: 6) { allow.tap() }
                 Thread.sleep(forTimeInterval: 1.1)
             }
-            shot("71-capture-populated", settle: 3.2)
-            tap(app, "Done listening", timeout: 5)
-            Thread.sleep(forTimeInterval: 1.2)
+            shot("36-capture-listening", settle: 3.2)
+            if tap(a, "Hold listening", timeout: 5) {
+                shot("37-capture-paused", settle: 1.7)
+                tap(a, "Resume listening", timeout: 4)
+                Thread.sleep(forTimeInterval: 1.0)
+            }
+            tap(a, "Done listening", timeout: 5)
+            Thread.sleep(forTimeInterval: 1.4)
         }
-        app.swipeUp(); shot("61-dashboard-full-middle", settle: 1.6)
-        app.swipeUp(); shot("62-dashboard-full-lower", settle: 1.6)
-        app.swipeUp(); shot("63-dashboard-full-foot", settle: 1.6)
-        app.swipeDown(); app.swipeDown(); app.swipeDown()
-        shot("64-dashboard-full-back-at-top", settle: 1.8)
+    }
 
-        // Settings over a reachable server, so the pages show connected state
-        // rather than every row saying it cannot reach anything.
-        if tap(app, "Settings", timeout: 8) {
-            shot("65-settings-live", settle: 1.8)
-            if row(app, "Listening") { shot("66-listening-live", settle: 1.4); back(app) }
-            if row(app, "Profile") { shot("67-profile-live", settle: 1.4); back(app) }
+    // MARK: - 4. Settings, light and dark
+
+    func testSettings() throws {
+        let a = app(live, signedIn)
+        a.launch()
+
+        guard tap(a, "Settings", timeout: 12) else {
+            XCTFail("never reached Settings"); return
         }
+        shot("40-settings", settle: 2.0)
+        a.swipeUp(); shot("41-settings-scrolled", settle: 1.2); a.swipeDown()
+        Thread.sleep(forTimeInterval: 0.8)
+
+        // About lives in the chrome, not in a row.
+        if tap(a, "About", timeout: 4) {
+            shot("42-about", settle: 1.5)
+            back(a)
+            Thread.sleep(forTimeInterval: 0.8)
+        }
+
+        page(a, "Profile", "43-profile")
+        page(a, "Notifications", "44-notifications")
+        page(a, "Privacy & Data", "45-privacy-and-data")
+        page(a, "Personalization", "46-personalization")
+
+        if row(a, "Listening") {
+            shot("47-listening", settle: 1.5)
+            a.swipeUp(); shot("48-listening-scrolled", settle: 1.1); a.swipeDown()
+            Thread.sleep(forTimeInterval: 0.7)
+            if row(a, "Listening activity") {
+                shot("49-listening-activity", settle: 1.4)
+                back(a)
+            }
+            back(a)
+        }
+
+        if row(a, "Connectors") {
+            shot("50-connectors", settle: 1.5)
+            page(a, "Your calendar", "51-calendar")
+            page(a, "Browser", "52-browser")
+            page(a, "Mac app", "53-mac-app")
+            page(a, "Pendant", "54-pendant")
+            back(a)
+        }
+
+        page(a, "Connected apps", "55-connected-apps")
+        page(a, "Advanced", "56-advanced")
+
+        // The alternate appearance, through the real picker.
+        if row(a, "Appearance") {
+            shot("57-appearance", settle: 1.4)
+            if row(a, "Dark") { shot("58-appearance-dark", settle: 1.8) }
+            back(a)
+        }
+        shot("59-settings-dark", settle: 1.4)
+        Thread.sleep(forTimeInterval: 1.0)
+        if tap(a, "About", timeout: 6) {
+            shot("60-about-dark", settle: 1.6)
+            back(a)
+            Thread.sleep(forTimeInterval: 0.8)
+        }
+        back(a)
+        shot("61-dashboard-dark", settle: 2.0)
     }
 }

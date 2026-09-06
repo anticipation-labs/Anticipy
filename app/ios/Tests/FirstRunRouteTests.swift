@@ -194,7 +194,7 @@ check("3. and resumes AT the name beat, not before it",
       three.route.segment?.firstStep == FirstRunBeat.name)
 check("3. with no second trip through the door and no replayed introduction",
       three.route.segment?.pages == [FirstRunBeat.name, FirstRunBeat.computer,
-                                     FirstRunBeat.mic])
+                                     FirstRunBeat.pendant, FirstRunBeat.mic])
 
 // 4. Signed out, then reopened by the SAME person.
 var four = Phone()
@@ -220,10 +220,10 @@ five.signsOut()
 five.signsIn(personB)
 check("5. a second person on a handed-on phone gets the whole tour",
       five.route == .tour(.whole))
-check("5. all five in-app beats, in their true order",
+check("5. all six in-app beats, in their true order",
       five.route.segment?.pages == [FirstRunBeat.welcome, FirstRunBeat.tour,
                                     FirstRunBeat.name, FirstRunBeat.computer,
-                                    FirstRunBeat.mic])
+                                    FirstRunBeat.pendant, FirstRunBeat.mic])
 check("5. and both flags were cleared together, so neither can drift",
       !five.hasSeenIntro == !five.hasOnboarded)
 
@@ -412,11 +412,11 @@ check("and the two that render no walkthrough report none",
 // FirstRunTrack is LIFTED out of OnboardingView.swift by the runner, never
 // copied, so these read the shipped arithmetic. Six names, with the account
 // counted first and the optional handoff last, is what the UI renders.
-check("the track names six beats, account first, microphone last",
+check("the track names seven beats, account first, microphone last",
       FirstRunTrack.beatNames == ["Your account", "Hello", "How I work",
-                                  "Your name", "Your computer",
+                                  "Your name", "Your computer", "Your pendant",
                                   "May I listen?"])
-check("and counts six", FirstRunTrack.count == 6)
+check("and counts seven", FirstRunTrack.count == 7)
 
 // THE INVARIANT. `step` is the absolute beat index in every segment and
 // `pageCount` is always FirstRunBeat.count, so the name beat reads "4 of 6"
@@ -433,9 +433,9 @@ check("and it is named for what it asks",
 check("the computer handoff is fifth",
       FirstRunTrack.ordinal(step: FirstRunBeat.computer,
                             pageCount: FirstRunBeat.count) == 5)
-check("the microphone closes the count at six",
+check("the microphone closes the count at seven",
       FirstRunTrack.ordinal(step: FirstRunBeat.mic,
-                            pageCount: FirstRunBeat.count) == 6)
+                            pageCount: FirstRunBeat.count) == 7)
 // THE TRAP THIS ARITHMETIC SETS, named so nobody walks into it. `pageCount` is
 // how many pages the TRACK is counting over, not how many the current segment
 // happens to carry. Handing it `segment.pages.count` looks like the obvious
@@ -444,7 +444,7 @@ check("the microphone closes the count at six",
 // the failure is a wrong word on a screen rather than a crash.
 check("a segment page count would misname the name beat",
       FirstRunTrack.name(step: FirstRunBeat.name,
-                         pageCount: FirstRunSegment.rest.pages.count) == "May I listen?")
+                         pageCount: FirstRunSegment.rest.pages.count) == "Your pendant")
 check("while the absolute count names it correctly",
       FirstRunTrack.name(step: FirstRunBeat.name,
                          pageCount: FirstRunBeat.count) == "Your name")
@@ -462,11 +462,23 @@ check("and the honest pre-auth ordinal would open the track at 1",
       && FirstRunSegment.intro.pages.firstIndex(of: FirstRunBeat.tour) == 1)
 check("so the pre-auth segment shows neither", !FirstRunSegment.intro.showsTrack)
 
+// THE MICROPHONE STAYS LAST, and this is the leg that says so. `heard` pushes
+// live before it queues, so the beat that asks iOS for the microphone may never
+// be moved in front of anything — a beat added after it would run the mic while
+// somebody was still being asked questions. The pendant beat (build 137) went
+// in FRONT of it for exactly this reason.
+for segment in [FirstRunSegment.rest, FirstRunSegment.whole] {
+    check("the microphone is the last beat of \(segment)",
+          segment.pages.last == FirstRunBeat.mic)
+}
+check("and the pendant sits directly in front of it",
+      FirstRunSegment.rest.pages.dropLast().last == FirstRunBeat.pendant)
+
 // A beat added to the indices and not to OnboardingView's page builder
 // would render a blank page on somebody's first run. There is no way to see a
 // SwiftUI switch from here, so the tripwire is the count the switch was
 // written against.
-check("there are five in-app beats behind the six names", FirstRunBeat.count == 5)
+check("there are six in-app beats behind the seven names", FirstRunBeat.count == 6)
 check("and every page in every segment is one of them",
       [FirstRunSegment.intro, .rest, .whole].allSatisfy { segment in
           segment.pages.allSatisfy { (0 ..< FirstRunBeat.count).contains($0) }

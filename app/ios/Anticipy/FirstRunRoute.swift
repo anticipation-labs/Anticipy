@@ -51,8 +51,17 @@ enum FirstRunBeat {
     static let tour = 1
     static let name = 2
     static let computer = 3
-    static let mic = 4
-    static let count = 5
+    /// The pendant's offer. AFTER the computer and BEFORE the microphone, and
+    /// that ordering is the whole of it: the mic beat must stay last, because
+    /// it is the one that asks iOS for the microphone and `heard` pushes live
+    /// before it queues. Adding a beat in front of it moves nothing forward.
+    ///
+    /// Almost nobody continues past the offer — there is no shipping pendant —
+    /// so this reads as one extra screen with a plain "Continue without one" on
+    /// it. See research/2026-09-06-pendant-onboarding-design.md.
+    static let pendant = 4
+    static let mic = 5
+    static let count = 6
 }
 
 /// The two public handoff pages, derived from the backend the app is actually
@@ -91,11 +100,11 @@ enum FirstRunSegment: Equatable {
             return [FirstRunBeat.welcome, FirstRunBeat.tour]
         case .rest:
             return [FirstRunBeat.name, FirstRunBeat.computer,
-                    FirstRunBeat.mic]
+                    FirstRunBeat.pendant, FirstRunBeat.mic]
         case .whole:
             return [FirstRunBeat.welcome, FirstRunBeat.tour,
                     FirstRunBeat.name, FirstRunBeat.computer,
-                    FirstRunBeat.mic]
+                    FirstRunBeat.pendant, FirstRunBeat.mic]
         }
     }
 
