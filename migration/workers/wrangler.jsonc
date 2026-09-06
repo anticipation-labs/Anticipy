@@ -19,7 +19,23 @@
   "name": "anticipy-api",
   // api.anticipy.ai routes to this Worker (the iOS app + future backend origin).
   "routes": [
-    { "pattern": "api.anticipy.ai", "custom_domain": true }
+    { "pattern": "api.anticipy.ai", "custom_domain": true },
+    // THE CONNECT PAGE ON THE APEX, and it is not cosmetic.
+    //
+    // A person receives this link in a text message. The spec's first rule is
+    // that they never see the plumbing — "connect your Notion", our name, our
+    // domain — and `api.anticipy.ai/c/xxx` reads as somebody's backend, which
+    // is exactly the tell the rule exists to avoid.
+    //
+    // It is also load-bearing rather than taste: ConnectHandoff.swift on the
+    // phone keeps an EXACT-host allowlist, `["anticipy.ai"]`, so a link minted
+    // on api.anticipy.ai is refused by the app that asked for it — measured,
+    // and already pinned by name in ConnectedAppsClientTests. One of the two
+    // had to move, and the apex is the one the product wants.
+    //
+    // More specific than any `anticipy.ai/*` route, so it wins for /c/ only and
+    // leaves the website serving everything else.
+    { "pattern": "anticipy.ai/c/*", "zone_name": "anticipy.ai" }
   ],
   // Consolidated here by decision 2026-09-04. The DMG bucket that ship.sh
   // writes still lives on account 5b63e25e and has to be copied across.

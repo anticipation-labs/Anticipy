@@ -68,6 +68,7 @@ sh "$HERE/run_connections_policy_tests.sh"
 # two rules a screen quietly breaks: no app name in the source, and no sentence
 # written in the view where the register gate cannot see it.
 sh "$HERE/run_connected_apps_tests.sh"
+sh "$HERE/run_connected_apps_client_tests.sh"
 # A question-card answer has no job status to reconcile against. Its own
 # account/question idempotency id and exact event lookup are what make response
 # loss and process restart safe instead of leaving a disabled card forever.

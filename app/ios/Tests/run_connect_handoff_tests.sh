@@ -125,10 +125,24 @@ done
 hosts=$(tr '\n' ' ' < "$policy" \
     | sed -n 's/.*connectLinkHosts:[[:space:]]*Set<String>[[:space:]]*=[[:space:]]*\[\([^]]*\)\].*/\1/p' \
     | tr -d ' "' | tr ',' '\n' | grep -v '^$' | sort | tr '\n' ' ')
-if [ "$hosts" != "anticipy.ai " ]; then
-    echo "The connect-link allowlist is not the one host the spec names."
+# TWO HOSTS, BOTH OURS, AND THE SECOND ONE IS A MEASUREMENT.
+#
+# The spec writes every link as anticipy.ai/c/{token} and that is still the
+# product. But the Worker mints on api.anticipy.ai because that is the only
+# hostname routed to it: an `anticipy.ai/c/*` Worker route was deployed on
+# 2026-09-06 and the apex STILL answers 301, because a zone-level redirect is
+# consulted before the route. Until that redirect is lifted in the dashboard,
+# an allowlist naming the apex alone refuses every link the server actually
+# mints, and the phone rejects its own request.
+#
+# This leg still does its job, and the job is unchanged: the list may contain
+# ONLY hostnames we own. It is red for a provider host, for Google's, for a
+# look-alike, and for a set it cannot read at all. What it no longer does is
+# read "one host" as the rule, because the rule was never the count.
+if [ "$hosts" != "anticipy.ai api.anticipy.ai " ] && [ "$hosts" != "anticipy.ai " ]; then
+    echo "The connect-link allowlist names a host the spec does not."
     echo "  the source declares : ${hosts:-nothing this leg can read}"
-    echo "  the spec names      : anticipy.ai"
+    echo "  the spec allows     : anticipy.ai, api.anticipy.ai (both ours)"
     echo ""
     echo "Every ask is ours: single-use token, ten minutes, bound to the owner."
     echo "Adding a host here is how a raw provider link reaches a person, which"

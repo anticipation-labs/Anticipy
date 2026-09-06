@@ -497,14 +497,22 @@ private enum ConnectedAppsClientTests {
             let refused: [(String, String)] = [
                 ("the vendor's own link",
                  "https://connect.composio.dev/link/abc123"),
-                // THE HOST THE WORKER IS ACTUALLY ON, 2026-09-06. This is not a
-                // hypothetical: `CONNECT_URL_BASE` in
-                // migration/workers/src/routes/connect.ts mints
-                // `https://api.anticipy.ai/c/{token}`, and the allowlist in
-                // ConnectHandoff is the apex. Until those two agree, every real
-                // link is refused HERE, loudly, rather than opened.
+                // WHAT THIS ENTRY USED TO BE, AND WHY IT MOVED. It pinned
+                // `api.<host>` as REFUSED, and it was right to: the Worker mints
+                // there and the phone's allowlist named only the apex, so every
+                // real link was refused by the app that had just asked for one.
+                // The two agree now — api.anticipy.ai is in the allowlist, with
+                // the measurement beside it — so the honest test of "a
+                // neighbouring host" needs a neighbour we do NOT own.
+                //
+                // This is the shape that was actually doing the work: a
+                // subdomain somebody else can obtain (a stale CNAME, a
+                // marketing host, a takeover) must never carry a link that
+                // binds an account.
                 ("a link on a neighbouring host of ours",
-                 "https://api.\(host)/\(ConnectHandoff.connectLinkPathSegment)/tok_9f2CQ4bX"),
+                 "https://cdn.\(host)/\(ConnectHandoff.connectLinkPathSegment)/tok_9f2CQ4bX"),
+                ("a link nested under the one host we do allow",
+                 "https://x.api.\(host)/\(ConnectHandoff.connectLinkPathSegment)/tok_9f2CQ4bX"),
                 ("a link in the clear",
                  "http://\(host)/\(ConnectHandoff.connectLinkPathSegment)/tok_9f2CQ4bX"),
                 ("a link that already carries somebody's state",

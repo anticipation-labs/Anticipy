@@ -68,6 +68,7 @@
 		9D99735C613237B976EDFB95 /* PendantBatteryPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B0C300D8A79FC68733630D6 /* PendantBatteryPolicy.swift */; };
 		9FB3C2E50F6F7C0BE7F7DC8D /* AnticipyWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 76E33D65DC012620958D319F /* AnticipyWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		9FCDE459DE0871E64A2694E0 /* WalkTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A581005E2008896C62D01C5 /* WalkTests.swift */; };
+		C7BA192AC90C3FA145C15B19 /* FrontendShots.swift in Sources */ = {isa = PBXBuildFile; fileRef = F689D64807D814A451141A24 /* FrontendShots.swift */; };
 		3521ECF08ADEA102FD63B72B /* DashboardShots.swift in Sources */ = {isa = PBXBuildFile; fileRef = F52DA0D3E431D41EF440BD6D /* DashboardShots.swift */; };
 		A0C6AC3D27BE2A2D7D82A6D4 /* OnboardingFinale.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7458BC7F8EBF91A246AAB60C /* OnboardingFinale.swift */; };
 		7FD62A109D1E0D6F410A8E49 /* HomeTips.swift in Sources */ = {isa = PBXBuildFile; fileRef = 59D029AE4819FDB91E33E7DE /* HomeTips.swift */; };
@@ -166,6 +167,7 @@
 		368691500357FCAF594BFF34 /* PendantRadioPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PendantRadioPolicy.swift; sourceTree = "<group>"; };
 		36BD88F8F6F1384E8D4C3850 /* CaptureEnvelope.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureEnvelope.swift; sourceTree = "<group>"; };
 		3A581005E2008896C62D01C5 /* WalkTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalkTests.swift; sourceTree = "<group>"; };
+		F689D64807D814A451141A24 /* FrontendShots.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrontendShots.swift; sourceTree = "<group>"; };
 		F52DA0D3E431D41EF440BD6D /* DashboardShots.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardShots.swift; sourceTree = "<group>"; };
 		3B0C892A3E61C142BCBEC2DE /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		3BC4BDEF755D6F5BC4138F18 /* AppTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppTheme.swift; sourceTree = "<group>"; };
@@ -440,6 +442,7 @@
 			isa = PBXGroup;
 			children = (
 				3A581005E2008896C62D01C5 /* WalkTests.swift */,
+				F689D64807D814A451141A24 /* FrontendShots.swift */,
 				F52DA0D3E431D41EF440BD6D /* DashboardShots.swift */,
 			);
 			path = UITests;
@@ -617,6 +620,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				9FCDE459DE0871E64A2694E0 /* WalkTests.swift in Sources */,
+				C7BA192AC90C3FA145C15B19 /* FrontendShots.swift in Sources */,
 				3521ECF08ADEA102FD63B72B /* DashboardShots.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -782,7 +786,7 @@
 				CODE_SIGN_INJECT_BASE_ENTITLEMENTS = NO;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 133;
+				CURRENT_PROJECT_VERSION = 134;
 				DEVELOPMENT_TEAM = "$(DEVELOPMENT_TEAM)";
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -854,7 +858,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 133;
+				CURRENT_PROJECT_VERSION = 134;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = "$(DEVELOPMENT_TEAM)";
 				ENABLE_NS_ASSERTIONS = NO;
@@ -889,7 +893,7 @@
 				CODE_SIGN_INJECT_BASE_ENTITLEMENTS = NO;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 133;
+				CURRENT_PROJECT_VERSION = 134;
 				DEVELOPMENT_TEAM = "$(DEVELOPMENT_TEAM)";
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -960,7 +964,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 133;
+				CURRENT_PROJECT_VERSION = 134;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = "$(DEVELOPMENT_TEAM)";
 				ENABLE_STRICT_OBJC_MSGSEND = YES;

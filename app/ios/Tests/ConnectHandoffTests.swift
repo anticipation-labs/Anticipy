@@ -360,8 +360,22 @@ private enum ConnectHandoffSuite {
               !ConnectHandoff.connectLinkIsOurs(url: u("https://anticipy.ai.example.net/c/tok_9f2CQ4bX")))
         check("our host in somebody else's path is refused",
               !ConnectHandoff.connectLinkIsOurs(url: u("https://example.net/anticipy.ai/c/tok_9f2CQ4bX")))
-        check("a subdomain of ours is still not the connect host",
-              !ConnectHandoff.connectLinkIsOurs(url: u("https://api.anticipy.ai/c/tok_9f2CQ4bX")))
+        // api.anticipy.ai IS a connect host now — the Worker mints there, because
+        // it is the only hostname routed to it. This leg used to say the
+        // opposite, and the change is deliberate, measured, and narrow.
+        check("the host the Worker actually mints on is ours",
+              ConnectHandoff.connectLinkIsOurs(url: u("https://api.anticipy.ai/c/tok_9f2CQ4bX")))
+        // AND EVERY OTHER SUBDOMAIN IS STILL REFUSED, which is the half that
+        // was doing the work. The allowlist is exact hostnames, so widening it
+        // by one name did not widen it to a pattern: a subdomain somebody else
+        // can obtain — a stale CNAME, a marketing page, a takeover — must never
+        // be able to carry a link that binds an account.
+        check("any other subdomain of ours is still not a connect host",
+              !ConnectHandoff.connectLinkIsOurs(url: u("https://cdn.anticipy.ai/c/tok_9f2CQ4bX")))
+        check("nor a subdomain that merely looks like the real one",
+              !ConnectHandoff.connectLinkIsOurs(url: u("https://api-anticipy.ai/c/tok_9f2CQ4bX")))
+        check("nor one nested under the host we do allow",
+              !ConnectHandoff.connectLinkIsOurs(url: u("https://x.api.anticipy.ai/c/tok_9f2CQ4bX")))
         check("credentials in the authority are refused",
               !ConnectHandoff.connectLinkIsOurs(url: u("https://a:b@anticipy.ai/c/tok_9f2CQ4bX")))
         check("a port we never mint is refused",

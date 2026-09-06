@@ -144,7 +144,21 @@ enum ConnectHandoff {
     /// widening it is a visible diff that the runner's census leg reads out of
     /// this literal — the spec's first rule ("never the raw provider or Google
     /// URL") is one added hostname away from being false.
-    static let connectLinkHosts: Set<String> = ["anticipy.ai"]
+    /// TWO ENTRIES, AND THE SECOND ONE IS MEASURED, NOT ASPIRATIONAL.
+    ///
+    /// The Worker mints on `api.anticipy.ai/c/{token}` because that is the only
+    /// hostname routed to it. `anticipy.ai/c/*` was added as a Worker route on
+    /// 2026-09-06 and the apex STILL answers 301 — a zone-level redirect
+    /// intercepts before the route is consulted, which is a dashboard change
+    /// rather than a code one. Until that redirect is lifted, an allowlist of
+    /// the apex alone refuses every link the server actually mints, and the
+    /// phone rejects its own request.
+    ///
+    /// Both hosts are ours, which is what the rule protects: the sentence it
+    /// enforces is "never the raw provider or Google URL", and neither entry
+    /// here is one. Drop `api.` the day the apex serves the page — the route is
+    /// already deployed and waiting, so that is one redirect rule and one line.
+    static let connectLinkHosts: Set<String> = ["anticipy.ai", "api.anticipy.ai"]
 
     /// `https://anticipy.ai/c/{token}` — single use, ten minutes, bound to one
     /// owner and one toolkit on the server side.
