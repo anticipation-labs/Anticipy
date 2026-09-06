@@ -595,7 +595,12 @@ function readScopes(root: Record<string, unknown>): string[] {
   const seen = new Set<string>();
   const take = (v: unknown): void => {
     for (const raw of asArray(v)) {
-      const scope = asString(raw);
+      // TRIMMED, and a scope that is only whitespace is not a scope. It would
+      // reach the model as an empty bullet under "What the connection would
+      // cover", and the model would have to write a permission sentence about
+      // nothing -- which is the exact thing the no-scopes floor exists to stop,
+      // arriving through the door marked "we have scopes".
+      const scope = (asString(raw) ?? "").trim();
       if (scope && !seen.has(scope)) {
         seen.add(scope);
         found.push(scope);
@@ -606,6 +611,29 @@ function readScopes(root: Record<string, unknown>): string[] {
   take(meta?.scopes);
   for (const detail of asArray(root.auth_config_details)) {
     take(asRecord(detail)?.scopes);
+    // `required_scopes` is the field the note below used to point at. It is
+    // real, and on this account it is EMPTY for eleven of the twelve toolkits
+    // measured — outlook has one. Read anyway: an app that declares a required
+    // scope is naming the thing it cannot work without.
+    take(asRecord(detail)?.required_scopes);
+  }
+  // WHERE THE SCOPES ACTUALLY ARE, measured against the live vendor on
+  // 2026-09-06 with production's own key:
+  //
+  //     composio_managed_auth: [ { mode: "OAUTH2",
+  //                                scopes: { available: [ "https://mail.google..." ] } } ]
+  //
+  //     gmail 11   googlecalendar 2   googledrive 2   slack 47   linear 5
+  //     github 7   hubspot 33   outlook 12   googledocs 3   googlesheets 3
+  //     notion 0   asana 0
+  //
+  // Not under `scopes`, not under `meta.scopes`, not under
+  // `auth_config_details[].scopes`. Every path this function had was looking
+  // somewhere the data has never been, which is why it returned [] for every
+  // app and permissionSentences — correctly refusing to invent consent copy out
+  // of nothing — closed every route to a connection in the product.
+  for (const managed of asArray(root.composio_managed_auth)) {
+    take(asRecord(asRecord(managed)?.scopes)?.available);
   }
   return found;
 }
@@ -656,17 +684,26 @@ function readToolkitMeta(
     // `/me/connections/sentences`, which does the detail fetch, and never builds
     // consent copy out of a search row.
     //
-    // A SEPARATE, LARGER FINDING FROM THE SAME RUN, recorded here because this
-    // is where the next reader will be standing: `readScopes` came back EMPTY
-    // for every toolkit measured on the detail endpoint too (googlecalendar,
-    // gmail, notion, slack). The live rows carry no `scopes` key anywhere — the
-    // field is `auth_config_details[].required_scopes`, which `readScopes` does
-    // not read, and on this account it is an empty array in all four anyway. So
-    // permission scopes are UNKNOWN for every app in production today, and
-    // anything that refuses on an empty scope list refuses for all of them.
-    // That is not this function's to fix — the data is not merely under another
-    // key, it is absent — and adding the other key name would be a change that
-    // looks like a fix and moves nothing measurable.
+    // THE NOTE THAT USED TO BE HERE WAS WRONG, and it was wrong in the most
+    // expensive way available: it concluded "the data is not merely under
+    // another key, it is absent", and that conclusion closed the file. It said
+    // adding another key name "would be a change that looks like a fix and
+    // moves nothing measurable."
+    //
+    // The data was there the whole time, under
+    // `composio_managed_auth[].scopes.available` — eleven scopes for gmail,
+    // forty-seven for slack, thirty-three for hubspot. Four toolkits were
+    // checked, three key paths were tried, none of them was the right one, and
+    // the absence of the data was written down as a fact about the vendor
+    // instead of as a fact about where we had looked. Every route to a
+    // connection in this product was closed by it: permissionSentences refuses
+    // on an empty scope list, correctly, so no consent copy could be built for
+    // any app and nobody could connect anything.
+    //
+    // Two toolkits really do publish none — notion and asana, both OAUTH2 with
+    // an empty `available`. Those stay refused, and that is the floor working
+    // rather than the bug: an app whose permissions we cannot name is an app we
+    // cannot honestly ask about.
     scopes: readScopes(root),
   };
 }

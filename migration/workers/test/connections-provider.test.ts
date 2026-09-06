@@ -1926,6 +1926,92 @@ await check("search() does exactly one thing with the query: hand it to the vend
 //      -> "one unreadable row is dropped; the readable ones survive it"
 //  12  `if (query === "gmail") return […]` added at the top of search()
 //      -> "NO APP IS NAMED in the adapter's executable source"
+
+// ===========================================================================
+// WHERE THE SCOPES ACTUALLY ARE
+// ===========================================================================
+//
+// The single fact that closed every route to a connection in this product, and
+// the reason it stayed closed: a previous reader checked four toolkits, tried
+// three key paths, found nothing, and wrote down "the data is not merely under
+// another key, it is absent" — a conclusion about the vendor drawn from a fact
+// about where we had looked. permissionSentences refuses on an empty scope
+// list, correctly, so nobody could connect anything.
+//
+// The shape below is COPIED FROM THE LIVE VENDOR, 2026-09-06, production's own
+// key, `GET /api/v3/toolkits/gmail`.
+
+/** The live gmail row's auth shape, trimmed to what readScopes walks. */
+const LIVE_GMAIL_AUTH = {
+  composio_managed_auth: [{
+    mode: "OAUTH2",
+    scopes: {
+      available: [
+        "https://www.googleapis.com/auth/userinfo.profile",
+        "https://www.googleapis.com/auth/userinfo.email",
+        "https://mail.google.com/",
+      ],
+    },
+  }],
+  auth_config_details: [{ name: "Gmail", mode: "OAUTH2", required_scopes: [] }],
+};
+
+await check("scopes are read from composio_managed_auth[].scopes.available", async () => {
+  const meta = await provider(async () => new Response(JSON.stringify({
+    slug: "gmail", name: "Gmail", ...LIVE_GMAIL_AUTH,
+  }), { status: 200, headers: { "content-type": "application/json" } })).toolkit("gmail");
+
+  assert.deepEqual(meta?.scopes, [
+    "https://www.googleapis.com/auth/userinfo.profile",
+    "https://www.googleapis.com/auth/userinfo.email",
+    "https://mail.google.com/",
+  ], "readScopes is looking somewhere the live vendor does not put them, which is "
+    + "how every app came back with zero scopes and nobody could connect anything");
+});
+
+await check("required_scopes is read too, and merged without duplicates", async () => {
+  const meta = await provider(async () => new Response(JSON.stringify({
+    slug: "outlook", name: "Outlook",
+    composio_managed_auth: [{ mode: "OAUTH2", scopes: { available: ["Mail.Read"] } }],
+    // outlook is the ONE toolkit of twelve measured that declares a required
+    // scope, and it declares one it also lists as available.
+    auth_config_details: [{ required_scopes: ["Mail.Read", "offline_access"] }],
+  }), { status: 200, headers: { "content-type": "application/json" } })).toolkit("outlook");
+
+  assert.deepEqual(meta?.scopes, ["Mail.Read", "offline_access"],
+    "either required_scopes is not read, or the merge is duplicating");
+});
+
+await check("a toolkit that publishes no scopes still reads as none, not as a guess", async () => {
+  // notion and asana, both measured live: OAUTH2 with an empty `available`.
+  // words.ts refuses these and that is the floor working — an app whose
+  // permissions we cannot name is one we cannot honestly ask about. This check
+  // exists so a later "fix" that invents a default scope list goes red.
+  const meta = await provider(async () => new Response(JSON.stringify({
+    slug: "notion", name: "Notion",
+    composio_managed_auth: [{ mode: "OAUTH2", scopes: { available: [] } }],
+    auth_config_details: [{ required_scopes: [] }],
+  }), { status: 200, headers: { "content-type": "application/json" } })).toolkit("notion");
+
+  assert.deepEqual(meta?.scopes, [], "a scope was invented for an app that declares none");
+});
+
+await check("a malformed managed-auth block cannot throw or smuggle a non-string", async () => {
+  const meta = await provider(async () => new Response(JSON.stringify({
+    slug: "x", name: "X",
+    composio_managed_auth: [
+      null,
+      "not an object",
+      { scopes: "not an object" },
+      { scopes: { available: "not an array" } },
+      { scopes: { available: [null, 42, "", "  ", "real.scope"] } },
+    ],
+  }), { status: 200, headers: { "content-type": "application/json" } })).toolkit("x");
+
+  assert.deepEqual(meta?.scopes, ["real.scope"],
+    "readScopes let something through that is not a non-empty string");
+});
+
 // ===========================================================================
 
 if (failures) {

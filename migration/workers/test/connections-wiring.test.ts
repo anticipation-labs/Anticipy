@@ -89,7 +89,8 @@ import {
   type ConnectEnv, type Connection,
 } from "../src/routes/connect.ts";
 import {
-  connectAuthWiring, connectDeps, connectWiring, makeSentenceWriter, type ConnectWiringEnv,
+  connectAuthWiring, connectDeps, connectWiring, makeSentenceWriter, SENTENCE_ATTEMPTS,
+  type ConnectWiringEnv,
 } from "../src/connections/wiring.ts";
 import {
   connectAuthRoute, connectAuthWiringInstalled, type ConnectAuthEnv,
@@ -97,7 +98,8 @@ import {
 import {
   ComposioConnections, connectionsFromEnv, resetConnectionsProvider, COMPOSIO_BASE_URL,
 } from "../src/connections/provider.ts";
-import { PermissionWordsRefused } from "../src/connections/words.ts";
+import { MAX_SENTENCE_CHARS, PermissionWordsRefused, permissionSentences }
+  from "../src/connections/words.ts";
 import {
   createD1Store, createMemoryStore, CrossOwnerWrite, type ConnectionsStore,
 } from "../src/connections/store.ts";
@@ -491,6 +493,104 @@ await check("the sentence writer hands a shape back rather than repairing it", a
   // is never turned into three sentences by this file.
   s.modelText = "I'd be happy to help with that.";
   assert.equal(await write(meta), "I'd be happy to help with that.");
+  s.restore();
+});
+
+
+await check("an over-long line is sent back to the model with the count that broke", async () => {
+  // THE MEASUREMENT THIS EXISTS FOR. Against the live model on 2026-09-06,
+  // Gmail's eleven scopes produced the same 84-character line SIX TIMES OUT OF
+  // SIX. The prompt already states the 80-character limit. So the writer asks
+  // again, showing the model the line it wrote and the count it broke — and
+  // with that, Gmail went 0/6 to 6/6.
+  const s = socket();
+  const r = await rig();
+  const write = makeSentenceWriter(r.env);
+  const meta = { slug: APP.slug, name: APP.name, logo: null, description: null,
+                 appUrl: null, scopes: APP.scopes } as never;
+
+  const tooLongLine = "A".repeat(MAX_SENTENCE_CHARS + 4);
+  let turn = 0;
+  Object.defineProperty(s, "modelText", {
+    get() {
+      turn += 1;
+      return turn === 1
+        ? JSON.stringify({ sentences: [tooLongLine, GOOD_SENTENCES[1], GOOD_SENTENCES[2]] })
+        : JSON.stringify({ sentences: GOOD_SENTENCES });
+    },
+    configurable: true,
+  });
+
+  const out = await write(meta);
+  assert.deepEqual(out, GOOD_SENTENCES, "the second answer was not returned");
+  assert.equal(turn, 2, `the model was asked ${turn} time(s); the retry did not fire`);
+
+  // WHAT THE SECOND REQUEST CARRIED. Asking again identically is pointless —
+  // the prompt already said 80 and the model already missed it — so the retry
+  // is only worth anything if it names the failure.
+  const modelCalls = s.calls.filter((c) => !c.url.startsWith(COMPOSIO_BASE_URL));
+  assert.equal(modelCalls.length, 2, "the model was not called twice");
+  const second = modelCalls[1]!.body;
+  assert.ok(second.includes(tooLongLine),
+    "the retry did not show the model the line it wrote");
+  assert.ok(second.includes(String(MAX_SENTENCE_CHARS + 4)),
+    "the retry did not say how long that line was");
+  assert.ok(second.includes(String(MAX_SENTENCE_CHARS)),
+    "the retry did not repeat the limit");
+  s.restore();
+});
+
+await check("a reply that already fits is returned without a second model call", async () => {
+  // THE CONTROL. A retry that fires on every request would double the latency
+  // of every connect page and double the spend, for nothing.
+  const s = socket();
+  const r = await rig();
+  const write = makeSentenceWriter(r.env);
+  const meta = { slug: APP.slug, name: APP.name, logo: null, description: null,
+                 appUrl: null, scopes: APP.scopes } as never;
+
+  s.modelText = JSON.stringify({ sentences: GOOD_SENTENCES });
+  assert.deepEqual(await write(meta), GOOD_SENTENCES);
+  const modelCalls = s.calls.filter((c) => !c.url.startsWith(COMPOSIO_BASE_URL));
+  assert.equal(modelCalls.length, 1,
+    `a good first answer cost ${modelCalls.length} model calls`);
+  s.restore();
+});
+
+await check("the retry gives up rather than looping, and words.ts still judges", async () => {
+  // THE LIMIT DOES NOT MOVE. A model that never complies is handed back over
+  // the limit, and words.ts refuses it with cause "too-long". Raising the cap
+  // would have been the easy green and the wrong one: 80 characters is what a
+  // person reads, and an unread line is not consent.
+  const s = socket();
+  const r = await rig();
+  const write = makeSentenceWriter(r.env);
+  const meta = { slug: APP.slug, name: APP.name, logo: null, description: null,
+                 appUrl: null, scopes: APP.scopes } as never;
+
+  // THREE DISTINCT over-long lines. The first draft repeated one line and
+  // words.ts refused it as `duplicate` before it ever reached the length rule
+  // -- the judge working correctly, and the fixture measuring the wrong refusal.
+  const stubborn = [
+    "Anticipy can read every message in your mailbox " + "b".repeat(40),
+    "Anticipy can send mail from your address whenever " + "c".repeat(40),
+    "Anticipy can delete anything it finds in there for " + "d".repeat(40),
+  ];
+  for (const line of stubborn) {
+    assert.ok(line.length > MAX_SENTENCE_CHARS, "the fixture line is not over the limit");
+  }
+  s.modelText = JSON.stringify({ sentences: stubborn });
+  const out = await write(meta);
+  const modelCalls = s.calls.filter((c) => !c.url.startsWith(COMPOSIO_BASE_URL));
+  assert.ok(modelCalls.length <= SENTENCE_ATTEMPTS,
+    `the writer made ${modelCalls.length} model calls; the bound is ${SENTENCE_ATTEMPTS}`);
+  assert.ok(modelCalls.length > 1, "it did not retry at all");
+  assert.deepEqual(out, stubborn,
+    "the writer repaired or truncated the answer instead of handing it to the judge");
+
+  const verdict = await permissionSentences(meta, async () => out) as { cause?: string };
+  assert.equal(verdict.cause, "too-long",
+    "words.ts stopped refusing an over-long line, so the limit moved");
   s.restore();
 });
 

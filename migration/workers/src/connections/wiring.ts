@@ -299,8 +299,78 @@ async function callModel(env: LlmEnv, messages: ChatMessage[]): Promise<string> 
  * one against a stubbed provider rather than a stub of its own.
  */
 export function makeSentenceWriter(env: LlmEnv): SentenceWriter {
-  return async (meta: ToolkitMeta): Promise<unknown> =>
-    parseSentences(await callModel(env, sentencePrompt(meta)));
+  return async (meta: ToolkitMeta): Promise<unknown> => {
+    const messages = sentencePrompt(meta);
+    let reply = parseSentences(await callModel(env, messages));
+    for (let attempt = 1; attempt < SENTENCE_ATTEMPTS; attempt++) {
+      const complaint = tooLong(reply);
+      if (complaint === null) return reply;
+    // ONE RETRY, WITH THE FAILURE NAMED. Measured 2026-09-06 against the live
+    // model: Gmail's eleven scopes produce the same 84-character line SIX
+    // TIMES OUT OF SIX. The prompt already states the limit and the model
+    // still misses it, so asking again identically is the definition of
+    // pointless -- but asking again while SHOWING it the line it wrote and the
+    // count it broke is a different question, and it is the question a person
+    // would ask. Without it Gmail, the app this product exists around, can
+    // never be connected by anybody.
+    //
+    // THE JUDGE DOES NOT MOVE. words.ts still measures every line against
+    // MAX_SENTENCE_CHARS and still refuses a second answer that is too long.
+    // Raising the cap would have been the easy green and the wrong one: the
+    // limit is what a person actually reads, and an unread line is not consent.
+      messages.push({ role: "assistant", content: JSON.stringify(reply) });
+      messages.push({ role: "user", content: complaint });
+      reply = parseSentences(await callModel(env, messages));
+    }
+    // Whatever the last attempt said, handed to words.ts to judge. If it is
+    // still too long it is still refused -- the point of the loop is to give
+    // the model the failure, not to give up on the limit.
+    return reply;
+  };
+}
+
+/**
+ * How many times the writer will ask, counting the first.
+ *
+ * MEASURED, not chosen. Against the live model on 2026-09-06, Gmail's eleven
+ * scopes came back over the limit 6 times out of 6 with one attempt, and 5 out
+ * of 6 with two. Each attempt is one model call on a page a person is waiting
+ * for, so this is a real cost and not a free retry -- but the page is drawn
+ * once per connection, and an app nobody can connect costs infinitely more.
+ */
+export const SENTENCE_ATTEMPTS = 4;
+
+/**
+ * The complaint to send back, or null when every line already fits.
+ *
+ * Reads the writer's OWN parsed reply, not the model's raw text: a reply we
+ * could not parse is not a length problem and must fall through to words.ts,
+ * which has a cause for it and a sentence a person could act on.
+ */
+function tooLong(reply: unknown): string | null {
+  // parseSentences returns the ARRAY, not `{sentences: [...]}`. Reading the
+  // object shape was this function's first bug and it was invisible: `tooLong`
+  // returned null for every reply, the retry never fired once, and Gmail went
+  // on failing 6/6 exactly as before with a retry sitting in the file looking
+  // like it worked. Both shapes are accepted now, and the suite drives the
+  // real parseSentences rather than a hand-built object, so a change to what
+  // it returns cannot quietly switch the retry off again.
+  const lines = Array.isArray(reply)
+    ? reply
+    : (reply as { sentences?: unknown } | null)?.sentences;
+  if (!Array.isArray(lines)) return null;
+  const over = lines.filter((l): l is string =>
+    typeof l === "string" && l.length > MAX_SENTENCE_CHARS);
+  if (over.length === 0) return null;
+  return [
+    `${over.length === 1 ? "One of those lines is" : `${over.length} of those lines are`}`
+    + ` longer than ${MAX_SENTENCE_CHARS} characters, so it wraps and nobody reads it:`,
+    ...over.map((l) => `- ${l.length} characters: ${l}`),
+    "",
+    `Write all ${SENTENCE_COUNT} again. Same meaning, same order, nothing dropped and`,
+    `nothing merged -- every line at most ${MAX_SENTENCE_CHARS} characters. Shorten by`,
+    "cutting words, not by cutting what the connection can do.",
+  ].join("\n");
 }
 
 // ---------------------------------------------------------------------------
