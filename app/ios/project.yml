@@ -731,7 +731,12 @@ settings:
     #          yet, so the write would 503. is_connect_live.py leg 13 is red
     #          until the migration runs, and the step runner refuses to let
     #          that hold-back exist without it.
-    CURRENT_PROJECT_VERSION: "148"
+    # 149: the phone now SENDS the setup-card skip. serverRecordsTheSoftSnooze
+    #      flipped to true, because the declined_soft migration is applied on
+    #      live D1 and leg 13 reads PASS. 148 was refused by the gate for
+    #      exactly this flag being stale-false against a table that could hold
+    #      the state. Same bytes as 148 otherwise.
+    CURRENT_PROJECT_VERSION: "149"
     DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: NO
@@ -783,7 +788,7 @@ targets:
         # literal from a Mac one, and two products answering "which build
         # are you holding" with different numbers is the exact disease this
         # gate exists to prevent.
-        CURRENT_PROJECT_VERSION: "148"
+        CURRENT_PROJECT_VERSION: "149"
         DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_ENTITLEMENTS: ../macos/AnticipyMac/AnticipyMac.entitlements
