@@ -658,7 +658,13 @@ settings:
     #      microphone and a beat after it would run a microphone while somebody
     #      was still being asked questions. Skip lives inside the step, never a
     #      footer, because page 41 requires it always visible.
-    CURRENT_PROJECT_VERSION: "142"
+    # 143: the same change as 142 -- the onboarding connect step -- renumbered
+    #      because 142's number and 142's source landed in two commits. The gate
+    #      diffs app/ios/Anticipy against the commit that SET the number, so a
+    #      split like that reads as "two different apps call themselves 142",
+    #      which is exactly what it is there to catch. Bump and source belong in
+    #      one commit; this one is.
+    CURRENT_PROJECT_VERSION: "143"
     DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: NO
@@ -710,7 +716,7 @@ targets:
         # literal from a Mac one, and two products answering "which build
         # are you holding" with different numbers is the exact disease this
         # gate exists to prevent.
-        CURRENT_PROJECT_VERSION: "142"
+        CURRENT_PROJECT_VERSION: "143"
         DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_ENTITLEMENTS: ../macos/AnticipyMac/AnticipyMac.entitlements
