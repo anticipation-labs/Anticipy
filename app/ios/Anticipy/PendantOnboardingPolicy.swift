@@ -152,6 +152,20 @@ enum PendantOnboardingPolicy {
 
         static let doneTitle = "That's the pendant sorted"
 
+        /// Oura puts a "Why we ask" beside the personal details it collects, and
+        /// this product already opens the microphone's promises before iOS
+        /// asks. Bluetooth gets the same courtesy: the sentence explaining it
+        /// is reachable BEFORE the system dialog, not after somebody has
+        /// refused one they did not understand.
+        static let whyBluetooth = "Why Bluetooth?"
+        static let whyBluetoothTitle = "What Bluetooth is for"
+        static let whyBluetoothPoints = [
+            "It is only ever used to reach your pendant. Nothing else is looked for and nothing is broadcast.",
+            "Your location is not read. iOS mentions location on this prompt because a Bluetooth scan can in principle infer it; this app asks for none and stores none.",
+            "The pendant sends audio to this phone and nowhere else. What leaves the phone is the same text the phone's own microphone would produce.",
+            "Turning Bluetooth off later stops the pendant and changes nothing else.",
+        ]
+
         /// The way out, offered on every screen behind the offer. Oura says
         /// "No Oura Ring yet?" twice, quietly, and never as an error; this is
         /// the same idea in this product's voice.
@@ -175,6 +189,15 @@ enum PendantOnboardingPolicy {
         let name: String
         /// Signal, if it was measured. Nil is drawn as nothing at all.
         let rssi: Int?
+
+        /// The last block of the identifier, which is what tells two pendants
+        /// in one room apart. Nil when the id is not shaped like one, because a
+        /// truncated something-else is worse than nothing.
+        var shortID: String? {
+            let tail = id.split(separator: "-").last.map(String.init) ?? id
+            guard tail.count >= 4, tail.allSatisfy({ $0.isHexDigit }) else { return nil }
+            return String(tail.suffix(6)).uppercased()
+        }
 
         /// Four bars' worth of nearness, or nil when nothing was measured.
         /// NEVER a percentage: RSSI is not a percentage and dressing it as one

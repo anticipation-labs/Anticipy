@@ -163,7 +163,9 @@ final class FrontendShots: XCTestCase {
         tap(a, "Continue")
         shot("21-your-computer", settle: 1.6)
         tap(a, "Continue")
+        // Two frames a beat apart, so the breathing light can be seen to move.
         shot("22-your-pendant", settle: 1.8)
+        shot("22a-your-pendant-breath", settle: 1.15)
         // Almost everybody leaves the pendant here. Photograph the branch too.
         if tap(a, "I have a pendant", timeout: 5) {
             shot("22b-pendant-wake", settle: 1.8)

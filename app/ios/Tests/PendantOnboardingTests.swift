@@ -93,6 +93,28 @@ let unmeasured = [P.Candidate(id: "x", name: "x", rssi: nil),
 check(P.ordered(unmeasured).first?.id == "y",
       "a measured device outranks one that reported nothing")
 
+// ------------------------------------------- explaining before iOS asks
+// Oura puts "Why we ask" beside what it collects; the microphone beat already
+// opens its promises before the system dialog. Bluetooth gets the same.
+check(!P.Copy.whyBluetooth.isEmpty && !P.Copy.whyBluetoothTitle.isEmpty,
+      "there is a way to ask what Bluetooth is for")
+check(P.Copy.whyBluetoothPoints.count >= 3,
+      "and it answers with more than a slogan")
+check(P.Copy.whyBluetoothPoints.contains { $0.lowercased().contains("location") },
+      "including the location question iOS's own prompt raises")
+check(P.Copy.whyBluetoothPoints.allSatisfy { !$0.isEmpty },
+      "and no promise is blank")
+
+// ------------------------------------------------ telling two pendants apart
+check(P.Candidate(id: "8F2A-19B10000-E8F2-537E-4F6C-D104768A1214", name: "n", rssi: nil)
+        .shortID == "8A1214",
+      "the identifier's tail is shown, the way Oura prints a ring's",
+      P.Candidate(id: "8F2A-19B10000-E8F2-537E-4F6C-D104768A1214", name: "n", rssi: nil).shortID ?? "nil")
+check(P.Candidate(id: "not-an-identifier", name: "n", rssi: nil).shortID == nil,
+      "something that is not an identifier is not truncated into looking like one")
+check(P.Candidate(id: "abc", name: "n", rssi: nil).shortID == nil,
+      "and neither is something too short to be one")
+
 // ------------------------------------------------------------------ the close
 check(P.doneLine(deviceName: "Pendant 7A").contains("Pendant 7A"),
       "the closing line names the device when there is a name")
