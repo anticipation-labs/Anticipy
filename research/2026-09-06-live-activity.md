@@ -90,6 +90,19 @@ it…`, which is the same omission plus visible damage. It has its own line now.
 same piece, and the suite fails if the view stops calling it. No amount of
 reading would have found this; it took a render.
 
+## The second defect, found the same way
+
+Build 144 went onto a simulator and the Dynamic Island showed a gold dot
+floating in black with no shape around it. The island is not a themed surface —
+it is a cut-out in the display, and it is black in every appearance — so the
+mark's ink outline, both text lines and the stop button's ink circle were all
+ink on black. The lock-screen capsule sits on cream and was fine; nothing in
+this file distinguished the two grounds.
+
+`ActivityMark` takes its stroke colour as a parameter now, and every island
+region passes cream. Build 145. Same lesson as the offline qualifier: neither
+was findable by reading.
+
 ## Proof
 
 * `sh app/ios/Tests/run_live_activity_tests.sh` — 131 walked checks plus 14

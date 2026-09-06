@@ -38,7 +38,7 @@ struct AnticipyLiveActivity: Widget {
             let face = face(context.state)
             return DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    ActivityMark(alive: context.state.alive)
+                    ActivityMark(alive: context.state.alive, stroke: ActivityPalette.ground)
                         .padding(.leading, 4)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
@@ -50,21 +50,23 @@ struct AnticipyLiveActivity: Widget {
                     VStack(spacing: 3) {
                         Text(face.title)
                             .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(ActivityPalette.ink)
+                            .foregroundStyle(ActivityPalette.ground)
                         Text(face.detail)
                             .font(.system(size: 13))
-                            .foregroundStyle(ActivityPalette.text2)
+                            .foregroundStyle(ActivityPalette.ground.opacity(0.72))
                     }
                 }
             } compactLeading: {
-                ActivityMark(alive: context.state.alive, size: 15)
+                ActivityMark(alive: context.state.alive, size: 15,
+                             stroke: ActivityPalette.ground)
             } compactTrailing: {
                 Text(LiveActivityPolicy.compact(reason(context.state), heard: context.state.heard))
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(ActivityPalette.champagne)
                     .monospacedDigit()
             } minimal: {
-                ActivityMark(alive: context.state.alive, size: 14)
+                ActivityMark(alive: context.state.alive, size: 14,
+                             stroke: ActivityPalette.ground)
             }
             .widgetURL(URL(string: "anticipy://open"))
         }
@@ -154,10 +156,18 @@ struct LockScreenActivityView: View {
 
 /// The product's mark, breathing while the microphone is actually hearing.
 /// Still otherwise, for the same reason the app's own indicators are.
+///
+/// `stroke` is a parameter and not a constant because THE DYNAMIC ISLAND IS
+/// ALWAYS BLACK. It is a cut-out in the display, not a themed surface, so it
+/// ignores the capsule's cream ground and every light-on-dark assumption the
+/// rest of this file makes. Drawn in ink there, the mark was a black outline on
+/// black: the first simulator run showed a floating gold dot with no shape
+/// around it. The lock screen keeps ink; the island gets cream.
 @available(iOS 16.1, *)
 private struct ActivityMark: View {
     var alive: Bool
     var size: CGFloat = 22
+    var stroke: Color = ActivityPalette.ink
 
     var body: some View {
         ZStack {
@@ -167,7 +177,7 @@ private struct ActivityMark: View {
                     .frame(width: size * 1.9, height: size * 1.9)
             }
             RoundedRectangle(cornerRadius: size * 0.34, style: .continuous)
-                .strokeBorder(ActivityPalette.ink, lineWidth: size * 0.11)
+                .strokeBorder(stroke, lineWidth: size * 0.11)
                 .frame(width: size * 0.70, height: size)
             // The microphone hole, and the one warm thing on the capsule. It
             // is the same light the pendant renders carry in the onboarding —
@@ -192,15 +202,18 @@ private struct ActivityMark: View {
 /// instead; interactive controls arrived in 17.
 @available(iOS 17.0, *)
 private struct StopButton: View {
+    /// True in the Dynamic Island, which is smaller AND always black — so the
+    /// button inverts there too, for the reason in `ActivityMark`.
     var compact: Bool
 
     var body: some View {
         Button(intent: StopListeningIntent()) {
             Image(systemName: "stop.fill")
                 .font(.system(size: compact ? 13 : 15, weight: .bold))
-                .foregroundStyle(ActivityPalette.onInk)
+                .foregroundStyle(compact ? ActivityPalette.ink : ActivityPalette.onInk)
                 .frame(width: compact ? 34 : 44, height: compact ? 34 : 44)
-                .background(Circle().fill(ActivityPalette.ink))
+                .background(Circle().fill(compact ? ActivityPalette.ground
+                                                  : ActivityPalette.ink))
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Stop listening")

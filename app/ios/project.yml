@@ -688,7 +688,13 @@ settings:
     #      a recorded level-1 decline cannot be walked back by this phone. The
     #      step runner reads the Worker's own source and goes red the day the
     #      two stop agreeing, in either direction.
-    CURRENT_PROJECT_VERSION: "144"
+    # 145: the Dynamic Island is ALWAYS BLACK -- a cut-out in the display, not
+    #      a themed surface -- so the mark, the two lines and the stop button
+    #      were drawn there in ink on black and were invisible. Found by
+    #      running build 144 on a simulator and looking at the island rather
+    #      than by reading the file. Lock screen keeps ink; the island gets
+    #      cream.
+    CURRENT_PROJECT_VERSION: "145"
     DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: NO
@@ -740,7 +746,7 @@ targets:
         # literal from a Mac one, and two products answering "which build
         # are you holding" with different numbers is the exact disease this
         # gate exists to prevent.
-        CURRENT_PROJECT_VERSION: "144"
+        CURRENT_PROJECT_VERSION: "145"
         DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_ENTITLEMENTS: ../macos/AnticipyMac/AnticipyMac.entitlements
