@@ -192,6 +192,9 @@ import argparse
 import json
 import os
 import re
+import base64
+import hashlib
+import hmac
 import secrets
 import subprocess
 import sys
@@ -239,6 +242,11 @@ TABLES = ("app_usage_signals", "connect_links", "connect_nudges", "connections")
 #: The vendor, pinned exactly as provider.ts pins it — a floating version is a
 #: silent rename away from a leg that measures nothing.
 COMPOSIO_BASE = os.environ.get("COMPOSIO_BASE_URL", "https://backend.composio.dev/api/v3.1")
+
+#: The vendor's v3 root. The webhook subscription lives at
+#: /api/v3/webhook_subscriptions — UNDERSCORE, not the hyphen the vendor's own
+#: docs print, which 404s. Measured 2026-09-06.
+COMPOSIO_BASE_V3 = "https://backend.composio.dev/api/v3"
 SESSION_PATH = "/tool_router/session"
 
 #: The vendor meta-tool that lets the MODEL start a connection on its own,
@@ -591,9 +599,10 @@ def leg_catalog(routes_code: int, credential: bool, control: dict | None,
     if answer["json"] and answer["message"]:
         return RED, BAD, (
             f"{where} -> {answer['status']} \"{answer['message']}\". Add an app does not "
-            "work: this is the route reporting its own failure, and the 503 case is the "
-            "unfilled ConnectionsApiDeps.search port — a declared port that "
-            "connectionsApiDeps() does not fill, so every search answers this")
+            "work: this is the route reporting its own failure. A 503 is either the "
+            "ConnectionsApiDeps.search port unfilled on the deployed build or the catalog "
+            "refusing to answer, and the body does not say which — `wrangler tail` does, "
+            "in the log line searchCatalog writes for the unfilled case")
     return UNPROVEN, INFO, (
         f"{where} -> {answer['status']} with nothing readable in it, so nothing is claimed "
         "about the catalog")
@@ -1189,7 +1198,7 @@ def overall(codes: list) -> int:
 
 
 def _http(url: str, method: str = "GET", headers: dict | None = None,
-          timeout: int = 30) -> tuple[int, dict, str]:
+          timeout: int = 30, body: bytes | None = None) -> tuple[int, dict, str]:
     """One request, with exactly the headers the caller asked for.
 
     THE DEFAULT IS ANONYMOUS — no Authorization, no cookie — and every leg but
@@ -1201,8 +1210,8 @@ def _http(url: str, method: str = "GET", headers: dict | None = None,
     no length at all; the four POST routes settle the credential before they
     read a body, so an empty one is refused without anything being written.
     """
-    req = urllib.request.Request(url, data=b"" if method == "POST" else None,
-                                 method=method, headers=headers or {})
+    data = body if body is not None else (b"" if method == "POST" else None)
+    req = urllib.request.Request(url, data=data, method=method, headers=headers or {})
     try:
         with urllib.request.urlopen(req, timeout=timeout) as res:
             return res.status, dict(res.headers), res.read().decode("utf-8", "replace")
@@ -1226,12 +1235,13 @@ def _credential() -> str:
 def run(*, read_only: bool = False, http=None, sql=None, vendor=None,
         owner: str | None = None, now_ms: int | None = None,
         credential: str | None = None, catalog_query: str | None = None,
-        ) -> tuple[int, list]:
+        webhook=None) -> tuple[int, list]:
     """Every leg, in chain order. Returns (exit code, rows to print).
 
-    The three transports are injected so the whole gate is testable offline;
+    The FOUR transports are injected so the whole gate is testable offline;
     `main()` supplies the real ones. `http` is called as
-    `http(url, method=..., headers=...)`.
+    `http(url, method=..., headers=..., body=...)`, and `webhook` as
+    `webhook(api_key)` returning `(secret, subscription)` or None.
     """
     http = http or _http
     now_ms = now_ms if now_ms is not None else int(time.time() * 1000)
@@ -1240,10 +1250,11 @@ def run(*, read_only: bool = False, http=None, sql=None, vendor=None,
     rows: list[tuple[str, str, str]] = []
     codes: list[int] = []
 
-    def ask(path: str, method: str = "GET", headers: dict | None = None):
+    def ask(path: str, method: str = "GET", headers: dict | None = None,
+            body: bytes | None = None):
         """One live request, or None if the request itself failed."""
         try:
-            return http(f"{WORKER}{path}", method=method, headers=headers)
+            return http(f"{WORKER}{path}", method=method, headers=headers, body=body)
         except Exception:
             return None
 
@@ -1257,11 +1268,13 @@ def run(*, read_only: bool = False, http=None, sql=None, vendor=None,
             kind, detail = classify_connections_response(*answer)
         route_results.append((name, method, path, kind, detail))
 
-    control = ask(CONNECTIONS_CONTROL_PATH)
-    control_kind = ("unreachable", "the control request failed") if control is None \
-        else classify_connections_response(*control)
+    # THE CONTROL, asked last so a reader of a `wrangler tail` sees it next to
+    # the six it calibrates. It is a (kind, detail) pair like every other answer.
+    got = ask(CONNECTIONS_CONTROL_PATH)
+    control = ("unreachable", "the control request failed") if got is None \
+        else classify_connections_response(*got)
 
-    code, mark, sentence = leg_routes(route_results, control_kind)
+    code, mark, sentence = leg_routes(route_results, control)
     routes_code = code
     codes.append(code)
     rows.append((mark, "1  THE SIX /me/connections ROUTES EXIST", sentence))
@@ -1394,6 +1407,48 @@ def run(*, read_only: bool = False, http=None, sql=None, vendor=None,
     code, mark, sentence = leg_connected(owners_n, rows_n)
     codes.append(code)
     rows.append((mark, "9  SOMEBODY HAS ACTUALLY CONNECTED AN APP", sentence))
+
+    # -- leg 10: the expiry webhook -------------------------------------------
+    # Every request here is safe against production, repeatedly: the unsigned
+    # and stale ones are refused before anything is read, and the signed one
+    # names an account NO ROW HOLDS, so the handler's answer is a quiet 200 and
+    # nothing is written. No owner is touched.
+    unsigned_answer = ask(WEBHOOK_PATH, "POST",
+                          {"content-type": "application/json"}, WEBHOOK_PROBE_BODY)
+    unsigned_code = unsigned_answer[0] if unsigned_answer else None
+    control_answer = ask(WEBHOOK_CONTROL_PATH, "POST",
+                         {"content-type": "application/json"}, WEBHOOK_PROBE_BODY)
+    control_code = control_answer[0] if control_answer else None
+
+    signed_result = stale_code = None
+    if unsigned_code == 403 and key:
+        try:
+            found = (webhook or webhook_secret)(key)
+        except VendorUnavailable:
+            found = None
+        if found:
+            secret, _sub = found
+            stamp = str(int((now_ms if now_ms else 0) / 1000) or int(time.time()))
+            head = {"content-type": "application/json", "webhook-id": WEBHOOK_PROBE_ID,
+                    "webhook-timestamp": stamp,
+                    "webhook-signature": sign_webhook(secret, WEBHOOK_PROBE_ID, stamp,
+                                                      WEBHOOK_PROBE_BODY)}
+            got = ask(WEBHOOK_PATH, "POST", head, WEBHOOK_PROBE_BODY)
+            if got:
+                signed_result = (got[0], got[2])
+            # The same body signed for a timestamp outside the window. If this
+            # is accepted, a captured request can be replayed at leisure.
+            old_stamp = str(int(stamp) - WEBHOOK_STALE_SECONDS)
+            stale_head = {"content-type": "application/json",
+                          "webhook-id": WEBHOOK_PROBE_ID, "webhook-timestamp": old_stamp,
+                          "webhook-signature": sign_webhook(secret, WEBHOOK_PROBE_ID,
+                                                            old_stamp, WEBHOOK_PROBE_BODY)}
+            stale_answer = ask(WEBHOOK_PATH, "POST", stale_head, WEBHOOK_PROBE_BODY)
+            stale_code = stale_answer[0] if stale_answer else None
+
+    code, mark, sentence = leg_webhook(unsigned_code, control_code, signed_result, stale_code)
+    codes.append(code)
+    rows.append((mark, "10 THE EXPIRY WEBHOOK IS LIVE AND VERIFIES", sentence))
 
     return overall(codes), rows
 
@@ -1625,6 +1680,44 @@ def self_test() -> int:
     cases.append(("leg9    an uncountable table is UNPROVEN",
                   leg_connected(None, None)[0] == UNPROVEN))
 
+    # ---- LEG 10 — every state the webhook has actually been in -------------
+    # The first two are not hypotheses: both were MEASURED on 2026-09-06,
+    # either side of `wrangler secret put`, in that order.
+    ok200 = (200, '{"ok":true,"ignored":"no such connection"}')
+    cases.append(("leg10   404 is red — the route is not deployed",
+                  leg_webhook(404, 404, None, None)[0] == RED))
+    cases.append(("leg10   503 is red — deployed, but no secret, so every expiry is dropped",
+                  leg_webhook(503, 404, None, None)[0] == RED))
+    cases.append(("leg10   403 with no signed probe is UNPROVEN, never green",
+                  leg_webhook(403, 404, None, None)[0] == UNPROVEN))
+    cases.append(("leg10   403 that the CONTROL also gives is UNPROVEN — that is the zone",
+                  leg_webhook(403, 403, ok200, 403)[0] == UNPROVEN))
+    cases.append(("leg10   an unsigned event ACCEPTED is red",
+                  leg_webhook(200, 404, None, None)[0] == RED))
+    cases.append(("leg10   a correctly signed event refused is red — wrong secret deployed",
+                  leg_webhook(403, 404, (403, '{"ok":false}'), 403)[0] == RED))
+    cases.append(("leg10   200 that does not say it ignored the account is red",
+                  leg_webhook(403, 404, (200, '{"ok":true}'), 403)[0] == RED))
+    cases.append(("leg10   a stale event ACCEPTED is red — a capture can be replayed",
+                  leg_webhook(403, 404, ok200, 200)[0] == RED))
+    cases.append(("leg10   unreachable is UNPROVEN, not a verdict",
+                  leg_webhook(None, None, None, None)[0] == UNPROVEN))
+    cases.append(("leg10   the live shape of 2026-09-06 is green",
+                  leg_webhook(403, 404, ok200, 403)[0] == GREEN))
+    # The signer must mirror webhookKeyBytes, not invent a rule. A whsec_
+    # secret keys with its DECODED bytes; anything else with its own UTF-8.
+    cases.append(("leg10   a whsec_ secret signs with decoded bytes",
+                  sign_webhook("whsec_" + base64.b64encode(b"key").decode(), "i", "1", b"{}")
+                  == "v1," + base64.b64encode(hmac.new(
+                      b"key", b"i.1.{}", hashlib.sha256).digest()).decode()))
+    cases.append(("leg10   a plain secret signs with its own bytes",
+                  sign_webhook("plainsecret", "i", "1", b"{}")
+                  == "v1," + base64.b64encode(hmac.new(
+                      b"plainsecret", b"i.1.{}", hashlib.sha256).digest()).decode()))
+    cases.append(("leg10   the probe names an account no owner could hold",
+                  WEBHOOK_PROBE_ACCOUNT.startswith("ca_gate_probe")
+                  and PROBE_OWNER in WEBHOOK_PROBE_BODY.decode()))
+
     # ---- The roll-up -------------------------------------------------------
     cases.append(("verdict red beats unproven", overall([GREEN, UNPROVEN, RED]) == RED))
     cases.append(("verdict unproven beats green", overall([GREEN, UNPROVEN]) == UNPROVEN))
@@ -1638,6 +1731,162 @@ def self_test() -> int:
     print("  " + "-" * 74)
     print(f"  {len(cases) - bad}/{len(cases)} correct\n")
     return 1 if bad else 0
+
+
+# ===========================================================================
+# LEG 10 — the expiry webhook
+# ===========================================================================
+
+#: The only webhook the vendor publishes. There is no "connected" event, which
+#: is the whole reason connections/wait.ts exists.
+WEBHOOK_PATH = "/connections/events"
+
+#: A control path one character away, so a 403 from the leg above can be shown
+#: to be THIS ROUTE answering rather than a blanket refusal on the zone.
+WEBHOOK_CONTROL_PATH = "/connections/eventsX"
+
+#: An account id no `connections` row holds, and shaped so it could not be
+#: mistaken for one. A verified event naming it must be a quiet 200: the vendor
+#: retries an error forever, and an account somebody already disconnected is
+#: not a problem.
+WEBHOOK_PROBE_ACCOUNT = "ca_gate_probe_nobody_holds_this"
+
+#: The webhook-id on every probe. A fixed value on purpose: the handler treats
+#: a repeat as the same event, so running this gate in a loop cannot pile up
+#: state anywhere.
+WEBHOOK_PROBE_ID = "msg_gate_probe"
+
+#: One second past the handler's freshness window (300s), so the stale case is
+#: unambiguous rather than sitting on the boundary.
+WEBHOOK_STALE_SECONDS = 301
+
+#: The event body, byte-exact, because the signature covers it. Compact
+#: separators for the same reason: a re-serialisation with different spacing
+#: signs something other than what is sent.
+WEBHOOK_PROBE_BODY = json.dumps({
+    "type": "composio.connected_account.expired",
+    "data": {"id": WEBHOOK_PROBE_ACCOUNT,
+             "connected_account_id": WEBHOOK_PROBE_ACCOUNT,
+             "user_id": PROBE_OWNER},
+}, separators=(",", ":")).encode()
+
+
+def leg_webhook(unsigned: int | None, control: int | None,
+                signed: tuple[int, str] | None, stale: int | None) -> tuple[int, str, str]:
+    """LEG 10. Is the expiry webhook deployed, secret-bearing, and verifying?
+
+    ONE STATUS CODE SEPARATES FOUR STATES, which is why this leg is cheap and
+    safe to run against production as often as anybody likes:
+
+        404  the route is not deployed at all
+        503  deployed, but COMPOSIO_WEBHOOK_SECRET is unset — every expiry is
+             dropped and no owner is ever asked to reconnect
+        403  deployed, secret set, and the signature was refused
+        200  deployed, secret set, and a correctly signed event was handled
+
+    Both 503 and 403 were measured on 2026-09-06, in that order, either side of
+    `wrangler secret put` — so the difference between them is not a reading of
+    the source, it is a before and after.
+
+    The signed case is the one that proves anything end to end: it exercises the
+    HMAC, the freshness window and the store read, and it names an account
+    NOBODY HOLDS, so it moves no row and touches no owner. Without it a 403 on
+    every request is indistinguishable from a webhook wired to the wrong secret,
+    which would refuse every real expiry forever with a green deploy.
+    """
+    where = f"POST {WORKER}{WEBHOOK_PATH}"
+
+    if unsigned is None:
+        return UNPROVEN, INFO, (f"{where} could not be reached, so nothing here is a "
+                                "claim about the webhook either way")
+    if unsigned == 404:
+        return RED, BAD, (f"{where} -> 404. The route is not deployed. Every "
+                          "connected_account.expired the vendor sends is dropped, and "
+                          "nobody is ever asked to reconnect a dead credential")
+    if unsigned == 503:
+        return RED, BAD, (f"{where} -> 503, so the route is deployed and "
+                          "COMPOSIO_WEBHOOK_SECRET is UNSET. Same outcome as a 404 for "
+                          "the person: every expiry is dropped. `wrangler secret put "
+                          "COMPOSIO_WEBHOOK_SECRET` with the value from the vendor's "
+                          "webhook subscription")
+    if unsigned != 403:
+        return RED, BAD, (f"{where} -> {unsigned} for an UNSIGNED event. Anything but a "
+                          "403 here means an unauthenticated caller can reach the "
+                          "handler, and marking somebody's connection expired strips "
+                          "the API hand off a working account and texts them about it")
+    if control is not None and control == 403:
+        return UNPROVEN, INFO, (f"{where} -> 403, but so does the control "
+                                f"{WEBHOOK_CONTROL_PATH}, so that 403 is the zone "
+                                "refusing everything and says nothing about this route")
+
+    if signed is None:
+        return UNPROVEN, INFO, (f"{where} -> 403 for an unsigned event and the control "
+                                f"{WEBHOOK_CONTROL_PATH} -> {control}, which is this "
+                                "route answering. But no CORRECTLY signed event was "
+                                "sent, so a webhook keyed with the wrong secret — which "
+                                "refuses every real expiry forever — reads identically "
+                                "from here")
+    code, body = signed
+    if code != 200:
+        return RED, BAD, (f"{where} refused a correctly signed event: {code} {body[:120]}. "
+                          "The deployed secret does not match the vendor's webhook "
+                          "subscription, so every real expiry will be refused")
+    if "ignored" not in body:
+        return RED, BAD, (f"{where} answered 200 to an event naming {WEBHOOK_PROBE_ACCOUNT}, "
+                          f"which no row holds, and did NOT say it ignored it: {body[:160]}. "
+                          "It may have written something")
+    if stale is not None and stale != 403:
+        return RED, BAD, (f"{where} accepted an event whose timestamp was 301s old "
+                          f"({stale}), so a captured request can be replayed at leisure")
+
+    freshness = " and a 301s-stale one was refused" if stale == 403 else ""
+    return GREEN, OK, (f"{where}: unsigned -> 403 (control {WEBHOOK_CONTROL_PATH} -> "
+                       f"{control}, so that is this route), correctly signed -> 200 "
+                       f"{body[:60]}{freshness}. The HMAC, the freshness window and the "
+                       "store read are all exercised, and no row moved: the event named "
+                       "an account nobody holds")
+
+
+def webhook_secret(api_key: str, *, base: str = COMPOSIO_BASE_V3,
+                   timeout: int = 30) -> tuple[str, dict] | None:
+    """The signing secret of our ONE webhook subscription, and the subscription.
+
+    NEVER RETURNED TO THE SCREEN. The caller signs with it inside this process
+    and prints only a status code; the secret is not put on a command line, not
+    logged, and not written to a file.
+
+    Exactly one subscription is expected. Two would mean two secrets, only one
+    of which the Worker holds, and a leg that picked the first would be green
+    or red by luck.
+    """
+    req = urllib.request.Request(f"{base.rstrip('/')}/webhook_subscriptions",
+                                 headers={"x-api-key": api_key, "accept": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as res:
+            answer = json.loads(res.read().decode("utf-8", "replace"))
+    except (urllib.error.URLError, urllib.error.HTTPError, ValueError, OSError) as exc:
+        raise VendorUnavailable(str(exc)) from exc
+    items = answer.get("items") or []
+    if len(items) != 1:
+        return None
+    secret = str(items[0].get("secret") or "")
+    return (secret, items[0]) if secret else None
+
+
+def sign_webhook(secret: str, msg_id: str, timestamp: str, body: bytes) -> str:
+    """Standard Webhooks, the scheme connections_webhook.ts verifies.
+
+    Signed input is `{id}.{timestamp}.{body}`, HMAC-SHA256, base64, presented as
+    `v1,<sig>`. The key bytes rule mirrors `webhookKeyBytes` EXACTLY: a
+    `whsec_` prefix means base64-decode the rest, anything else is the string's
+    own UTF-8 bytes. Mirroring rather than re-deciding is the point — a signer
+    that made its own choice here would go green against a Worker that verifies
+    differently.
+    """
+    signed = msg_id.encode() + b"." + timestamp.encode() + b"." + body
+    key = (base64.b64decode(secret[len("whsec_"):]) if secret.startswith("whsec_")
+           else secret.encode())
+    return "v1," + base64.b64encode(hmac.new(key, signed, hashlib.sha256).digest()).decode()
 
 
 def report(code: int, rows: list) -> None:

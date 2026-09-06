@@ -35,6 +35,7 @@ import os
 import re
 import shutil
 import sys
+import time
 import urllib.parse
 
 import pytest
@@ -69,8 +70,12 @@ LIVE_404 = (404, {"content-type": "application/json"},
 REFUSED = (401, JSON_H, '{"ok":false,"message":"Sign in first."}')
 #: connections_api.ts NOT_A_ROUTE: the prefix is routed, this path is not a leg.
 NOT_A_LEG = (404, JSON_H, '{"ok":false,"message":"There\'s nothing at this address."}')
-#: `refuse(503, CATALOG_UNREACHABLE)` — what `?q=` answers on every deployment
-#: that has not filled `ConnectionsApiDeps.search`, which is all of them.
+#: `refuse(503, CATALOG_UNREACHABLE)` — what `?q=` answers when the search port
+#: is unfilled on the deployed build, and also when the catalog refuses. Measured
+#: 2026-09-06 06:17: no filler existed at all. A `provider.search` was written
+#: into `connectionsApiDeps()` later the same day; whether the deployed build
+#: carries it is what leg 3 is for, and it is UNPROVEN until somebody exports a
+#: credential.
 CATALOG_503 = (503, JSON_H,
                '{"ok":false,"message":"I couldn\'t look that up just now. '
                'Nothing has changed."}')
@@ -143,7 +148,8 @@ class FakeWorker:
     """
 
     def __init__(self, page=None, code=None, routes=REFUSED, control=LIVE_404,
-                 listing=None, catalog=CATALOG_503, way_in=False, only=None):
+                 listing=None, catalog=CATALOG_503, way_in=False, only=None,
+                 webhook=None, webhook_control=None):
         self.page = page              # (status, headers, body) or None -> sign-in
         self.code = code              # the /code control page, or None -> real one
         self.routes = routes          # the answer for all six /me/connections legs
@@ -152,16 +158,31 @@ class FakeWorker:
         self.catalog = catalog
         self.way_in = way_in
         self.only = only or {}        # path -> answer, overriding everything
+        # LEG 10. `webhook` is a callable (headers) -> answer, so a test can
+        # answer differently for a signed and an unsigned request without the
+        # fake having to know how to verify a signature -- it looks at whether
+        # one was PRESENTED, which is the only thing a fake honestly can.
+        self.webhook = webhook
+        self.webhook_control = webhook_control or (404, {}, "not found")
         self.seen = []
         self.token = None
 
-    def __call__(self, url, method="GET", headers=None):
+    def __call__(self, url, method="GET", headers=None, body=None):
         path = urllib.parse.urlsplit(url).path
         query = urllib.parse.urlsplit(url).query
         self.seen.append({"method": method, "path": path, "query": query,
-                          "headers": dict(headers or {})})
+                          "headers": dict(headers or {}), "body": body})
         if path in self.only:
             return self.only[path]
+
+        if path == M.WEBHOOK_CONTROL_PATH:
+            return self.webhook_control
+        if path == M.WEBHOOK_PATH:
+            if self.webhook is None:
+                raise AssertionError(
+                    "the gate asked for the webhook and this fake serves none; "
+                    "use a_deployed_worker() or pass webhook=")
+            return self.webhook(dict(headers or {}))
 
         m = re.fullmatch(r"/c/([A-Za-z0-9_-]{43})(/code)?", path)
         if m:
@@ -185,12 +206,49 @@ class FakeWorker:
                 if r["path"] == path and (method is None or r["method"] == method)]
 
 
-def a_deployed_worker(**kw):
+def a_verifying_webhook(*, now_ms=None, stale_ok=False,
+                        signed=(200, JSON_H,
+                                '{"ok":true,"ignored":"no such connection"}')):
+    """The shape production had on 2026-09-06, an hour after the secret landed.
+
+    It cannot check a signature and does not pretend to: it answers on whether
+    one was PRESENTED and whether the timestamp is inside the window. That is
+    exactly the distinction leg 10 draws its verdict from, and no more.
+    """
+    def answer(headers):
+        sig = headers.get("webhook-signature")
+        stamp = headers.get("webhook-timestamp")
+        if not sig or not stamp:
+            return (403, JSON_H, '{"ok":false,"error":"forbidden"}')
+        # THE SAME CLOCK THE GATE USED. A fake that read the wall clock while
+        # the gate signed against an injected `now_ms` calls every fresh
+        # signature stale, and the leg then reports a webhook keyed with the
+        # wrong secret -- a false RED produced entirely by the test rig.
+        now = int(now_ms / 1000) if now_ms else int(time.time())
+        skew = abs(now - int(stamp))
+        if skew > 300 and not stale_ok:
+            return (403, JSON_H, '{"ok":false,"error":"forbidden"}')
+        return signed
+    return answer
+
+
+def a_deployed_worker(*, now_ms=None, **kw):
     """Every HTTP leg green: six routes refusing, the control 404ing, a connect
-    page with a way in on it, and a catalog with rows."""
+    page with a way in on it, a catalog with rows, and a verifying webhook.
+
+    Pass the same `now_ms` the gate is run with, or the webhook signs against
+    one clock and is checked against another.
+    """
     kw.setdefault("way_in", True)
     kw.setdefault("catalog", (200, JSON_H, '{"items":[{"slug":"x"},{"slug":"y"}]}'))
+    kw.setdefault("webhook", a_verifying_webhook(now_ms=now_ms))
     return FakeWorker(**kw)
+
+
+def a_webhook_secret(secret="plainprobesecret"):
+    """The `webhook` transport run() takes: (api_key) -> (secret, subscription)."""
+    return lambda _api_key: (secret, {"id": "ws_fake", "webhook_url": "x",
+                                      "enabled_events": ["composio.connected_account.expired"]})
 
 
 def http_answering(*answer):
@@ -569,15 +627,16 @@ def _catalog_run(worker, **kw):
 
 
 def test_the_unfilled_search_port_is_red_and_its_sentence_is_quoted():
-    """`ConnectionsApiDeps.search` is a declared port and `connectionsApiDeps()`
-    does not fill it, so `?q=` answers 503 on every deployment there has ever
-    been. That is a person tapping Add an app and getting nothing — a broken
-    feature, not an unmeasured one — and the leg quotes the Worker's own
-    sentence so the reader can grep for it rather than take our word."""
+    """A 503 to `?q=` is a person tapping Add an app and getting nothing — a
+    broken feature, not an unmeasured one — whether the cause is an unfilled
+    `ConnectionsApiDeps.search` port on the deployed build or a catalog that did
+    not answer. The leg quotes the Worker's own sentence so the reader can grep
+    for it rather than take our word, and does not guess between the two causes,
+    because the body does not say."""
     code, rows = _catalog_run(a_deployed_worker(catalog=CATALOG_503))
     assert rows[2][0] == M.BAD
     assert "I couldn't look that up just now" in rows[2][2]
-    assert "search" in rows[2][2]
+    assert "search" in rows[2][2], "the reader is pointed at the port by name"
     assert code == M.RED
 
 
@@ -1135,7 +1194,8 @@ def test_an_uncountable_connections_table_claims_nothing():
 def test_the_measured_state_of_2026_09_06_at_0408():
     """The whole chain as production stood the morning this gate was written:
     nothing deployed, no tables, a working vendor key, nothing connected."""
-    code, rows = M.run(http=FakeWorker(page=LIVE_404, routes=LIVE_404), sql=FakeD1(),
+    code, rows = M.run(http=FakeWorker(page=LIVE_404, routes=LIVE_404,
+                                       webhook=lambda _h: LIVE_404), sql=FakeD1(),
                        vendor=vendor_answering(), owner="sxkotd1h02qb6gw")
     assert marks(rows) == [
         M.BAD,    # 1 the six routes: the router's generic 404
@@ -1147,6 +1207,7 @@ def test_the_measured_state_of_2026_09_06_at_0408():
         M.INFO,   # 7 no page to look at
         M.OK,     # 8 the vendor key
         M.INFO,   # 9 the connections table could not be counted
+        M.BAD,    # 10 the webhook route is not deployed either
     ], details(rows)
     assert code == M.RED
 
@@ -1174,11 +1235,12 @@ def test_the_measured_state_of_2026_09_06_at_0617():
 
 def test_everything_working_is_the_only_way_to_exit_zero():
     now = 1_757_000_000_000
-    code, rows = M.run(http=a_deployed_worker(),
+    code, rows = M.run(http=a_deployed_worker(now_ms=now),
                        sql=d1_with_a_working_connect_links(now),
                        vendor=vendor_answering(), owner="sxkotd1h02qb6gw",
-                       credential="an-owner-token", now_ms=now)
-    assert marks(rows) == [M.OK] * 9, details(rows)
+                       credential="an-owner-token", now_ms=now,
+                       webhook=a_webhook_secret())
+    assert marks(rows) == [M.OK] * 10, details(rows)
     assert code == M.GREEN
 
 
