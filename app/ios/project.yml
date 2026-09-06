@@ -650,7 +650,15 @@ settings:
     #      pushes saying "substring not found", which reads as a rotted test
     #      rather than a regressed banner; it now finds the banner wherever it
     #      lives, so a move reports as a move.
-    CURRENT_PROJECT_VERSION: "141"
+    # 142: "Which apps do you live in?" is IN first run. The Connections spec's
+    #      STEP 2 (page 45) was written, compiled into the target and shipped in
+    #      builds 133-141 with ZERO CALL SITES -- a screen that existed for
+    #      nobody. It is FirstRunBeat.connect now, after the pendant and before
+    #      the microphone, because the mic beat is the one that asks iOS for the
+    #      microphone and a beat after it would run a microphone while somebody
+    #      was still being asked questions. Skip lives inside the step, never a
+    #      footer, because page 41 requires it always visible.
+    CURRENT_PROJECT_VERSION: "142"
     DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: NO
@@ -702,7 +710,7 @@ targets:
         # literal from a Mac one, and two products answering "which build
         # are you holding" with different numbers is the exact disease this
         # gate exists to prevent.
-        CURRENT_PROJECT_VERSION: "141"
+        CURRENT_PROJECT_VERSION: "142"
         DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_ENTITLEMENTS: ../macos/AnticipyMac/AnticipyMac.entitlements
