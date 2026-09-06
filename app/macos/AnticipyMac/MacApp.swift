@@ -49,8 +49,7 @@ struct AnticipyMacApp: App {
             pocketbase.postTranscript(text: line.text,
                                       startedAt: line.startedAt,
                                       endedAt: line.endedAt,
-                                      speaker: line.channel == .owner ? "owner" : "other",
-                                      source: line.channel == .owner ? "mac_mic" : "mac_system")
+                                      speaker: TranscriptWire.speaker(for: line.channel))
         }
     }
 }

@@ -806,6 +806,7 @@ targets:
       - ../macos/Anticipy/Capture/MeetingOfferPolicy.swift
       - ../macos/Anticipy/Capture/CaptureStreamHealth.swift
       - ../macos/Anticipy/Capture/MeetingLinePolicy.swift
+      - ../macos/Anticipy/Capture/TranscriptWire.swift
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: ai.anticipy.mac
