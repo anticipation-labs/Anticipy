@@ -65,3 +65,14 @@ migration/workers/owners/
 # under migration/spike/containers-sdk/node_modules are a deliberately vendored
 # 220K SDK and stay tracked; gitignore does not untrack what is already in.
 node_modules/
+
+# Vendor agent skills, installed by `npx skills add`. They are somebody else's
+# instructions living in this working tree, not Anticipy source, and committing
+# them would make this repo carry another project's behaviour.
+.agents/
+skills-lock.json
+
+# Claude Code's own working directory: throwaway git worktrees, a scheduler
+# lock, and per-machine local settings. None of it is Anticipy source, and the
+# worktrees in particular are whole checkouts of this repo inside itself.
+.claude/
