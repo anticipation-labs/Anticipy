@@ -260,9 +260,12 @@ DECODERS = {
 #   * arm A's transcript filed under arm B reverses R3, and the protocol's own
 #     mitigation is a sentence asking the operator to be careful.
 #
-# The scratch recorder DOES NOT EXIST YET, so its output contract is still free
-# to require this, and a line in a file nobody has written is the cheapest
-# check in the repo. First line of each transcript, stripped before scoring:
+# The scratch recorder EXISTS as of 2026-09-06, iOS build 153
+# (`app/ios/Anticipy/Audio/ScratchRecorder.swift`), and it writes this line.
+# It was specified here first, while the file was still unwritten and its
+# output contract was free to require anything — which is why the cheapest
+# check in the repo is also the one the recorder was built around. First line
+# of each transcript, stripped before scoring:
 #
 #   #anticipy: arm=A decoder=sf_ctx wav=arm_a.wav sha256=<64 hex of the WAV>
 #

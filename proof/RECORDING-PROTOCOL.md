@@ -11,11 +11,16 @@ scoring is trustworthy.
 
 ## Before you start
 
-- A build of the app carrying the **scratch recorder** — the thing that writes
-  the microphone tap to a WAV file and can decode it offline. If you do not
-  have that build, stop; it is the missing piece and nothing here works
-  without it. (`.superpowers/sdd/agc-harness-report.md` says exactly what it
-  has to do.)
+- **TestFlight build 153 or later.** That is the first build carrying the
+  scratch recorder — the thing that writes the microphone tap to a WAV and can
+  decode it offline. Builds 152 and earlier cannot make these recordings at
+  all; from 2026-08-24 until 2026-09-06 that was the single reason this whole
+  document had never been carried out.
+- On the phone: **Settings → Listening → Recording for the harness.** The three
+  arms, the toggle and the two decodes are all on that one screen, and it
+  refuses to record when the arm you picked and the audio engine disagree.
+  Listening must be ON — the recorder taps the live microphone rather than
+  opening a second one.
 - The script: **`proof/fixtures/read_aloud_script.txt`**. Print it, or put it
   on a laptop screen you can read from without leaning in.
 - A normal room. Not a studio, not a café. Some background noise is the point —
@@ -64,7 +69,8 @@ volume for A and B — you are the constant they are compared against.
 
 ## When you are done
 
-Three WAVs and three transcripts from the scratch recorder, plus two the Mac
+Three WAVs and three transcripts from the scratch recorder (copy the whole
+`Documents/scratch` folder off the phone with the Files app), plus two the Mac
 makes for you. **Scaffold the run
 first**, then write straight into the paths the manifest names — do not invent
 a flat naming scheme beside it and copy things across afterwards:
