@@ -24,7 +24,23 @@ ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = ROOT / "extension/manifest.json"
 APP = ROOT / "app/ios/Anticipy/AnticipyApp.swift"
 MIRROR = ROOT / "app/ios/Tests/StaleExtensionTests.swift"
-BANNER = ROOT / "app/ios/Anticipy/Views/ContentView.swift"
+#: The banner MOVED from ContentView.swift to here on 2026-09-06 (iOS 129,
+#: "Home becomes the conversation"), and both of this file's banner legs went
+#: red with `ValueError: substring not found` -- a message that reads like a
+#: broken test rather than a moved banner. `test_the_banner_lives_in_exactly
+#: _one_file` below is the leg that now says which it is.
+BANNER = ROOT / "app/ios/Anticipy/Views/SettingsConnectorsView.swift"
+
+#: The `if let` that opens the banner. Also the thing counted across the whole
+#: Swift tree, so a second copy of the banner is a failure rather than a
+#: coin-flip about which one this file happens to read.
+BANNER_ANCHOR = "if let stale = session.staleExtensionVersion {"
+
+#: Where the message ends and the row's own arguments begin. The scan stops
+#: here so `"exclamationmark.triangle"` is not read as a sentence fragment --
+#: it is an SF Symbol name, and it would fail the trailing-space rule that the
+#: real fragments have to obey.
+BANNER_MESSAGE_END = "systemImage:"
 
 
 def _shipped_version() -> str:
@@ -88,8 +104,18 @@ def test_the_pinned_version_is_comparable_the_way_swift_compares_it():
 def _banner_fragments() -> list:
     """The literal fragments the stale-extension banner concatenates."""
     src = BANNER.read_text()
-    start = src.index("if let stale = session.staleExtensionVersion {")
-    body = src[start:src.index(".font(", start)]
+    assert BANNER_ANCHOR in src, (
+        f"{BANNER.relative_to(ROOT)} no longer opens the stale-extension "
+        f"banner with {BANNER_ANCHOR!r}. If the banner moved again, "
+        f"test_the_banner_lives_in_exactly_one_file says where to."
+    )
+    start = src.index(BANNER_ANCHOR)
+    assert BANNER_MESSAGE_END in src[start:], (
+        f"the stale-extension banner in {BANNER.relative_to(ROOT)} no longer "
+        f"reaches {BANNER_MESSAGE_END!r}, so this test cannot tell where its "
+        f"message stops and its styling begins. Re-point BANNER_MESSAGE_END."
+    )
+    body = src[start:src.index(BANNER_MESSAGE_END, start)]
     # The comment above the Text() quotes the old fused string on purpose, so
     # strip prose before scanning or this test finds the bug it is describing.
     code = "\n".join(line for line in body.splitlines()
@@ -128,4 +154,34 @@ def test_the_banner_still_names_the_version_it_wants():
         "the stale-extension banner in ContentView.swift stopped naming "
         "AnticipySession.expectedExtensionVersion, so it now tells someone to "
         "reload without saying what they should end up on."
+    )
+
+
+def test_the_banner_lives_in_exactly_one_file():
+    """A banner nobody can find is a banner nobody maintains.
+
+    On 2026-09-06 the banner moved out of ContentView.swift and was rewritten
+    down to "Update the browser extension. Installed version: 0.8.3." -- no
+    instruction, no target version, nothing a person could act on without
+    asking somebody. Both legs above went red, but they went red saying
+    `ValueError: substring not found`, which reads as this test rotting rather
+    than as the banner regressing, and it sat red across five pushes.
+
+    This leg is the one that tells the difference: it finds the banner wherever
+    it is, so a move reports as a move.
+    """
+    swift = sorted((ROOT / "app/ios").rglob("*.swift"))
+    assert swift, "no Swift sources found under app/ios"
+    holders = [f for f in swift if BANNER_ANCHOR in f.read_text()]
+    shown = sorted(str(f.relative_to(ROOT)) for f in holders)
+    assert len(holders) == 1, (
+        f"the stale-extension banner opens with {BANNER_ANCHOR!r} in "
+        f"{len(holders)} file(s): {shown}. Exactly one is expected -- two "
+        f"copies drift and this file only ever reads one of them; zero means "
+        f"the banner was deleted or rewritten, and nothing now tells a person "
+        f"on a stale extension that they are on one."
+    )
+    assert holders[0] == BANNER, (
+        f"the stale-extension banner now lives in {shown[0]}, but this test "
+        f"reads {BANNER.relative_to(ROOT)}. Re-point BANNER."
     )

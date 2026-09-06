@@ -100,7 +100,29 @@ private struct SettingsBrowserConnectorView: View {
 
             if let stale = session.staleExtensionVersion {
                 GroupedCard {
-                    InfoRow("Update the browser extension. Installed version: \(stale).",
+                    // WHAT THIS HAS TO SAY, and why it is four fragments rather
+                    // than one. "Update the browser extension. Installed
+                    // version: 0.8.3." names the problem and then abandons the
+                    // person: it never says where to go, what to press, or
+                    // which version they are aiming at, so the only way to act
+                    // on it is to ask somebody. It shipped that way and
+                    // tests/test_extension_version_pin.py caught it. The
+                    // banner must name the TARGET version, because "reload to
+                    // get the new one" is not an instruction anybody can check
+                    // against what they are looking at.
+                    //
+                    // Every fragment but the last ends in a space. These
+                    // shipped FUSED once -- the version interpolation ran
+                    // straight into the next sentence and the banner read
+                    // "...press Reload to get 0.11.0until then it's working
+                    // from old instructions." Nobody saw it for three minor
+                    // versions, because the version pin had rotted shut and a
+                    // banner that can never fire can never be proofread by
+                    // using the product. That seam is held by the same test.
+                    InfoRow("Chrome is running the old extension (\(stale)). "
+                            + "Open chrome://extensions and press Reload to get "
+                            + "\(AnticipySession.expectedExtensionVersion). "
+                            + "Until then it's working from old instructions.",
                             systemImage: "exclamationmark.triangle")
                 }
             }

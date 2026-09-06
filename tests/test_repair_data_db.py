@@ -48,14 +48,76 @@ def build(dirpath: pathlib.Path, *, corrupt: bool) -> pathlib.Path:
     pages = c.execute("PRAGMA page_count").fetchone()[0]
     c.close()
     if corrupt:
-        with open(db, "r+b") as f:
-            for page in range(root + 3, min(root + 6, pages)):
-                f.seek((page - 1) * 4096 + 8)
-                f.write(os.urandom(256))
-        verdict = subprocess.run(["sqlite3", str(db), "PRAGMA integrity_check;"],
-                                 capture_output=True, text=True).stdout.strip()
-        assert verdict != "ok", "the fixture failed to break the file"
+        _punch_holes_in_agents_only(db, root, pages)
     return db
+
+
+#: How many damaged pages the fixture is looking for. Three was the original
+#: number and it is enough to orphan rows into lost_and_found.
+HOLES_WANTED = 3
+
+
+def _reads_whole(db: pathlib.Path, table: str, rows: int) -> bool:
+    """Can every row of `table` still be read out of `db`?
+
+    A fresh connection every time on purpose: SQLite caches pages, and a
+    connection opened before the bytes changed will happily serve the old ones
+    and report a file that is no longer there.
+    """
+    conn = sqlite3.connect(db)
+    try:
+        return conn.execute(f"SELECT count(*) FROM {table}").fetchone()[0] == rows
+    except sqlite3.DatabaseError:
+        return False
+    finally:
+        conn.close()
+
+
+def _punch_holes_in_agents_only(db: pathlib.Path, root: int, pages: int) -> None:
+    """Damage the `agents` tree and NOTHING else, by checking rather than guessing.
+
+    The fixture used to assume the layout: "agents last, so its leaf pages are
+    allocated after every root page and a hole punched just past its root lands
+    in ITS tree and nobody else's" -- and then punched `root+3 .. root+6`
+    unconditionally. That assumption is a property of one SQLite version's
+    allocator, not of SQLite. On this machine it held; on the CI runner it did
+    not, and `root+3` landed in `owners`. `.recover` then dropped that table,
+    the test asked it for a row count, and the failure surfaced as
+    `sqlite3.OperationalError: no such table: owners` -- which reads like the
+    repair script losing data, and is really the fixture aiming at the wrong
+    page. It sat red across five pushes.
+
+    So: try a page, keep the hole only if `owners` and `events` still read out
+    whole and the file is now damaged, and put the bytes back otherwise. No
+    page arithmetic to be right or wrong about, and nothing version-specific.
+    """
+    original = db.read_bytes()
+    for page in range(root + 1, pages + 1):
+        before = db.read_bytes()
+        with open(db, "r+b") as f:
+            f.seek((page - 1) * 4096 + 8)
+            f.write(os.urandom(256))
+        damaged = subprocess.run(["sqlite3", str(db), "PRAGMA integrity_check;"],
+                                 capture_output=True, text=True).stdout.strip() != "ok"
+        collateral = not (_reads_whole(db, "owners", 50) and _reads_whole(db, "events", 2000))
+        if collateral or not damaged:
+            db.write_bytes(before)          # this page was not agents-only; undo it
+            continue
+        if _count_holes(db, original) >= HOLES_WANTED:
+            return
+    raise AssertionError(
+        f"could not damage {HOLES_WANTED} page(s) of `agents` without also "
+        f"damaging `owners` or `events`, having tried pages {root + 1}..{pages}. "
+        f"The fixture has not broken the file, so nothing below would be "
+        f"measuring the repair."
+    )
+
+
+def _count_holes(db: pathlib.Path, original: bytes) -> int:
+    """How many 4096-byte pages now differ from the file as first written."""
+    now = db.read_bytes()
+    return sum(1 for i in range(0, min(len(now), len(original)), 4096)
+               if now[i:i + 4096] != original[i:i + 4096])
 
 
 def sha(path: pathlib.Path) -> str:

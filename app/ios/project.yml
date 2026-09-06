@@ -610,7 +610,16 @@ settings:
     #      correctly minted link, every time. Both hosts are ours and both are
     #      allowed now; the three subdomain refusals that were doing the real
     #      work are pinned separately.
-    CURRENT_PROJECT_VERSION: "135"
+    # 136: the stale-extension banner stopped telling anybody what to do.
+    #      It had moved out of ContentView.swift and been rewritten down to
+    #      "Update the browser extension. Installed version: 0.8.3." — the
+    #      problem named and then abandoned: no place to go, nothing to press,
+    #      and no target version to check yourself against. It names all three
+    #      again. tests/test_extension_version_pin.py had been red across five
+    #      pushes saying "substring not found", which reads as a rotted test
+    #      rather than a regressed banner; it now finds the banner wherever it
+    #      lives, so a move reports as a move.
+    CURRENT_PROJECT_VERSION: "136"
     DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: NO
@@ -662,7 +671,7 @@ targets:
         # literal from a Mac one, and two products answering "which build
         # are you holding" with different numbers is the exact disease this
         # gate exists to prevent.
-        CURRENT_PROJECT_VERSION: "135"
+        CURRENT_PROJECT_VERSION: "136"
         DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_ENTITLEMENTS: ../macos/AnticipyMac/AnticipyMac.entitlements
