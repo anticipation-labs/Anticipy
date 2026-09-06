@@ -574,6 +574,10 @@ settings:
     # 127: StaleExtensionTests.swift mirrored the pin as 0.14.0 while the app
     #      said 0.15.0 — a mirror testing a comparison the app never makes.
     #      App behaviour is identical to 126.
+    # 132: ConnectedAppsClient.swift is untracked again. 128 committed it to
+    #      make the LOCAL build see it, but the ConnectHandoff half it calls is
+    #      still in another session's working tree, so the runner archived a
+    #      file whose dependency does not exist in the repo.
     # 131: the dashboard's day headings read the reference time they are
     #      given rather than the device clock, so "Today" means today on the
     #      phone reading it and the suite can be pinned to an instant.
@@ -590,7 +594,7 @@ settings:
     #      finale, three tips over Home with a coach mark on Listen, and the
     #      four-second dot-to-mark opening in front of it all. Also the
     #      Claude-style Settings home and the Connect page (0d7e37ba).
-    CURRENT_PROJECT_VERSION: "131"
+    CURRENT_PROJECT_VERSION: "132"
     DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: NO
@@ -642,7 +646,7 @@ targets:
         # literal from a Mac one, and two products answering "which build
         # are you holding" with different numbers is the exact disease this
         # gate exists to prevent.
-        CURRENT_PROJECT_VERSION: "131"
+        CURRENT_PROJECT_VERSION: "132"
         DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_ENTITLEMENTS: ../macos/AnticipyMac/AnticipyMac.entitlements
