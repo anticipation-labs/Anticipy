@@ -773,6 +773,49 @@ if let bad = ConnectionsPolicy.firstForbidden(in: everyLine) {
 check("and none of them raises its voice",
       everyLine.allSatisfy { !$0.contains("!") })
 
+// ---------------------------------------------------------------------------
+// THE TWO LINES THAT SAY WHAT IS TRUE OF SOMEBODY'S ACCOUNT
+// ---------------------------------------------------------------------------
+//
+// Every other assertion about these two compares the model's output against
+// ConnectionsPolicy.statusLine(...) and ConnectionsPolicy.writesLine(...) —
+// the implementation as its own oracle. An audit on 2026-09-06 SWAPPED the two
+// writesLine strings, so a read-only connection rendered as "I can make
+// changes", and ran all four connect-related iOS suites: every one exited 0.
+// It did the same to statusLine(.needsReconnect), making a dead credential
+// render as "Connected", with the same result.
+//
+// A person reading "I can make changes" over a connection that cannot, or
+// "Connected" over one that has stopped working, has been told something false
+// about their own account by a screen whose entire job is to be true about it.
+// So these are pinned to the WORDS, which is the only thing a copied oracle
+// cannot follow.
+
+check("a live connection says Connected",
+      ConnectionsPolicy.statusLine(.connected) == "Connected")
+check("a dead credential does NOT say Connected",
+      ConnectionsPolicy.statusLine(.needsReconnect) == "Needs connecting again")
+check("and one that was never connected says so",
+      ConnectionsPolicy.statusLine(.disconnected) == "Not connected")
+check("no two statuses share a line, so the card cannot show one state as another",
+      Set(ConnectionStatus.allCases.map { ConnectionsPolicy.statusLine($0) }).count
+        == ConnectionStatus.allCases.count)
+
+check("the write opt-in ON says Anticipy can act",
+      ConnectionsPolicy.writesLine(true) == "I can make changes")
+check("the write opt-in OFF says it only reads",
+      ConnectionsPolicy.writesLine(false) == "Reading only")
+check("the two write lines are not the same sentence",
+      ConnectionsPolicy.writesLine(true) != ConnectionsPolicy.writesLine(false))
+// The direction, stated once more in the form a swap actually breaks: only the
+// ON line may promise a change, and the OFF line must not.
+check("only the ON line mentions changing anything",
+      ConnectionsPolicy.writesLine(true).lowercased().contains("change")
+        && !ConnectionsPolicy.writesLine(false).lowercased().contains("change"))
+check("and only the OFF line says reading",
+      ConnectionsPolicy.writesLine(false).lowercased().contains("read")
+        && !ConnectionsPolicy.writesLine(true).lowercased().contains("read"))
+
 // The one thing the gate deliberately does NOT do: censor an app's own name.
 // A vendor calling itself something on the list gets called that; the check is
 // on the sentences around the name, and pretending otherwise would render a

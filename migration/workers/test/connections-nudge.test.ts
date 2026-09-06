@@ -1213,5 +1213,17 @@ await check("askMessage exists only because the two link constants disagree", ()
 
 console.log = realLog;
 globalThis.fetch = realFetch;
+await check("MAX_ASKS_PER_SWEEP is 20 — the number, not just the name", () => {
+  // THE PER-TICK OUTBOUND-TEXT BUDGET, and it was asserted only against itself.
+  // Raised 20 -> 2000 by an audit on 2026-09-06 with all 53 checks green, because
+  // every assertion reads `report.sent === MAX_ASKS_PER_SWEEP`. This is how many
+  // texts one sweep may send to one fleet of owners; at 2000 a single tick could
+  // text everybody, which is the shape of the accident this budget exists to stop.
+  assert.equal(MAX_ASKS_PER_SWEEP, 20,
+    `MAX_ASKS_PER_SWEEP is now ${MAX_ASKS_PER_SWEEP}. If that is deliberate, say why here `
+      + "and change this line; a ceiling must not move by accident.");
+});
+
+
 console.log(`connections-nudge: ${passes} checks passed, ${failures} failed`);
 if (failures) process.exit(1);

@@ -1869,5 +1869,57 @@ await check("the vendor's name is nowhere in the source either", () => {
 //         short list"
 // ===========================================================================
 
+await check("/me/connections: the status the store holds is the status the phone reads", async () => {
+  // THE FIELD THE WHOLE NEEDS-RECONNECT SURFACE CROSSES ON, and until now
+  // nothing asserted it. Every fixture in this file was `status: "connected"`,
+  // so an audit on 2026-09-06 replaced `status: c.status` with
+  // `status: "connected"` — a hardcode reporting a dead credential, and the
+  // disconnected stranger's row, as live — and all 80 checks stayed green.
+  //
+  // The expiry webhook writes `needs_reconnect`, and this route is the ONLY way
+  // that reaches the phone: connections_api returns it verbatim and the phone's
+  // ConnectionsPolicy.statusLine turns it into "Needs connecting again". A
+  // constant here means a person is told an app is working while every request
+  // through it fails, and the ask to fix it never appears.
+  const r = await rig();
+  // The rig seeds every row `connected`, which is exactly the blind spot. One
+  // row is moved to `needs_reconnect` through the real store, the way the
+  // expiry webhook moves it.
+  const store = createD1Store(r.env as never);
+  await store.putConnection({
+    user_id: OWNER as never, toolkit: "quandle_mail",
+    connected_account_id: OWNER_ACCOUNT_2, alias: "work",
+    status: "needs_reconnect", writes_enabled: false, last_used_at: null,
+  } as StoredConnection);
+
+  const res = await connectionsApiRoute(getReq(R.list, r.ownerToken), r.env, r.deps);
+  assert.equal(res.status, 200);
+  const body = await res.json() as { items: { toolkit: string; status: string }[] };
+  const byToolkit = new Map(body.items.map((i) => [i.toolkit, i.status]));
+
+  assert.equal(byToolkit.get("quandle_mail"), "needs_reconnect",
+    "a connection the vendor said had expired is reported to the phone as something "
+      + "else; the person is told it works while every request through it fails");
+  // THE CONTROL, and the reason one row is not enough: a route returning a
+  // constant "needs_reconnect" would pass the line above and be just as wrong.
+  assert.equal(byToolkit.get("zellibrix"), "connected",
+    "a live connection is no longer reported as connected");
+  assert.ok(new Set(byToolkit.values()).size > 1,
+    "every row came back with the same status, so this route is not reading the store");
+});
+
+
+await check("MAX_LINKS_PER_OWNER is 6 — the number, not just the name", () => {
+  // THE 429 CEILING ON CONNECT-LINK MINTING, and it was asserted only against itself.
+  // Raised 6 -> 600 by the same audit with all 80 checks green. Each link is a
+  // single-use door into somebody's account for ten minutes; how many may be open
+  // at once is the security property, and the loops that mint them all count to
+  // this constant, so only its NAME was pinned and never its size.
+  assert.equal(MAX_LINKS_PER_OWNER, 6,
+    `MAX_LINKS_PER_OWNER is now ${MAX_LINKS_PER_OWNER}. If that is deliberate, say why here `
+      + "and change this line; a ceiling must not move by accident.");
+});
+
+
 console.log(`\n${passes} passed, ${failures} failed`);
 if (failures > 0) process.exit(1);

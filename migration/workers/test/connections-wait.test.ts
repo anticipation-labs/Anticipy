@@ -1140,5 +1140,16 @@ await check("src/index.ts hands the Worker's ExecutionContext to connectRoute", 
     "src/index.ts's fetch still binds `_ctx`");
 });
 
+await check("MAX_VENDOR_CALLS is 16 — the number, not just the name", () => {
+  // THE POLL'S SECOND HARD EXIT, and it was asserted only against itself.
+  // Raised 16 -> 4096 by the same audit with all 48 checks green. wait.ts names this
+  // as the guard that stops a frozen clock spinning inside a promise nobody
+  // awaits; at 4096 the guard is decoration.
+  assert.equal(MAX_VENDOR_CALLS, 16,
+    `MAX_VENDOR_CALLS is now ${MAX_VENDOR_CALLS}. If that is deliberate, say why here `
+      + "and change this line; a ceiling must not move by accident.");
+});
+
+
 console.log(`connections-wait: ${passes} checks passed, ${failures} failed`);
 if (failures) process.exit(1);

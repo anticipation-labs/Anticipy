@@ -595,6 +595,21 @@ await check("the per-owner ceiling holds ACROSS links — a second stolen link s
       "the owner ceiling let " + sent + " texts through");
   });
 
+await check("the ceiling is FIVE, not merely whatever the constant says", () => {
+  // MAX_ATTEMPTS is the only thing standing between a six-digit code and
+  // somebody guessing it. Every other check in this file loops to
+  // MAX_ATTEMPTS and asserts against MAX_ATTEMPTS, so the constant is its own
+  // oracle: an audit on 2026-09-06 raised it from 5 to 500 and all 60 checks
+  // stayed green -- while the check below is titled "five guesses and no more".
+  //
+  // A million codes and 500 guesses per link, with 3 codes a link and 5 links
+  // an owner an hour, is a different product from one with 5. The NUMBER is
+  // the security property, so the number is pinned.
+  assert.equal(MAX_ATTEMPTS, 5,
+    `the sign-in code now allows ${MAX_ATTEMPTS} guesses. If that is deliberate, `
+      + "say why here and change this line; it must not move by accident.");
+});
+
 await check("five guesses and no more, even when the sixth is right", async () => {
   const r = await rig();
   const code = await askForCode(r);
