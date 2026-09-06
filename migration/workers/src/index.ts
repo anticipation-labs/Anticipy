@@ -49,6 +49,9 @@ import { smsInbound, transcriptionToken, type SmsEnv } from "./routes/sms.ts";
 import { sendblueInbound, type SendblueEnv } from "./routes/sendblue.ts";
 import { connectRoute, installConnectWiring, type ConnectEnv } from "./routes/connect.ts";
 import { connectionsApiRoute, type ConnectionsApiEnv } from "./routes/connections_api.ts";
+import {
+  connectionsWebhook, CONNECTIONS_WEBHOOK_PATH, type ConnectionsWebhookEnv,
+} from "./routes/connections_webhook.ts";
 import { connectAuthWiring, connectWiring } from "./connections/wiring.ts";
 import {
   connectAuthRoute, connectSession, installConnectAuthWiring,
@@ -145,7 +148,7 @@ installConnectAuthWiring(connectAuthWiring);
 installConnectSessionReader(connectSession);
 
 export default {
-  async fetch(request: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
     const path = url.pathname;
     const method = request.method;
@@ -217,6 +220,23 @@ export default {
       return transcriptionToken(request, env as unknown as SmsEnv);
     }
 
+    // The connections vendor's ONE webhook. It publishes nothing for a
+    // successful connection -- only that a connected account has expired -- so
+    // this is the only way we ever learn a credential died at the far end
+    // without a task failing in front of the owner first.
+    //
+    // The whole path is handed over, unknown methods included, so it answers
+    // 405 with an Allow header rather than the generic 404: a webhook URL that
+    // 404s reads, in a vendor dashboard, as a URL somebody typed wrong.
+    //
+    // Outside /api/collections/ like the other doors: it defends itself, and
+    // the whole of that defence is an HMAC over the raw body. An unsigned POST
+    // here would strip the API hand off a working connection and text its owner
+    // about it. See routes/connections_webhook.ts.
+    if (path === CONNECTIONS_WEBHOOK_PATH) {
+      return connectionsWebhook(request, env as unknown as ConnectionsWebhookEnv);
+    }
+
     // Settings -> Connected Apps, the six routes the phone already calls.
     //
     // The whole prefix is handed over, unknown methods included, so the route
@@ -256,7 +276,17 @@ export default {
       // every path it owned before.
       const authed = await connectAuthRoute(request, env as unknown as ConnectAuthEnv);
       if (authed) return authed;
-      return connectRoute(request, env as unknown as ConnectEnv);
+      // ctx IS LOAD-BEARING, not decoration. /go hands the connection backup
+      // (connections/wait.ts) to ctx.waitUntil the moment the vendor link is
+      // minted, and a Worker cancels background work the instant the response
+      // is returned -- so without it the poll starts and is killed, and a
+      // browser that dies between the vendor's consent screen and /done leaves
+      // an account bound at the vendor with no row here and nothing that would
+      // ever mention it again. The vendor publishes no success webhook, so
+      // nothing arrives later to repair that. connect.ts refuses to start the
+      // poll at all when it is handed no ctx, and says so once per redirect,
+      // rather than starting a timer a Worker will kill.
+      return connectRoute(request, env as unknown as ConnectEnv, undefined, ctx);
     }
 
     // --- the referral hop. fellowship.pb.js, recovered. ------------------

@@ -97,6 +97,9 @@
  * 2026-09-05, page 26.
  */
 import { verifyToken, type AuthEnv } from "../pb/auth.ts";
+import {
+  waitBudgetMs, waitForConnection, type WaitEnv,
+} from "../connections/wait.ts";
 
 // ---------------------------------------------------------------------------
 // ENV
@@ -786,7 +789,17 @@ function checkedSentences(sentences: unknown, slug: string): string[] {
 
 /** POST /c/{token}/go. */
 export type ConnectPageGo =
-  | { state: "ok"; redirectUrl: string }
+  /**
+   * `owner` and `toolkit` ride along ONLY so the background poll can be
+   * started, and they come off the STORED ROW the redeem verified — never off
+   * the request. Nothing renders them: the refusal states carry nothing on
+   * purpose (naming the app to a caller who has not proved they are the owner
+   * is the oracle this file exists to close), and the `ok` state is a 303 with
+   * an empty body. They are here rather than re-read from the store in
+   * `handleGo` because a second read is a second answer, and a link the poll
+   * was started for must be the link that was actually spent.
+   */
+  | { state: "ok"; redirectUrl: string; owner: OwnerId; toolkit: string }
   | { state: "sign-in-required" }
   | { state: "expired" }
   | { state: "already-used" }
@@ -849,7 +862,7 @@ export async function connectPageGo(
     return { state: "provider-unavailable" };
   }
 
-  return { state: "ok", redirectUrl };
+  return { state: "ok", redirectUrl, owner: link.user_id, toolkit: link.toolkit };
 }
 
 /** GET /c/{token}/done — the vendor's callback, and the ONLY moment we ever
@@ -1385,13 +1398,37 @@ const unwired = (): Response =>
     "Anticipy can't set this up right now. Nothing has changed on your account.");
 
 /**
+ * THE LIFETIME EXTENSION, and why it is a fourth parameter rather than
+ * something this file can arrange for itself.
+ *
+ * `/go` starts a background poll (connections/wait.ts) the moment the vendor
+ * link is minted, because the callback is the only success signal the vendor
+ * offers and a browser that dies on the way back to it loses the connection
+ * permanently. A Worker CANCELS outstanding work as soon as a response is
+ * returned; the only thing that keeps it running is `ExecutionContext.waitUntil`,
+ * and an ExecutionContext exists nowhere but the entry point's `fetch`.
+ *
+ * So the entry point has to hand it down: `connectRoute(request, env,
+ * undefined, ctx)`. WITHOUT IT THE POLL IS NOT STARTED AT ALL, and `/go` says
+ * so in one log line per redirect. Starting it anyway was tried and is wrong
+ * twice over: on a Worker the runtime cancels it the moment the redirect is
+ * returned, so it buys nothing; and off a Worker — in this repo's own suites —
+ * it is a real timer nobody can join, which held test/connect-routes.test.ts
+ * open for eleven minutes per redirect. A backup that only pretends to run is
+ * the silent version of the feature not existing.
+ */
+export interface ConnectBackground {
+  waitUntil(promise: Promise<unknown>): void;
+}
+
+/**
  * The entry point index.ts registers.
  *
  * `deps` is injectable so the suite can drive the real handlers with a store it
  * controls; production passes nothing and gets the installed wiring.
  */
 export async function connectRoute(
-  request: Request, env: ConnectEnv, deps?: ConnectDeps,
+  request: Request, env: ConnectEnv, deps?: ConnectDeps, ctx?: ConnectBackground,
 ): Promise<Response> {
   const url = new URL(request.url);
   const route = parseConnectPath(url.pathname);
@@ -1422,7 +1459,9 @@ export async function connectRoute(
   const state = checkedState(url.searchParams.get("state"));
 
   if (route.leg === "view") return await handleView(request, env, wired, route.token, now, state);
-  if (route.leg === "go")   return await handleGo(request, env, wired, route.token, now, baseUrl);
+  if (route.leg === "go") {
+    return await handleGo(request, env, wired, route.token, now, baseUrl, ctx);
+  }
   return await handleDone(request, env, wired, route.token, now, state, url);
 }
 
@@ -1449,9 +1488,88 @@ async function handleView(
   return viewPage(token, view, state);
 }
 
+/**
+ * START THE BACKUP AND WALK AWAY.
+ *
+ * The vendor publishes no success webhook, so `/done` in the person's own
+ * browser is the only signal a connection exists — and a browser that dies
+ * between the consent screen and that page loses the connection permanently:
+ * bound at the vendor, no row here, no nudge flip, and nothing that will ever
+ * mention it again. connections/wait.ts is the second signal, and THIS is the
+ * moment to start it: the vendor link has just been minted, so a connect is in
+ * flight for exactly this owner on exactly this toolkit.
+ *
+ * NOTHING HERE IS AWAITED. `tokenHandle` is a hash and would cost microseconds,
+ * but it is inside the task rather than in front of it so that the redirect is
+ * built from values this function already holds and the request path touches
+ * the poll's promise exactly once — to hand it to `waitUntil`.
+ *
+ * THE OWNER AND THE TOOLKIT COME OFF THE SPENT LINK, which came off the stored
+ * row: `connectPageGo` reads them from the row `redeem` verified, never from
+ * the session and never from anything on the request. wait.ts checks them
+ * against the row again anyway, which is the difference between "should never"
+ * and "cannot".
+ *
+ * NO CONTEXT, NO POLL, and the log line names the one change that fixes it.
+ * A Worker cancels background work when the response is returned unless
+ * `waitUntil` holds it open, so an unheld promise finishes nothing in
+ * production — and off a Worker it is worse than nothing: a real timer that
+ * nobody holds a handle to, which is exactly what held a sibling test suite
+ * open for eleven minutes per redirect. The redirect is unaffected either way;
+ * only the backup is.
+ */
+function startWaiting(
+  env: ConnectEnv & WaitEnv,
+  deps: ConnectDeps,
+  token: string,
+  owner: OwnerId,
+  toolkit: string,
+  now: number,
+  ctx: ConnectBackground | undefined,
+): void {
+  const budget = waitBudgetMs(env);
+  if (budget <= 0) {
+    // An operator turned it off. Say so once per redirect: a switched-off
+    // backup and a broken one look identical from the outside, and only one of
+    // them is somebody's decision.
+    console.log("connect go: the connection backup is switched off "
+      + "(CONNECT_WAIT_MS=0), so this connect is the callback's alone");
+    return;
+  }
+
+  if (!ctx || typeof ctx.waitUntil !== "function") {
+    console.log("connect go: the connection backup did NOT start — the entry point "
+      + "passed no ExecutionContext, and without waitUntil a Worker cancels background "
+      + "work the moment the redirect is returned. Pass ctx as connectRoute's fourth "
+      + "argument. Until then this connect is the callback's alone.");
+    return;
+  }
+
+  const task = (async (): Promise<void> => {
+    await waitForConnection(env, {
+      owner,
+      toolkit,
+      handle: await tokenHandle(token),
+      deadline: now + budget,
+      store: deps.store,
+      provider: deps.provider,
+      onConnected: deps.onConnected,
+      // The caller's clock, so a test that owns time owns it end to end.
+      // Production wires none and wait.ts uses Date.now.
+      now: deps.now,
+    });
+  })().catch(() => {
+    // `waitForConnection` does not throw; this is the belt for the hash and for
+    // whatever a future edit puts above it. An unhandled rejection here would
+    // land on a request that was answered minutes ago.
+  });
+
+  ctx.waitUntil(task);
+}
+
 async function handleGo(
   request: Request, env: ConnectEnv, deps: ConnectDeps,
-  token: string, now: number, baseUrl: string,
+  token: string, now: number, baseUrl: string, ctx?: ConnectBackground,
 ): Promise<Response> {
   // Before the session is even read, and long before the compare-and-set.
   if (isCrossSitePost(request)) {
@@ -1476,6 +1594,10 @@ async function handleGo(
     // never in a log line. `Referrer-Policy: no-referrer` above keeps our own
     // token off the request the browser makes next.
     console.log(`connect go: ${await tokenFingerprint(token)} spent, redirecting`);
+    // THE BACKUP, started at the one moment we know a connect is in flight and
+    // AWAITED NOWHERE — see startWaiting. The redirect below is built and
+    // returned without touching this promise.
+    startWaiting(env, deps, token, go.owner, go.toolkit, now, ctx);
     return new Response(null, {
       status: 303,
       headers: {
