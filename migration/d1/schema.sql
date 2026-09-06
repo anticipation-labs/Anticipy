@@ -1267,8 +1267,17 @@ CREATE INDEX IF NOT EXISTS "idx_connections_owner" ON "connections" ("user_id", 
 CREATE TABLE IF NOT EXISTS "connect_nudges" (
   "user_id"      TEXT NOT NULL CHECK (length("user_id") = 15),
   "toolkit"      TEXT NOT NULL CHECK (length("toolkit") > 0),
-  "state"        TEXT NOT NULL CHECK ("state" IN ('never_asked','asked','declined','connected','needs_reconnect')),
+  "state"        TEXT NOT NULL CHECK ("state" IN ('never_asked','asked','declined_soft','declined','connected','needs_reconnect')),
       -- contract.ts:81-87.
+      -- 'declined_soft' added 2026-09-06. It is the setup card's Skip: page 21
+      -- says that skip "records declined_soft with a 7-day snooze, not a real
+      -- decline", and until that date the code recorded a real decline with a
+      -- shorter clock — which raised the ask threshold from 0.50 to 0.80 and
+      -- permanently silenced in_task, onboarding and repeated_use for that app.
+      -- It is the ONE state that legitimately carries level 0 alongside a
+      -- snooze; nudge.ts whatIsMissing enforces that pairing in both
+      -- directions. The live table was rebuilt to widen this CHECK while
+      -- connect_nudges held ZERO rows (measured immediately before).
   "level"        INTEGER NOT NULL DEFAULT 0 CHECK ("level" BETWEEN 0 AND 3),
       -- 0 while never declined; 1, 2, 3 as declines accumulate. LEVEL 3
       -- STOPS — LEVEL_THRESHOLD[3] is +Infinity and only the user may

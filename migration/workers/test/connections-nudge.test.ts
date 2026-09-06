@@ -89,6 +89,7 @@ import {
   installNudgeWiring,
   maturedBySilence,
   mintConnectLink,
+  mintConnectPage,
   nudgeWiringInstalled,
   recordDecline,
   sendConnectAsk,
@@ -101,7 +102,7 @@ import {
 import { createD1Store, createMemoryStore, type ConnectionsStore, type StoreEnv }
   from "../src/connections/store.ts";
 import {
-  CONNECT_URL_BASE, LINK_TTL_MS, TOKEN_CHARS,
+  CONNECT_URL_BASE, LINK_TTL_MS, MAX_PAGE_APPS, TOKEN_CHARS,
   parseConnectPath, redeem, tokenHandle,
 } from "../src/routes/connect.ts";
 import { CONNECT_LINK_PREFIX, FORBIDDEN_TERMS, MAX_ASK_SEGMENTS } from "../src/connections/words.ts";
@@ -497,6 +498,59 @@ await check("CONNECT_BASE_URL moves the link, matching routes/connect.ts precede
     "a preview deployment mints links pointing at production");
 });
 
+// ---------------------------------------------------------------------------
+// A PAGE OF APPS ON ONE TOKEN — the minter for the reader routes/connect.ts
+// already had. Spec page 25, "One Connect button opens a multi-app connect
+// page".
+// ---------------------------------------------------------------------------
+
+await check("mintConnectPage refuses a page longer than the reader can walk", async () => {
+  // THE LIBRARY INVARIANT, PINNED WHERE IT LIVES. routes/connections_api.ts
+  // refuses an over-long request with a 400 of its own, and that route check
+  // SHADOWS this one — a mutation that removed this ceiling survived the whole
+  // HTTP suite on 2026-09-06 because the request never reached it. This function
+  // is exported and has other callers; a ceiling only one caller enforces is a
+  // ceiling the next caller does not have.
+  const r = rig();
+  const many = Array.from({ length: MAX_PAGE_APPS + 1 }, (_, i) => `app_${i}`);
+  await assert.rejects(
+    () => mintConnectPage(r.env, OWNER, many, null, r.deps),
+    /at most 12 apps/,
+    "a page past the reader's ceiling was minted, so the apps past it are rows nothing "
+    + "will ever draw and nothing will ever spend",
+  );
+  assert.equal((await r.store.linksForOwner(OWNER)).length, 0, "a refused page wrote rows");
+
+  // THE CONTROL: exactly at the ceiling is fine, or the limit is an outage.
+  const ok = await mintConnectPage(
+    r.env, OWNER, many.slice(0, MAX_PAGE_APPS), null, r.deps);
+  assert.equal(ok.toolkits.length, MAX_PAGE_APPS);
+  assert.equal((await r.store.linksForOwner(OWNER)).length, MAX_PAGE_APPS);
+});
+
+await check("mintConnectPage refuses an empty page and a repeated app", async () => {
+  const r = rig();
+  await assert.rejects(() => mintConnectPage(r.env, OWNER, [], null, r.deps),
+    /at least one app/);
+  await assert.rejects(() => mintConnectPage(r.env, OWNER, [SLUG_A, SLUG_A], null, r.deps),
+    /twice/);
+  assert.equal((await r.store.linksForOwner(OWNER)).length, 0);
+});
+
+await check("a page of one is the row a one-app link has always been", async () => {
+  // The compatibility story, made structural. `mintConnectLink` is now literally
+  // `mintConnectPage` with one app, so the only way this can drift is if
+  // `pageHandle(token, 0)` stops being `tokenHandle(token)`.
+  const r = rig();
+  const minted = await mintConnectPage(r.env, OWNER, [SLUG_A], null, r.deps);
+  const token = minted.url.slice(minted.url.lastIndexOf("/") + 1);
+  const rows = await r.store.linksForOwner(OWNER);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0]!.token_handle, await tokenHandle(token),
+    "app 0 moved off the plain handle, so every link already in the wild resolves to nothing");
+  assert.deepEqual(minted.toolkits, [SLUG_A]);
+});
+
 // ===========================================================================
 // 3. THE POLICY — every hold, and the floor
 // ===========================================================================
@@ -606,15 +660,31 @@ await check("an open ask holds; 72 hours of silence is a decline with a 14-day s
     "the fresh 14-day snooze from the silence was not applied");
 });
 
-await check("an onboarding skip snoozes 7 days, not 14, and only at level 1", () => {
+await check("an onboarding skip snoozes 7 days and does NOT climb the ladder, once", () => {
+  // REWRITTEN 2026-09-06 and the old assertions are worth naming, because they
+  // passed over the defect: this check used to demand `one.level === 1` by
+  // implication (it asserted `two.level === 2`) and only ever measured the
+  // SNOOZE. Seven days instead of fourteen looks like the spec's exception; the
+  // rung underneath it was the thing that mattered, and it silenced in_task,
+  // onboarding and repeated_use for that app for good.
   const skipped = nudgeOf({ state: "asked", trigger: "onboarding", sent_at: NOW });
   const one = recordDecline(skipped, NOW, "said_no");
+  assert.equal(one.state, "declined_soft");
+  assert.equal(one.level, 0, "a skipped setup card is not a rung — spec pages 21 and 25");
   assert.equal(one.snooze_until, NOW + ONBOARDING_SKIP_SNOOZE_DAYS * DAY);
   assert.equal(one.acted_at, NOW, "a tapped skip is an action and must be recorded as one");
+
+  // ONCE. A second no is a real no, or a row whose trigger never moves off
+  // `onboarding` buys seven days of quiet forever and is asked every week for
+  // the rest of its life.
   const two = recordDecline(one, NOW, "said_no");
-  assert.equal(two.level, 2);
-  assert.equal(two.snooze_until, NOW + SNOOZE_DAYS[2] * DAY,
-    "the onboarding exception applied twice");
+  assert.equal(two.state, "declined");
+  assert.equal(two.level, 1, "the onboarding exception applied twice");
+  assert.equal(two.snooze_until, NOW + SNOOZE_DAYS[1] * DAY);
+
+  const three = recordDecline(two, NOW, "said_no");
+  assert.equal(three.level, 2);
+  assert.equal(three.snooze_until, NOW + SNOOZE_DAYS[2] * DAY);
 });
 
 await check("connected holds, and needs_reconnect is weekly at most", () => {

@@ -85,7 +85,7 @@ import { DEFAULT_CONNECT_MODEL } from "../src/connections/wiring.ts";
 import { OPENROUTER_BASE } from "../src/llm.ts";
 import { FORBIDDEN_TERMS, PermissionWordsRefused } from "../src/connections/words.ts";
 import { LINK_TTL_MS } from "../src/connections/nudge.ts";
-import { CONNECT_URL_BASE, TOKEN_CHARS } from "../src/routes/connect.ts";
+import { CONNECT_URL_BASE, MAX_PAGE_APPS, TOKEN_CHARS } from "../src/routes/connect.ts";
 import { MAX_SEARCH_RESULTS } from "../src/connections/provider.ts";
 import {
   connectionsApiRoute,
@@ -1319,8 +1319,18 @@ await check("a link body naming another owner binds to the signed-in one", async
 });
 
 await check("the mint budget stops the seventh link in an hour", async () => {
-  const r = await rig();
+  // THE CLOCK ADVANCES BETWEEN CALLS, AND THAT IS NEW. Until 2026-09-06 this
+  // check minted six links at one frozen instant, which passed while the budget
+  // counted ROWS — and counting rows is what charged a four-app connect page
+  // four times for one tap of one Connect button. The budget now counts MINTS
+  // (distinct mint instants in the window), so a rig that freezes the clock is
+  // a rig in which six separate HTTP requests happened in the same millisecond,
+  // which is not a thing production can do. One millisecond apart is enough and
+  // is the realistic case.
+  let clock = NOW;
+  const r = await rig({ now: () => clock });
   for (let i = 0; i < MAX_LINKS_PER_OWNER; i++) {
+    clock = NOW + i;
     const res = await connectionsApiRoute(
       postReq(R.link, r.ownerToken, { toolkit: "zellibrix" }), r.env, r.deps);
     // THE CONTROL: every one under the ceiling must work, or the limit is an
@@ -1328,6 +1338,7 @@ await check("the mint budget stops the seventh link in an hour", async () => {
     assert.equal(res.status, 200, `link ${i + 1} of ${MAX_LINKS_PER_OWNER}`);
     await bodyOf(res, `link ${i}`);
   }
+  clock = NOW + MAX_LINKS_PER_OWNER;
   const over = await connectionsApiRoute(
     postReq(R.link, r.ownerToken, { toolkit: "zellibrix" }), r.env, r.deps);
   assert.equal(over.status, 429);
@@ -1378,6 +1389,190 @@ await check("a database that cannot mint says so, and answers no url", async () 
   const body = await jsonOf(res, "link db down");
   assert.ok(!("url" in body));
   assert.equal(storedLinks(r.db).length, 0);
+});
+
+// ---------------------------------------------------------------------------
+// ONE CONNECT BUTTON, ONE LINK — spec page 25.
+//
+// THE DEFECT THESE REPRODUCE, measured on 2026-09-06 before the change: this
+// route minted ONE row per call, so the setup card's single Connect button
+// asked for a link per ticked app and walked the person through four separate
+// browser round trips for one decision. routes/connect.ts could already DRAW,
+// walk, tap, call back and skip a page of apps; nothing in the Worker could
+// make one.
+// ---------------------------------------------------------------------------
+
+await check("four ticked apps become ONE link, in the order they were ticked", async () => {
+  const r = await rig();
+  const wanted = ["zellibrix", "quandle_mail", "borogrove", "tuletide"];
+  const res = await connectionsApiRoute(
+    postReq(R.link, r.ownerToken, { toolkits: wanted }), r.env, r.deps);
+  assert.equal(res.status, 200);
+  const body = await jsonOf(res, "page mint");
+  const url = String(body.url);
+  const token = url.slice(`${CONNECT_URL_BASE}/`.length);
+  assert.equal(token.length, TOKEN_CHARS);
+  assert.deepEqual(body.toolkits, wanted,
+    "the phone ticked a set and must be told which set this link actually carries");
+
+  const rows = storedLinks(r.db);
+  assert.equal(rows.length, wanted.length, "one link per app was minted, or one app was dropped");
+  // EVERY ROW AT ITS OWN DERIVED HANDLE, and app 0 at the plain one — which is
+  // what makes every link already in the wild resolve unchanged.
+  for (let i = 0; i < wanted.length; i++) {
+    const handle = i === 0 ? sha256Hex(token) : sha256Hex(`${token} ${i}`);
+    const row = rows.find((x) => x.token_handle === handle);
+    assert.ok(row, `app ${i} is not at its own page handle`);
+    assert.equal(row!.toolkit, wanted[i], `app ${i} is the wrong app`);
+    assert.equal(row!.user_id, OWNER);
+    assert.equal(row!.expires_at, NOW + LINK_TTL_MS, "one page, one expiry");
+    assert.equal(row!.used_at, null);
+  }
+  assert.ok(!JSON.stringify(rows).includes(token),
+    "the raw token reached the database on the page path");
+});
+
+await check("a page of ONE is byte-identical to the link every build in the wild mints",
+  async () => {
+    // THE CONTROL for the check above. `{toolkit: x}` and `{toolkits: [x]}` must
+    // produce the same row at the same handle, or the compatibility story is a
+    // promise rather than a structure.
+    const one = await rig();
+    await bodyOf(await connectionsApiRoute(
+      postReq(R.link, one.ownerToken, { toolkit: "zellibrix" }), one.env, one.deps), "old shape");
+    const many = await rig();
+    await bodyOf(await connectionsApiRoute(
+      postReq(R.link, many.ownerToken, { toolkits: ["zellibrix"] }), many.env, many.deps),
+      "new shape");
+
+    const shape = (rows: Record<string, unknown>[]) =>
+      rows.map((x) => ({ ...x, token_handle: "<hash>" }));
+    assert.equal(storedLinks(one.db).length, 1);
+    assert.deepEqual(shape(storedLinks(many.db) as never), shape(storedLinks(one.db) as never),
+      "a page of one is not the row a one-app link has always been");
+  });
+
+await check("a page too long, or naming an app twice, is refused WHOLE", async () => {
+  const r = await rig();
+  const bodies: Record<string, unknown>[] = [
+    // Past the reader's own ceiling. Truncating would drop apps the person
+    // ticked and tell nobody.
+    { toolkits: Array.from({ length: MAX_PAGE_APPS + 1 }, (_, i) => `app_${i}`) },
+    { toolkits: ["zellibrix", "zellibrix"] },
+    { toolkits: ["zellibrix", "ZELLIBRIX"] },
+    { toolkits: [] },
+    { toolkits: ["zellibrix", ""] },
+    { toolkits: ["zellibrix", null] },
+    { toolkits: ["zellibrix", 7] },
+    { toolkits: "zellibrix" },
+    // Two fields disagreeing about what somebody ticked is a client bug, and
+    // picking a winner would connect a set nobody chose.
+    { toolkit: "zellibrix", toolkits: ["borogrove"] },
+  ];
+  for (const body of bodies) {
+    const res = await connectionsApiRoute(postReq(R.link, r.ownerToken, body), r.env, r.deps);
+    // 400 AND NOT 503, and the difference is the whole check. `mintConnectPage`
+    // refuses every one of these too, as a library invariant — but it THROWS,
+    // and a throw here becomes "we are broken, try again later" for a body that
+    // will never be acceptable. A phone told 503 retries; a phone told 400 stops
+    // and the bug is visible. Accepting either status let a mutation that
+    // deleted this route's own duplicate check pass, because the refusal simply
+    // moved one layer down and changed nothing the test could see.
+    assert.equal(res.status, 400, `${JSON.stringify(body)} answered ${res.status}`);
+    await bodyOf(res, "page refused");
+  }
+  assert.equal(storedLinks(r.db).length, 0,
+    "a refused page still wrote rows — half a page is worse than none");
+});
+
+await check("a page that cannot be written whole writes NOTHING", async () => {
+  // ALL OR NONE, which is the entire reason `putAll` is a method and not a loop
+  // at the call site. A page half in the database is a person looking at fewer
+  // apps than they ticked, with nothing anywhere saying which ones are missing.
+  const r = await rig();
+  r.db.failOn = (sql) => sql.startsWith(`INSERT INTO "connect_links"`);
+  const res = await connectionsApiRoute(
+    postReq(R.link, r.ownerToken, { toolkits: ["zellibrix", "borogrove", "tuletide"] }),
+    r.env, r.deps);
+  assert.equal(res.status, 503);
+  const body = await jsonOf(res, "page db down");
+  assert.ok(!("url" in body));
+  assert.equal(storedLinks(r.db).length, 0);
+});
+
+await check("a page whose THIRD row fails rolls the first two back", async () => {
+  // THE CHECK ABOVE IS NOT ENOUGH ON ITS OWN and this is the difference. It
+  // fails EVERY insert, so a minter looping `put` one row at a time would pass
+  // it — nothing is written either way. The property is a TRANSACTION, and only
+  // a partial failure can see one: fail the third statement and the first two
+  // must be gone.
+  const r = await rig();
+  let seen = 0;
+  r.db.failOn = (sql) => sql.startsWith(`INSERT INTO "connect_links"`) && ++seen >= 3;
+  const res = await connectionsApiRoute(
+    postReq(R.link, r.ownerToken, { toolkits: ["zellibrix", "borogrove", "tuletide"] }),
+    r.env, r.deps);
+  assert.equal(res.status, 503);
+  await bodyOf(res, "page partial failure");
+  assert.equal(storedLinks(r.db).length, 0,
+    "two apps of a three-app page survived: the person opens their link and one app they "
+    + "ticked is simply not there, with nothing anywhere saying which");
+});
+
+await check("a page of many spends ONE of the owner's six mints, not many", async () => {
+  // THE OUTAGE THIS REPRODUCES, and it was live in the working tree before this
+  // check existed. The budget counted `connect_links` ROWS, and a page of four
+  // apps writes four of them — so ticking four apps, changing your mind and
+  // ticking four again put the person over a six-an-hour ceiling and locked
+  // them out of connecting ANYTHING for an hour. A rate limit that fires on the
+  // second use of the feature it limits is an outage in a limit's clothing.
+  //
+  // A page is one link: one token, one expiry, one tap of one Connect button.
+  let clock = NOW;
+  const r = await rig({ now: () => clock });
+  for (let i = 0; i < MAX_LINKS_PER_OWNER; i++) {
+    clock = NOW + i;
+    const res = await connectionsApiRoute(
+      postReq(R.link, r.ownerToken, { toolkits: ["zellibrix", "borogrove", "tuletide"] }),
+      r.env, r.deps);
+    assert.equal(res.status, 200, `page ${i + 1} of ${MAX_LINKS_PER_OWNER}`);
+    await bodyOf(res, `page ${i}`);
+  }
+  // 18 rows, 6 mints. The rows are the CONTROL: if the budget were still
+  // counting them, the third page would already have been refused.
+  assert.equal(storedLinks(r.db).length, 3 * MAX_LINKS_PER_OWNER);
+
+  clock = NOW + MAX_LINKS_PER_OWNER;
+  const over = await connectionsApiRoute(
+    postReq(R.link, r.ownerToken, { toolkits: ["zellibrix"] }), r.env, r.deps);
+  assert.equal(over.status, 429, "the budget is per LINK and a page is one link");
+  await bodyOf(over, "page over budget");
+});
+
+await check("a page of twelve is minted, not refused by the budget it costs one of", async () => {
+  // MAX_PAGE_APPS (12) is larger than MAX_LINKS_PER_OWNER (6). Under the old
+  // row-counting budget any page past six apps was refused before the minter
+  // ever saw it — the ceiling on how MANY links you may ask for silently became
+  // a ceiling on how many apps one page may hold, at half the declared number.
+  const r = await rig();
+  const wanted = Array.from({ length: MAX_PAGE_APPS }, (_, i) => `app_${i}`);
+  const res = await connectionsApiRoute(
+    postReq(R.link, r.ownerToken, { toolkits: wanted }), r.env, r.deps);
+  assert.equal(res.status, 200);
+  const body = await jsonOf(res, "twelve app page");
+  assert.equal((body.toolkits as string[]).length, MAX_PAGE_APPS);
+  assert.equal(storedLinks(r.db).length, MAX_PAGE_APPS);
+});
+
+await check("a page body naming another owner binds every row to the signed-in one", async () => {
+  const r = await rig();
+  const res = await connectionsApiRoute(postReq(R.link, r.ownerToken, {
+    toolkits: ["zellibrix", "borogrove"], user_id: STRANGER, owner: STRANGER,
+  }), r.env, r.deps);
+  assert.equal(res.status, 200);
+  await bodyOf(res, "page foreign owner named");
+  assert.deepEqual(new Set(storedLinks(r.db).map((x) => x.user_id)), new Set([OWNER]),
+    "a body field decided whose account a page of connect links binds");
 });
 
 // ===========================================================================
@@ -1443,6 +1638,13 @@ await check("the onboarding skip is the SEVEN-day soft snooze, and it is a diffe
     assert.equal(softRow.trigger, "onboarding",
       "the row must SAY it was a setup card, or nothing downstream can tell the two apart");
     assert.equal(Number(softRow.snooze_until) - NOW, 7 * DAY_MS);
+    // THE LADDER, WHICH THIS CHECK DID NOT READ UNTIL 2026-09-06 and which is
+    // the whole of what "not a real decline" means. Seven days instead of
+    // fourteen was the only thing measured, while the row underneath said
+    // `declined` at level 1 — and level 1 raises the ask threshold from 0.50 to
+    // 0.80, silencing in_task, onboarding and repeated_use for that app forever.
+    assert.equal(Number(softRow.level), 0, "a skipped setup card climbed the decline ladder");
+    assert.equal(softRow.state, "declined_soft");
 
     // THE CONTROL, AND THE POINT: the same tap without the setup card is the
     // real decline. Conflating them is what page 21 forbids in one sentence.
@@ -1453,8 +1655,46 @@ await check("the onboarding skip is the SEVEN-day soft snooze, and it is a diffe
     await bodyOf(realRes, "skip not onboarding");
     const realRow = storedNudges(real.db)[0]!;
     assert.equal(realRow.trigger, null);
+    assert.equal(Number(realRow.level), 1, "an ordinary decline IS a rung and must still climb");
+    assert.equal(realRow.state, "declined");
     assert.equal(Number(realRow.snooze_until) - NOW, 14 * DAY_MS);
     assert.notEqual(Number(softRow.snooze_until), Number(realRow.snooze_until));
+  });
+
+await check("the acknowledgement says SOFT about the row it wrote, not about the moment",
+  async () => {
+    // WHAT THE PHONE READS. `ConnectOnboardingPolicy.serverAgreedWithSkip` takes
+    // the level and the snooze off this body and refuses to believe a skip
+    // landed unless they mean what its own card means — so these two numbers are
+    // the contract, not decoration.
+    const soft = await rig();
+    const ok = await jsonOf(await connectionsApiRoute(
+      postReq(R.skip, soft.ownerToken, { toolkit: UNASKED, onboarding: true }),
+      soft.env, soft.deps), "soft ack");
+    assert.equal(ok.state, "recorded");
+    assert.equal(ok.level, 0);
+    assert.equal(ok.soft, true);
+    assert.equal(Number(ok.snooze_until) - NOW, 7 * DAY_MS);
+
+    // THE CONTROL, AND IT IS THE ONE THAT MATTERS: a row whose MOMENT is still
+    // `onboarding` but which is already on the ladder. The decline it takes is a
+    // real one, and a `soft` flag read off the trigger rather than off the row
+    // the ladder actually wrote would answer TRUE here — telling the phone a
+    // hard decline was a seven-day shrug.
+    const hard = await rig();
+    hard.db.db.prepare(
+      `INSERT INTO connect_nudges (user_id, toolkit, state, level, snooze_until, "trigger",
+         sent_at, acted_at, channel) VALUES (?,?,?,?,?,?,?,?,?)`,
+    ).run(OWNER, UNASKED, "declined", 1, NOW - DAY_MS, "onboarding", NOW - 30 * DAY_MS,
+      NOW - 30 * DAY_MS, "ios");
+    const climbed = await jsonOf(await connectionsApiRoute(
+      postReq(R.skip, hard.ownerToken, { toolkit: UNASKED, onboarding: true }),
+      hard.env, hard.deps), "hard ack");
+    assert.equal(climbed.state, "recorded");
+    assert.equal(climbed.level, 2);
+    assert.equal(climbed.soft, false,
+      "the acknowledgement called a level-2 decline a soft snooze, because it read the "
+      + "moment that produced the ask instead of the row the ladder wrote");
   });
 
 await check("an absent onboarding flag is the LONGER quiet, never the shorter one", async () => {

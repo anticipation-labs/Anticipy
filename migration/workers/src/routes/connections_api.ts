@@ -157,12 +157,17 @@ import {
 import { makePermissionWords } from "../connections/words.ts";
 import { makeSentenceWriter } from "../connections/wiring.ts";
 import {
-  mintConnectLink,
+  mintConnectPage,
   LINK_TTL_MS,
+  type MintedLink,
   type NudgeDeps,
   type NudgeEnv,
 } from "../connections/nudge.ts";
-import { recordSkip, type DeclineStore } from "./connect.ts";
+// `MAX_PAGE_APPS` is routes/connect.ts's number — it is the reader's ceiling on
+// how many apps one connect page may carry, and this route refuses a longer
+// request with the caller's own status code rather than letting the minter
+// throw it into a 503.
+import { MAX_PAGE_APPS, recordSkip, type DeclineStore } from "./connect.ts";
 import type {
   Connection,
   DisconnectResult,
@@ -401,6 +406,10 @@ export interface ConnectionsApiStore extends DeclineStore {
   deleteConnection(user: OwnerId | string, accountId: string): Promise<boolean>;
   linksForOwner(user: OwnerId | string): Promise<StoredLink[]>;
   put(row: StoredLink): Promise<void>;
+  /** A whole connect page, in ONE transaction. `handleLink` mints a page of N
+   *  apps on one token (spec page 25) and a page half-written is a person
+   *  looking at fewer apps than they ticked, with nothing anywhere saying so. */
+  putAll(rows: readonly StoredLink[]): Promise<void>;
 }
 
 /** The vendor calls these routes make. `authorize` is deliberately absent:
@@ -1192,8 +1201,8 @@ async function handleLink(
   deps: ConnectionsApiDeps, now: number,
 ): Promise<Response> {
   const body = await jsonBody(request);
-  const slug = slugOf(body?.toolkit);
-  if (slug === null) return refuse(400, BAD_REQUEST);
+  const slugs = pageOf(body);
+  if (slugs === null) return refuse(400, BAD_REQUEST);
 
   let held: StoredLink[];
   try {
@@ -1206,16 +1215,37 @@ async function handleLink(
   // one constant both halves share, so `expires_at - LINK_TTL_MS` IS the moment
   // it was minted. Reading the window off the same constant the mint uses means
   // there is no second answer to how long a link lives.
+  //
+  // THE BUDGET COUNTS LINKS, NOT ROWS, and the difference arrived with the
+  // multi-app page. A page of four apps writes four `connect_links` rows on ONE
+  // token, so counting rows charged this ceiling four times for one tap of one
+  // Connect button — somebody who ticked four apps, changed their mind and
+  // ticked four again would be locked out of connecting anything for an hour.
+  // That is an outage wearing a rate limit's clothes, and it would have shipped
+  // on the exact flow the spec asks for.
+  //
+  // A PAGE IS ITS MINT INSTANT. Every row of one page is written with a single
+  // `expires_at` computed once (`mintConnectPage`), so the distinct expiries in
+  // the window ARE the mints in the window. The one shape where that undercounts
+  // is two separate pages minted in the same millisecond for one owner, which
+  // costs that owner one extra mint out of six and cannot be provoked usefully:
+  // this is a courtesy ceiling on top of an authenticated route, not a defence.
+  // The alternative — a group id column — needs a schema change and an index to
+  // answer a question the clock already answers.
   const since = now - LINK_WINDOW_MS;
-  const recent = held.filter((row) => Number(row?.expires_at) - LINK_TTL_MS >= since).length;
-  if (recent >= MAX_LINKS_PER_OWNER) {
-    console.log(`me/connections/link: 429 — ${recent} links already minted in the window`);
+  const mints = new Set<number>();
+  for (const row of held) {
+    const mintedAt = Number(row?.expires_at) - LINK_TTL_MS;
+    if (Number.isFinite(mintedAt) && mintedAt >= since) mints.add(mintedAt);
+  }
+  if (mints.size >= MAX_LINKS_PER_OWNER) {
+    console.log(`me/connections/link: 429 — ${mints.size} links already minted in the window`);
     return refuse(429, TOO_MANY_LINKS);
   }
 
-  let minted: { url: string; expires_at: number; fingerprint: string };
+  let minted: MintedLink;
   try {
-    minted = await mintConnectLink(env, owner, slug, null, linkOnlyDeps(deps));
+    minted = await mintConnectPage(env, owner, slugs, null, linkOnlyDeps(deps));
   } catch (err) {
     console.log(`me/connections/link: could not mint — ${named(err)}`);
     return refuse(503, COULD_NOT_READ);
@@ -1223,9 +1253,66 @@ async function handleLink(
 
   // The fingerprint, NEVER the token and never the URL. A support transcript, a
   // breadcrumb or a `wrangler tail` carrying a whole token hands its reader an
-  // account binding.
-  console.log(`me/connections/link: minted ${minted.fingerprint}`);
-  return json(200, { url: minted.url, expires_at: minted.expires_at });
+  // account binding. The COUNT of apps is safe and worth having: it is the one
+  // number that says whether the page the phone asked for is the page it got.
+  console.log(`me/connections/link: minted ${minted.fingerprint}, ${minted.toolkits.length} app(s)`);
+  return json(200, {
+    url: minted.url,
+    expires_at: minted.expires_at,
+    // ECHOED BACK, IN THE ORDER THE PAGE WILL DRAW THEM. The phone ticked a set
+    // and gets told which set this link actually carries — so a mint that
+    // silently dropped one is visible on the client rather than only at the
+    // moment somebody notices an app missing from the page. Catalog slugs
+    // carry no token material.
+    toolkits: minted.toolkits,
+  });
+}
+
+/**
+ * WHICH APPS THIS LINK IS FOR — one, or the whole set somebody ticked.
+ *
+ * TWO SHAPES, ONE MEANING, and the older one is not deprecated by accident:
+ *   `{ "toolkit": "slack" }`             every build in the wild today
+ *   `{ "toolkits": ["slack", "notion"] }` the setup card's one Connect button
+ *
+ * Both are accepted and both go down the same path — a page of one is a page.
+ * A body naming BOTH is refused rather than reconciled: two fields disagreeing
+ * about what somebody ticked is a client bug, and picking a winner would connect
+ * a set nobody chose.
+ *
+ * `null` IS THE ONLY REFUSAL and it is a 400. There is no partial read: a list
+ * with one unusable entry is refused whole, because filtering it would mint a
+ * page silently shorter than the one the person is about to be shown.
+ *
+ * THE CEILING IS CHECKED HERE TOO, AND THAT IS NOT A DUPLICATE BY ACCIDENT.
+ * `mintConnectPage` refuses a page past `MAX_PAGE_APPS` as a library invariant
+ * and THROWS, which this route can only turn into a 503 — "we are broken, try
+ * again later" for a body that will never be acceptable, which a client then
+ * retries forever. A request naming thirteen apps is the caller's mistake and
+ * gets the caller's status code. The number is imported from the one file that
+ * declares it, so the two cannot disagree about it; only about whose fault it
+ * is, which is the whole point.
+ */
+function pageOf(body: Record<string, unknown> | null): string[] | null {
+  const many = body?.toolkits;
+  const one = body?.toolkit;
+  if (many !== undefined && many !== null) {
+    if (one !== undefined && one !== null) return null;
+    if (!Array.isArray(many) || many.length === 0) return null;
+    if (many.length > MAX_PAGE_APPS) return null;
+    const slugs: string[] = [];
+    for (const raw of many) {
+      const slug = slugOf(raw);
+      if (slug === null) return null;
+      // A set the person ticked cannot contain the same box twice, so a repeat
+      // is a client that lost track rather than a preference to honour.
+      if (slugs.includes(slug)) return null;
+      slugs.push(slug);
+    }
+    return slugs;
+  }
+  const slug = slugOf(one);
+  return slug === null ? null : [slug];
 }
 
 // ===========================================================================
@@ -1298,6 +1385,22 @@ async function handleSkip(
     state: outcome.state,
     level: outcome.level,
     snooze_until: outcome.snooze_until,
+    /**
+     * WAS THIS THE SEVEN-DAY SHRUG OR A RUNG ON THE LADDER? The two are
+     * different things to have done to somebody and the phone acts on the
+     * difference — `ConnectOnboardingPolicy.serverAgreedWithSkip` refuses to
+     * believe a skip landed unless the far end recorded what the card means.
+     *
+     * It is `recordDecline`'s own answer about the row it wrote, carried
+     * through `recordSkip`, and NOT re-derived from the request's `onboarding`
+     * flag. Deriving it here would report a level-2 decline as soft whenever
+     * the ask that produced it happened to have come from a setup card.
+     *
+     * `false` on `already-declined`, which is honest rather than lossy: that
+     * branch wrote NOTHING, so no soft snooze was recorded by this call. The
+     * level and the date beside it say what is standing.
+     */
+    soft: outcome.state === "recorded" ? outcome.soft : false,
   });
 }
 
@@ -1476,6 +1579,7 @@ function linkOnlyDeps(deps: ConnectionsApiDeps): NudgeDeps {
     // by it.
     store: {
       put: (row) => deps.store.put(row),
+      putAll: (rows) => deps.store.putAll(rows),
       readNudge: () => notAnAsk("readNudge"),
       nudgesForOwner: () => notAnAsk("nudgesForOwner"),
       putNudge: () => notAnAsk("putNudge"),

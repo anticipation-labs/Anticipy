@@ -334,6 +334,41 @@ CONNECTIONS_ROUTES = (
     ("sentences", "POST", "/me/connections/sentences"),
     ("link", "POST", "/me/connections/link"),
     ("skip", "POST", "/me/connections/skip"),
+    # ADDED 2026-09-06, and it was 404 on this Worker until that afternoon.
+    # `GET /me/connections/signals` is what the onboarding card asks so it can
+    # pre-tick the apps somebody already lives in — page 25's "Detected apps
+    # pre-selected". Without it OnboardingConnectStep passed literal empty
+    # arrays and pre-selected NOTHING for every person alive, while the ranking
+    # next door passed 154 checks proving it would have ordered them correctly
+    # if anything had ever handed it a row. A missing route here is invisible
+    # from the outside in exactly the way this leg exists to catch: the screen
+    # still draws, and it draws an empty list that looks like an answer.
+    ("signals", "GET", "/me/connections/signals"),
+)
+
+#: LEG 12's TABLE: routes whose METHOD is the thing worth proving, and the
+#: method they must refuse.
+#:
+#: WHY A SECOND LEG RATHER THAN A LONGER LEG 1. Leg 1 asks "did this path answer
+#: 401", which a Worker that refused every path on earth would satisfy — hence
+#: its control. But a Worker that answered 401 to every path AND every method
+#: would satisfy the control too, because the control is a PATH. The method is
+#: the one discriminator that needs no credential: `/skip` must refuse GET
+#: (a prefetcher, a link scanner or a preview crawler must never decline an app
+#: on somebody's behalf) and `/signals` must refuse POST (a read route that
+#: accepted a write would let anybody with a session weight their own evidence
+#: table, and weight is what eventually licenses interrupting somebody).
+#:
+#: 405 is the shape to look for and 401 is NOT acceptable here: the method table
+#: is consulted before the credential, so a 401 on the wrong method means the
+#: route is answering the method question with "sign in and find out".
+METHOD_SHAPED_ROUTES = (
+    ("skip", "GET", "/me/connections/skip",
+     "a prefetcher, a link scanner or an iOS list-preview must never record "
+     "somebody's decline for them"),
+    ("signals", "POST", "/me/connections/signals",
+     "a read route that took a write would let anybody with a session add weight to "
+     "their own evidence table"),
 )
 
 #: THE CONTROL for leg 1. Not a route: index.ts hands `connectionsApiRoute` the
@@ -1330,6 +1365,48 @@ def _read_or_none(path: str) -> str | None:
         return None
 
 
+def declared_api_routes(root: str = ROOT) -> tuple[list | None, dict | None]:
+    """The routes and verbs `connections_api.ts` actually declares.
+
+    Returns `(paths, {leg: method})`, or `(None, None)` when this checkout cannot
+    produce them — which every caller turns into a failed self-test case rather
+    than a pass, because "I could not read the declaration" and "the declaration
+    matches" are different facts and only one of them is evidence.
+
+    WHY THIS READS A FILE INSTEAD OF HOLDING A LIST. It used to hold a list, and
+    the list was the bug: `/me/connections/signals` shipped on 2026-09-06 while
+    this gate probed seven routes and called itself complete, because the eighth
+    was missing from the probe tuple AND from the literal it was compared
+    against, so the two agreed with each other about a route neither had heard
+    of. A copy of a declaration is not a check on it.
+    """
+    text = _read_or_none(_os.path.join(
+        root, "migration", "workers", "src", "routes", "connections_api.ts"))
+    if text is None:
+        return None, None
+    paths = re.findall(
+        r'^\s*(\w+):\s*"(/me/connections[^"]*)",\s*$', text, re.MULTILINE)
+    verbs = re.findall(r'^\s*(\w+):\s*"(GET|POST)",\s*$', text, re.MULTILINE)
+    if not paths or not verbs:
+        return None, None
+    return [p for _leg, p in paths], {leg: verb for leg, verb in verbs}
+
+
+def soft_state_in_worker_source(root: str = ROOT) -> bool:
+    """Is `SOFT_SNOOZE_STATE` the string the Worker's ladder actually writes?
+
+    THE CONTROL FOR LEG 13. That leg greps a live CHECK constraint for a word;
+    if the Worker were changed to write a different word, the leg would go on
+    reporting green about a state nothing produces. So the word is checked
+    against `recordDecline`'s own source, where it is written.
+    """
+    text = _read_or_none(_os.path.join(
+        root, "migration", "workers", "src", "connections", "nudge.ts"))
+    if text is None:
+        return False
+    return f'state: "{SOFT_SNOOZE_STATE}",' in text
+
+
 def due_statement(source: str | None) -> str | None:
     """The SQL text `candidateSql()` returns, cut out of due.ts's source.
 
@@ -1932,7 +2009,238 @@ def run(*, read_only: bool = False, http=None, sql=None, vendor=None,
     codes.append(code)
     rows.append((mark, "11 SOMEBODY IS ACTUALLY BEING ASKED", sentence))
 
+    # -- leg 12: the two new doors are shaped right ---------------------------
+    method_results = []
+    for name, method, path, why in METHOD_SHAPED_ROUTES:
+        answer = ask(path, method)
+        method_results.append((name, method, path,
+                               None if answer is None else answer[0], why))
+    code, mark, sentence = leg_methods(method_results)
+    codes.append(code)
+    rows.append((mark, "12 THE SETUP CARD'S TWO DOORS REFUSE THE WRONG VERB", sentence))
+
+    # -- leg 13: can the ladder record a soft snooze at all --------------------
+    ddl = None
+    if tables_known and "connect_nudges" in found:
+        try:
+            got = sql("SELECT sql FROM sqlite_master WHERE name='connect_nudges'")
+            if got:
+                ddl = str(got[0].get("sql") or "")
+        except (D1Unavailable, TypeError, ValueError, KeyError, IndexError):
+            ddl = None
+    code, mark, sentence = leg_soft_snooze(ddl, tables_known)
+    codes.append(code)
+    rows.append((mark, "13 A SKIPPED SETUP CARD CAN BE RECORDED AS A SHRUG", sentence))
+
+    # -- leg 14: the host the link is minted on is the host that answers -------
+    #
+    # ONE FRESH TOKEN-SHAPED PATH PER HOST, and it is deliberately a token
+    # nobody minted: the question is WHOSE CODE ANSWERS, and every host that
+    # reaches connect.ts answers a well-formed unminted token identically to a
+    # real one. Nothing is written and no owner is named.
+    minting_host = urllib.parse.urlsplit(WORKER).netloc.lower()
+    hosts = [minting_host] + [h for h in phone_link_hosts() if h != minting_host]
+    kinds: dict = {}
+    for host in hosts:
+        probe = f"https://{host}/c/{'A' * 43}"
+        try:
+            answer = http(probe)
+        except Exception:
+            answer = None
+        kinds[host] = None if answer is None else classify_c_response(*answer)[0]
+    code, mark, sentence = leg_link_host(minting_host, kinds, hosts)
+    codes.append(code)
+    rows.append((mark, "14 THE HOST WE MINT ON IS THE HOST THAT ANSWERS", sentence))
+
     return overall(codes), rows
+
+
+# ===========================================================================
+# LEG 12 — the method table, which is the one discriminator that costs nothing
+# ===========================================================================
+
+#: The state the spec's own soft snooze needs on the LIVE table, byte for byte
+#: as it appears inside `connect_nudges`'s CHECK constraint.
+SOFT_SNOOZE_STATE = "declined_soft"
+
+#: The single statement that repairs leg 13, quoted so a red leg hands the owner
+#: the thing to run rather than a description of it.
+SOFT_SNOOZE_MIGRATION = "migration/d1/2026-09-06-connect-nudges-declined-soft.sql"
+
+
+def leg_methods(results: list) -> tuple[int, str, str]:
+    """LEG 12. Does each new door refuse the verb it must refuse?
+
+    `results` is a list of (name, method, path, status|None, why).
+
+    405 IS THE ONLY PASS, and 401 is explicitly not one. The router settles the
+    method before it settles the credential, so a 401 on the wrong verb means the
+    route is answering "is this verb allowed?" with "sign in and find out" — and
+    a signed-in prefetcher would then get through. The distinction matters
+    because the failure it guards is silent: a GET that recorded a decline would
+    show up as somebody simply never being asked again.
+    """
+    unreachable = [n for n, _m, _p, s, _w in results if s is None]
+    if unreachable:
+        return UNPROVEN, INFO, (
+            f"{', '.join(sorted(unreachable))} could not be reached, so nothing is claimed "
+            "about which verbs they accept")
+
+    wrong = [(n, m, s, w) for n, m, _p, s, w in results if s != 405]
+    if wrong:
+        worst = [f"{m} /me/connections/{n} answered {s} (wanted 405) — {w}"
+                 for n, m, s, w in wrong]
+        # A 2xx here is the live version of the failure; anything else is the
+        # route not being sure, which is the same risk one step further back.
+        code = RED if any(200 <= s < 300 for _n, _m, s, _w in wrong) else RED
+        return code, BAD, "; ".join(worst)
+
+    named = ", ".join(f"{m} /me/connections/{n}" for n, m, _p, _s, _w in results)
+    return GREEN, OK, (
+        f"{named} each answer 405, and 405 rather than 401 — the method table is "
+        "consulted before the credential, so a signed-in prefetcher cannot reach either "
+        "of them by the wrong verb")
+
+
+# ===========================================================================
+# LEG 13 — can the setup card's Skip be recorded as what it IS
+# ===========================================================================
+
+def leg_soft_snooze(ddl: str | None, tables_known: bool) -> tuple[int, str, str]:
+    """LEG 13. Will live D1 accept the row a skipped setup card produces?
+
+    THE FAILURE THIS EXISTS FOR, and it is a live one as this is written. Spec
+    page 21: "Skip records `declined_soft` with a 7-day snooze, not a real
+    decline"; page 25 says it again. Until 2026-09-06 the Worker recorded a real
+    decline with a shorter clock — level 1, which raises the ask threshold from
+    0.50 to 0.80 against a strict comparison and permanently silences in_task,
+    onboarding and repeated_use for that app. One tap on a setup card ended the
+    conversation about that app for good.
+
+    The Worker now writes `declined_soft`. The LIVE TABLE's CHECK constraint
+    still lists five states, and SQLite cannot alter a CHECK — the table has to
+    be rebuilt. Until it is, that write is refused by the database, `recordSkip`
+    answers `not-recorded`, and the phone is told 503. Which is honest, and is
+    not the feature working.
+
+    RED, NOT UNPROVEN. This is a thing that can be read and is being read: the
+    constraint is either wide enough or it is not. `ConnectOnboardingPolicy`
+    `.serverRecordsTheSoftSnooze` on the phone stays false while this is red, so
+    the two halves cannot drift — the phone keeps its offline fallback and no
+    person's "no" is dropped on the floor in the meantime.
+    """
+    if not tables_known:
+        return UNPROVEN, INFO, (
+            "live D1 could not be read at all (leg 2), so nothing is claimed about what "
+            "the ladder can record")
+    if ddl is None:
+        return UNPROVEN, INFO, (
+            "connect_nudges' own DDL could not be read back from sqlite_master, so whether "
+            "the soft snooze is writable is unknown — which is not the same as it working")
+    if SOFT_SNOOZE_STATE in ddl:
+        return GREEN, OK, (
+            f"live connect_nudges accepts state '{SOFT_SNOOZE_STATE}', so a skipped setup "
+            "card can be recorded as the seven-day shrug the spec calls for instead of a "
+            "level-1 decline that silences three triggers forever")
+    return RED, BAD, (
+        f"live connect_nudges' CHECK does NOT list '{SOFT_SNOOZE_STATE}', so the row a "
+        "skipped setup card produces is refused by the database: recordSkip answers "
+        "not-recorded and the phone is told 503. The repair is one file, "
+        f"`{SOFT_SNOOZE_MIGRATION}`, run with `wrangler d1 execute anticipy-backend "
+        "--remote --file=…` — a table rebuild, because SQLite cannot widen a CHECK. It "
+        "was written and NOT run: connect_nudges held zero rows when it was authored, so "
+        "it is a rename, a create and a drop with nothing to migrate")
+
+
+# ===========================================================================
+# LEG 14 — the host the link is MINTED on is the host that answers
+# ===========================================================================
+#
+# THE DEFECT THIS FOUND, on 2026-09-06, minutes after a deploy that reported
+# success and was correct:
+#
+#   GET https://anticipy.ai/c/<43 chars>
+#     -> 301 https://www.anticipy.ai/c/<43 chars>
+#     -> 307 https://www.anticipy.ai/
+#     -> 200  the marketing home page
+#
+# `anticipy.ai/c/*` IS a registered Worker route pointing at `anticipy-api`
+# (confirmed against the Cloudflare API for the zone, and `wrangler deploy`
+# prints it back on every deploy). It never runs, because a zone-level
+# apex-to-www redirect fires in FRONT of the Worker route, and the website then
+# 307s an unknown /c/ path to its own home page. A route can be present, correct,
+# printed by the deploy tool, and dead.
+#
+# WHY IT COSTS NOTHING TODAY AND IS STILL WORTH A LEG. Links are minted on
+# `CONNECT_URL_BASE`, which is `api.anticipy.ai/c`, and that host serves the real
+# page — so every link in the wild works. But the spec's own page 26 says the
+# link is `anticipy.ai/c/{token}`, `words.ts` pins `CONNECT_LINK_PREFIX` to
+# exactly that, and `nudge.ts` carries a documented DUPLICATE of `askText`
+# (`askMessage`) whose entire reason for existing is that those two constants
+# disagree. So one env var — `CONNECT_BASE_URL` — moved to the host the spec
+# asks for would send every connect link in every text message to a marketing
+# page, and the suite would stay green throughout.
+#
+# THE POLARITY IS DELIBERATE. Red is reserved for the host links are ACTUALLY
+# minted on: that is the question "can the person who got a text open the page".
+# Every other host the phone would accept is measured and NAMED in the sentence,
+# because a host on `ConnectHandoff.connectLinkHosts` that does not serve the
+# page is a trap one config change away from being sprung.
+
+#: The phone's own allowlist, and the reason this leg reads more than one host.
+#: `ConnectHandoff.connectLinkHosts` is what the app will open; anything on it
+#: that is not the connect page is a link the app opens happily and a person
+#: lands nowhere.
+def phone_link_hosts(root: str = ROOT) -> list:
+    """`ConnectHandoff.connectLinkHosts`, read out of the Swift rather than
+    copied. `[]` when this checkout cannot produce it, which the leg reports as
+    "the phone's allowlist was not read" instead of as an empty allowlist."""
+    text = _read_or_none(_os.path.join(
+        root, "app", "ios", "Anticipy", "Backend", "ConnectHandoff.swift"))
+    if text is None:
+        return []
+    m = re.search(r"connectLinkHosts:\s*Set<String>\s*=\s*\[([^\]]*)\]", text)
+    if not m:
+        return []
+    return re.findall(r'"([^"]+)"', m.group(1))
+
+
+#: `classify_c_response` kinds that mean connect.ts itself drew the page. Both
+#: count here: `unwired` is a broken deployment, and leg 6 is the leg that says
+#: so — this one is only asking WHOSE code answered.
+SERVED_BY_CONNECT = ("connect-page", "unwired")
+
+
+def leg_link_host(minting_host: str, results: dict, allowlist: list) -> tuple[int, str, str]:
+    """LEG 14. `results` maps host -> the `classify_c_response` kind for
+    `/c/<43 chars>` on it, or None when it could not be reached."""
+    mine = results.get(minting_host)
+    if mine is None:
+        return UNPROVEN, INFO, (
+            f"{minting_host} could not be reached, so nothing is claimed about whether the "
+            "links this Worker mints open anything")
+    if mine not in SERVED_BY_CONNECT:
+        return RED, BAD, (
+            f"THE LINKS THIS WORKER MINTS DO NOT OPEN THE CONNECT PAGE. {minting_host}/c/"
+            f"<43 chars> answered {mine!r}, not connect.ts. Every connect link in every text "
+            "message goes there")
+
+    strays = [h for h in allowlist
+              if h != minting_host and results.get(h) not in (None,) + SERVED_BY_CONNECT]
+    unreached = [h for h in allowlist if h != minting_host and results.get(h) is None]
+    sentence = (f"{minting_host}/c/<43 chars> is drawn by connect.ts, so every link this "
+                "Worker mints opens the page it was minted for")
+    if strays:
+        sentence += (
+            f". THE PHONE WOULD ALSO OPEN {', '.join(strays)}, AND THEY DO NOT SERVE IT: "
+            + "; ".join(f"{h} -> {results[h]!r}" for h in strays)
+            + ". Measured 2026-09-06: the apex 301s to www, which 307s an unknown /c/ path to "
+              "the marketing home page, so the registered `anticipy.ai/c/*` Worker route never "
+              "runs. One CONNECT_BASE_URL change away from every text going nowhere — and it is "
+              "the host the spec (page 26) and words.ts CONNECT_LINK_PREFIX both name")
+    if unreached:
+        sentence += f". Not reached at all: {', '.join(unreached)}"
+    return GREEN, OK, sentence
 
 
 # ===========================================================================
@@ -2017,11 +2325,59 @@ def self_test() -> int:
     cases.append(("leg1    an unreadable route withholds green without crying red",
                   leg_routes([("link", "POST", "/me/connections/link", "unreadable", "")]
                              + _routes_all("refused")[1:], control_ok)[0] == UNPROVEN))
+    # THE PATHS AND THE VERBS, READ OUT OF THE WORKER'S OWN SOURCE — not copied
+    # into a literal here, which is what this case used to be. A second list of
+    # the routes is a second answer to what the routes are, and it drifts
+    # silently: `/me/connections/signals` shipped on 2026-09-06 and this gate
+    # went on probing seven routes and calling itself complete, because the
+    # eighth was missing from BOTH the tuple above and the literal below and the
+    # two therefore agreed. The declaration is `CONNECTIONS_API_ROUTES` and
+    # `METHOD` in src/routes/connections_api.ts; this reads both.
+    declared_paths, declared_methods = declared_api_routes()
     cases.append(("leg1    the paths are the ones connections_api.ts declares",
-                  [p for _n, _m, p in CONNECTIONS_ROUTES] == [
-                      "/me/connections", "/me/connections/catalog", "/me/connections/writes",
-                      "/me/connections/disconnect", "/me/connections/sentences",
-                      "/me/connections/link", "/me/connections/skip"]))
+                  declared_paths is not None
+                  and sorted(p for _n, _m, p in CONNECTIONS_ROUTES) == sorted(declared_paths)))
+    cases.append(("leg1    THE CONTROL: the reader finds routes at all, so == is not vacuous",
+                  bool(declared_paths) and len(declared_paths or []) >= 7))
+    cases.append(("leg1    and each route is probed with the verb the Worker routes it by",
+                  declared_methods is not None
+                  and all(declared_methods.get(n) == m for n, m, _p in CONNECTIONS_ROUTES)))
+    cases.append(("leg12   the wrong-verb table probes the verb the Worker REFUSES",
+                  declared_methods is not None
+                  and all(declared_methods.get(n) not in (None, m)
+                          for n, m, _p, _w in METHOD_SHAPED_ROUTES)))
+    cases.append(("leg12   405 on both is green",
+                  leg_methods([(n, m, p, 405, w) for n, m, p, w in METHOD_SHAPED_ROUTES])[0]
+                  == GREEN))
+    cases.append(("leg12   a GET that RECORDS a decline is red, not a curiosity",
+                  leg_methods([("skip", "GET", "/me/connections/skip", 200, "why"),
+                               ("signals", "POST", "/me/connections/signals", 405, "why")])[0]
+                  == RED))
+    cases.append(("leg12   401 on the wrong verb is RED too — the method table is first",
+                  leg_methods([("skip", "GET", "/me/connections/skip", 401, "why"),
+                               ("signals", "POST", "/me/connections/signals", 405, "why")])[0]
+                  == RED))
+    cases.append(("leg12   a route that could not be reached is UNPROVEN, never green",
+                  leg_methods([("skip", "GET", "/me/connections/skip", None, "why"),
+                               ("signals", "POST", "/me/connections/signals", 405, "why")])[0]
+                  == UNPROVEN))
+
+    # ---- LEG 13, the soft snooze the live table may or may not accept -------
+    five = ("CREATE TABLE \"connect_nudges\" (\"state\" TEXT NOT NULL CHECK (\"state\" IN "
+            "('never_asked','asked','declined','connected','needs_reconnect')))")
+    six = five.replace("'declined',", "'declined_soft','declined',")
+    cases.append(("leg13   a five-state CHECK is RED: the shrug cannot be written",
+                  leg_soft_snooze(five, True)[0] == RED))
+    cases.append(("leg13   and the red names the file that repairs it",
+                  SOFT_SNOOZE_MIGRATION in leg_soft_snooze(five, True)[2]))
+    cases.append(("leg13   a six-state CHECK is green",
+                  leg_soft_snooze(six, True)[0] == GREEN))
+    cases.append(("leg13   an unreadable DDL is UNPROVEN, not a pass",
+                  leg_soft_snooze(None, True)[0] == UNPROVEN))
+    cases.append(("leg13   no D1 at all is UNPROVEN and says so",
+                  leg_soft_snooze(None, False)[0] == UNPROVEN))
+    cases.append(("leg13   THE CONTROL: the state it looks for is the one nudge.ts writes",
+                  soft_state_in_worker_source()))
 
     # ---- LEG 3, the catalog ------------------------------------------------
     listed = {"status": 200, "items": 4, "message": None, "json": True}
@@ -2522,8 +2878,22 @@ def report(code: int, rows: list) -> None:
         print(f"  [{mark}] {name.ljust(width)} {detail}")
     print("  " + "-" * (width + 30))
     if code == RED:
-        print("  NOBODY CAN CONNECT AN APP. Work the first red leg — the legs are in")
-        print("  chain order and a lower one cannot be measured over a broken higher one.")
+        # WHICH RED, and it is not a detail. Legs 1-11 are the CONNECT chain, in
+        # chain order: a red one there means somebody who wants to connect an app
+        # cannot, and the lower legs cannot be measured over it. Legs 12 and 13
+        # are about the other half of the same screen — the verbs those doors
+        # refuse, and whether a person's "no" can be recorded as the shrug it is.
+        # Printing "nobody can connect an app" over a red 13 would be a false
+        # sentence at the bottom of a gate whose whole job is not writing those.
+        chain = [name for mark, name, _d in rows
+                 if mark == BAD and not name.strip().startswith(("12", "13"))]
+        if chain:
+            print("  NOBODY CAN CONNECT AN APP. Work the first red leg — the legs are in")
+            print("  chain order and a lower one cannot be measured over a broken higher one.")
+        else:
+            print("  A PERSON CAN CONNECT AN APP. What is red is what happens when they")
+            print("  say NO to one: the setup card's Skip cannot be recorded as the spec's")
+            print("  seven-day shrug, so it is refused outright rather than mis-recorded.")
         print("  The commands and the order are in "
               "research/2026-09-06-composio-connections-live.md\n")
     elif code == UNPROVEN:

@@ -1361,10 +1361,25 @@ export async function connectPageGo(
  * and the caller must be able to tell which one it just wrote.
  */
 export type DeclineOutcome =
-  | { state: "recorded"; level: 1 | 2 | 3; snooze_until: number; soft: boolean }
+  /**
+   * LEVEL 0 IS A REAL ANSWER HERE, and it is the setup card's answer. The spec
+   * gives an onboarding skip a seven-day soft snooze that is "not a real
+   * decline" (pages 21 and 25), so `recordDecline` leaves the ladder where it
+   * was and stamps `declined_soft`. The level on the wire is therefore 0 for
+   * exactly that shape, and `soft` says so in a second field so a caller need
+   * not infer a meaning from a number.
+   *
+   * The phone reads BOTH: `ConnectOnboardingPolicy.serverAgreedWithSkip` holds
+   * this route to the meaning its own card has, and a level that moved is the
+   * disagreement it refuses on.
+   */
+  | { state: "recorded"; level: 0 | 1 | 2 | 3; snooze_until: number; soft: boolean }
   /** The ladder was already at this rung and the snooze is still running. A
-   *  second tap, a refresh or a retry lands here and writes NOTHING. */
-  | { state: "already-declined"; level: 1 | 2 | 3; snooze_until: number }
+   *  second tap, a refresh or a retry lands here and writes NOTHING. Level 0
+   *  for the same reason as above: a second tap on a soft snooze is still a
+   *  soft snooze, and reporting it as level 1 would tell the phone the ladder
+   *  moved when nothing did. */
+  | { state: "already-declined"; level: 0 | 1 | 2 | 3; snooze_until: number }
   /** This owner already has this app connected, so there is no ask to refuse.
    *  Declining here would replace a live `connected` row with `declined` and
    *  the router would stop using a connection the person still has. */
@@ -1449,17 +1464,25 @@ export async function recordSkip(
   // ALREADY SAID, STILL STANDING. The ladder advances once per ask, not once
   // per tap: a refresh, a double tap or a retried POST must not walk somebody
   // from "ask me in a fortnight" to "never ask me again".
+  //
+  // BOTH REFUSAL STATES, because there are two and a second tap on either one
+  // must write nothing. `declined_soft` is level 0 by construction, so the
+  // `level >= 1` clause that guards the ladder cannot guard it — and without
+  // this branch a person tapping Skip twice would re-base their own seven days
+  // from the second tap, quietly lengthening a quiet they only asked for once.
+  const standing = current.state === "declined" || current.state === "declined_soft";
+  const rung = current.state === "declined_soft" ? 0 : current.level;
   if (
-    current.state === "declined"
+    standing
     && current.acted_at !== null
     && typeof current.snooze_until === "number"
     && Number.isFinite(current.snooze_until)
     && who.at < current.snooze_until
-    && current.level >= 1
+    && (current.state === "declined_soft" || current.level >= 1)
   ) {
     return {
       state: "already-declined",
-      level: current.level as 1 | 2 | 3,
+      level: rung as 0 | 1 | 2 | 3,
       snooze_until: current.snooze_until,
     };
   }
@@ -1477,9 +1500,15 @@ export async function recordSkip(
   }
   return {
     state: "recorded",
-    level: next.level as 1 | 2 | 3,
+    level: next.level as 0 | 1 | 2 | 3,
     snooze_until: Number(next.snooze_until),
-    soft: next.trigger === "onboarding",
+    // THE STATE THE LADDER ACTUALLY WROTE, not the trigger that produced it.
+    // Until 2026-09-06 this line read `next.trigger === "onboarding"`, which is
+    // a fact about the MOMENT and answered `true` for a row the same function
+    // had just advanced to level 2 — so the one field naming a soft snooze said
+    // "soft" over a hard decline. `recordDecline` is the only thing that knows
+    // which branch it took, and this is it saying so.
+    soft: next.state === "declined_soft",
   };
 }
 

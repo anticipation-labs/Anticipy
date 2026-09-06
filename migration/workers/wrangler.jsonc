@@ -211,8 +211,41 @@
   // not need a code change. Do not instead move the connect ask onto the
   // nightly trigger — an ask that lands at 04:17 UTC is the 3am text the policy
   // exists to prevent.
+  //
+  // ==========================================================================
+  // HELD BACK AGAIN ON 2026-09-06, AND THIS TIME THE REASON IS A MEASUREMENT.
+  //
+  // The paragraphs above were written when the line went back in, and the
+  // commit that carried them (ed12043d) was never deployed. So the argument for
+  // turning it on has never actually been tested against production, while the
+  // fact underneath it has changed: the HQ reminder sweep has now been dark
+  // since 2026-09-05, which is longer than any of its own claim windows.
+  //
+  // WHAT THE LIVE WORKER ACTUALLY HAS, read from the Cloudflare API rather than
+  // from this file, on 2026-09-06:
+  //
+  //   GET /accounts/…/workers/scripts/anticipy-api/schedules
+  //   -> { "schedules": [ { "cron": "17 4 * * *" } ] }
+  //
+  // One trigger. So `*/5 * * * *` sitting in this file is not "already on" — it
+  // is a change that the next deploy would make, and the first tick after it
+  // would run `sweep(env)` against a backlog of reminders and follow-ups that
+  // came due while nothing was running. That is a burst of real text messages
+  // to the team, sent all at once, for events that are days old.
+  //
+  // THAT IS THE OWNER'S CALL AND NOT A DEPLOY'S SIDE EFFECT. Restoring it is
+  // one line and no code change:
+  //
+  //     "crons": ["*/5 * * * *", "17 4 * * *"]
+  //
+  // The connect-ask half of the trigger (`connectAsks`) is bounded by its own
+  // policy and would send nothing today — `app_usage_signals` is empty in
+  // production, measured the same day — so nothing in the connections work
+  // needs this line. It is the HQ sweep, and only the HQ sweep, that a yes here
+  // starts.
+  // ==========================================================================
   "triggers": {
-    "crons": ["*/5 * * * *", "17 4 * * *"]
+    "crons": ["17 4 * * *"]
   },
 
   // --------------------------------------------------------------------------

@@ -70,6 +70,23 @@ LIVE_404 = (404, {"content-type": "application/json"},
 REFUSED = (401, JSON_H, '{"ok":false,"message":"Sign in first."}')
 #: connections_api.ts NOT_A_ROUTE: the prefix is routed, this path is not a leg.
 NOT_A_LEG = (404, JSON_H, '{"ok":false,"message":"There\'s nothing at this address."}')
+#: What a real route answers to the verb it does not take. Measured against
+#: production on 2026-09-06 after the deploy: `GET /me/connections/skip` and
+#: `POST /me/connections/signals` both answer 405 with an empty body, because
+#: connections_api.ts consults its METHOD table before it consults the
+#: credential. The empty body is part of the measurement and not laziness — the
+#: Worker sends none.
+WRONG_VERB = (405, {}, "")
+#: The `connect_nudges` DDL a live D1 hands back, in the two shapes that matter
+#: to leg 13: the five-state CHECK production shipped with, and the six-state one
+#: that can hold the spec's `declined_soft`. Only the part the leg reads is
+#: reproduced; the rest of the column list is scenery.
+NUDGES_DDL_FIVE = (
+    'CREATE TABLE "connect_nudges" ("user_id" TEXT NOT NULL, "toolkit" TEXT NOT NULL, '
+    '"state" TEXT NOT NULL CHECK ("state" IN '
+    "('never_asked','asked','declined','connected','needs_reconnect')), "
+    '"level" INTEGER NOT NULL DEFAULT 0)')
+NUDGES_DDL_SIX = NUDGES_DDL_FIVE.replace("'declined',", "'declined_soft','declined',")
 #: `refuse(503, CATALOG_UNREACHABLE)` — what `?q=` answers when the search port
 #: is unfilled on the deployed build, and also when the catalog refuses. Measured
 #: 2026-09-06 06:17: no filler existed at all. A `provider.search` was written
@@ -149,7 +166,7 @@ class FakeWorker:
 
     def __init__(self, page=None, code=None, routes=REFUSED, control=LIVE_404,
                  listing=None, catalog=CATALOG_503, way_in=False, only=None,
-                 webhook=None, webhook_control=None):
+                 webhook=None, webhook_control=None, wrong_verb=WRONG_VERB):
         self.page = page              # (status, headers, body) or None -> sign-in
         self.code = code              # the /code control page, or None -> real one
         self.routes = routes          # the answer for all six /me/connections legs
@@ -164,6 +181,10 @@ class FakeWorker:
         # one was PRESENTED, which is the only thing a fake honestly can.
         self.webhook = webhook
         self.webhook_control = webhook_control or (404, {}, "not found")
+        # LEG 12. What every route in `METHOD_SHAPED_ROUTES` answers to the verb
+        # it must refuse. A test that wants the failure passes the 200 or the
+        # 401; a working deployment answers 405.
+        self.wrong_verb = wrong_verb
         self.seen = []
         self.token = None
 
@@ -197,6 +218,15 @@ class FakeWorker:
             return self.listing
         if path == "/me/connections/catalog" and (headers or {}).get("Authorization"):
             return self.catalog
+        # LEG 12 — THE WRONG VERB, answered BEFORE the path table below.
+        #
+        # A fake that answered the routes' 401 to every verb would let a gate
+        # that never checks the method report green about a route a prefetcher
+        # can reach. The method table in the Worker is consulted before the
+        # credential, so the honest answer to the wrong verb is 405 and it does
+        # not depend on who is asking.
+        if any(path == p and method == m for _n, m, p, _w in M.METHOD_SHAPED_ROUTES):
+            return self.wrong_verb
         if any(path == p for _n, _m, p in M.CONNECTIONS_ROUTES):
             return self.routes
         raise AssertionError(f"the gate asked for {path!r}, which the fake does not serve")
@@ -269,7 +299,13 @@ class FakeD1:
     """
 
     def __init__(self, tables=(), connections=None, rows=None, fail_on=None,
-                 asked=None, due=0):
+                 asked=None, due=0, nudges_ddl=NUDGES_DDL_SIX):
+        # LEG 13. The `connect_nudges` DDL this D1 hands back. Defaults to the
+        # SIX-state CHECK — the one that can hold the spec's soft snooze —
+        # because every test that does not care about leg 13 is describing a
+        # deployment that works, and a fixture whose default is the broken shape
+        # would make six unrelated tests assert a red they are not about.
+        self.nudges_ddl = nudges_ddl
         self.tables = list(tables)
         self.connections = connections or {"rows_n": 0, "owners_n": 0}
         self.statements = []
@@ -288,6 +324,14 @@ class FakeD1:
             if needle in sql:
                 raise M.D1Unavailable(f"refused: {needle}")
         if "sqlite_master" in sql:
+            # TWO DIFFERENT QUESTIONS OF ONE TABLE, and answering them the same
+            # way is how leg 13 came to read `""` as a DDL and call every
+            # deployment broken. Leg 2 asks WHICH tables exist; leg 13 asks what
+            # ONE of them is declared as.
+            if '"sql"' in sql or "SELECT sql" in sql:
+                if "connect_nudges" not in self.tables:
+                    return []
+                return [{"sql": self.nudges_ddl}] if self.nudges_ddl is not None else []
             return [{"name": t} for t in self.tables]
         if sql.startswith("INSERT INTO \"connect_links\""):
             # Parsed out of the statement rather than handed over: a fake that
@@ -1023,7 +1067,13 @@ def test_the_control_page_is_asked_for_the_same_token_as_the_page():
     worker = a_deployed_worker()
     M.run(http=worker, sql=FakeD1(tables=M.TABLES), read_only=True,
           vendor=vendor_answering(), owner="sxkotd1h02qb6gw")
-    tokens = {r["path"].split("/")[2] for r in worker.seen if r["path"].startswith("/c/")}
+    # LEG 14's PROBE IS EXCLUDED BY NAME, not by loosening the count. It asks a
+    # DELIBERATELY UNMINTED token ("A" * 43) on each host the phone would open,
+    # because its question is whose code answers rather than what a real link
+    # does — and a leg that shared the page token would be spending somebody's
+    # single-use link to find out which Worker is on a hostname.
+    tokens = {r["path"].split("/")[2] for r in worker.seen
+              if r["path"].startswith("/c/") and r["path"].split("/")[2] != "A" * 43}
     assert len(tokens) == 1, tokens
 
 
@@ -1037,10 +1087,18 @@ def test_the_page_is_fetched_once_per_run_and_never_with_a_credential():
           vendor=vendor_answering(), owner="sxkotd1h02qb6gw",
           credential="an-owner-token")
     page_requests = [r for r in worker.seen
-                     if r["path"].startswith("/c/") and not r["path"].endswith("/code")]
+                     if r["path"].startswith("/c/") and not r["path"].endswith("/code")
+                     and r["path"].split("/")[2] != "A" * 43]
     assert len(page_requests) == 1
     assert page_requests[0]["method"] == "GET"
     assert not page_requests[0]["headers"].get("Authorization")
+    # AND NO /c/ REQUEST ANYWHERE IN THE RUN CARRIES ONE, which is stronger than
+    # what this test asserted before leg 14 existed: the rule is about the
+    # connect page, not about one probe, and a second prober is exactly how a
+    # rule scoped to one call site stops holding.
+    for r in worker.seen:
+        if r["path"].startswith("/c/"):
+            assert not r["headers"].get("Authorization"), r["path"]
 
 
 # ===========================================================================
@@ -1213,7 +1271,13 @@ def test_an_uncountable_connections_table_claims_nothing():
 def test_the_measured_state_of_2026_09_06_at_0408():
     """The whole chain as production stood the morning this gate was written:
     nothing deployed, no tables, a working vendor key, nothing connected."""
+    # `wrong_verb=LIVE_404` because nothing was deployed at all that morning:
+    # the wrong verb on an absent route is the router's generic 404, not the 405
+    # a real route sends. Leaving the fake's 405 default here would have this
+    # test assert that a Worker serving NOTHING nevertheless had a correct method
+    # table, which is the kind of green a fixture invents rather than measures.
     code, rows = M.run(http=FakeWorker(page=LIVE_404, routes=LIVE_404,
+                                       wrong_verb=LIVE_404,
                                        webhook=lambda _h: LIVE_404), sql=FakeD1(),
                        vendor=vendor_answering(), owner="sxkotd1h02qb6gw")
     assert marks(rows) == [
@@ -1228,6 +1292,9 @@ def test_the_measured_state_of_2026_09_06_at_0408():
         M.INFO,   # 9 the connections table could not be counted
         M.BAD,    # 10 the webhook route is not deployed either
         M.INFO,   # 11 connect_nudges could not be counted either
+        M.BAD,    # 12 the wrong-verb doors 404 like everything else that morning
+        M.INFO,   # 13 no connect_nudges to read a CHECK constraint off
+        M.BAD,    # 14 /c/ was the router's 404 that morning, on every host
     ], details(rows)
     assert code == M.RED
 
@@ -1260,7 +1327,11 @@ def test_everything_working_is_the_only_way_to_exit_zero():
                        vendor=vendor_answering(), owner="sxkotd1h02qb6gw",
                        credential="an-owner-token", now_ms=now,
                        webhook=a_webhook_secret())
-    assert marks(rows) == [M.OK] * 11, details(rows)
+    # THIRTEEN, not eleven. Legs 12 and 13 arrived on 2026-09-06 with the
+    # setup card's two new doors; a roll-up that kept counting to eleven would
+    # go on calling a deployment complete while the newest half of it was
+    # unmeasured, which is the exact shape leg 1's own signals hole had.
+    assert marks(rows) == [M.OK] * 14, details(rows)
     assert code == M.GREEN
 
 
@@ -1274,6 +1345,270 @@ def test_one_unmeasured_leg_is_enough_to_withhold_green():
                        owner="sxkotd1h02qb6gw", credential="an-owner-token", now_ms=now)
     assert code == M.UNPROVEN
     assert marks(rows)[8] == M.INFO
+
+
+# ===========================================================================
+# LEG 12 — the wrong verb, which is the one discriminator that costs nothing
+# ===========================================================================
+# THE FAILURE THIS GUARDS. `POST /me/connections/skip` records a person's
+# decline. If the route ever took a GET, an iOS link preview, a message-app
+# unfurler or a browser prefetch would silence an app on somebody's behalf —
+# and the failure is INVISIBLE, because what it produces is somebody quietly
+# never being asked again. `GET /me/connections/signals` is the mirror: a read
+# route that took a write would let anybody with a session add weight to their
+# own evidence table, and weight is what eventually licenses interrupting
+# somebody.
+#
+# It is a separate leg from 1 because leg 1's control is a PATH. A Worker that
+# answered 401 to every path AND every verb satisfies leg 1 and its control
+# together; only the method can tell them apart, and it needs no credential.
+
+
+def test_both_new_doors_must_answer_405_and_401_is_not_good_enough():
+    """405 rather than 401, and the difference is not pedantry: the Worker's
+    method table is consulted BEFORE the credential, so a 401 on the wrong verb
+    means the route is answering "is this verb allowed?" with "sign in and find
+    out" — and a signed-in prefetcher then gets through."""
+    for status in (200, 401, 404, 500):
+        code, rows = M.run(http=a_deployed_worker(wrong_verb=(status, {}, "")),
+                           sql=d1_with_a_working_connect_links(), vendor=vendor_answering(),
+                           owner="sxkotd1h02qb6gw", read_only=True)
+        assert marks(rows)[11] == M.BAD, f"{status} on the wrong verb passed leg 12"
+        assert code == M.RED
+
+
+def test_leg_12_probes_the_verb_the_worker_actually_refuses():
+    """THE CONTROL FOR THE PROBE ITSELF. A leg that asked `POST /skip` — the
+    verb that route DOES take — would get a 401 and report red about a working
+    Worker, or, worse, be quietly changed to accept 401 and then prove nothing.
+    The verbs come out of connections_api.ts's own METHOD table."""
+    _paths, methods = M.declared_api_routes()
+    assert methods, "the Worker's METHOD table could not be read at all"
+    for name, method, _path, _why in M.METHOD_SHAPED_ROUTES:
+        assert methods.get(name) is not None, f"{name} is not a declared route"
+        assert methods[name] != method, (
+            f"leg 12 probes {method} /me/connections/{name}, which is the verb the Worker "
+            "ROUTES it by — so a 405 would be the bug and a 200 would be correct")
+
+
+def test_leg_12_asks_each_door_exactly_once_and_without_a_credential():
+    """No token on these. The point is what the route does BEFORE it knows who
+    is asking, and sending a credential would measure a different question."""
+    worker = a_deployed_worker()
+    M.run(http=worker, sql=d1_with_a_working_connect_links(), vendor=vendor_answering(),
+          owner="sxkotd1h02qb6gw", credential="an-owner-token", read_only=True)
+    for _name, method, path, _why in M.METHOD_SHAPED_ROUTES:
+        asked = worker.asked(path, method)
+        assert len(asked) == 1, f"{method} {path} was asked {len(asked)} time(s)"
+        assert not asked[0]["headers"].get("Authorization"), \
+            f"leg 12 sent a credential to {method} {path}, which measures the wrong question"
+
+
+# ===========================================================================
+# LEG 13 — can a person's "no" be recorded as the shrug it is
+# ===========================================================================
+# THE DEFECT, live as this is written. Spec page 21: "Skip records
+# `declined_soft` with a 7-day snooze, not a real decline." Until 2026-09-06 the
+# Worker wrote a REAL decline with a shorter clock — level 1, which raises the
+# ask threshold from 0.50 to 0.80 against a strict comparison and permanently
+# silences in_task (0.80), onboarding (0.70) and repeated_use (0.60). One tap on
+# a setup card ended the conversation about that app forever.
+#
+# The Worker now writes `declined_soft`. Live D1's CHECK constraint still lists
+# five states and SQLite cannot widen a CHECK, so the table needs a rebuild. This
+# leg is RED until it happens, which is what keeps the two halves honest: the
+# phone's `ConnectOnboardingPolicy.serverRecordsTheSoftSnooze` stays false while
+# it is red, so nobody's "no" is dropped on the floor in the meantime.
+
+
+def test_the_five_state_check_production_shipped_with_is_red():
+    code, rows = M.run(http=a_deployed_worker(),
+                       sql=FakeD1(tables=M.TABLES, connections={"rows_n": 2, "owners_n": 1},
+                                  asked={"asked_n": 1, "newest": 0.0},
+                                  nudges_ddl=NUDGES_DDL_FIVE),
+                       vendor=vendor_answering(), owner="sxkotd1h02qb6gw", read_only=True)
+    assert marks(rows)[12] == M.BAD, details(rows)
+    assert code == M.RED
+    # AND IT HANDS OVER THE REPAIR. A red leg that describes a problem without
+    # naming the file that fixes it is a leg somebody learns to scroll past.
+    assert M.SOFT_SNOOZE_MIGRATION in rows[12][2]
+    assert "wrangler d1 execute" in rows[12][2]
+
+
+def test_the_six_state_check_is_green():
+    """THE CONTROL. Without it, a leg that returned RED unconditionally would
+    pass the test above and prove nothing."""
+    code, rows = M.run(http=a_deployed_worker(),
+                       sql=d1_with_a_working_connect_links(), vendor=vendor_answering(),
+                       owner="sxkotd1h02qb6gw", read_only=True)
+    assert marks(rows)[12] == M.OK, details(rows)
+    assert code != M.RED
+
+
+def test_a_ddl_that_cannot_be_read_is_unproven_and_never_a_pass():
+    """"I could not read the constraint" and "the constraint is fine" are
+    different facts, and only one of them is evidence."""
+    fake = FakeD1(tables=M.TABLES, connections={"rows_n": 2, "owners_n": 1},
+                  asked={"asked_n": 1, "newest": 0.0}, nudges_ddl=None)
+    _code, rows = M.run(http=a_deployed_worker(), sql=fake, vendor=vendor_answering(),
+                        owner="sxkotd1h02qb6gw", read_only=True)
+    assert marks(rows)[12] == M.INFO, details(rows)
+
+
+def test_the_state_leg_13_looks_for_is_the_one_the_worker_writes():
+    """THE CONTROL FOR THE WORD ITSELF. Leg 13 greps a live CHECK constraint for
+    a string. If the Worker were changed to write a different one, the leg would
+    go on reporting green about a state nothing produces — a gate measuring its
+    own vocabulary."""
+    assert M.soft_state_in_worker_source(), (
+        f"nudge.ts no longer writes state: \"{M.SOFT_SNOOZE_STATE}\", so leg 13 is checking "
+        "live D1 for a value this Worker never sends")
+
+
+def test_a_red_soft_snooze_does_not_claim_nobody_can_connect_an_app():
+    """THE SENTENCE AT THE BOTTOM HAS TO BE TRUE. Legs 1-11 are the connect
+    chain; 12 and 13 are about the other half of the same screen. Printing
+    "NOBODY CAN CONNECT AN APP" over a red 13 would be a false sentence at the
+    foot of a gate whose whole job is not writing those."""
+    import io
+    import contextlib
+    code, rows = M.run(http=a_deployed_worker(),
+                       sql=FakeD1(tables=M.TABLES, connections={"rows_n": 2, "owners_n": 1},
+                                  asked={"asked_n": 1, "newest": 0.0},
+                                  nudges_ddl=NUDGES_DDL_FIVE),
+                       vendor=vendor_answering(), owner="sxkotd1h02qb6gw", read_only=True)
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        M.report(code, rows)
+    printed = out.getvalue()
+    assert "NOBODY CAN CONNECT AN APP" not in printed, printed[-600:]
+    assert "say NO to one" in printed, printed[-600:]
+
+    # THE CONTROL: a red in the chain itself still says it, or the branch above
+    # has quietly deleted the gate's loudest sentence.
+    chain_red, chain_rows = M.run(http=FakeWorker(page=LIVE_404, routes=LIVE_404,
+                                                  wrong_verb=LIVE_404,
+                                                  webhook=lambda _h: LIVE_404),
+                                  sql=FakeD1(), vendor=vendor_answering(),
+                                  owner="sxkotd1h02qb6gw")
+    out2 = io.StringIO()
+    with contextlib.redirect_stdout(out2):
+        M.report(chain_red, chain_rows)
+    assert "NOBODY CAN CONNECT AN APP" in out2.getvalue()
+
+
+# ===========================================================================
+# LEG 14 — the host we mint on is the host that answers
+# ===========================================================================
+# THE DEFECT THIS FOUND, on 2026-09-06, minutes after a deploy that reported
+# success and WAS correct:
+#
+#   GET https://anticipy.ai/c/<43 chars>
+#     -> 301 https://www.anticipy.ai/c/<43 chars>
+#     -> 307 https://www.anticipy.ai/
+#     -> 200  the marketing home page
+#
+# `anticipy.ai/c/*` is a registered Worker route pointing at `anticipy-api`
+# (confirmed against the Cloudflare API for the zone; `wrangler deploy` prints it
+# back on every deploy). It never runs: a zone-level apex-to-www redirect fires
+# in FRONT of the route. A route can be present, correct, printed by the deploy
+# tool, and dead.
+#
+# It costs nothing today because links are minted on `api.anticipy.ai`, which
+# works. It is one env var from costing everything, and that env var points at
+# the host the spec (page 26) and `words.ts` CONNECT_LINK_PREFIX both name.
+
+
+def _hosts_answering(mapping, default=REFUSED):
+    """An http transport that answers by HOST rather than by path — the only
+    thing FakeWorker cannot do, and the whole point of this leg."""
+    import urllib.parse as _u
+
+    def http(url, method="GET", headers=None, body=None):
+        host = _u.urlsplit(url).netloc.lower()
+        if host in mapping:
+            return mapping[host]
+        return default
+    return http
+
+
+def test_the_minting_host_serving_the_marketing_site_is_red():
+    """The failure in its live shape: the host links are minted on answers with
+    somebody else's HTML. Every connect link in every text goes there."""
+    site = (200, {"content-type": "text/html; charset=utf-8"}, "<!DOCTYPE html><html>…")
+    code, _mark, sentence = M.leg_link_host(
+        "api.anticipy.ai", {"api.anticipy.ai": M.classify_c_response(*site)[0]},
+        ["api.anticipy.ai"])
+    assert code == M.RED
+    assert "DO NOT OPEN THE CONNECT PAGE" in sentence
+
+
+def test_a_host_the_phone_would_open_that_does_not_serve_the_page_is_named():
+    """GREEN, because links work — and the sentence has to carry the trap, or
+    the next person moves CONNECT_BASE_URL to the host the spec names and every
+    text goes to a marketing page with the board still all green."""
+    code, _mark, sentence = M.leg_link_host(
+        "api.anticipy.ai",
+        {"api.anticipy.ai": "connect-page", "anticipy.ai": "unreadable"},
+        ["api.anticipy.ai", "anticipy.ai"])
+    assert code == M.GREEN
+    assert "anticipy.ai" in sentence
+    assert "CONNECT_BASE_URL" in sentence
+
+
+def test_both_hosts_serving_the_page_says_so_without_a_warning():
+    """THE CONTROL. Without it, a leg that always appended the warning would
+    pass the test above and teach the reader to ignore it."""
+    code, _mark, sentence = M.leg_link_host(
+        "api.anticipy.ai",
+        {"api.anticipy.ai": "connect-page", "anticipy.ai": "connect-page"},
+        ["api.anticipy.ai", "anticipy.ai"])
+    assert code == M.GREEN
+    assert "DO NOT SERVE IT" not in sentence
+
+
+def test_a_minting_host_that_cannot_be_reached_is_unproven():
+    code, _mark, _s = M.leg_link_host("api.anticipy.ai", {"api.anticipy.ai": None},
+                                      ["api.anticipy.ai"])
+    assert code == M.UNPROVEN
+
+
+def test_leg_14_reads_the_phones_own_allowlist_rather_than_a_copy():
+    """THE CONTROL FOR THE HOST LIST. A gate holding its own copy of
+    `ConnectHandoff.connectLinkHosts` would go on checking the hosts it knew
+    about on the day it was written — and the trap this leg exists to catch is
+    precisely a host somebody adds to that allowlist."""
+    hosts = M.phone_link_hosts()
+    assert hosts, "ConnectHandoff.connectLinkHosts could not be read out of the Swift"
+    assert "api.anticipy.ai" in hosts
+
+
+def test_leg_14_probes_an_unminted_token_and_carries_no_credential():
+    """It must never spend somebody's single-use link to find out which Worker
+    is on a hostname, and it must not send a credential — the question is what
+    an anonymous person with a link gets."""
+    seen = []
+
+    def http(url, method="GET", headers=None, body=None):
+        seen.append((url, dict(headers or {})))
+        return REFUSED if "/me/" in url or "/c/" in url else LIVE_404
+
+    worker = a_deployed_worker()
+
+    def both(url, method="GET", headers=None, body=None):
+        import urllib.parse as _u
+        if _u.urlsplit(url).netloc.lower() != "api.anticipy.ai":
+            seen.append((url, dict(headers or {})))
+            return (200, {"content-type": "text/html"}, "<html>the website</html>")
+        return worker(url, method=method, headers=headers, body=body)
+
+    M.run(http=both, sql=d1_with_a_working_connect_links(), vendor=vendor_answering(),
+          owner="sxkotd1h02qb6gw", credential="an-owner-token", read_only=True)
+    off_host = [u for u, _h in seen]
+    assert off_host, "leg 14 never asked any host but the minting one"
+    for url, headers in seen:
+        assert url.endswith("/c/" + "A" * 43), url
+        assert not headers.get("Authorization"), url
 
 
 # ===========================================================================

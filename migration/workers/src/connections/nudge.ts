@@ -108,8 +108,10 @@ import type { StoredLink, StoreEnv } from "./store.ts";
 import {
   CONNECT_URL_BASE,
   LINK_TTL_MS,
+  MAX_PAGE_APPS,
   TOKEN_CHARS,
   connectUrl,
+  pageHandle,
   tokenFingerprint,
   tokenHandle,
 } from "../routes/connect.ts";
@@ -251,6 +253,17 @@ export interface NudgeStore {
   /** Insert. MUST reject a handle that already exists rather than overwrite. */
   put(row: StoredLink): Promise<void>;
   /**
+   * INSERT A WHOLE CONNECT PAGE, ALL OF IT OR NONE OF IT — the writer behind
+   * spec page 25's "One Connect button opens a multi-app connect page".
+   *
+   * `mintConnectPage` calls THIS and never `put` in a loop, and the difference
+   * is the only thing between "the apps you ticked" and "some of the apps you
+   * ticked, and nothing anywhere says which". `ConnectionsStore.putAll` is one
+   * D1 batch, i.e. one transaction, and it also refuses a mixed-owner batch and
+   * a duplicate handle before the database sees either.
+   */
+  putAll(rows: readonly StoredLink[]): Promise<void>;
+  /**
    * THE LEASE, WHEN THE STORE OWNS ONE. Optional today because store.ts has no
    * conditional write on `connect_nudges` — see `d1ClaimAsk`, which is the one
    * this Worker uses until it does. A store that implements it wins: it is
@@ -385,6 +398,17 @@ export interface MintedLink {
   /** What a log line MAY say about this link: the first 12 hex characters of
    *  its handle. Enough to correlate two lines, useless for redeeming one. */
   fingerprint: string;
+  /**
+   * THE APPS THIS ONE LINK CARRIES, in the order the page will draw them —
+   * which is the order the caller ticked them, canonicalised through the same
+   * `checkedSlug` the rows were written with.
+   *
+   * It is here so a caller can tell the person what they are about to see
+   * without re-deriving it, and so a route can echo it back to the phone. It
+   * carries NO token material: these are catalog slugs, safe in a log line, and
+   * the URL above remains the only carrier of the raw token.
+   */
+  toolkits: readonly string[];
 }
 
 /**
@@ -439,8 +463,67 @@ export async function mintConnectLink(
   alias: AccountAlias | null = null,
   injected?: NudgeDeps | null,
 ): Promise<MintedLink> {
+  return mintConnectPage(env, owner, [toolkit], alias, injected);
+}
+
+/**
+ * ONE CONNECT BUTTON, ONE LINK, HOWEVER MANY APPS WERE TICKED — spec page 25's
+ * "One Connect button opens a multi-app connect page", and the half that was
+ * missing until 2026-09-06.
+ *
+ * routes/connect.ts has drawn, walked, tapped, called back and skipped a page of
+ * apps since the round before this one; nothing could MAKE one, because the only
+ * minter in the Worker wrote a single row. So the phone asked for a link per
+ * ticked app and walked people through N browser round trips for one decision.
+ * This is the writer for the reader that already existed.
+ *
+ * WHAT A PAGE IS: N ordinary `connect_links` rows — same table, same columns,
+ * same single-use gate, same exactly-once lease — at handles derived from the
+ * ONE token the person holds (`pageHandle`). Nothing is added to the schema and
+ * no row carries a list.
+ *
+ * A ONE-APP PAGE IS BYTE-IDENTICAL TO WHAT SHIPPED. `pageHandle(token, 0)` IS
+ * `tokenHandle(token)`, and `putAll([row])` is what `put(row)` already delegates
+ * to, so every link in the wild resolves exactly as it did. That is why
+ * `mintConnectLink` above is now one line: two minters would be two answers to
+ * what a token is worth, and they would disagree the first time one was edited.
+ *
+ * ALL OF IT OR NONE OF IT. `putAll` is one D1 batch — one transaction — because
+ * a page written a row at a time can fail halfway and leave somebody looking at
+ * a page missing the apps they ticked, with nothing anywhere saying so. It also
+ * refuses a mixed-owner batch and a duplicate handle before the database sees
+ * either.
+ *
+ * IT REFUSES RATHER THAN TRUNCATES. A caller asking for thirteen apps has a bug
+ * or a UI that let somebody tick thirteen; quietly minting the first twelve
+ * would drop an app the person chose and tell nobody. Same number as the
+ * reader's ceiling, imported from it, so the two cannot disagree about how long
+ * a page may be.
+ *
+ * DUPLICATES ARE REFUSED TOO, and by slug rather than by handle, so the message
+ * names the app instead of a hash. Two rows for one toolkit is a page that
+ * offers the same card twice and a second single-use row nothing will ever
+ * spend.
+ */
+export async function mintConnectPage(
+  env: NudgeEnv,
+  owner: OwnerId | string,
+  toolkits: readonly (Toolkit | string)[],
+  alias: AccountAlias | null = null,
+  injected?: NudgeDeps | null,
+): Promise<MintedLink> {
   const deps = injected ?? WIRING(env);
-  if (!deps || !deps.store || typeof deps.store.put !== "function") {
+  // BOTH PORTS, and `put` is not vestigial here. A store wired before this file
+  // learned about pages has `put` and no `putAll`; one wired by a caller that
+  // read only the page half could have `putAll` and no `put`. Either is the same
+  // wiring fault and must reach an operator by name, rather than as a TypeError
+  // three lines further down that `sendConnectAsk` would swallow as "the vendor
+  // is having a bad day".
+  if (
+    !deps || !deps.store
+    || typeof deps.store.put !== "function"
+    || typeof deps.store.putAll !== "function"
+  ) {
     throw new Error(
       "no connect-link store wired: a link cannot be minted without somewhere to bind it, "
         + "and a link nobody bound is a token that redeems to nothing. See installNudgeWiring().",
@@ -450,25 +533,47 @@ export async function mintConnectLink(
   // runs. A display name reaching here binds the connection to the wrong
   // person, which is the worst failure this product has and has happened once.
   const who = ownerId(typeof owner === "string" ? owner : String(owner ?? ""));
-  const slug = checkedSlug(toolkit);
+
+  if (!Array.isArray(toolkits) || toolkits.length === 0) {
+    throw new Error("a connect page needs at least one app; got none");
+  }
+  if (toolkits.length > MAX_PAGE_APPS) {
+    throw new Error(
+      `a connect page carries at most ${MAX_PAGE_APPS} apps and ${toolkits.length} were asked `
+        + "for; refusing rather than dropping the ones past the end",
+    );
+  }
+  const slugs = toolkits.map(checkedSlug);
+  const seen = new Set<string>();
+  for (const slug of slugs) {
+    if (seen.has(slug)) {
+      throw new Error(`a connect page names ${JSON.stringify(slug)} twice`);
+    }
+    seen.add(slug);
+  }
 
   const now = deps.now ? deps.now() : Date.now();
   const token = newToken();
-  const row: StoredLink = {
-    token_handle: await tokenHandle(token),
-    user_id: who,
-    toolkit: slug,
-    alias: alias ?? null,
-    expires_at: now + LINK_TTL_MS,
-    used_at: null,
-    completed_at: null,
-  };
-  await deps.store.put(row);
+  const expires = now + LINK_TTL_MS;
+  const rows: StoredLink[] = [];
+  for (let app = 0; app < slugs.length; app++) {
+    rows.push({
+      token_handle: await pageHandle(token, app),
+      user_id: who,
+      toolkit: slugs[app],
+      alias: alias ?? null,
+      expires_at: expires,
+      used_at: null,
+      completed_at: null,
+    });
+  }
+  await deps.store.putAll(rows);
 
   return {
     url: connectUrl(token, baseOf(env, deps)),
-    expires_at: row.expires_at,
+    expires_at: expires,
     fingerprint: await tokenFingerprint(token),
+    toolkits: slugs,
   };
 }
 
@@ -683,6 +788,14 @@ function whatIsMissing(
  *   `nudge.level === 0`      Once. Somebody who has already been down the
  *                            ladder and is skipping a card is on the ladder;
  *                            the soft path would walk them back UP it.
+ *   `nudge.state !== "declined_soft"`
+ *                            AND ONCE MEANS ONCE. Without this clause a row
+ *                            whose trigger never moves off `onboarding` is soft
+ *                            forever: every skip re-buys seven days at level 0,
+ *                            the ladder never starts, and somebody who has now
+ *                            said no twice keeps being asked every week until
+ *                            they stop using the product. The SECOND no is a
+ *                            real L1 — which is exactly what a second no is.
  *
  * Anything else is the ordinary ladder, unchanged to the byte.
  */
@@ -691,7 +804,10 @@ export function recordDecline(
   at: number,
   how: "said_no" | "silence",
 ): ConnectNudge {
-  const soft = how === "said_no" && nudge.trigger === "onboarding" && nudge.level === 0;
+  const soft = how === "said_no"
+    && nudge.trigger === "onboarding"
+    && nudge.level === 0
+    && nudge.state !== "declined_soft";
   if (soft) {
     return {
       ...nudge,

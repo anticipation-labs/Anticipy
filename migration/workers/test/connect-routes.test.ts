@@ -109,7 +109,15 @@ import {
 // hold its own copy of FORBIDDEN_TERMS for the register scan, which is two
 // copies of a list and no way to notice when they part company.
 import { FORBIDDEN_TERMS, forbiddenTermIn } from "../src/connections/words.ts";
-import type { ConnectNudge } from "../../../spike/two-hands/src/connections/contract.ts";
+// THE LADDER ITSELF, so the soft-snooze checks below can put a row to the two
+// functions that actually decide what a skip costs, rather than only to the
+// route that writes one. `recordDecline` is what the route calls; `shouldAsk` is
+// the thing whose answer the person eventually feels.
+import { recordDecline, shouldAsk } from "../src/connections/nudge.ts";
+import type {
+  ConnectNudge,
+  NudgeTrigger,
+} from "../../../spike/two-hands/src/connections/contract.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const SOURCE = readFileSync(join(here, "..", "src", "routes", "connect.ts"), "utf8");
@@ -1684,6 +1692,14 @@ await check("Skip does NOT spend the link — changing your mind still works", a
 await check("THE ROW'S OWN MOMENT decides the snooze, not the surface that asked", async () => {
   // Onboarding: the ask engine wrote `trigger: onboarding`, so this is the
   // spec's seven-day SOFT snooze rather than a real decline (page 21).
+  //
+  // UNTIL 2026-09-06 THIS CHECK ASSERTED `softRow.level === 1` AND PASSED, which
+  // is how the defect survived a suite: it read the SNOOZE and never the LADDER,
+  // so "not a real decline" was measured entirely by a number of days. The row
+  // it was passing over had `state: "declined", level: 1`, and level 1 raises
+  // LEVEL_THRESHOLD from 0.50 to 0.80 against a strict `score > threshold` —
+  // silencing in_task (0.80), onboarding (0.70) and repeated_use (0.60) for that
+  // app forever. Seven quiet days on paper, permanent silence in fact.
   const soft = await rig();
   soft.store.nudges.set(`${OWNER}::zellibrix`, {
     user_id: OWNER as never, toolkit: "zellibrix" as never, state: "asked", level: 0,
@@ -1693,7 +1709,15 @@ await check("THE ROW'S OWN MOMENT decides the snooze, not the surface that asked
   await bodyOf(await connectRoute(skipReq(soft.token, asHeader(soft.ownerToken)),
     soft.env, soft.deps), "skip soft");
   const softRow = nudgeFor(soft)!;
-  assert.equal(softRow.level, 1);
+  assert.equal(softRow.level, 0,
+    "a skipped setup card climbed the decline ladder: page 21 says it records declined_soft "
+    + "and is NOT a real decline, and a rung is the only thing that raises the ask threshold");
+  assert.equal(softRow.state, "declined_soft",
+    "the soft snooze must be its own state — `declined` at level 0 is a row whatIsMissing "
+    + "refuses outright, so the owner would never be asked about this app again");
+  assert.equal(softRow.acted_at, NOW,
+    "they touched the glass; a soft snooze that does not stamp acted_at is indistinguishable "
+    + "from a card nobody was ever shown");
   assert.equal((softRow.snooze_until as number) - NOW, 7 * DAY,
     "a skipped setup card is not a real decline and must not carry a real decline's snooze");
 
@@ -1708,8 +1732,130 @@ await check("THE ROW'S OWN MOMENT decides the snooze, not the surface that asked
   await bodyOf(await connectRoute(skipReq(real.token, asHeader(real.ownerToken)),
     real.env, real.deps), "skip real");
   const realRow = nudgeFor(real)!;
+  assert.equal(realRow.level, 1, "an in-task decline IS a rung and must still climb");
+  assert.equal(realRow.state, "declined");
   assert.equal((realRow.snooze_until as number) - NOW, 14 * DAY);
   assert.notEqual(softRow.snooze_until, realRow.snooze_until);
+});
+
+await check("THE SOFT SNOOZE APPLIES ONCE, AND ONLY FROM THE BOTTOM OF THE LADDER", async () => {
+  // Somebody already at level 1 who meets a setup card is ON the ladder. Reading
+  // this as soft would walk them back DOWN it — the shape that lets a client
+  // send `onboarding` on every skip and never accumulate a decline at all.
+  const r = await rig();
+  r.store.nudges.set(`${OWNER}::zellibrix`, {
+    user_id: OWNER as never, toolkit: "zellibrix" as never, state: "declined", level: 1,
+    snooze_until: NOW - DAY, trigger: "onboarding", sent_at: NOW - 30 * DAY,
+    acted_at: NOW - 30 * DAY, channel: "ios",
+  });
+  await bodyOf(await connectRoute(skipReq(r.token, asHeader(r.ownerToken)), r.env, r.deps),
+    "skip from level 1");
+  const row = nudgeFor(r)!;
+  assert.equal(row.level, 2, "an onboarding-triggered row already at level 1 must climb to 2");
+  assert.equal(row.state, "declined");
+  assert.equal((row.snooze_until as number) - NOW, 45 * DAY);
+});
+
+await check("a second Skip does NOT re-base the seven days the soft snooze already bought",
+  async () => {
+    // The `level >= 1` clause that guards the ladder against a double tap cannot
+    // guard a soft snooze, which is level 0 by construction. Without a branch of
+    // its own, tap two silently lengthens a quiet the person asked for once.
+    const r = await rig();
+    r.store.nudges.set(`${OWNER}::zellibrix`, {
+      user_id: OWNER as never, toolkit: "zellibrix" as never, state: "asked", level: 0,
+      snooze_until: null, trigger: "onboarding", sent_at: NOW - 1000, acted_at: null,
+      channel: "sms",
+    });
+    await bodyOf(await connectRoute(skipReq(r.token, asHeader(r.ownerToken)), r.env, r.deps),
+      "soft skip once");
+    const first = { ...nudgeFor(r)! };
+    assert.equal(first.state, "declined_soft");
+    await bodyOf(await connectRoute(skipReq(r.token, asHeader(r.ownerToken)), r.env, r.deps),
+      "soft skip twice");
+    const second = nudgeFor(r)!;
+    assert.equal(second.state, "declined_soft", "tap two turned a soft snooze into a decline");
+    assert.equal(second.level, 0);
+    assert.equal(second.snooze_until, first.snooze_until,
+      "tap two moved the date — seven days from the second tap is a quiet nobody asked for");
+  });
+
+await check("SILENCE IS NEVER SOFT, whatever moment produced the ask", async () => {
+  // Page 24 is explicit: "a link nobody tapped for 72 hours is treated as
+  // declined L1". Somebody who read the card and walked past it said something;
+  // somebody who never opened the text said something else, and the spec's
+  // timers are tuned from the difference.
+  const onboarding: ConnectNudge = {
+    user_id: OWNER as never, toolkit: "zellibrix" as never, state: "asked", level: 0,
+    snooze_until: null, trigger: "onboarding", sent_at: NOW - 1000, acted_at: null,
+    channel: "sms",
+  };
+  const quiet = recordDecline(onboarding, NOW, "silence");
+  assert.equal(quiet.state, "declined", "silence on a setup-card ask is a real L1 decline");
+  assert.equal(quiet.level, 1);
+  assert.equal((quiet.snooze_until as number) - NOW, 14 * DAY);
+  assert.equal(quiet.acted_at, null, "nobody acted; stamping acted_at claims a tap that never was");
+
+  // THE CONTROL: the same row, the same instant, the other verb.
+  const tapped = recordDecline(onboarding, NOW, "said_no");
+  assert.equal(tapped.state, "declined_soft");
+  assert.equal(tapped.level, 0);
+  assert.notEqual(quiet.snooze_until, tapped.snooze_until);
+});
+
+await check("SEVEN DAYS LATER THE SOFT SNOOZE IS SPENT AND EVERY TRIGGER IS BACK", async () => {
+  // The whole claim of `declined_soft` in one check: it costs seven days and
+  // nothing else. `shouldAsk` gets no clause of its own for the state — the
+  // level does the work — so this is the only thing proving the level does it.
+  const softened: ConnectNudge = {
+    user_id: OWNER as never, toolkit: "zellibrix" as never, state: "declined_soft", level: 0,
+    snooze_until: NOW + 7 * DAY, trigger: "onboarding", sent_at: NOW - DAY, acted_at: NOW,
+    channel: "ios",
+  };
+  const moment = (now: number, trigger: NudgeTrigger) => ({
+    now, trigger, localHour: 14, taskInFlight: false, resultDelivered: true,
+    tasksThatWouldHaveUsedIt: 2, lastAskAnyAppAt: null,
+  });
+  const asking = { owner: OWNER, toolkit: "zellibrix" };
+
+  // Inside the seven days: quiet, and quiet for the RIGHT reason.
+  const held = shouldAsk(softened, moment(NOW + DAY, "repeated_use") as never, asking as never);
+  assert.equal(held.decision, "hold");
+  assert.match(held.reason, /snoozed/);
+
+  // After them, the three triggers a level-1 decline silences forever are all
+  // licensed again. This is the exact set the old behaviour killed.
+  for (const trigger of ["repeated_use", "onboarding", "in_task"] as NudgeTrigger[]) {
+    const verdict = shouldAsk(softened, moment(NOW + 8 * DAY, trigger) as never, asking as never);
+    assert.equal(verdict.decision, "ask",
+      `${trigger} is still refused after the soft snooze ran out: ${verdict.reason}`);
+  }
+
+  // THE CONTROL: the same row as a REAL level-1 decline, same clock, same
+  // triggers. Two of the three stay refused forever, which is what makes the
+  // paragraph above a difference and not a coincidence.
+  const declined: ConnectNudge = { ...softened, state: "declined", level: 1 };
+  for (const trigger of ["repeated_use", "onboarding"] as NudgeTrigger[]) {
+    const verdict = shouldAsk(declined, moment(NOW + 8 * DAY, trigger) as never, asking as never);
+    assert.equal(verdict.decision, "hold",
+      `${trigger} cleared level 1's 0.80 threshold, so the control proves nothing`);
+  }
+});
+
+await check("a soft row that has acquired a rung is refused rather than read", async () => {
+  // The mirror of "declined at level 0". Either pairing is a row two writers
+  // disagree about, and reading it either way silences or re-asks on a guess.
+  const bad: ConnectNudge = {
+    user_id: OWNER as never, toolkit: "zellibrix" as never, state: "declined_soft", level: 2,
+    snooze_until: NOW + DAY, trigger: "onboarding", sent_at: NOW - DAY, acted_at: NOW,
+    channel: "ios",
+  };
+  const verdict = shouldAsk(bad, {
+    now: NOW + 30 * DAY, trigger: "in_task", localHour: 14, taskInFlight: false,
+    resultDelivered: true, tasksThatWouldHaveUsedIt: 2, lastAskAnyAppAt: null,
+  } as never, { owner: OWNER, toolkit: "zellibrix" } as never);
+  assert.equal(verdict.decision, "no-verdict");
+  assert.match(verdict.reason, /soft snooze is not a rung/);
 });
 
 await check("an app this owner already has connected has nothing to decline", async () => {
