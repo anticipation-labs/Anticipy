@@ -245,16 +245,48 @@ def invite_tester(client: Client, bundle_id: str, group_name: str,
                   "Nothing sent.")
             return 0
 
-    client.request("POST", "/v1/betaTesters", body={
-        "data": {
-            "type": "betaTesters",
-            "attributes": {"firstName": first, "lastName": last, "email": email},
-            "relationships": {"betaGroups": {"data": [
-                {"type": "betaGroups", "id": group["id"]}]}},
-        }
-    })
-    print(f"invited {email} to {group_name}. Apple has sent the email; the "
-          "person must accept it in TestFlight before any build appears.")
+    # A PERSON CAN ALREADY EXIST WITHOUT BEING IN THIS GROUP.
+    #
+    # Apple keeps one beta tester record per address per account. Creating a
+    # second answers 409 Conflict, which is what the first attempt at Tejas hit
+    # after josegaelcl06 had gone through cleanly -- the difference being that
+    # one address was new to the account and the other was not. So: look the
+    # person up first, and if they exist, ATTACH them to the group rather than
+    # trying to make a second copy of them.
+    found = client.request("GET", "/v1/betaTesters", {
+        "filter[email]": email, "limit": 1})["data"]
+    if found:
+        client.request(
+            "POST", f"/v1/betaGroups/{group['id']}/relationships/betaTesters",
+            body={"data": [{"type": "betaTesters", "id": found[0]["id"]}]})
+        print(f"{email} already had a tester record on this account and has "
+              f"been added to {group_name}.")
+    else:
+        try:
+            client.request("POST", "/v1/betaTesters", body={
+                "data": {
+                    "type": "betaTesters",
+                    "attributes": {"firstName": first, "lastName": last,
+                                   "email": email},
+                    "relationships": {"betaGroups": {"data": [
+                        {"type": "betaGroups", "id": group["id"]}]}},
+                }
+            })
+        except urllib.error.HTTPError as error:
+            # Apple explains itself in the body. Printing the status alone
+            # sends the reader to guess between "already exists", "no seats"
+            # and "this key may not".
+            detail = ""
+            try:
+                detail = error.read().decode()[:500]
+            except Exception:                 # noqa: BLE001
+                pass
+            print(f"refused by App Store Connect: HTTP {error.code}")
+            if detail:
+                print(detail)
+            return 1
+    print(f"{email} is on {group_name}. Apple has sent the email; the person "
+          "must accept it in TestFlight before any build appears.")
 
     after = client.request("GET", f"/v1/betaGroups/{group['id']}/betaTesters",
                            {"limit": 100})["data"]
