@@ -188,6 +188,76 @@ def live_next_build(client: Client, bundle_id: str,
         source)
 
 
+def who_can_install(client: Client, bundle_id: str, version: str) -> int:
+    """Which tester groups can actually install one build — READ ONLY.
+
+    A build can be VALID and still reach nobody. "VALID" is Apple's verdict on
+    the BYTES: processing finished and the archive is installable. Whether a
+    human sees it in TestFlight is a separate fact — the build has to be
+    attached to a beta group, and an external group additionally needs a review
+    that VALID says nothing about. On 2026-09-06 the owner's phone was on build
+    88 while 153 was VALID, which is exactly the shape this answers.
+
+    It asks and prints. It attaches nothing: assigning a build to testers
+    distributes software to people, which is the owner's decision to make in
+    App Store Connect, not a side effect of a status query.
+    """
+    apps = client.request("GET", "/v1/apps", {
+        "filter[bundleId]": bundle_id, "limit": 1})["data"]
+    if len(apps) != 1:
+        raise RuntimeError(f"expected one app for {bundle_id}, found {len(apps)}")
+    app_id = apps[0]["id"]
+
+    builds = client.request("GET", "/v1/builds", {
+        "filter[app]": app_id, "filter[version]": version, "limit": 5})["data"]
+    if not builds:
+        print(f"build {version} does not exist under {bundle_id}")
+        return 1
+    build = builds[0]
+    attrs = build.get("attributes") or {}
+    state = attrs.get("processingState", "?")
+    expired = attrs.get("expired")
+    print(f"build {version}: processingState={state} expired={expired} "
+          f"uploaded={attrs.get('uploadedDate', '?')}")
+
+    groups = client.request(
+        "GET", f"/v1/builds/{build['id']}/betaGroups", {"limit": 50})["data"]
+    if not groups:
+        # The whole point of the command. Nobody is told anything by silence.
+        print("NOBODY. This build is attached to no tester group, so it does "
+              "not appear in anyone's TestFlight.")
+    else:
+        print(f"{len(groups)} group(s) can install it:")
+        for group in groups:
+            g = group.get("attributes") or {}
+            kind = "internal" if g.get("isInternalGroup") else "external"
+            print(f"  - {g.get('name', '?')} ({kind}), "
+                  f"public link {'on' if g.get('publicLinkEnabled') else 'off'}")
+
+    # An external group sees nothing until review clears, and that state does
+    # not live on the group.
+    detail = client.request(
+        "GET", f"/v1/builds/{build['id']}/betaBuildLocalizations", {"limit": 1})
+    del detail
+    review = client.request("GET", "/v1/buildBetaDetails", {
+        "filter[build]": build["id"], "limit": 1})["data"]
+    if review:
+        r = review[0].get("attributes") or {}
+        print(f"internal testers: {r.get('internalBuildState', '?')}")
+        print(f"external testers: {r.get('externalBuildState', '?')}")
+
+    # For context, so a reader can see whether an OLDER build is the one
+    # testers are actually being offered.
+    recent = client.request("GET", "/v1/builds", {
+        "filter[app]": app_id, "limit": 8, "sort": "-version"})["data"]
+    print("most recent builds Apple holds:")
+    for item in recent:
+        a = item.get("attributes") or {}
+        print(f"  {a.get('version', '?'):>5}  {a.get('processingState', '?')}"
+              f"  expired={a.get('expired')}")
+    return 0
+
+
 def processing_verdict(builds: list[dict[str, Any]],
                        version: str) -> tuple[str, str]:
     """Return a fail-closed verdict for one uploaded build number.
@@ -281,6 +351,9 @@ def main() -> int:
                       default=BUILD_PROCESSING_TIMEOUT_SECONDS)
     slot = sub.add_parser("free-signing-slot")
     slot.add_argument("--dry-run", action="store_true")
+    who = sub.add_parser("who-can-install")
+    who.add_argument("--bundle", required=True)
+    who.add_argument("--build", required=True)
     args = parser.parse_args()
 
     client = Client(Credentials.environment())
@@ -289,6 +362,8 @@ def main() -> int:
             client, args.bundle, args.marketing, args.source))
     elif args.command == "wait-build":
         wait_for_valid_build(client, args.bundle, args.build, args.timeout)
+    elif args.command == "who-can-install":
+        return who_can_install(client, args.bundle, args.build)
     else:
         free_signing_slot(client, args.dry_run)
     return 0
