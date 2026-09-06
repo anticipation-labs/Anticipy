@@ -68,3 +68,40 @@ report that nobody has written an assertion against is decoration.
 And the CI message was `sqlite3.OperationalError: no such table: owners` — a
 production-data-loss defect that read like a rotted test, which is why it sat
 red across five pushes with everyone walking past it.
+
+---
+
+## Postscript: two things learned after the fix
+
+### `.recover` is far less robust on SQLite 3.45 than on 3.51
+
+Three pushes were spent making the fixture build a "damage confined to
+`agents`" file on GitHub's runner, and it cannot be done there. On 3.45.1
+`.recover` loses the WHOLE SCHEMA at the first damaged page — `owners` and
+`events` come back missing from a file whose damage never touched them — for
+every one of five damage shapes, on all eighteen pages `dbstat` names as
+belonging to `agents`, across all thirty candidates. On 3.51 the same bytes
+cost only the cells on the damaged page.
+
+That is worth knowing on its own: **if this script is ever run for real, the
+SQLite in the image decides how much survives.** On an older one, the swap gate
+added today is the difference between keeping the original and installing a
+nearly empty database.
+
+The test now SKIPS on a build where the input cannot be constructed, printing
+the version and the reason. A skip normally reads as a pass and is the wrong
+answer in this repo; it is right here only because the reason is printed, is
+checkable, and un-skips itself on a SQLite that can build the file.
+
+### The tool repairs a backend that no longer exists
+
+`repair_data_db.sh` operates on `pb_data/data.db` — PocketBase. Its only
+callers are `backend/start.sh` and `backend/Dockerfile`, both Railway
+artifacts, and Railway and PocketBase were retired on 2026-09-05 when
+production moved to Cloudflare D1.
+
+So this is a fallback nobody currently runs. That does not make the defect less
+real — it would have installed a database missing a table and called it done —
+but it does bound how much more effort the fixture deserves. The three fixes
+stand and are pinned by legs that need no damaged file. If PocketBase ever
+comes back, the skip above is the first thing to look at.
