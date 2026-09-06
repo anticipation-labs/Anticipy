@@ -214,6 +214,28 @@ sh "$HERE/run_interruption_contract_tests.sh"
 # leave AVAudioSession's stack before rebuilding, the tap-bearing engine is
 # retired rather than reused, and AVFAudio's NSException becomes a retry.
 sh "$HERE/run_audio_recovery_tests.sh"
+# The radio, and the number. Both are pure Foundation and both run in about a
+# second, and NEITHER was in this file until 2026-09-06 -- they sat beside it
+# with nothing calling them, which is the same way seventeen spike suites and
+# three Worker suites went unrun this week. run_phone_number_tests in
+# particular guards a bug that SHIPPED: e164 prepended "+1" to any bare
+# ten-digit number, so a stranger outside North America finished sign-up with a
+# US number on their account and heard nothing for a week, with no error on any
+# screen. A guard against that is not optional and must not be opt-in.
+sh "$HERE/run_pendant_tests.sh"
+sh "$HERE/run_phone_number_tests.sh"
+
+# THE THREE THAT STAY OUT, and why, so the next person does not have to guess
+# and does not "fix" it by adding them:
+#   run_cursor_bench.sh   prints timings and never fails. A gate that cannot go
+#                         red is not a gate; it is output nobody reads.
+#   run_cursor_fuzz.sh    100k generated schedules against a HEAD~1 checkout of
+#                         the cursor it replaced. Wants a git worktree and real
+#                         minutes. Run it when TranscriptCursor changes.
+#   run_audio_stress.sh   a soak, not a check.
+# All three are run by hand. If one of them ever grows a pass/fail verdict that
+# holds in seconds, it belongs above this comment instead of in it.
+
 # Not a logic suite: it asks whether the build number still identifies these
 # bytes. Last, because it is the one leg that reads git rather than source, and
 # a red one here means "bump it before you commit", not "the code is wrong".
