@@ -647,14 +647,38 @@ let fourth = ConnectionsPolicy.recordDecline(third, at: NOW, how: .saidNo, for: 
 check("a fourth decline cannot climb past three", fourth.level == 3)
 
 // The onboarding exception: a card skipped during setup is a form refused, not
-// an app refused. Once, at level 1.
+// an app refused — a SKIP, and the ladder does not move.
+//
+// THIS BLOCK USED TO ASSERT THE DEFECT. It fixed the NUMBER and left the
+// sentence: seven days rather than fourteen, but state `.declined` and the
+// ladder advanced to level 1 — and the server turns a level-1 decline into
+// permanent silence for the two triggers that carry evidence. So walking past
+// a card during setup ended the conversation about that app for good, which is
+// the opposite of what a skip means. `ConnectOnboardingPolicy.skipOutcome` has
+// always said so, and `agreesWithSkip` is the leg that caught the two files
+// disagreeing (CI red on 2026-09-06). The expectation below is the contract's,
+// not the old behaviour's.
 let skipped = ConnectionsPolicy.recordDecline(nudge(state: .asked, trigger: .onboarding),
                                               at: NOW, how: .saidNo, for: ME)!
 check("skipping a setup card snoozes 7 days, not 14",
       skipped.snoozeUntil == NOW + Double(ConnectionsPolicy.onboardingSkipSnoozeDays) * DAY)
+check("and does not advance the ladder", skipped.level == 0)
+check("and does not write the row down as a refusal of the app",
+      skipped.state != .declined)
+check("but it does record that they acted", skipped.actedAt == NOW)
 let skippedTwice = ConnectionsPolicy.recordDecline(skipped, at: NOW, how: .saidNo, for: ME)!
-check("but a second decline is a second decline whatever the first one was",
-      skippedTwice.snoozeUntil == NOW + Double(CONTRACT_SNOOZE_DAYS[1]) * DAY)
+check("skipping the same setup card again is still a skip, not a climb",
+      skippedTwice.level == 0
+        && skippedTwice.snoozeUntil == NOW + Double(ConnectionsPolicy.onboardingSkipSnoozeDays) * DAY)
+// A refusal that is NOT the setup card still climbs, and that is the whole
+// point of keeping the two apart.
+let realNo = ConnectionsPolicy.recordDecline(nudge(state: .asked, trigger: .inTask),
+                                             at: NOW, how: .saidNo, for: ME)!
+check("a refusal outside setup is a decline and does climb",
+      realNo.level == 1 && realNo.state == .declined)
+let realNoTwice = ConnectionsPolicy.recordDecline(realNo, at: NOW, how: .saidNo, for: ME)!
+check("and a second decline is a second decline",
+      realNoTwice.snoozeUntil == NOW + Double(CONTRACT_SNOOZE_DAYS[1]) * DAY)
 
 // Tapping through is NOT a connection. The connection lands when the provider
 // says it landed; stamping `connected` on a tap puts an app on the Settings

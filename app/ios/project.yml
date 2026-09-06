@@ -574,6 +574,9 @@ settings:
     # 127: StaleExtensionTests.swift mirrored the pin as 0.14.0 while the app
     #      said 0.15.0 — a mirror testing a comparison the app never makes.
     #      App behaviour is identical to 126.
+    # 130: a setup card walked past is a SKIP again — recordDecline stopped
+    #      writing it down as a refusal of the app and stopped climbing the
+    #      ladder, which the server turns into permanent silence at level 1.
     # 129: the conversation dashboard. Home is a thread you read rather than
     #      eight stacked sections, with the capture moment as the face it
     #      wears while she listens, and History behind the title. Also: the
@@ -584,7 +587,7 @@ settings:
     #      finale, three tips over Home with a coach mark on Listen, and the
     #      four-second dot-to-mark opening in front of it all. Also the
     #      Claude-style Settings home and the Connect page (0d7e37ba).
-    CURRENT_PROJECT_VERSION: "129"
+    CURRENT_PROJECT_VERSION: "130"
     DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: NO
@@ -636,7 +639,7 @@ targets:
         # literal from a Mac one, and two products answering "which build
         # are you holding" with different numbers is the exact disease this
         # gate exists to prevent.
-        CURRENT_PROJECT_VERSION: "129"
+        CURRENT_PROJECT_VERSION: "130"
         DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_ENTITLEMENTS: ../macos/AnticipyMac/AnticipyMac.entitlements

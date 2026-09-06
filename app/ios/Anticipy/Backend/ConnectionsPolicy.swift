@@ -945,19 +945,37 @@ enum ConnectionsPolicy {
     static func recordDecline(_ nudge: ConnectNudge, at now: Double, how: DeclineKind,
                               for owner: OwnerId) -> ConnectNudge? {
         guard OwnerScoped.belongs(nudge, to: owner) else { return nil }
+        // THE SETUP CARD'S SKIP IS NOT A DECLINE, and this branch is the whole
+        // of that. It used to fix the NUMBER and leave the sentence: seven days
+        // instead of fourteen, but state `.declined` and the ladder advanced to
+        // level 1 — so walking past a card during setup was written down as a
+        // refusal of the app, and the server's own thresholds turn a level-1
+        // decline into permanent silence for the two triggers that carry
+        // evidence. A shrug ended the conversation for good.
+        //
+        // `ConnectOnboardingPolicy.skipOutcome` has always said what a skip
+        // means, and its three rules are mirrored exactly here: never advance
+        // and never reset the ladder, never shorten a snooze somebody already
+        // earned, and leave a connected row alone. Two files, one meaning —
+        // `agreesWithSkip` is the leg that holds them together.
+        if nudge.trigger == .onboarding,
+           nudge.state == .neverAsked || nudge.state == .asked {
+            let until = now + Double(onboardingSkipSnoozeDays) * dayInSeconds
+            return ConnectNudge(
+                userID: nudge.userID, toolkit: nudge.toolkit, state: .neverAsked,
+                level: nudge.level,
+                snoozeUntil: max(nudge.snoozeUntil ?? -Double.greatestFiniteMagnitude, until),
+                trigger: nudge.trigger,
+                sentAt: nudge.sentAt,
+                actedAt: now,
+                channel: nudge.channel)
+        }
         let level = min(nudge.level + 1, maxDeclineLevel)
         guard level >= 1, level <= snoozeDays.count else { return nil }
-        // The onboarding exception: a card skipped during setup is a form
-        // refused, not an app refused. Held for the full 14 days it would look
-        // like a "no" this system never actually got. It applies once, at level
-        // 1 — a second decline is a second decline whatever the first was.
-        let days = (level == 1 && nudge.trigger == .onboarding)
-            ? onboardingSkipSnoozeDays
-            : snoozeDays[level - 1]
         return ConnectNudge(
             userID: nudge.userID, toolkit: nudge.toolkit, state: .declined,
             level: level,
-            snoozeUntil: now + Double(days) * dayInSeconds,
+            snoozeUntil: now + Double(snoozeDays[level - 1]) * dayInSeconds,
             trigger: nudge.trigger,
             sentAt: nudge.sentAt,
             actedAt: how == .saidNo ? now : nil,
