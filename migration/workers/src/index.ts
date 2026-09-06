@@ -60,6 +60,7 @@ import {
 import { installConnectSessionReader } from "./routes/connect.ts";
 import { workerOwners, purgeAudit, authClaim, phoneRemove, profileUpsert, type ServiceEnv } from "./routes/service.ts";
 import { handsApiRun, HANDS_API_RUN_PATH, type HandsApiEnv } from "./routes/hands_api.ts";
+import { adminConnectLink, ADMIN_CONNECT_LINK_PATH, type AdminConnectLinkEnv } from "./routes/admin_connect_link.ts";
 import { agentRegister, agentKey, agentLlm, agentCaptcha, agentUpgradeCredential, type AgentEnv } from "./routes/agent.ts";
 import {
   serveFile, shareEvidence, depositEvidenceImage, discardEvidenceImage, type AssetEnv,
@@ -211,6 +212,11 @@ export default {
     // than the generic 404 the gate reads as "not deployed". routes/hands_api.ts.
     if (path === HANDS_API_RUN_PATH) {
       return handsApiRun(request, env as unknown as HandsApiEnv);
+    }
+    // The Week A gate's manual trigger: mint a connect page for one owner and
+    // text it. Internal-key only; see routes/admin_connect_link.ts.
+    if (path === ADMIN_CONNECT_LINK_PATH) {
+      return adminConnectLink(request, env as unknown as AdminConnectLinkEnv);
     }
 
     // Twilio's inbound webhook. TWILIO_AUTH_TOKEN is the only thing that can
