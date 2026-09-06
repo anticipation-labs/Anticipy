@@ -21,6 +21,7 @@ import json
 import os
 import subprocess
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
@@ -220,9 +221,37 @@ def who_can_install(client: Client, bundle_id: str, version: str) -> int:
     print(f"build {version}: processingState={state} expired={expired} "
           f"uploaded={attrs.get('uploadedDate', '?')}")
 
-    groups = client.request(
-        "GET", f"/v1/builds/{build['id']}/betaGroups", {"limit": 50})["data"]
-    if not groups:
+    # EVERY QUERY BELOW IS ALLOWED TO FAIL SEPARATELY. The App Store Connect
+    # key's role decides which of these routes it may read, and the first
+    # attempt at this command died on a 403 from the beta-groups route after
+    # having already learned the build was VALID -- printing a traceback
+    # instead of the half of the answer it held. A status query that stops at
+    # the first refusal tells the reader nothing, and "I was not allowed to
+    # ask" is a different fact from "nobody can install it".
+    def ask(path: str, params: dict[str, str | int]) -> tuple[Any, str]:
+        try:
+            return client.request("GET", path, params)["data"], ""
+        except urllib.error.HTTPError as error:
+            if error.code == 403:
+                return None, ("403 Forbidden -- this API key's role may not "
+                              "read " + path + ". A key with App Manager can.")
+            return None, f"HTTP {error.code} from {path}"
+        except Exception as error:            # noqa: BLE001 - report, never raise
+            return None, f"{type(error).__name__} from {path}: {error}"
+
+    groups, why = ask(f"/v1/builds/{build['id']}/betaGroups", {"limit": 50})
+    if groups is None:
+        # Second route to the same fact. It filters groups by build rather than
+        # walking the build's relationship, and the role that refuses one
+        # sometimes allows the other.
+        groups, why2 = ask("/v1/betaGroups",
+                           {"filter[builds]": build["id"], "limit": 50})
+        if groups is None:
+            print("could not read the tester groups: " + why)
+            print("  and the other way round: " + why2)
+    if groups is None:
+        pass
+    elif not groups:
         # The whole point of the command. Nobody is told anything by silence.
         print("NOBODY. This build is attached to no tester group, so it does "
               "not appear in anyone's TestFlight.")
@@ -236,20 +265,22 @@ def who_can_install(client: Client, bundle_id: str, version: str) -> int:
 
     # An external group sees nothing until review clears, and that state does
     # not live on the group.
-    detail = client.request(
-        "GET", f"/v1/builds/{build['id']}/betaBuildLocalizations", {"limit": 1})
-    del detail
-    review = client.request("GET", "/v1/buildBetaDetails", {
-        "filter[build]": build["id"], "limit": 1})["data"]
-    if review:
+    review, why = ask("/v1/buildBetaDetails",
+                      {"filter[build]": build["id"], "limit": 1})
+    if review is None:
+        print("could not read the tester states: " + why)
+    elif review:
         r = review[0].get("attributes") or {}
         print(f"internal testers: {r.get('internalBuildState', '?')}")
         print(f"external testers: {r.get('externalBuildState', '?')}")
 
     # For context, so a reader can see whether an OLDER build is the one
     # testers are actually being offered.
-    recent = client.request("GET", "/v1/builds", {
-        "filter[app]": app_id, "limit": 8, "sort": "-version"})["data"]
+    recent, why = ask("/v1/builds",
+                      {"filter[app]": app_id, "limit": 8, "sort": "-version"})
+    if recent is None:
+        print("could not list recent builds: " + why)
+        return 0
     print("most recent builds Apple holds:")
     for item in recent:
         a = item.get("attributes") or {}
