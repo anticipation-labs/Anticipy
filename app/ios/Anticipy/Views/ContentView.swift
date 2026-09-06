@@ -1052,6 +1052,64 @@ struct HomeView: View {
 
     /// Nothing to show at all. WHY there's nothing is a separate question, and
     /// the answer decides which of four very different screens you get.
+    /// Everything Home says that is not part of the conversation: the
+    /// microphone it cannot use, the number it does not have, the extension
+    /// running old instructions, and the two offers. They sit at the top of
+    /// the thread because they are about the whole screen rather than about
+    /// any one thing said, and they keep their own suites' shapes.
+    @ViewBuilder private var dashboardNotices: some View {
+        if micNeedsHelp { micRecoveryCard }
+        if verified && showInterviewOffer { interviewOfferCard }
+        if mailReadOffer { mailReadCard }
+        if browserOffer { browserOfferCard }
+        if HomeFeedPolicy.sayUnreachable(phoneState: session.canonicalOwnerPhoneState) {
+            unreachableNotice
+        }
+    }
+
+    // MARK: - The conversation dashboard's feed
+
+    /// THE THREAD, assembled from rows that were already decided elsewhere.
+    ///
+    /// Every element carries somebody else's verdict — a transcript line is
+    /// what the ears heard, a job's placement is `HomeFeedPolicy`'s, an
+    /// event's `decision` is the brain's. Nothing here reads the WORDS to
+    /// work out what a line meant, which is law 1 and is why the ordering
+    /// lives in `DashboardPolicy` where `run_dashboard_tests.sh` can walk it.
+    private var dashboardTurns: [DashboardPolicy.Turn] {
+        let heard = session.transcript.map {
+            DashboardPolicy.HeardRow(id: $0.id, text: $0.text, at: $0.created)
+        }
+        let said = session.anticipySays.compactMap { ev -> DashboardPolicy.SaidRow? in
+            guard ev.kind == "anticipy_says", let text = ev.text, !text.isEmpty else { return nil }
+            return DashboardPolicy.SaidRow(id: ev.id, text: text, at: ev.created,
+                                           decision: ev.decision ?? "")
+        }
+        let rows = session.jobs.compactMap { job -> DashboardPolicy.JobRow? in
+            let placement: DashboardPolicy.JobRow.Placement
+            switch HomeFeedPolicy.placement(status: job.status, lane: job.lane) {
+            case .needsYou:  placement = .needsYou
+            case .handling:  placement = .handling
+            // Finished and hidden work is not a turn in the conversation.
+            // `finishedShown` and `DoneDeck` carry the first; the second is
+            // hidden because HomeFeedPolicy said so.
+            case .done, .hidden: return nil
+            }
+            return DashboardPolicy.JobRow(id: job.id, goal: job.goal,
+                                          consequence: job.consequence,
+                                          at: job.updated ?? job.created,
+                                          placement: placement)
+        }
+        return DashboardPolicy.thread(heard: heard, said: said, jobs: rows)
+    }
+
+    private var dashboardCaptureState: DashboardPolicy.CaptureState {
+        DashboardPolicy.captureState(micBlocked: session.micBlocked,
+                                     listening: session.listener.isListening,
+                                     suspended: session.listener.suspended,
+                                     reachable: verified)
+    }
+
     private var feedIsEmpty: Bool {
         needsOK.isEmpty && openQuestions.isEmpty && handling.isEmpty
             && finished.isEmpty && foundForYou.isEmpty
@@ -1066,276 +1124,60 @@ struct HomeView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                Theme.bg.ignoresSafeArea()
-                // Was a hand-rolled copy of the grain with .plusLighter
-                // hard-coded — a white haze over a white page once light mode
-                // existed. GrainLayer reads the scheme.
-                GrainLayer()
-                ScrollView {
-                    // Rhythm is driven explicitly: space BETWEEN groups is
-                    // 2.5–3x space WITHIN one, which is what makes this read
-                    // as a layout instead of a list.
-                    VStack(alignment: .leading, spacing: 0) {
-                        if micNeedsHelp { micRecoveryCard.padding(.top, Theme.Space.tight) }
-                        // "Want me to actually know you?" — the graduation.
-                        //
-                        // Gated on her having FINISHED something visible, not
-                        // on a step count. design/PREMIUM-FEEL.md:43-47: ask
-                        // AFTER demonstrating value, framed as her curiosity
-                        // rather than data collection. Asking on day one, before
-                        // she has done a single thing, is the version people
-                        // decline.
-                        if verified && showInterviewOffer {
-                            interviewOfferCard.padding(.top, Theme.Space.snug)
-                        }
-                        // "Want to open your mail and let me read it once while
-                        // you watch?" — the graduation's second half, and the
-                        // one that needs her to have earned it most, because it
-                        // is the only source that is not on this phone.
-                        if mailReadOffer {
-                            mailReadCard.padding(.top, Theme.Space.snug)
-                        }
-                        // Her briefing only appears over a verified read. She
-                        // does not get to say "I've got the watch" from an app
-                        // that has never once reached its own server — and on
-                        // day one the empty state carries the whole screen.
-                        if verified && !feedIsEmpty {
-                            anticipyCardView.padding(.top, Theme.Space.snug)
-                        }
-                        // What she found — the quiet work, delivered. Lives
-                        // at the top because Omar's words were exact: "it
-                        // should text you the results and pull it up at the
-                        // top of the app." Before this section existed her
-                        // finished research sat in the database and nowhere
-                        // else a human looks.
-                        if verified && !foundForYou.isEmpty {
-                            foundHeader
-                                .padding(.top, Theme.Space.section)
-                                .padding(.bottom, Theme.Space.tight)
-                            VStack(spacing: Theme.Space.snug) {
-                                ForEach(foundForYou, id: \.id) { ev in
-                                    FoundCard(event: ev)
-                                        .transition(.asymmetric(
-                                            insertion: .move(edge: .top).combined(with: .opacity),
-                                            removal: .opacity))
-                                }
-                            }
-                        }
-                        listenCard.padding(.top, feedIsEmpty ? Theme.Space.tight : Theme.Space.roomy)
-                        if verified && !recentConversationInsights.isEmpty {
-                            sectionHeader("Insights")
-                                .padding(.top, Theme.Space.section)
-                                .padding(.bottom, Theme.Space.tight)
-                            HomeInsightsCard(
-                                items: recentConversationInsights,
-                                needsYou: needsOK.count + openQuestions.count,
-                                working: handling.count,
-                                done: finished.count)
-                        }
-                        // AN UNREACHABLE CUSTOMER NEVER FINDS OUT THEY ARE
-                        // UNREACHABLE. Those were this file's own capitals,
-                        // written above a sentence nested inside
-                        // `if !handling.isEmpty` — so it could only reach
-                        // someone who already had work stuck, and an account
-                        // with no number gets asked nothing and never
-                        // accumulates any. Said here instead, once, under the
-                        // control, on the screen everybody opens. The nested
-                        // copy is gone rather than kept: this one already
-                        // carries the parked-queue consequence in its own
-                        // words, and that one asked the device-local mirror
-                        // with no guard on it at all.
-                        if HomeFeedPolicy.sayUnreachable(
-                            phoneState: session.canonicalOwnerPhoneState) {
-                            unreachableNotice.padding(.top, Theme.Space.tight)
-                        }
-                        if feedIsEmpty {
-                            switch session.connection {
-                            case .loading:          loadingState
-                            case .offline:          offlineState
-                            case .refused(let s):   refusedState(s)
-                            case .ready:            emptyState
-                            }
-                        } else {
-                            if !verified { staleNotice.padding(.top, Theme.Space.section) }
-                            if !needsOK.isEmpty {
-                                needsOKHeader
-                                    .padding(.top, Theme.Space.section)
-                                    .padding(.bottom, Theme.Space.tight)
-                                VStack(spacing: Theme.Space.snug) {
-                                    ForEach(Array(needsOK.enumerated()), id: \.element.id) { i, job in
-                                        ConfirmJobCard(
-                                            job: job,
-                                            canonicalPhoneState: session.canonicalOwnerPhoneState)
-                                            .transition(.asymmetric(
-                                                insertion: .move(edge: .top).combined(with: .opacity),
-                                                removal: .opacity.combined(with: .scale(scale: 0.96))))
-                                            .animation(Theme.spring.delay(min(Double(i) * 0.05, 0.25)), value: session.jobs)
-                                    }
-                                }
-                            }
-                            if !openQuestions.isEmpty {
-                                askHeader
-                                    .padding(.top, Theme.Space.section)
-                                    .padding(.bottom, Theme.Space.tight)
-                                VStack(spacing: Theme.Space.snug) {
-                                    ForEach(openQuestions, id: \.id) { ev in
-                                        AskCard(event: ev)
-                                            .transition(.asymmetric(
-                                                insertion: .move(edge: .top).combined(with: .opacity),
-                                                removal: .opacity.combined(with: .scale(scale: 0.96))))
-                                    }
-                                }
-                            }
-                            if !handling.isEmpty {
-                                // A handling section can contain three different
-                                // hands at once. Each card names its own hand;
-                                // the shared heading therefore stays neutral.
-                                sectionHeader("In progress")
-                                    .padding(.top, Theme.Space.section)
-                                    .padding(.bottom, Theme.Space.tight)
-                                // Unpaired used to be one grey sentence
-                                // pointing at a screen with nothing to tap —
-                                // and it is now all that is left of first
-                                // run's browser page. So where there is real
-                                // work waiting, the ask itself goes here,
-                                // once. The sentence stays for the two cases
-                                // the card does not cover: paired but shut,
-                                // and anyone who already said "later".
-                                if !browserHandling.isEmpty {
-                                    if browserOffer {
-                                        browserOfferCard
-                                            .padding(.bottom, Theme.Space.base)
-                                    } else if !session.agentOnline {
-                                        Text(session.agentPaired
-                                             ? "Open Chrome and your browser work picks up on its own."
-                                             : "Link Chrome in Settings and your browser work picks up on its own.")
-                                            .font(.system(size: 15))
-                                            .foregroundStyle(Theme.text2)
-                                            .padding(.bottom, Theme.Space.tight)
-                                    }
-                                }
-                                // He has had to ASK whether his extension was
-                                // current — twice — and once a whole retest
-                                // ran against a stale one while everybody
-                                // believed the fixes were live. Chrome already
-                                // reports its version on every heartbeat, so
-                                // the answer was always here to be shown.
-                                // THE SECOND COPY OF THE UNREACHABLE SENTENCE
-                                // IS GONE FROM HERE, and both halves of that
-                                // are deliberate. It was the same fact as
-                                // `unreachableNotice` above — which already
-                                // carries the parked-queue consequence in its
-                                // own words ("anything I prepare will just sit
-                                // here until you open the app") — so with the
-                                // hoist landed the two said one thing twice on
-                                // one scroll, in two different voices. And this
-                                // one asked `session.ownerPhone.isEmpty` with NO
-                                // guard at all: the device-local mirror is empty
-                                // in exactly the same way whether the account
-                                // has no number or this launch has not read it
-                                // yet, so on a reinstall-and-sign-in whose owner
-                                // read failed it printed "I have no number for
-                                // you" in the app's one accent colour at
-                                // somebody whose number was sitting on the
-                                // server. See `HomeFeedPolicy.sayUnreachable`.
-                                if let stale = session.staleExtensionVersion {
-                                    // These three fragments shipped fused: the version
-                                    // interpolation ran straight into the next sentence, so the
-                                    // banner read "press Reload to get 0.11.0until then it's
-                                    // working from old instructions." Nobody saw it for three
-                                    // minor versions because the version pin had rotted shut
-                                    // (AnticipyApp.swift:104) and a banner that can never fire
-                                    // can never be proofread by using the product -- fixing the
-                                    // pin on 2026-08-24 is what exposed it. Every fragment but
-                                    // the last must end in a space;
-                                    // tests/test_extension_version_pin.py holds that seam now.
-                                    Text("Chrome is running the old extension (\(stale)). "
-                                         + "Open chrome://extensions and press Reload to get \(AnticipySession.expectedExtensionVersion). "
-                                         + "Until then it's working from old instructions.")
-                                        .font(.system(size: 15))
-                                        .foregroundStyle(Theme.accent)
-                                        .padding(.bottom, Theme.Space.tight)
-                                }
-                                VStack(spacing: 0) {
-                                    ForEach(Array(handling.enumerated()), id: \.element.id) { i, job in
-                                        if i > 0 { Rectangle().fill(Theme.edge).frame(height: 0.5) }
-                                        HandlingCard(job: job)
-                                            .transition(.asymmetric(
-                                                insertion: .move(edge: .top).combined(with: .opacity),
-                                                removal: .opacity.combined(with: .scale(scale: 0.96))))
-                                            .animation(Theme.spring.delay(min(Double(i) * 0.05, 0.25)), value: session.jobs)
-                                    }
-                                }
-                            }
-                            if !finished.isEmpty {
-                                sectionHeader("Done")
-                                    .padding(.top, Theme.Space.section)
-                                    .padding(.bottom, Theme.Space.tight)
-                                DoneDeck(jobs: finishedShown)
-                            }
-                        }
-                        // Diagnostics belong at the foot, not as the opening
-                        // statement of the whole product.
-                        statusStrip.padding(.top, Theme.Space.wide)
+                // THE CONVERSATION DASHBOARD IS THE SCREEN NOW. What used to
+                // be eight stacked sections down one scroll — the control, the
+                // approvals, the questions, in-progress, done, insights, the
+                // empty states — is one thread you read like a conversation,
+                // with the capture moment as the face it wears while she is
+                // listening. `ConversationDashboard` draws; `DashboardPolicy`
+                // decides; the notices and the two offers stay here, where
+                // run_home_copy_tests.sh reads them.
+                ConversationDashboard(
+                    turns: dashboardTurns,
+                    captureState: dashboardCaptureState,
+                    listening: session.listener.isListening,
+                    everListened: !session.transcript.isEmpty,
+                    history: [],
+                    onStartListening: { session.startListening() },
+                    onHoldListening: {
+                        if session.listener.isListening { session.stopListening() }
+                        else { session.startListening() }
+                    },
+                    onStopListening: { session.stopListening() },
+                    onSend: { line in typedLine = line; submitTyped() },
+                    onOpenSession: { _ in },
+                    onRefresh: { await session.refresh() }
+                ) {
+                    dashboardNotices
+                } approval: { id in
+                    if let job = session.jobs.first(where: { $0.id == id }) {
+                        ConfirmJobCard(job: job,
+                                       canonicalPhoneState: session.canonicalOwnerPhoneState)
                     }
-                    .padding(.horizontal)
-                    .padding(.bottom, 30)
-                }
-                .refreshable { await session.refresh() }
-            }
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    // THE MARK ALONE, AND THAT IS THE FIX. This was an HStack
-                    // of the mark plus `Text("Anticipy")` at 24pt serif, and
-                    // the wordmark never rendered: the leading slot is narrow
-                    // once the trailing control has its share, so the system
-                    // truncated the text to nothing — while the HStack's 10pt
-                    // spacing before it SURVIVED.
-                    //
-                    // iOS gives a toolbar item its own glass backing and
-                    // centres the item's content inside it. So the thing being
-                    // centred was `[mark][10pt][nothing]`, which put the mark
-                    // 5pt left of the circle's middle and read exactly as a
-                    // logo sitting off-centre in its own button.
-                    //
-                    // Nothing visible is lost: the wordmark was already
-                    // invisible, and the app it names is the one you are in.
-                    LogoMark(size: 26)
-                        .accessibilityLabel("Anticipy")
-                }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    // NO PLATE OF ITS OWN, and that is the whole point.
-                    //
-                    // iOS draws a glass capsule behind EVERY toolbar item -
-                    // it is what the mark on the left is sitting in. Giving
-                    // this one `.icon` as well put the component's machined
-                    // metal face INSIDE that capsule: two nested surfaces, a
-                    // grey disc in a white one, which is what read as "there
-                    // is still colour inside it". The leading item looks right
-                    // for exactly the reason this one looked wrong - it brings
-                    // no surface of its own.
-                    //
-                    // So `GlassyIconStyle` is for glyph buttons that have to
-                    // supply their own affordance, like the send arrow on the
-                    // compose line. In a toolbar the system already did it.
+                } doneDeck: {
+                    if !finishedShown.isEmpty {
+                        VStack(alignment: .leading, spacing: Theme.Space.tight) {
+                            sectionHeader("Done")
+                            DoneDeck(jobs: finishedShown)
+                        }
+                    }
+                } settingsLink: {
                     NavigationLink { SettingsHomeView() } label: {
                         Image(systemName: "slider.horizontal.3")
-                            // The colour it had before any of this: a muted
-                            // dark, the same weight as the mark opposite it.
-                            // Without it the glyph inherits the app's champagne
-                            // `.tint`, which makes a gold gear - and a `Theme`
-                            // role is not a view naming a colour, which is what
-                            // the contract actually forbids.
-                            .foregroundStyle(Theme.text2)
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundStyle(OnboardTheme.ink)
+                            .frame(width: 44, height: 44)
+                            .background(Circle().fill(OnboardTheme.card))
                     }
-                    // An icon on its own is announced as "button" and nothing
-                    // else. VoiceOver users got two unnamed controls on Home.
                     .accessibilityLabel("Settings")
                 }
             }
-            // The single clearest "this is a real, current iOS app" signal
-            // available: content blurs as it passes under the header.
-            .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
+            // NO NAVIGATION BAR. The dashboard draws its own header — the
+            // title that switches to History, and Settings beside it — so a
+            // system bar above it was a second, emptier header stacked on the
+            // real one, with the mark floating in a glass capsule over a page
+            // that already shows the mark nowhere else.
+            .navigationBarHidden(true)
             // NOT pinned to .dark. It was, which put white toolbar glyphs on a
             // white page the moment light mode existed. Omitted so it inherits
             // whatever AnticipyApp pinned.

@@ -395,6 +395,35 @@ lift() {
     cat "$out/FirstRunTrack.swift"
 } > "$out/track.swift"
 
+# ------------------------------------------------ THE WIDGET'S DOORBELL
+# `anticipy://listen` is openable by any web page, any QR code and any other
+# app. Ungated it was the one path in the product that could start a
+# microphone before an account existed — `heard` pushes live before it queues,
+# so a stranger's room would have gone to the server because somebody tapped a
+# link. It may only do what the listen control on Home does, and that control
+# does not exist until first run is over.
+doorbell=$(awk '/host == "listen"/{grab=1} grab{print; if (/^[[:space:]]*\}[[:space:]]*else/) exit}' "$root")
+if [ -z "$doorbell" ]; then
+    echo "No anticipy://listen branch in AnticipyApp.swift. Either the"
+    echo "doorbell moved or it is gone; either way this leg is reading nothing."
+    exit 2
+fi
+if ! printf '%s\n' "$doorbell" | grep -q 'FirstRunRoute.decide'; then
+    echo "The anticipy://listen doorbell starts listening without asking"
+    echo "FirstRunRoute where this phone is. A link, a QR code or any other app"
+    echo "could then run the microphone in front of somebody who has not made"
+    echo "an account, and the first thing heard would be pushed live to a"
+    echo "server that has no owner to file it under."
+    printf '%s\n' "$doorbell"
+    exit 2
+fi
+if ! printf '%s\n' "$doorbell" | grep -q '== .home'; then
+    echo "The doorbell consults the route but does not require .home."
+    echo "Every other route is a person mid-first-run."
+    exit 2
+fi
+echo "PASS: the anticipy://listen doorbell only rings once first run is over"
+
 # swiftc only permits top-level code in a file literally named main.swift.
 cp "$here/FirstRunRouteTests.swift" "$out/main.swift"
 # BOTH policies, compiled together. The defect this suite caught did not

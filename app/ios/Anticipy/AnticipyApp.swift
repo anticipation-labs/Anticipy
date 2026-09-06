@@ -216,7 +216,20 @@ struct AnticipyApp: App {
                 guard url.scheme?.lowercased() == ConnectHandoff.callbackScheme else { return }
                 let host = url.host?.lowercased() ?? ""
                 if host == "listen" {
-                    session.startListening()
+                    // THE DOORBELL IS NOT A BACK DOOR. This scheme is openable
+                    // by any web page, any QR code and any other app, so it may
+                    // only do what the listen control on Home does — and that
+                    // control does not exist until first run is over. Ungated it
+                    // was the one path that could start a microphone before an
+                    // account existed: `heard` pushes live before it queues, so
+                    // a stranger's room would have been posted to the server by
+                    // a link. The route switch above argues the same rule for
+                    // the primer; this is the same rule for the doorbell.
+                    if FirstRunRoute.decide(hasSeenIntro: hasSeenIntro,
+                                            isSignedIn: session.isSignedIn,
+                                            hasOnboarded: hasOnboarded) == .home {
+                        session.startListening()
+                    }
                 } else if host == ConnectHandoff.callbackHost {
                     // `session.accountID` is the owner ROW id — the same id
                     // `contract.ts` binds every connection to. NOT `ownerID`,

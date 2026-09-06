@@ -113,6 +113,12 @@ sh "$HERE/run_job_receipt_tests.sh"
 # the only sentence saying it might have gone through anyway. Early, for the
 # reachability reason above.
 sh "$HERE/run_home_feed_tests.sh"
+# The conversation dashboard — the screen where somebody talks to her. Beside
+# the home feed because it draws that feed: a thread rather than eight stacked
+# sections, with the capture moment as the face it wears while she listens. Its
+# first leg is law 1, because the tempting version of this screen picks your
+# commitments out of your sentences with a word list.
+sh "$HERE/run_dashboard_tests.sh"
 # What Home SAYS once it has placed a job — the same screen one step later. Four
 # of its sentences carry a number the phone counted: how many things are waiting
 # on a browser, how many interview answers she already holds, how long the

@@ -105,6 +105,7 @@ enum FirstRunEnding: Equatable {
 /// is the last screen of first run: nothing decorative here may be able to take
 /// the app down at the finish line. Two inert booleans cannot.
 struct OnboardingFinale: View {
+    @State private var left = false
     /// Whether the owner's standing wish is to be listening — `isListening`,
     /// not `capturing`. See `FirstRunEnding`.
     ///
@@ -177,12 +178,24 @@ struct OnboardingFinale: View {
         // A fixed curtain, not a chain of callbacks: nothing here can leave
         // the app without a path out of first run.
         .task {
+            // `try?` on a cancelled sleep returns rather than throwing, so
+            // without the check a tap-through — which removes this view and
+            // cancels the task — counted as the curtain falling too, and
+            // `onDone` ran twice.
             try? await Task.sleep(nanoseconds: 3_400_000_000)
-            onDone()
+            guard !Task.isCancelled else { return }
+            leave()
         }
         // Tapping through is respected: this is the one screen where somebody is
         // being made to watch something.
-        .onTapGesture { onDone() }
+        .onTapGesture { leave() }
         .accessibilityAddTraits(.isModal)
+    }
+
+    /// One way out, taken once, whichever of the two reaches it first.
+    private func leave() {
+        guard !left else { return }
+        left = true
+        onDone()
     }
 }

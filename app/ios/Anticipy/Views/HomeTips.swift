@@ -20,6 +20,7 @@ struct ListenControlAnchorKey: PreferenceKey {
 /// half and a bubble points at "Listen with phone". Tapping the switch itself
 /// ends the scene; so does tapping the bubble, or waiting.
 struct HomeTipsOverlay: View {
+    @State private var ending = false
     /// The listen control's frame in this overlay's space, when Home has
     /// reported one. Without it the coach mark is skipped rather than guessed.
     let listenFrame: CGRect?
@@ -246,6 +247,11 @@ struct HomeTipsOverlay: View {
     }
 
     private func finish() {
+        // Three things end the coach mark — the switch coming on, the seven
+        // seconds, and a tap — and any two of them can arrive together. Each
+        // used to schedule its own `onDone`.
+        guard !ending else { return }
+        ending = true
         withAnimation(Theme.springSlow) { shown = false }
         DispatchQueue.main.asyncAfter(deadline: .now() + (reduceMotion ? 0 : 0.45)) { onDone() }
     }
