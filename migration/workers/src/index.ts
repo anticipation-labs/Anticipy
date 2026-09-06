@@ -59,6 +59,7 @@ import {
 } from "./routes/connect_auth.ts";
 import { installConnectSessionReader } from "./routes/connect.ts";
 import { workerOwners, purgeAudit, authClaim, phoneRemove, profileUpsert, type ServiceEnv } from "./routes/service.ts";
+import { handsApiRun, HANDS_API_RUN_PATH, type HandsApiEnv } from "./routes/hands_api.ts";
 import { agentRegister, agentKey, agentLlm, agentCaptcha, agentUpgradeCredential, type AgentEnv } from "./routes/agent.ts";
 import {
   serveFile, shareEvidence, depositEvidenceImage, discardEvidenceImage, type AssetEnv,
@@ -202,6 +203,14 @@ export default {
     }
     if (path === "/me/profile/upsert" && method === "POST") {
       return profileUpsert(request, env as unknown as ServiceEnv);
+    }
+    // THE API HAND'S ONE DOOR. The brain's run_api_jobs claims a lane="api"
+    // row and POSTs its id here; the route reads the step off the row and runs
+    // it on src/connections/api_hand.ts. Service token only, checked before any
+    // read. The whole path is handed over so the wrong verb answers 405 rather
+    // than the generic 404 the gate reads as "not deployed". routes/hands_api.ts.
+    if (path === HANDS_API_RUN_PATH) {
+      return handsApiRun(request, env as unknown as HandsApiEnv);
     }
 
     // Twilio's inbound webhook. TWILIO_AUTH_TOKEN is the only thing that can

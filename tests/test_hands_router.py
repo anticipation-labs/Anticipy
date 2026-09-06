@@ -123,10 +123,12 @@ def test_the_four_verdicts_and_their_lanes():
     assert lane_for(HandVerdict(HAND_BROWSER, "")) == ""
     assert lane_for(HandVerdict(HAND_RESEARCH, "")) == "research"
     assert lane_for(HandVerdict(HAND_HOLD, "")) == "research"
-    # api -> the browser lane, FOR NOW: there is no api executor, and a new
-    # lane string would be claimed by every extension whose filter reads
-    # lane!="research". Pinned with its reason; change it with the executor.
-    assert lane_for(HandVerdict(HAND_API, "")) == ""
+    # api -> its own lane, since 2026-09-06: brain/worker.py run_api_jobs
+    # claims it and the Worker's /hands/api/run runs it (routes/hands_api.ts).
+    # Until then it mapped to "" because no executor existed; that pin and
+    # its reason are in git. tests/test_api_lane.py owns the executor side.
+    assert lane_for(HandVerdict(HAND_API, "")) == "api"
+    assert hands.LANE_API == "api"
     # The non-answers are the floor's own state, not the browser's.
     assert lane_for(HandVerdict(HAND_UNASKED, "")) == "research"
     assert lane_for(HandVerdict(HAND_UNANSWERED, "")) == "research"
@@ -532,28 +534,47 @@ def test_the_verdict_rides_on_the_row(monkeypatch, offline):
 #   m3  work out 18% tip on 84 dollars ....... research read         research
 #   m5  find local gutter companies .......... research read         research
 #   m8  renew the parking permit, hold at pay  browser  write        lane ''
-#   m11 send the revised quote by Thursday ... hold     irreversible research*
+#   m11 send the revised quote by Thursday ... hold     irreversible CARD  ''*
 #   m11 move the call to Monday 3pm .......... browser  write        lane ''
 #   m25 book the 7pm table at Santouka ....... browser  write        lane ''
 #   m27 email the landlord re the heater ..... browser  write        lane ''
 #   m29 find a dentist open Saturdays ........ research read         research
 #   m34 what's the wifi at the cabin ......... research read         research
-#   m36 wire $2,000 to the account ........... hold     irreversible research*
+#   m36 wire $2,000 to the account ........... hold     irreversible CARD  ''*
 #   m37 book my usual haircut ................ browser  write        lane ''
-#   m39 text Laura I'm running late .......... hold     irreversible research*
-#   m41 cancel that .......................... hold     irreversible research*
-#   m43 what do I have tomorrow .............. research read         research
+#   m39 text Laura I'm running late .......... hold     irreversible CARD  ''*
+#   m41 cancel that .......................... hold     irreversible CARD  ''*
+#   m43 what do I have tomorrow .............. browser  read         lane ''‡
 #   m47 check in for the flight .............. browser  write        lane ''
 #   C   open example.net in my browser ....... browser  read         lane ''
 #   C   what did I promise Marcus ............ research read         research
-#   read on a connected mail app ............. api      read   (lane '' today)
+#   read on a connected mail app ............. api      read         lane 'api'†
 #   write on it, writes OFF .................. browser  write
-#   write on it, writes ON, rung 0 ........... hold     irreversible
-#   read on a connected calendar, Mac offline  api      read
+#   write on it, writes ON, rung 0 ........... browser  write   (floor: rung 0)
+#   read on a connected calendar, Mac offline  api      read         lane 'api'†
 #
-#   * the router's lane; job_lane's seatbelt then holds send/wire/text/cancel
-#     on the browser lane ("") whatever the verdict, as the parametrised leg
-#     above pins.
+#   RE-MEASURED 2026-09-06 (later the same day), same model, same key, the
+#   .env.local key loaded through overnight/_env: 22 verdicts, 0 flagged,
+#   both controls held. Two rows moved between the two runs and both are
+#   inside their accepted sets — m43 (‡) went research -> browser ("needs to
+#   read from an app, but no app is connected"), and the writes-ON row came
+#   back `browser` from the FLOOR ("rung 0 is below 3") where the morning run
+#   had recorded `hold`; the model's own answer was api/write, which is what
+#   the floor exists to catch. Everything else is byte-for-byte the morning
+#   table.
+#
+#   * REFRESHED 2026-09-06, after the table was first written: lane_for(hold)
+#     is still "research" (the router's own lane, and what the probe prints),
+#     but job_lane no longer leaves a held consequential step there. The rule
+#     that shipped in 6f62bc68 — no verdict or hold + is_consequential -> ""
+#     — parks these four as a CARD on the browser lane (awaiting_confirm,
+#     visible in the app), and the seatbelt holds send/wire/text/cancel on ""
+#     whatever the verdict, as the parametrised leg above pins.
+#   † lane 'api' since 2026-09-06 (hands.LANE_API): the executor exists —
+#     brain/worker.py run_api_jobs + the Worker's /hands/api/run. Before that
+#     day this column read "(lane '' today)". Note that the note carries no
+#     tool or args yet (hands.py docstring), so on live the row comes back
+#     `tool_required` and is handed to the browser lane by the route.
 #
 # The two fact legs, measured the same hour against https://api.anticipy.ai:
 # `connections` answers HTTP 404 for both known owner ids (the Worker's

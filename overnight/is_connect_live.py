@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """CAN A PERSON ACTUALLY CONNECT AN APP, AND DOES ANYTHING EVER OFFER?
-Eleven legs, measured against LIVE.
+Fifteen legs, measured against LIVE.
 
 Everything about the Connections feature is repo-green. The pure core in
 `migration/workers/src/routes/connect.ts` is ported from a spike with 1006
@@ -29,6 +29,13 @@ ever ASKED. The machinery to accept a yes shipped on 2026-09-06 with nothing
 anywhere producing one:
 
     anything ever OFFERS              leg 11     an `asked` row on live D1
+
+AND THE HAND THAT USES A CONNECTION, once one exists. The router writes an
+`api` verdict onto a job and the brain claims it; the only thing that can run
+it is one Worker door, and until 2026-09-06 that door did not exist:
+
+    the api hand's door               leg 15     POST /hands/api/run refuses
+                                                 everyone but the brain
 
 Legs 1, 3 and 7 were added on 2026-09-06 and THE SIX LEGS WERE RENUMBERED into
 that order — a note quoting "leg 5" from before that day means the vendor key,
@@ -174,6 +181,24 @@ WHAT EACH LEG ANSWERS:
      identically from here; the rows are what tell the difference, because a
      row was written by the Worker that is actually running on a tick that
      actually fired.
+
+ 15. THE API HAND'S DOOR REFUSES EVERYONE BUT THE BRAIN. `POST /hands/api/run`
+     (migration/workers/src/routes/hands_api.ts) is the one production caller
+     of api_hand.ts `runStep`: brain/worker.py `run_api_jobs` claims a
+     `lane="api"` row and POSTs its id here with the service token, and the
+     route reads the step off the ROW and settles the row itself. The same
+     four-state shape as leg 10, and for the same reason it is cheap and safe
+     against production as often as anybody likes: an anonymous POST must be
+     401 BEFORE any read, a POST carrying a token nobody minted must be the
+     same 401, and the control `/hands/api/runX` must be the router's generic
+     404. A 404 on the route is "not deployed" — every step the router
+     licensed for a connected app is then claimed, released and never run.
+     Anything but 401 for an anonymous caller is the loudest red here: it is
+     a door onto somebody's connected accounts that opens for anybody. A 401
+     the control ALSO gives is the zone refusing everything and proves
+     nothing about this route. The gate holds no service token and sends
+     none; the body names a job id nobody minted, which the route refuses
+     before reading anything even when the token is right.
 
 THE THIRD STATE IS MANDATORY HERE, and it is copied from firmware_gate.py: exit
 2 UNPROVEN is neither pass nor fail, and it belongs to anything that was
@@ -2052,7 +2077,100 @@ def run(*, read_only: bool = False, http=None, sql=None, vendor=None,
     codes.append(code)
     rows.append((mark, "14 THE HOST WE MINT ON IS THE HOST THAT ANSWERS", sentence))
 
+    # -- leg 15: the api hand's door -------------------------------------------
+    # Three POSTs, none carrying a credential this gate holds (it holds none):
+    # anonymous, a token minted for this probe and nothing else, and the
+    # control. The body names a job id nobody minted; the route answers the
+    # token before it reads anything, so no row is touched whatever it says.
+    plain = {"content-type": "application/json"}
+    anon = ask(HANDS_API_PATH, "POST", plain, HANDS_API_PROBE_BODY)
+    wrong = ask(HANDS_API_PATH, "POST",
+                {**plain, "X-Anticipy-Token": HANDS_API_PROBE_TOKEN}, HANDS_API_PROBE_BODY)
+    hands_control = ask(HANDS_API_CONTROL_PATH, "POST", plain, HANDS_API_PROBE_BODY)
+    code, mark, sentence = leg_api_hand(anon[0] if anon else None,
+                                        wrong[0] if wrong else None,
+                                        hands_control[0] if hands_control else None)
+    codes.append(code)
+    rows.append((mark, "15 THE API HAND'S DOOR REFUSES EVERYONE BUT THE BRAIN", sentence))
+
     return overall(codes), rows
+
+
+# ===========================================================================
+# LEG 15 — the api hand's door
+# ===========================================================================
+
+#: routes/hands_api.ts HANDS_API_RUN_PATH, byte for byte; index.ts dispatches
+#: it by exact path, which is what makes the control below a non-route.
+HANDS_API_PATH = "/hands/api/run"
+#: THE CONTROL. Not a route: index.ts compares `path === HANDS_API_RUN_PATH`,
+#: so this must fall through to the router's generic 404. If it does not, a
+#: 401 is not evidence the door is deployed and the leg says so.
+HANDS_API_CONTROL_PATH = "/hands/api/runX"
+#: A job id nobody minted, in the shape the route requires (15 lowercase
+#: alphanumerics), so a right token would still be answered "no such job"
+#: and nothing would be read past that. The gate never holds the right token.
+HANDS_API_PROBE_BODY = b'{"job":"gateprobe000000"}'
+#: A token minted for this run and never anything else. It is WRONG by
+#: construction — the point is that a wrong token gets the same 401 as none —
+#: and it is never printed.
+HANDS_API_PROBE_TOKEN = "gate-probe-" + secrets.token_hex(16)
+
+
+def leg_api_hand(anon: int | None, wrong: int | None,
+                 control: int | None) -> tuple[int, str, str]:
+    """LEG 15. Is the api hand's door deployed, and shut to everyone but the
+    brain?
+
+    ONE STATUS CODE SEPARATES THE STATES, as on leg 10:
+
+        404  the route is not deployed — an api-lane row has nowhere to run
+        405  deployed, but POST is refused: the door is mis-shaped
+        401  deployed, and it refused a caller with no token / a wrong one
+        2xx/other  an anonymous or wrongly-keyed caller REACHED the hand
+
+    The green shape is 401 for no token, 401 for a wrong token, and the
+    router's 404 for the control beside it. A right token is never sent, so
+    what a right token does is api_hand's suite's business, not this leg's.
+    """
+    where = f"POST {WORKER}{HANDS_API_PATH}"
+    if anon is None:
+        return UNPROVEN, INFO, (f"{where} could not be reached, so nothing here is a "
+                                "claim about the api hand's door either way")
+    if anon == 404:
+        return RED, BAD, (f"{where} -> 404. The route is not deployed. Every step the "
+                          "router licenses for a connected app lands on lane \"api\", "
+                          "is claimed by the brain, released, and never run")
+    if anon == 405:
+        return RED, BAD, (f"{where} -> 405 to a POST. The path is routed and the door "
+                          "refuses the one verb it exists for; the brain can never "
+                          "hand it a job")
+    if anon != 401:
+        return RED, BAD, (f"{where} -> {anon} for a caller with NO token. Anything but a "
+                          "401 here means an anonymous caller reaches a door onto "
+                          "somebody's connected accounts")
+    if wrong is not None and wrong != 401:
+        return RED, BAD, (f"{where} -> 401 with no token but {wrong} with a token nobody "
+                          "minted, so the check is on the header's presence and not "
+                          "its value")
+    if control is None:
+        return UNPROVEN, INFO, (f"{where} -> 401, but the control {HANDS_API_CONTROL_PATH} "
+                                "could not be reached, so that 401 is uncalibrated")
+    if control == 401:
+        return UNPROVEN, INFO, (f"{where} -> 401, but so does the control "
+                                f"{HANDS_API_CONTROL_PATH}, so that 401 is the zone "
+                                "refusing everything and says nothing about this route")
+    if control != 404:
+        return UNPROVEN, INFO, (f"{where} -> 401, but the control {HANDS_API_CONTROL_PATH} "
+                                f"-> {control} rather than the router's 404, so the "
+                                "discriminator is uncalibrated")
+    if wrong is None:
+        return UNPROVEN, INFO, (f"{where} -> 401 with no token and the control 404s, but "
+                                "the wrong-token request could not be made, so a door "
+                                "that checks presence rather than value reads the same")
+    return GREEN, OK, (f"{where}: no token -> 401, a token nobody minted -> 401, control "
+                       f"{HANDS_API_CONTROL_PATH} -> 404 (so that is this route). The "
+                       "door is deployed and shut to everyone but the brain")
 
 
 # ===========================================================================
@@ -2700,6 +2818,37 @@ def self_test() -> int:
                   _wired is True))
 
     # ---- The roll-up -------------------------------------------------------
+    # ---- LEG 15 — the api hand's door, the same four-state shape as leg 10 -
+    # The first is what production answers until the route is deployed; the
+    # green shape is what test/hands-api.test.ts measures the handler to do.
+    cases.append(("leg15   404 is red — the route is not deployed",
+                  leg_api_hand(404, 404, 404)[0] == RED))
+    cases.append(("leg15   405 to a POST is red — the door is mis-shaped",
+                  leg_api_hand(405, 405, 404)[0] == RED))
+    cases.append(("leg15   an anonymous POST that is not refused is the loudest red",
+                  leg_api_hand(200, 401, 404)[0] == RED))
+    cases.append(("leg15   a token nobody minted getting past is red",
+                  leg_api_hand(401, 200, 404)[0] == RED))
+    cases.append(("leg15   401 that the CONTROL also gives is UNPROVEN — that is the zone",
+                  leg_api_hand(401, 401, 401)[0] == UNPROVEN))
+    cases.append(("leg15   a control that is not the router's 404 is UNPROVEN",
+                  leg_api_hand(401, 401, 403)[0] == UNPROVEN))
+    cases.append(("leg15   a control that could not be reached is UNPROVEN",
+                  leg_api_hand(401, 401, None)[0] == UNPROVEN))
+    cases.append(("leg15   a wrong-token request that could not be made withholds green",
+                  leg_api_hand(401, None, 404)[0] == UNPROVEN))
+    cases.append(("leg15   unreachable is UNPROVEN, not a verdict",
+                  leg_api_hand(None, None, None)[0] == UNPROVEN))
+    cases.append(("leg15   401, 401, control 404 is green",
+                  leg_api_hand(401, 401, 404)[0] == GREEN))
+    cases.append(("leg15   the probe body names a job nobody minted, in the route's own id shape",
+                  re.fullmatch(r"[a-z0-9]{15}", json.loads(HANDS_API_PROBE_BODY)["job"]) is not None
+                  and json.loads(HANDS_API_PROBE_BODY)["job"].startswith("gateprobe")))
+    cases.append(("leg15   the probe token is minted for the probe and is never a credential",
+                  HANDS_API_PROBE_TOKEN.startswith("gate-probe-")
+                  and not any((os.environ.get(n) or "") == HANDS_API_PROBE_TOKEN
+                              for n in ("ANTICIPY_SERVICE_TOKEN",) + CREDENTIAL_ENV)))
+
     cases.append(("verdict red beats unproven", overall([GREEN, UNPROVEN, RED]) == RED))
     cases.append(("verdict unproven beats green", overall([GREEN, UNPROVEN]) == UNPROVEN))
     cases.append(("verdict all green is green", overall([GREEN, GREEN]) == GREEN))
@@ -2885,15 +3034,24 @@ def report(code: int, rows: list) -> None:
         # refuse, and whether a person's "no" can be recorded as the shrug it is.
         # Printing "nobody can connect an app" over a red 13 would be a false
         # sentence at the bottom of a gate whose whole job is not writing those.
+        # Leg 15 is beside the chain too: it is about what a connection is FOR
+        # once it exists, and a red there is "the hand has no door", never
+        # "nobody can connect".
         chain = [name for mark, name, _d in rows
-                 if mark == BAD and not name.strip().startswith(("12", "13"))]
+                 if mark == BAD and not name.strip().startswith(("12", "13", "15"))]
+        beside = [name.strip()[:2] for mark, name, _d in rows
+                  if mark == BAD and name.strip().startswith(("12", "13", "15"))]
         if chain:
             print("  NOBODY CAN CONNECT AN APP. Work the first red leg — the legs are in")
             print("  chain order and a lower one cannot be measured over a broken higher one.")
         else:
-            print("  A PERSON CAN CONNECT AN APP. What is red is what happens when they")
-            print("  say NO to one: the setup card's Skip cannot be recorded as the spec's")
-            print("  seven-day shrug, so it is refused outright rather than mis-recorded.")
+            print("  A PERSON CAN CONNECT AN APP. What is red is beside the chain:")
+            if any(n in ("12", "13") for n in beside):
+                print("  what happens when they say NO to one: the setup card's Skip cannot be")
+                print("  recorded as the spec's seven-day shrug, so it is refused outright.")
+            if "15" in beside:
+                print("  the API hand's door: a step the router licenses for a connected app")
+                print("  is claimed by the brain and has no route on this Worker to run it.")
         print("  The commands and the order are in "
               "research/2026-09-06-composio-connections-live.md\n")
     elif code == UNPROVEN:

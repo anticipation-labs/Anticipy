@@ -99,6 +99,11 @@ CATALOG_503 = (503, JSON_H,
 #: routes/connect.ts unwired().
 UNWIRED = (503, HTML_H, f"<h1>{M.UNWIRED_MARK}</h1><p>Anticipy can't set this up "
                         "right now.</p>")
+#: routes/hands_api.ts's refusal to a caller with no service token or a wrong
+#: one — the same body for both, measured by hands-api.test.ts. Not yet seen
+#: on production: the route is new on 2026-09-06 and undeployed as written.
+HANDS_REFUSED = (401, {"content-type": "application/json"},
+                 '{"ok":false,"message":"service token required"}')
 
 
 def sign_in_page(token, way_in=False):
@@ -166,7 +171,8 @@ class FakeWorker:
 
     def __init__(self, page=None, code=None, routes=REFUSED, control=LIVE_404,
                  listing=None, catalog=CATALOG_503, way_in=False, only=None,
-                 webhook=None, webhook_control=None, wrong_verb=WRONG_VERB):
+                 webhook=None, webhook_control=None, wrong_verb=WRONG_VERB,
+                 hands=None, hands_control=LIVE_404):
         self.page = page              # (status, headers, body) or None -> sign-in
         self.code = code              # the /code control page, or None -> real one
         self.routes = routes          # the answer for all six /me/connections legs
@@ -185,6 +191,12 @@ class FakeWorker:
         # it must refuse. A test that wants the failure passes the 200 or the
         # 401; a working deployment answers 405.
         self.wrong_verb = wrong_verb
+        # LEG 15. `hands` is an answer, or a callable (headers) -> answer so a
+        # test can answer differently to no token and a wrong one. The default
+        # is the deployed handler's own refusal (hands_api.ts, measured by
+        # migration/workers/test/hands-api.test.ts): 401 either way.
+        self.hands = hands if hands is not None else HANDS_REFUSED
+        self.hands_control = hands_control
         self.seen = []
         self.token = None
 
@@ -196,6 +208,10 @@ class FakeWorker:
         if path in self.only:
             return self.only[path]
 
+        if path == M.HANDS_API_CONTROL_PATH:
+            return self.hands_control
+        if path == M.HANDS_API_PATH:
+            return self.hands(dict(headers or {})) if callable(self.hands) else self.hands
         if path == M.WEBHOOK_CONTROL_PATH:
             return self.webhook_control
         if path == M.WEBHOOK_PATH:
@@ -1278,7 +1294,8 @@ def test_the_measured_state_of_2026_09_06_at_0408():
     # table, which is the kind of green a fixture invents rather than measures.
     code, rows = M.run(http=FakeWorker(page=LIVE_404, routes=LIVE_404,
                                        wrong_verb=LIVE_404,
-                                       webhook=lambda _h: LIVE_404), sql=FakeD1(),
+                                       webhook=lambda _h: LIVE_404,
+                                       hands=LIVE_404), sql=FakeD1(),
                        vendor=vendor_answering(), owner="sxkotd1h02qb6gw")
     assert marks(rows) == [
         M.BAD,    # 1 the six routes: the router's generic 404
@@ -1295,6 +1312,7 @@ def test_the_measured_state_of_2026_09_06_at_0408():
         M.BAD,    # 12 the wrong-verb doors 404 like everything else that morning
         M.INFO,   # 13 no connect_nudges to read a CHECK constraint off
         M.BAD,    # 14 /c/ was the router's 404 that morning, on every host
+        M.BAD,    # 15 the api hand's door did not exist yet, so: the router's 404
     ], details(rows)
     assert code == M.RED
 
@@ -1327,11 +1345,12 @@ def test_everything_working_is_the_only_way_to_exit_zero():
                        vendor=vendor_answering(), owner="sxkotd1h02qb6gw",
                        credential="an-owner-token", now_ms=now,
                        webhook=a_webhook_secret())
-    # THIRTEEN, not eleven. Legs 12 and 13 arrived on 2026-09-06 with the
-    # setup card's two new doors; a roll-up that kept counting to eleven would
+    # FIFTEEN, not eleven. Legs 12 and 13 arrived on 2026-09-06 with the
+    # setup card's two new doors, 14 with the host check, and 15 the same day
+    # with the api hand's door; a roll-up that kept counting to eleven would
     # go on calling a deployment complete while the newest half of it was
     # unmeasured, which is the exact shape leg 1's own signals hole had.
-    assert marks(rows) == [M.OK] * 14, details(rows)
+    assert marks(rows) == [M.OK] * 15, details(rows)
     assert code == M.GREEN
 
 
@@ -1871,6 +1890,128 @@ def test_red_outranks_unproven():
 
 def test_the_self_test_covers_every_leg_offline():
     assert M.self_test() == 0
+
+
+# ===========================================================================
+# LEG 15 — the api hand's door, the one production caller of runStep
+# ===========================================================================
+# THE FAILURE THIS GUARDS. brain/hands.py writes an `api` verdict onto a job
+# and brain/worker.py run_api_jobs claims it; the only thing that can run it is
+# POST /hands/api/run on the deployed Worker. Repo-green on both halves reads
+# exactly like a working hand until this leg asks the live URL — law 3, in the
+# file that exists for law 3. And it is a door onto somebody's connected
+# accounts, so the leg's loudest red is not "missing" but "open".
+
+HANDS_API_TS = os.path.join(REPO, "migration", "workers", "src", "routes", "hands_api.ts")
+INDEX_TS = os.path.join(REPO, "migration", "workers", "src", "index.ts")
+
+
+def _leg15(rows):
+    row = next(r for r in rows if r[1].strip().startswith("15"))
+    return row[0], row[2]
+
+
+def test_leg_15_asks_anonymously_then_with_a_probe_token_then_the_control():
+    fake = a_deployed_worker()
+    M.run(http=fake, sql=FakeD1(tables=M.TABLES), vendor=vendor_answering(),
+          owner="sxkotd1h02qb6gw", read_only=True)
+    asked = fake.asked(M.HANDS_API_PATH, "POST")
+    assert len(asked) == 2, "the door is asked once with no token and once with a wrong one"
+    assert "X-Anticipy-Token" not in asked[0]["headers"]
+    assert "Authorization" not in asked[0]["headers"]
+    assert asked[1]["headers"]["X-Anticipy-Token"] == M.HANDS_API_PROBE_TOKEN
+    assert M.HANDS_API_PROBE_TOKEN.startswith("gate-probe-")
+    for r in asked:
+        assert r["body"] == M.HANDS_API_PROBE_BODY
+        assert json.loads(r["body"])["job"].startswith("gateprobe")
+    control = fake.asked(M.HANDS_API_CONTROL_PATH, "POST")
+    assert len(control) == 1
+    assert "X-Anticipy-Token" not in control[0]["headers"]
+    assert not fake.asked(M.HANDS_API_PATH, "GET"), "the door is a POST door"
+
+
+def test_a_missing_hands_route_is_red_and_says_what_it_costs():
+    _, rows = M.run(http=a_deployed_worker(hands=LIVE_404), sql=FakeD1(tables=M.TABLES),
+                    vendor=vendor_answering(), owner="sxkotd1h02qb6gw", read_only=True)
+    mark, sentence = _leg15(rows)
+    assert mark == M.BAD
+    assert "not deployed" in sentence
+    assert "never run" in sentence
+
+
+def test_an_anonymous_caller_reaching_the_hand_is_the_loudest_red():
+    answered = (200, JSON_H, '{"ok":false,"message":"no such job"}')
+    _, rows = M.run(http=a_deployed_worker(hands=answered), sql=FakeD1(tables=M.TABLES),
+                    vendor=vendor_answering(), owner="sxkotd1h02qb6gw", read_only=True)
+    mark, sentence = _leg15(rows)
+    assert mark == M.BAD
+    assert "NO token" in sentence
+    # A 404 for the id with no token is the same red: the row was looked for
+    # before the token was checked.
+    _, rows = M.run(http=a_deployed_worker(hands=(404, JSON_H, '{"ok":false,"message":"no such job"}'),
+                                           hands_control=LIVE_404),
+                    sql=FakeD1(tables=M.TABLES), vendor=vendor_answering(),
+                    owner="sxkotd1h02qb6gw", read_only=True)
+    assert _leg15(rows)[0] == M.BAD
+
+
+def test_a_door_that_checks_the_headers_presence_and_not_its_value_is_red():
+    def by_presence(headers):
+        return (200, JSON_H, '{"ok":false,"message":"no such job"}') \
+            if headers.get("X-Anticipy-Token") else HANDS_REFUSED
+    _, rows = M.run(http=a_deployed_worker(hands=by_presence), sql=FakeD1(tables=M.TABLES),
+                    vendor=vendor_answering(), owner="sxkotd1h02qb6gw", read_only=True)
+    mark, sentence = _leg15(rows)
+    assert mark == M.BAD
+    assert "nobody minted" in sentence
+
+
+def test_a_zone_that_401s_everything_proves_nothing_about_the_hand():
+    _, rows = M.run(http=a_deployed_worker(hands_control=HANDS_REFUSED),
+                    sql=FakeD1(tables=M.TABLES), vendor=vendor_answering(),
+                    owner="sxkotd1h02qb6gw", read_only=True)
+    mark, sentence = _leg15(rows)
+    assert mark == M.INFO
+    assert "zone" in sentence
+
+
+def test_the_shape_hands_api_test_measures_is_green():
+    _, rows = M.run(http=a_deployed_worker(), sql=FakeD1(tables=M.TABLES),
+                    vendor=vendor_answering(), owner="sxkotd1h02qb6gw", read_only=True)
+    mark, sentence = _leg15(rows)
+    assert mark == M.OK
+    assert "shut to everyone but the brain" in sentence
+
+
+def test_a_red_hands_door_does_not_claim_nobody_can_connect_an_app():
+    import io
+    import contextlib
+    code, rows = M.run(http=a_deployed_worker(hands=LIVE_404),
+                       sql=FakeD1(tables=M.TABLES, connections={"rows_n": 2, "owners_n": 1},
+                                  asked={"asked_n": 1, "newest": 0.0},
+                                  nudges_ddl=NUDGES_DDL_SIX),
+                       vendor=vendor_answering(), owner="sxkotd1h02qb6gw", read_only=True)
+    assert code == M.RED
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        M.report(code, rows)
+    printed = out.getvalue()
+    assert "NOBODY CAN CONNECT AN APP" not in printed, printed[-600:]
+    assert "API hand's door" in printed, printed[-600:]
+    assert "say NO to one" not in printed, "a red 15 is not a red 13"
+
+
+def test_the_gate_names_the_route_the_worker_dispatches_and_the_control_is_not_one():
+    route = open(HANDS_API_TS, encoding="utf-8").read()
+    index = open(INDEX_TS, encoding="utf-8").read()
+    assert f'export const HANDS_API_RUN_PATH = "{M.HANDS_API_PATH}"' in route
+    assert "path === HANDS_API_RUN_PATH" in index, "index.ts must dispatch by exact path"
+    assert 'path.startsWith("/hands' not in index, \
+        "a prefix dispatch would make the control a route and the leg uncalibrated"
+    assert M.HANDS_API_CONTROL_PATH.startswith(M.HANDS_API_PATH)
+    assert M.HANDS_API_CONTROL_PATH != M.HANDS_API_PATH
+    # And the refusal the fake answers with is the route's own.
+    assert '"service token required"' in route
 
 
 # ===========================================================================

@@ -1197,9 +1197,11 @@ def job_lane(goal: str, params: dict | None = None, *, owner_ref: str = "",
     twice, a dead gateway — lands as "research" too, because research is
     the one lane a browser may not claim and the one hand that cannot change
     the world. That is a FLOOR: nothing licenses a hand that acts unless the
-    model said so. An api verdict maps to "" for now (no executor exists and
-    a new lane string is claimable by every extension in the wild — see
-    hands.LANE_FOR) with the verdict riding on the row.
+    model said so. An api verdict lands as "api" (hands.LANE_API): the
+    worker's run_api_jobs claims that lane and the Worker's /hands/api/run
+    route runs the step off the row (routes/hands_api.ts), refusing any row
+    whose `_hand` does not say api. It mapped to "" until 2026-09-06, when
+    no executor existed.
 
     THE SEATBELT HOLDS AFTER THE VERDICT. The irreversible-verb deny list is
     what a plan TOUCHES, which Law 1 permits; it runs after the model has

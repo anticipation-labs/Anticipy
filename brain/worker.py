@@ -28,6 +28,7 @@ from . import research
 
 from .anticipy_core import (DEVICE_CALENDAR_LANE, RESEARCH_LANE, Anticipy,
                             goal_tokens, is_device_lane, needs_no_browser)
+from .hands import LANE_API
 from .evidence import picture_for_done_text
 from .memory import Memory
 from . import sorter
@@ -1351,8 +1352,12 @@ def report_stalled_work(anticipy) -> None:
         # same class of untruth as promising to solve a CAPTCHA — he acts on
         # it, and nothing changes. `report_unclaimed_device_work` below owns
         # that lane, and says the true thing instead.
+        # The api lane is excluded for the research lane's reason exactly:
+        # run_api_jobs below runs it in THIS process, through the Worker's
+        # /hands/api/run door, and his browser is not what it waits on.
         filt = (f'(status="queued" || status="running") && updated<="{since}"'
-                f' && lane!="research" && lane!="{DEVICE_CALENDAR_LANE}"')
+                f' && lane!="research" && lane!="{DEVICE_CALENDAR_LANE}"'
+                f' && lane!="{LANE_API}"')
         scope = owner_filter(anticipy)
         if scope:
             filt = f"({filt}) && {scope}"
@@ -1507,16 +1512,19 @@ def report_unclaimed_device_work(anticipy) -> None:
         # queued with no hand and no notice — the orphan
         # `CalendarHandPolicy.swift:96-105` names by name.
         # The negative clauses are exhaustive rather than clever: "" is the
-        # browser and "research" is this process, and those are the only other
-        # lanes a job row carries, so this is the device rows plus anything
-        # oddly cased. `is_device_lane` — the same normalisation the other two
-        # layers use — is what actually selects.
+        # browser, "research" and "api" are this process (run_research_jobs
+        # and run_api_jobs), and those are the only other lanes a job row
+        # carries, so this is the device rows plus anything oddly cased.
+        # `is_device_lane` — the same normalisation the other two layers use
+        # — is what actually selects. "api" is named here and not left to
+        # that selector on purpose: a page of ten filled by api rows the
+        # selector discards is the device lane going quiet by another route.
         # DELIBERATELY NOT `lane~"device_calendar"`: no filter in this repo
         # uses that operator against the live PocketBase, and a filter the
         # server rejects comes back `ok=False`, which the line below reads as
         # "nothing to report" — trading a narrow silence for a total one.
         filt = (f'(status="queued" || status="running")'
-                f' && lane!="" && lane!="{RESEARCH_LANE}"'
+                f' && lane!="" && lane!="{RESEARCH_LANE}" && lane!="{LANE_API}"'
                 f' && updated<="{since}"')
         scope = owner_filter(anticipy)
         if scope:
@@ -1962,6 +1970,284 @@ def run_research_jobs(anticipy, runner=None) -> None:
                   f"{job.get('goal', '')[:60]}")
     except Exception as e:
         print(f"research pass failed: {e}")
+
+
+# ---------------------------------------------------------------------------
+# THE API LANE — the brain-side half of the last wire.
+#
+# brain/hands.py answers WHICH HAND takes a step; a verdict of `api` lands the
+# row on lane="api" with the verdict riding in params["_hand"]. This pass is
+# to that lane what run_research_jobs is to lane="research": it takes back
+# what a dead run abandoned, claims up to five queued rows for THIS owner with
+# the extension's own doctrine — stamp, read back, run only if the stamp
+# survived — and then, instead of running anything itself, POSTs each claimed
+# id to the Worker's /hands/api/run (migration/workers/src/routes/hands_api.ts).
+# THE WORKER WRITES THE OUTCOME, not this process: the route is the one thing
+# that knows whether the vendor was called, so it settles the row (done,
+# needs_user, failed, or handed back to the browser lane) before it answers,
+# and a brain that dies between the POST and the reply cannot lose "this write
+# may have landed". What this pass applies from the answer is bookkeeping: a
+# door that is not there (404) or refuses this token (401) releases the claim
+# and backs off, so five rows do not bounce every two seconds against a route
+# that is not deployed; a door that could not be reached leaves the row
+# RUNNING for release_stranded_api, because "unreachable" and "ran" are
+# indistinguishable from here and re-running is the one thing never allowed.
+# ---------------------------------------------------------------------------
+
+API_CLAIMANT = "worker-api"
+#: The Worker route. routes/hands_api.ts HANDS_API_RUN_PATH, pinned equal by
+#: test/hands-api.test.ts.
+API_HAND_RUN_PATH = "/hands/api/run"
+# A vendor call is one HTTP round trip plus a catalog read; the research
+# lane's ten minutes is generous here and there is no reason to be tighter.
+API_LEASE_SECONDS = 600
+API_STRANDED_MINUTES = 15
+# How long this process stops polling the lane after the door said it is not
+# there (404) or that this token does not open it (401). Neither changes in
+# two seconds, and a row claimed and released every tick reads as work.
+API_HAND_BACKOFF_SECONDS = 300
+# The one HTTP call a pass makes to the Worker per job; a catalog read and an
+# execute can each take seconds against a slow vendor.
+API_HAND_TIMEOUT = 60
+_api_hand_down_until = 0.0
+
+
+def _api_note(job: dict) -> dict:
+    try:
+        params = json.loads(job.get("params") or "{}") or {}
+    except Exception:
+        return {}
+    note = params.get("_hand") if isinstance(params, dict) else None
+    return note if isinstance(note, dict) else {}
+
+
+def release_stranded_api(anticipy,
+                         older_than_minutes: int = API_STRANDED_MINUTES) -> int:
+    """Requeue — or park — api jobs this worker claimed and never settled.
+
+    Unlike research, a stranded row here MAY have reached the vendor: the
+    brain claimed it, POSTed, and died before the Worker's answer, or the
+    Worker died mid-run. `recover_expired` already carries the rule: a
+    possible external effect parks the row as needs_user for the owner to
+    check, never a re-run; a read is requeued, up to the attempt cap. The
+    effect is read off the verdict the router wrote (`_hand.effect`), which is
+    what the Worker ran the step as."""
+    base = anticipy.backend_url
+    cutoff = (datetime.now(timezone.utc) - timedelta(minutes=older_than_minutes)
+              ).strftime("%Y-%m-%d %H:%M:%S")
+    filt = (f'status="running" && lane="{LANE_API}"'
+            f' && claimed_by="{API_CLAIMANT}" && updated<="{cutoff}"')
+    scope = owner_filter(anticipy)
+    if scope:
+        filt = f"({filt}) && {scope}"
+    try:
+        r = pb.get(f"{base}/api/collections/jobs/records",
+                   params={"filter": filt, "perPage": 20, "sort": "updated"},
+                   timeout=10)
+        if not getattr(r, "ok", False):
+            return 0
+        items = r.json().get("items", [])
+    except Exception as e:
+        print(f"api sweep failed: {e}")
+        return 0
+    freed = 0
+    for job in items:
+        body = {"status": "queued", "claimed_by": "", "claimed_at": ""}
+        headers = None
+        try:
+            params = json.loads(job.get("params") or "{}") or {}
+        except Exception:
+            params = {}
+        effect = str(_api_note(job).get("effect") or "")
+        # A read that stopped landed nothing. Anything else may have, and an
+        # effect nobody declared is read as the severe case, never the gentle
+        # one — the same polarity hands._read_reply gives a garbled effect.
+        uncertain = effect != "read"
+        workflow = workflow_from_params(params)
+        if workflow:
+            try:
+                workflow = recover_expired_plan(
+                    workflow, external_effect_uncertain=uncertain)
+            except Exception as e:
+                print(f"api sweep: {job['id']} cannot be recovered: {e}")
+                continue
+            body.update(workflow.job_fields())
+            body["params"] = json.dumps(put_in_params(params, workflow))
+            if body["status"] == "needs_user":
+                body["effect_uncertain"] = True
+                body["result"] = (
+                    "The step on the connected app may have gone through "
+                    "before anything came back — please check the app "
+                    "before I try again.")
+            headers = {"X-Anticipy-Lease": job.get("lease_token") or ""}
+        elif uncertain:
+            body = {"status": "needs_user", "effect_uncertain": True,
+                    "result": ("The step on the connected app may have gone "
+                               "through before anything came back — please "
+                               "check the app before I try again.")}
+        try:
+            back = pb.patch(f"{base}/api/collections/jobs/records/{job['id']}",
+                            json=body, headers=headers, timeout=10)
+        except Exception as e:
+            print(f"api sweep: {job['id']} could not be handed back: {e}")
+            continue
+        if getattr(back, "ok", False):
+            freed += 1
+    if freed:
+        print(f"api hand: recovered {freed} job(s) a dead run left at running")
+    return freed
+
+
+def _release_api_claim(anticipy, job: dict, params: dict, workflow,
+                       lease_token: str, why: str) -> None:
+    """Give a claim back WITHOUT running: the door was not there or refused
+    this token, and the row must not sit at running for fifteen minutes over
+    a step nobody attempted. A plan goes back to queued with its lease
+    released (attempts stay counted — the claim happened)."""
+    body = {"status": "queued", "claimed_by": "", "claimed_at": ""}
+    headers = None
+    if workflow:
+        from dataclasses import replace as _replace
+        from .workflow import PlanState
+        try:
+            released = _replace(workflow, state=PlanState.QUEUED, lease=None,
+                                reason=why, updated_at=datetime.now(timezone.utc))
+            released.assert_valid()
+        except Exception as e:
+            print(f"api hand: {job['id']} could not be released: {e}")
+            return
+        body.update(released.job_fields())
+        body["params"] = json.dumps(put_in_params(params, released))
+        headers = {"X-Anticipy-Lease": lease_token}
+    try:
+        back = pb.patch(f"{anticipy.backend_url}/api/collections/jobs/records/{job['id']}",
+                        json=body, headers=headers, timeout=10)
+        if not getattr(back, "ok", False):
+            print(f"api hand: {job['id']} release refused "
+                  f"({getattr(back, 'status_code', '?')}) — the stranded sweep will")
+    except Exception as e:
+        print(f"api hand: {job['id']} release failed: {e}")
+
+
+def run_api_jobs(anticipy, poster=None) -> None:
+    """Run the api lane: claim HERE, execute in the Worker. See the block
+    comment above. `poster(url, json=..., timeout=...)` is the one seam,
+    defaulting to the records client so the service token and the worker
+    marker ride on the request the way they do on every other brain call."""
+    global _api_hand_down_until
+    try:
+        if time.time() < _api_hand_down_until:
+            return
+        base = anticipy.backend_url
+        release_stranded_api(anticipy)
+        filt = f'status="queued" && lane="{LANE_API}"'
+        scope = owner_filter(anticipy)
+        if scope:
+            filt = f"({filt}) && {scope}"
+        r = pb.get(f"{base}/api/collections/jobs/records",
+                   params={"filter": filt, "perPage": 5, "sort": "created"},
+                   timeout=10)
+        if not getattr(r, "ok", False):
+            return
+        jobs = r.json().get("items", [])
+        if not jobs:
+            return
+        post = poster or pb.post
+        for job in jobs:
+            note = _api_note(job)
+            if note.get("hand") != "api" or note.get("lane") != LANE_API:
+                # A row on this lane that the router never licensed for this
+                # hand. Nothing here may run it and nothing here may move it
+                # (the lane is immutable through the records API); say so
+                # and leave it, the way the device lane is left.
+                print(f"api hand: {job['id']} sits on lane api without an "
+                      f"api verdict ({note.get('hand')!r}) — not claiming it")
+                continue
+            try:
+                params = json.loads(job.get("params") or "{}") or {}
+            except Exception:
+                params = {}
+            workflow = workflow_from_params(params)
+            lease_token = ""
+            claim_body = {"status": "running", "claimed_by": API_CLAIMANT,
+                          "claimed_at": datetime.now(timezone.utc)
+                          .strftime("%Y-%m-%d %H:%M:%S")}
+            if workflow:
+                try:
+                    workflow = claim_plan(
+                        workflow, expected_version=workflow.version,
+                        actor_id=API_CLAIMANT,
+                        lease_seconds=API_LEASE_SECONDS)
+                except Exception:
+                    continue
+                lease_token = workflow.lease.token
+                params = put_in_params(params, workflow)
+                claim_body.update(workflow.job_fields())
+                claim_body["params"] = json.dumps(params)
+            claim = pb.patch(
+                f"{base}/api/collections/jobs/records/{job['id']}",
+                json=claim_body, timeout=10)
+            if not getattr(claim, "ok", False):
+                continue
+            check = pb.get(f"{base}/api/collections/jobs/records/{job['id']}",
+                           timeout=10)
+            if not getattr(check, "ok", False):
+                continue
+            fresh = check.json()
+            if fresh.get("claimed_by") != API_CLAIMANT \
+                    or fresh.get("status") != "running" \
+                    or (lease_token and fresh.get("lease_token") != lease_token):
+                continue
+            # THE OWNER IN THE BODY IS A CHECK, NOT A NAME. The route reads
+            # the row's own owner_ref and refuses a body that disagrees; this
+            # process sends its own scope so a mis-scoped claim is refused
+            # loudly instead of run quietly.
+            owner_ref = str(getattr(anticipy, "owner_ref", "") or "").strip()
+            body = {"job": job["id"]}
+            if owner_ref:
+                body["owner"] = owner_ref
+            try:
+                answer = post(f"{base}{API_HAND_RUN_PATH}", json=body,
+                              timeout=API_HAND_TIMEOUT)
+            except Exception as e:
+                # UNREACHABLE IS NOT "DID NOT RUN". The request may have
+                # arrived and the reply been lost; the row stays running
+                # under this claim and release_stranded_api settles it later
+                # without re-running anything it cannot vouch for.
+                print(f"api hand: {job['id']} — the door could not be "
+                      f"reached ({e!r}); leaving the claim for the sweep")
+                continue
+            code = getattr(answer, "status_code", None)
+            if code in (401, 404):
+                why = ("the Worker has no /hands/api/run route deployed"
+                       if code == 404 else
+                       "the Worker refused this process' service token")
+                _release_api_claim(anticipy, job, params, workflow,
+                                   lease_token, why)
+                _api_hand_down_until = time.time() + API_HAND_BACKOFF_SECONDS
+                print(f"api hand: {why} — released {job['id']} and pausing "
+                      f"the lane for {API_HAND_BACKOFF_SECONDS}s")
+                break
+            try:
+                payload = answer.json() or {}
+            except Exception:
+                payload = {}
+            if getattr(answer, "ok", False) and payload.get("ok"):
+                lane = payload.get("lane")
+                where = " -> browser lane" if lane == "" else ""
+                print(f"api hand: {job['id']} {payload.get('outcome')}"
+                      f"{' (' + str(payload.get('reason')) + ')' if payload.get('reason') else ''}"
+                      f" -> {payload.get('status')}{where} — "
+                      f"{job.get('goal', '')[:60]}")
+                continue
+            # The door answered and did not settle the row (a 409 the claim
+            # doctrine should make impossible, a 500 whose write failed).
+            # Nothing is re-run; the sweep owns what is still running.
+            print(f"api hand: {job['id']} answered {code} "
+                  f"{str(payload.get('message') or '')[:80]!r} — leaving it "
+                  "for the stranded sweep")
+    except Exception as e:
+        print(f"api pass failed: {e}")
 
 
 FINISHED_PER_PAGE = 200
@@ -5216,6 +5502,12 @@ def main() -> None:
             # The research lane runs HERE, in this process. Read-only goals
             # never wait for — or touch — his browser (roadmap §6).
             run_research_jobs(anticipy)
+
+            # THE API HAND. A step the router licensed for an app he has
+            # connected (lane="api") is claimed here, exactly as research is,
+            # and run by the Worker's /hands/api/run door — the one place
+            # that calls api_hand.ts. Never his browser; never unclaimed.
+            run_api_jobs(anticipy)
 
             # A stuck job must SPEAK. When the browser hands something back —
             # it needs a detail she doesn't have, hit a login wall, found the
