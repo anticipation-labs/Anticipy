@@ -1243,15 +1243,16 @@ enum ConnectOnboardingPolicy {
     /// the whole argument: an unsent skip costs one person one repeated ask,
     /// which the next skip can correct, and a recorded level-1 decline cannot
     /// be walked back by anything the phone can do.
-    /// TRUE SINCE 2026-09-06 19:40Z. The migration that lets live D1 hold
-    /// `declined_soft` (migration/d1/2026-09-06-connect-nudges-declined-soft.sql)
-    /// was applied to production that evening with 0 rows to carry, and
-    /// overnight/is_connect_live.py leg 13 reads PASS against the live CHECK.
-    /// nudge.ts treats declined_soft as the legitimate level-0 refusal. Build
-    /// 148 was stamped while this still read false and the gate refused it --
-    /// correctly, since a false here with a live table that CAN hold the state
-    /// was tape with no tracker. Both halves agree now; so does this line.
-    static let serverRecordsTheSoftSnooze = true
+    /// FALSE, AND A WRONG FLIP WAS CAUGHT. On 2026-09-06 this was set true
+    /// because the declined_soft MIGRATION had been applied to live D1 and leg
+    /// 13 read PASS -- "the table CAN hold the state". That is a different fact
+    /// from "the Worker WRITES the state": recordSkip still reaches
+    /// recordDecline, which stamps `declined` at level 1, and this suite's own
+    /// serverAgreedWithSkip measured it and said no. A phone sending skips to
+    /// a server that records them as real declines punishes every person who
+    /// walks past the setup card. Stays false until nudge.ts writes
+    /// declined_soft on the onboarding trigger; the gate holds both halves.
+    static let serverRecordsTheSoftSnooze = false
 
     /// Does another implementation of "the owner refused the setup card" mean
     /// the same thing this one does?

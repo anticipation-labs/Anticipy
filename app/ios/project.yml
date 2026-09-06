@@ -736,7 +736,12 @@ settings:
     #      live D1 and leg 13 reads PASS. 148 was refused by the gate for
     #      exactly this flag being stale-false against a table that could hold
     #      the state. Same bytes as 148 otherwise.
-    CURRENT_PROJECT_VERSION: "149"
+    # 150: 149 REVERTED. The flag went true on a misread -- the migration let
+    #      the table HOLD declined_soft, but the Worker still WRITES a real
+    #      level-1 decline on a skip, and the suite measured exactly that. The
+    #      gate refused 149 and a commit went past it anyway; this puts the flag
+    #      back to false and the number forward so the bytes are named.
+    CURRENT_PROJECT_VERSION: "150"
     DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: NO
@@ -788,7 +793,7 @@ targets:
         # literal from a Mac one, and two products answering "which build
         # are you holding" with different numbers is the exact disease this
         # gate exists to prevent.
-        CURRENT_PROJECT_VERSION: "149"
+        CURRENT_PROJECT_VERSION: "150"
         DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_ENTITLEMENTS: ../macos/AnticipyMac/AnticipyMac.entitlements
