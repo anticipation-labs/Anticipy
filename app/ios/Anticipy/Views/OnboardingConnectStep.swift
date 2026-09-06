@@ -108,8 +108,15 @@ struct OnboardingConnectStep: View {
             // Detection refused. The person is told the true and useful half;
             // the diagnostic half (`Refusal.sentence`) belongs in the journal,
             // where somebody can act on it.
-            if step.refusal != nil {
-                Text(ConnectOnboardingPolicy.Copy.detectionTrouble)
+            //
+            // WHICH sentence is the REFUSAL'S answer, not this view's. Until
+            // 2026-09-06 this line read `Copy.detectionTrouble` for every cause,
+            // so "I could not look at your evidence" and "I looked, you do use
+            // apps, and I could not load their names" read identically — two
+            // renderings for three answers, chosen in a `some View` where no
+            // suite could reach the choice.
+            if let refusal = step.refusal {
+                Text(refusal.cardSentence)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }

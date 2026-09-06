@@ -172,10 +172,11 @@ enum ConnectOnboardingPolicy {
     enum NudgeState: String, CaseIterable {
         case neverAsked = "never_asked"
         case asked = "asked"
-        /// The setup card's skip — see the same member on the top-level
-        /// `NudgeState`. Mirrored here because this file carries its own copy
-        /// of the contract's closed sets, and a member on one copy and not the
-        /// other is the same silent drop in a second place.
+        /// The setup card's Skip, level 0, seven days — NOT a rung on the
+        /// ladder. `ConnectionsPolicy.NudgeState.declinedSoft` carries the long
+        /// version of why; this enum is the same closed set read by the other
+        /// half of the same feature, and the runner compares BOTH against
+        /// contract.ts member for member.
         case declinedSoft = "declined_soft"
         case declined = "declined"
         case connected = "connected"
@@ -374,6 +375,45 @@ enum ConnectOnboardingPolicy {
         /// A weight, a timestamp or a level this build cannot read. Fails
         /// closed: an unreadable row must not be ranked, and must not be asked.
         case unreadableRow = "unreadable_row"
+        /// WE HAVE NOT LOOKED. The evidence could not be read — the request
+        /// failed, or the card was reached before the answer landed.
+        ///
+        /// It is its own cause and not folded into an empty card, because the
+        /// two are claims about different things. "You use none of these" is a
+        /// claim about the PERSON; this is a claim about US, and telling
+        /// somebody the first when the truth is the second is how a working
+        /// product gets abandoned at setup by a person whose network blinked.
+        case couldNotLook = "could_not_look"
+        /// There IS evidence for this owner and the catalog could name none of
+        /// it. Also not an empty card: every row was dropped for want of a
+        /// name, which is our defect, and rendering it as "nothing detected"
+        /// bills it to the person.
+        case catalogUnreadable = "catalog_unreadable"
+
+        /// WHAT THE PERSON READS when this refusal reaches the setup card.
+        ///
+        /// DECIDED HERE AND NOT IN THE VIEW. `OnboardingConnectStep` drew
+        /// `Copy.detectionTrouble` for EVERY refusal until 2026-09-06 — two
+        /// renderings for three answers — and the reason it could is that the
+        /// choice lived in a `some View` where no suite can run it. A caller
+        /// that must pick a string cannot be checked; a caller that renders one
+        /// can.
+        ///
+        /// EVERY REFUSAL ANSWERS, including the ones that cannot reach this
+        /// screen, because a `default:` here is how the next cause added to the
+        /// enum silently inherits somebody else's sentence. The scoping causes
+        /// share `detectionTrouble`: to the person they are all "we could not
+        /// work out your apps", and the half that names which is for the
+        /// journal, where somebody can act on it.
+        var cardSentence: String {
+            switch self {
+            case .catalogUnreadable:
+                return Copy.catalogTrouble
+            case .notSignedIn, .foreignRow, .mixedOwners, .foreignLink,
+                 .wrongToolkit, .linkNotOurs, .unreadableRow, .couldNotLook:
+                return Copy.detectionTrouble
+            }
+        }
 
         var sentence: String {
             switch self {
@@ -391,6 +431,10 @@ enum ConnectOnboardingPolicy {
                 return "the address this card would open is not our connect page"
             case .unreadableRow:
                 return "a row carried a value this build cannot read"
+            case .couldNotLook:
+                return "this owner's evidence could not be read, so nothing was ranked"
+            case .catalogUnreadable:
+                return "there is evidence for this owner and the catalog could name none of it"
             }
         }
     }
@@ -552,6 +596,162 @@ enum ConnectOnboardingPolicy {
                 out.append(DetectedApp(key: line.key,
                                        name: entry.name,
                                        logo: entry.logo,
+                                       preselected: preselect,
+                                       evidence: line.sources))
+            }
+            return .apps(out)
+        }
+    }
+
+    // =====================================================================
+    // MARK: - 1B. The card, from what the server actually said
+    // =====================================================================
+
+    /// ONE LINE OF `me/connections/signals`: AN APP THIS OWNER LIVES IN,
+    /// ALREADY RANKED, ALREADY NAMED.
+    ///
+    /// THE RANKING IS THE SERVER'S AND IS NOT REDONE HERE. `rank` above is the
+    /// same arithmetic in this language, mirrored under a gate, and it still
+    /// runs — over rows a caller holds locally. It cannot run over THIS,
+    /// because the weight is deliberately not on the wire: it is an ordering
+    /// with no unit that decays between two calls, and a number on the wire is
+    /// an invitation to `if weight > 0.5` on a phone — a second policy about
+    /// who gets asked to connect what, in the one place nobody reviewing this
+    /// feature would look. Two definitions of which app is first is a list that
+    /// reorders itself between the screen and the message about it.
+    ///
+    /// WHAT IS STILL DECIDED HERE IS EVERY PRODUCT QUESTION: which lines are
+    /// dropped, which arrive ticked, and how many. That is what the card is,
+    /// and it belongs where a laptop can run it.
+    ///
+    /// `unreadable` IS THE HONEST FOURTH FIELD. A source spelling or an account
+    /// alias this build has never heard of reads as NOTHING rather than as the
+    /// nearest thing — the enums are closed for that reason — but "nothing" is
+    /// not the same as "there was nothing there", and the difference decides a
+    /// tick. A line carrying one is SHOWN and never PRE-SELECTED: the exclusion
+    /// rules are written in terms of sources (`connected` drops a line, `asked`
+    /// unticks it), so a spelling we cannot read is a rule we cannot apply, and
+    /// the safe side of a rule nobody could apply is the unticked one. Ticking
+    /// it would be inventing a tick out of our own ignorance.
+    struct RankedApp: Equatable {
+        let key: AppKey
+        /// From the catalog, through the server. Never a slug shown raw.
+        let name: String
+        let logo: String?
+        let lastSeenAt: Double
+        /// The kinds of evidence this build knows, as they arrived.
+        let sources: [SignalSource]
+        /// Every value on this line this build could not read — a source, an
+        /// alias — kept rather than dropped in silence.
+        let unreadable: [String]
+
+        /// The line as the wire carried it: strings in, closed enums out.
+        ///
+        /// The client cannot build this type (the two files are compiled apart,
+        /// on purpose — see the runners), so the translation is done from
+        /// primitives HERE, where the enums are and where a suite can run it.
+        init(toolkit: String, name: String, logo: String? = nil,
+             alias: String? = nil, lastSeenAt: Double, sources: [String] = []) {
+            var known: [SignalSource] = []
+            var lost: [String] = []
+            for raw in sources {
+                if let source = SignalSource(rawValue: raw) {
+                    if !known.contains(source) { known.append(source) }
+                } else {
+                    lost.append(raw)
+                }
+            }
+            var account: AccountAlias?
+            if let alias, !alias.isEmpty {
+                account = AccountAlias(rawValue: alias)
+                if account == nil { lost.append(alias) }
+            }
+            self.key = AppKey(toolkit: toolkit, alias: account)
+            self.name = name
+            self.logo = logo
+            self.lastSeenAt = lastSeenAt
+            self.sources = known
+            self.unreadable = lost
+        }
+    }
+
+    /// WHAT THE EVIDENCE ROUTE ANSWERED, in the four states the route declares
+    /// (`SIGNALS_ANSWER`, routes/connections_api.ts).
+    ///
+    /// Four rather than one, because three of them come back EMPTY and they are
+    /// three different things to say to a person. A card that folds them
+    /// together tells somebody they use none of the apps in the world every
+    /// time a request fails — on the one screen that then invites them to
+    /// connect what they already live in.
+    enum SignalsAnswer: Equatable {
+        /// This owner's apps, best first, as the server ordered them.
+        case ranked([RankedApp])
+        /// We looked, and this owner has no evidence yet. THE ONLY ONE OF THE
+        /// four that is a claim about the person.
+        case nothingYet
+        /// We could not look — the request failed, or the card was reached
+        /// before the answer landed. A claim about us.
+        case unreachable
+        /// We looked, there IS evidence, and the catalog could name none of it.
+        /// Also a claim about us, and a different one.
+        case catalogUnreadable
+    }
+
+    /// THE CARD, FROM WHAT THE SERVER ACTUALLY SAID.
+    ///
+    /// The overload the flow calls. It exists because the flow used to call the
+    /// one above with two literal empty arrays — `detected(from: [], catalog:
+    /// [], …)` — so "detected apps pre-selected" pre-selected nothing, for
+    /// every person, forever, while this file's own suite proved it would have
+    /// ranked them correctly if anything had ever handed it a row.
+    ///
+    /// THREE EMPTY ANSWERS, THREE DIFFERENT THINGS TO SAY, and this is the
+    /// function that keeps them apart:
+    ///   * `.apps([])` — we looked, and there is nothing. A claim about the
+    ///     person, and only made when the server made it.
+    ///   * `.refused(.couldNotLook)` — we could not look.
+    ///   * `.refused(.catalogUnreadable)` — we looked, there IS evidence, and
+    ///     the catalog could name none of it.
+    ///
+    /// NEVER INVENT A TICK, and there are three ways this function could and
+    /// does not: a refusal returns no rows at all; a line whose evidence this
+    /// build cannot fully read is shown unticked; and the cap is a hard stop
+    /// rather than a target, so a short list stays short.
+    ///
+    /// NO CLOCK. Nothing here decays, because nothing here re-ranks — the two
+    /// went together, and a `now` on this signature would be a parameter that
+    /// changes no answer and reads as though it might.
+    static func detected(from answer: SignalsAnswer,
+                         signedInOwner: OwnerID?,
+                         maxPreselected: Int = ConnectOnboardingPolicy.maxPreselected) -> Detection {
+        // Asked first, so a signed-out phone reads as signed out whatever the
+        // network did. `notSignedIn` is the more fundamental fact and it is the
+        // one the flow's other half (`ConnectBeat.audience`) is deciding on at
+        // the same moment.
+        guard signedInOwner != nil else { return .refused(.notSignedIn) }
+        switch answer {
+        case .unreachable:
+            return .refused(.couldNotLook)
+        case .catalogUnreadable:
+            return .refused(.catalogUnreadable)
+        case .nothingYet:
+            return .apps([])
+        case .ranked(let lines):
+            var out: [DetectedApp] = []
+            var ticked = 0
+            for line in lines {
+                // Already connected: offering it reads as "Anticipy forgot".
+                if line.sources.contains(.connected) { continue }
+                // Already asked: the nudge state machine owns that
+                // conversation, and a pre-ticked box would re-put a question
+                // this owner has already been put.
+                let alreadyAsked = line.sources.contains(.asked)
+                let readable = line.unreadable.isEmpty
+                let preselect = !alreadyAsked && readable && ticked < maxPreselected
+                if preselect { ticked += 1 }
+                out.append(DetectedApp(key: line.key,
+                                       name: line.name,
+                                       logo: line.logo,
                                        preselected: preselect,
                                        evidence: line.sources))
             }
@@ -754,6 +954,23 @@ enum ConnectOnboardingPolicy {
         static let detectionTrouble = "I could not work out which apps you use just now. "
             + "Search for one, or skip this — none of it is required."
 
+        /// THE OTHER REFUSAL, WHICH IS A DIFFERENT THING TO HAVE HAPPENED.
+        ///
+        /// `detectionTrouble` is "we could not look". This one is "we looked,
+        /// there IS evidence for you, and we could not put a NAME to any of it"
+        /// — the catalog answered nothing usable. Both are claims about US and
+        /// neither tells the person a falsehood about themselves, which is why
+        /// one sentence over both was defensible; it was still two renderings
+        /// for three answers, and the two failures need different work from us,
+        /// so a support thread that can tell them apart is worth one string.
+        ///
+        /// It says LESS about the cause than the diagnostic does, on purpose:
+        /// "the catalog is unreadable" is our vocabulary. What the person needs
+        /// is that the list is missing, that it is not their fault, and that
+        /// both ways out are still open.
+        static let catalogTrouble = "I know you use a few apps, but I could not load their "
+            + "names just now. Search for one, or skip this — none of it is required."
+
         /// EVERY SENTENCE THIS STEP CAN SAY, in one list, so a suite cannot
         /// check six of them and believe it checked the screen. The query
         /// inside `nothingFound` is the OWNER'S OWN WORDS quoted back, so the
@@ -761,7 +978,7 @@ enum ConnectOnboardingPolicy {
         /// prose, never theirs.
         static var everySentence: [String] {
             [title, subtitle, searchPlaceholder, connect, skip, footnote,
-             searchPrompt, searching, searchTrouble, detectionTrouble,
+             searchPrompt, searching, searchTrouble, detectionTrouble, catalogTrouble,
              nothingFound(query: "…")]
         }
     }
@@ -963,6 +1180,71 @@ enum ConnectOnboardingPolicy {
                                        leavesTheRowDeclined: false,
                                        snoozeDays: Contract.onboardingSkipSnoozeDays)
 
+    /// DOES THE SERVER RECORD WHAT THIS CARD MEANS BY A SKIP? MEASURED, NO.
+    ///
+    /// A skip has to reach the server or it does not exist: the local write is
+    /// this handset's memory, a reinstall forgets it, a second phone never had
+    /// it, and the ask engine — the thing that actually decides whether this
+    /// person is asked again — reads neither. So the phone wants to send one.
+    ///
+    /// THE SERVER HALF LANDED ON 2026-09-06 AND THE DATABASE HALF DID NOT, and
+    /// this constant is now tracking the second one. What changed and what did
+    /// not, measured rather than assumed:
+    ///
+    ///   FIXED. `recordDecline` (connections/nudge.ts) no longer advances the
+    ///   ladder for a setup-card skip. It writes `state: "declined_soft"`,
+    ///   `level: 0` and a seven-day snooze, so when the snooze runs out the
+    ///   person is back at threshold 0.50 and every trigger can reach them
+    ///   again. `POST /me/connections/skip` answers `{level: 0, soft: true}`,
+    ///   which is exactly what `serverAgreedWithSkip` below demands. Deployed
+    ///   the same day: `/me/connections/skip` answers 401 rather than 404 on
+    ///   the live backend. (The host is deliberately not written out — the
+    ///   law-1 scan over this file refuses any domain literal, and it is right
+    ///   to: a file that may carry one of ours is a file somebody will put an
+    ///   app's in.)
+    ///
+    ///   NOT FIXED. Live D1's `connect_nudges` still carries the CHECK
+    ///   constraint it shipped with — five states, no `declined_soft` — and
+    ///   SQLite cannot widen a CHECK, so the table has to be rebuilt. Until it
+    ///   is, that write is refused by the DATABASE: `recordSkip` answers
+    ///   `not-recorded` and the route answers 503. A phone sending skips into
+    ///   that would have every onboarding skip fail, which is worse than not
+    ///   sending: the local snooze still happens either way, and a 503 per
+    ///   ticked app is a burst of failures at the most fragile minute this
+    ///   product has.
+    ///
+    ///   The repair is one file, run once, and it is somebody's yes rather than
+    ///   an agent's: `migration/d1/2026-09-06-connect-nudges-declined-soft.sql`.
+    ///   `overnight/is_connect_live.py` leg 13 is RED until it lands and names
+    ///   that file in its own failure text, so nobody has to remember.
+    ///
+    /// That is exactly `skipMeans` inverted on two of its three facts, and
+    /// `agreesWithSkip(levelBefore: 0, levelAfter: 1, declinedAfter: true, …)`
+    /// returns false over it — the predicate this file already had for holding
+    /// two implementations to one meaning, pointed at the server for the first
+    /// time.
+    ///
+    /// The spec says the same thing in its own words twice: page 21, "Skip
+    /// records `declined_soft` with a 7-day snooze, not a real decline", and
+    /// page 25, "Skipping in onboarding is a 7-day snooze, not a decline".
+    /// `NudgeState.declinedSoft` now exists on BOTH sides — contract.ts, this
+    /// app's own enum, and the Worker's ladder. What is missing is a column
+    /// constraint on one table.
+    ///
+    /// SO THE WIRE IS BUILT AND NOT USED, WHICH IS A THIRD STATE AND NOT A
+    /// SHRUG. `ConnectedAppsClient.skip` exists, is driven by the suite, and
+    /// has a call site in the flow that reads this constant. Flipping it to
+    /// true is the whole change, and it is ONE line the day the migration runs.
+    /// The step runner reads the Worker's `recordDecline` and demands this
+    /// constant match it, so it goes RED in BOTH directions until the two
+    /// agree. Nobody has to remember.
+    ///
+    /// Writing a wrong `declined` is not the safe direction here and that is
+    /// the whole argument: an unsent skip costs one person one repeated ask,
+    /// which the next skip can correct, and a recorded level-1 decline cannot
+    /// be walked back by anything the phone can do.
+    static let serverRecordsTheSoftSnooze = false
+
     /// Does another implementation of "the owner refused the setup card" mean
     /// the same thing this one does?
     ///
@@ -982,6 +1264,38 @@ enum ConnectOnboardingPolicy {
         guard declinedAfter == skipMeans.leavesTheRowDeclined else { return false }
         guard snoozeDaysAfter.isFinite else { return false }
         return abs(snoozeDaysAfter - Double(skipMeans.snoozeDays)) < 0.5
+    }
+
+    /// DID THE FAR END MEAN WHAT THIS CARD MEANT?
+    ///
+    /// `agreesWithSkip` pointed at an acknowledgement off the wire instead of
+    /// at a row, so the phone can check the server's answer with the same
+    /// predicate it checks its neighbour's transition with. One meaning, one
+    /// judge, whichever implementation is being judged.
+    ///
+    /// A FLOOR, AND POINTED THE WAY A FLOOR MUST POINT. The question is "does
+    /// anything license believing the server recorded what this card means",
+    /// and a missing level or a missing instant is nobody answering — so it
+    /// returns false rather than waving through. A no-verdict that waved
+    /// through would be a phone that stopped asking on an answer it never read.
+    ///
+    /// `declinedAfter` IS THE LEVEL, and that is a fact about the far end
+    /// rather than a convenience: the ask engine's `recordDecline` stamps
+    /// `declined` in the same statement that advances the ladder, so a level
+    /// above zero and a row left saying declined are the same event. The
+    /// acknowledgement carries no field for the row's state, and inventing one
+    /// here would be reading a word to decide what happened.
+    ///
+    /// Milliseconds on both sides, which is the contract's clock. The phone's
+    /// own store keeps seconds and that gap is spanned by `agreesWithSkip`
+    /// taking a count of DAYS rather than two instants.
+    static func serverAgreedWithSkip(levelAfter: Int?, snoozeUntil: Double?,
+                                     at now: Double) -> Bool {
+        guard let level = levelAfter, let until = snoozeUntil else { return false }
+        guard now.isFinite, until.isFinite else { return false }
+        return agreesWithSkip(levelBefore: 0, levelAfter: level,
+                              declinedAfter: level >= 1,
+                              snoozeDaysAfter: (until - now) / Contract.dayMilliseconds)
     }
 
     /// What Skip did, so a caller logs what it actually wrote.
@@ -1066,14 +1380,6 @@ enum ConnectOnboardingPolicy {
                 // not an ask and is not undone by walking past a card.
                 out.append(next)
                 continue
-            case .declinedSoft:
-                // Already a soft refusal. Extend the quiet if ours is longer
-                // and change NOTHING else: the level stays 0, which is the
-                // whole of what makes this state different from a decline, and
-                // `actedAt` stays the moment they actually walked past.
-                next.snoozeUntil = max(record.snoozeUntil ?? -Double.greatestFiniteMagnitude, until)
-                out.append(next)
-                continue
             case .declined:
                 // The ladder already has an answer from this person, and the
                 // row is the only record of HOW it was reached. Extend the
@@ -1088,9 +1394,26 @@ enum ConnectOnboardingPolicy {
                 next.snoozeUntil = max(record.snoozeUntil ?? -Double.greatestFiniteMagnitude, until)
                 out.append(next)
                 continue
+            case .declinedSoft:
+                // ALREADY A SHRUG. Walking past the card a second time is the
+                // same answer, not a new one: extend the quiet if ours is
+                // longer and touch nothing else. Without this branch the row
+                // would fall through and re-stamp `actedAt`, which would move
+                // the moment they answered to the moment they scrolled past.
+                next.snoozeUntil = max(record.snoozeUntil ?? -Double.greatestFiniteMagnitude,
+                                       until)
+                out.append(next)
+                continue
             case .neverAsked, .asked:
-                // The ladder has not advanced and does not advance now.
-                next.state = .neverAsked
+                // The ladder has not advanced and does not advance now — and
+                // since 2026-09-06 the row can SAY that rather than imply it.
+                // It used to become `neverAsked`, which had the right effect
+                // (askable again when the snooze ends) and told a small lie:
+                // they WERE asked, the card was on the glass, and `actedAt` two
+                // lines down says so. `declinedSoft` is the state the server's
+                // own ladder writes for this exact event, so the offline
+                // fallback and the server row now mean one thing.
+                next.state = .declinedSoft
             }
             // Never shorten a snooze somebody already earned.
             next.snoozeUntil = max(record.snoozeUntil ?? -Double.greatestFiniteMagnitude, until)

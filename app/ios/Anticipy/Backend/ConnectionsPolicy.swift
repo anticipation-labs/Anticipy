@@ -192,22 +192,22 @@ enum ConnectionStatus: String, CaseIterable, Hashable {
 enum NudgeState: String, CaseIterable, Hashable {
     case neverAsked = "never_asked"
     case asked
-    /// THE SETUP CARD'S SKIP. A seven-day snooze at level 0, and NOT a decline.
+    /// THE SETUP CARD'S SKIP, and it is a state rather than a rung.
     ///
-    /// The spec asks for it by name twice, and the server writes it: see
-    /// `migration/workers/src/connections/nudge.ts`, which stamps
-    /// `state: "declined_soft"` when somebody walks past a card during setup.
+    /// Spec page 21: "Skip records `declined_soft` with a 7-day snooze, not a
+    /// real decline"; page 25 says it again. Until 2026-09-06 the server wrote a
+    /// REAL decline with a shorter clock — level 1, which raises the ask
+    /// threshold from 0.50 to 0.80 against a strict comparison and silences
+    /// in_task, onboarding and repeated_use for that app for good. One tap on a
+    /// card during setup ended the conversation about it forever.
     ///
-    /// It was missing here until 2026-09-06, and the cost of that is the exact
-    /// failure `run_connections_policy_tests.sh` was written to catch: a state
-    /// the server writes and the app does not know does not fail to compile. It
-    /// decodes as nil in `ConnectNudge.parse`, the row is dropped, and the card
-    /// silently disappears for whoever is in it — with no error anywhere and
-    /// nothing on the phone able to tell that a row arrived at all.
+    /// It carries LEVEL 0 and a seven-day snooze. When the snooze runs out the
+    /// person is exactly where they were before they tapped Skip.
     ///
-    /// A soft refusal reads as a decline ON THIS SCREEN. The difference between
-    /// the two is not what the card shows; it is what the ask engine may do
-    /// afterwards, and that lives on the server.
+    /// This member exists here because the app and the text thread are two skins
+    /// on ONE record: a state on the server and not here does not fail to
+    /// compile, it decodes as nil, and the card silently disappears for whoever
+    /// is in it.
     case declinedSoft = "declined_soft"
     case declined
     case connected
@@ -240,15 +240,43 @@ struct ToolkitMeta: Equatable {
     let description: String?
     let appURL: String?
     let scopes: [String]
+    /// HOSTS THIS VENDOR'S MAIL EXCHANGERS SIT UNDER, as the catalog gives them
+    /// — the `mail_hosts` column, snake_case beside `app_url`.
+    ///
+    /// THE SEAM, AND IT IS DRY, WHICH IS THE MEASUREMENT AND NOT A GAP. Spec
+    /// page 22 seeds the onboarding card from the sign-up address' MX record,
+    /// and `ConnectOnboardingPolicy.seeds(fromMailExchanger:)` is the reader
+    /// waiting for it. On 2026-09-06 the server half was measured against the
+    /// live vendor by taking the UNION OF EVERY KEY PATH over twelve detail rows
+    /// and fifty listing rows: there is no mail, mx, exchanger or dns field
+    /// anywhere on either endpoint, so this column comes back EMPTY on every app
+    /// today.
+    ///
+    /// IT IS CARRIED ANYWAY, and empty rather than absent, because "the catalog
+    /// names no mail host" and "this server is too old to have the column" are
+    /// different facts, and a missing key makes the phone guess which one it
+    /// holds. The seed stays dry until somebody builds the honest path — a
+    /// resolved exchanger put to a MODEL against the catalog — and it will be
+    /// dry because nothing published one, not because a line is missing.
+    ///
+    /// NO HOST OF OURS MAY EVER APPEAR IN THIS FILE — not in the code and not
+    /// in this comment, which is why neither provider is named in it. A mail
+    /// domain written into the source is the law-1 violation this feature has
+    /// dodged three times; the Worker's own suite goes red the moment one
+    /// reaches provider.ts, and the runner for this file greps this source for
+    /// app names. The catalog says, or nothing is seeded.
+    let mailHosts: [String]
 
     init(slug: String, name: String, logo: String? = nil,
-         description: String? = nil, appURL: String? = nil, scopes: [String] = []) {
+         description: String? = nil, appURL: String? = nil, scopes: [String] = [],
+         mailHosts: [String] = []) {
         self.slug = slug
         self.name = name
         self.logo = logo
         self.description = description
         self.appURL = appURL
         self.scopes = scopes
+        self.mailHosts = mailHosts
     }
 
     /// A catalog row is usable when it can name the app on a screen. A page
@@ -853,18 +881,25 @@ enum ConnectionsPolicy {
             // two rows that can disagree.
             return .hidden("this app is already connected")
 
-        case .declinedSoft:
-            // They walked past a setup card. Quiet, exactly like a decline —
-            // this screen is not where the two differ. `isStopped` is not
-            // consulted because a soft refusal never advances the ladder, so a
-            // row in this state cannot be at the end of one.
-            return .hidden("this owner skipped the card and the snooze is running")
-
         case .declined:
             if nudge.isStopped {
                 return .hidden("this owner has said no three times; only they reopen it")
             }
             return .hidden("this owner said no and the snooze is running")
+
+        case .declinedSoft:
+            // THEY WALKED PAST A SETUP CARD. Hidden, exactly like a decline —
+            // the difference between the two is not what this screen shows, it
+            // is what the ASK ENGINE may do afterwards, and that lives on the
+            // server. Seven days of quiet either way, and this card is quiet
+            // for both.
+            //
+            // A SEPARATE BRANCH RATHER THAN A SHARED ONE, so the hidden reason
+            // tells the truth about which of the two it is: "said no" over
+            // somebody who shrugged at a form during setup is the sentence that
+            // would make the next reader treat a shrug as a refusal, which is
+            // the exact conflation the state exists to end.
+            return .hidden("this owner skipped a setup card; the seven-day quiet is running")
 
         case .asked:
             // An ask with no moment behind it is an ask out of nowhere, and a

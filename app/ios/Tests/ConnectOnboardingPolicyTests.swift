@@ -254,5 +254,389 @@ check("CONTROL: eight days later it asks again",
                            now: nowSeconds + Double(flowSkip.snoozeDays + 1) * day)
         == .nothingConnected)
 
+
+// ===================================================== 7. THE CARD IS ACTUALLY FED
+//
+// GAP A, and it is the one that made page 45's first sentence a decoration.
+// `OnboardingView.connectDetection` was `detected(from: [], catalog: [], …)` —
+// two literal empty arrays — so "detected apps pre-selected" pre-selected
+// nothing, for every person alive, while section 4 of ConnectOnboardingTests
+// proved 154 times over that the ranking would have ordered them beautifully if
+// anything had ever handed it a row.
+//
+// THE ROWS ARE THE SERVER'S AND SO IS THEIR ORDER. `rank` above is the same
+// arithmetic mirrored under a gate and still runs over locally held rows; it
+// cannot run over these, because the weight is deliberately not on the wire.
+// What is still decided here is every product question — which lines are
+// dropped, which arrive ticked, how many — and those are what these checks are.
+//
+// THE APP NAMES AND SLUGS HERE ARE INVENTED. They exist only in this file.
+let evidenceSlugs = ["ember", "harbour", "lantern", "meadow", "nimbus",
+                     "orchard", "petrel", "quarry"]
+
+func line(_ slug: String, sources: [String] = ["said"], alias: String? = nil,
+          seen: Double = nowMillis) -> P.RankedApp {
+    P.RankedApp(toolkit: slug, name: slug.uppercased(), logo: nil,
+                alias: alias, lastSeenAt: seen, sources: sources)
+}
+
+// THE THREE EMPTY ANSWERS ARE THREE DIFFERENT FACTS, and only one of them is a
+// claim about the person. A card that folds them together tells somebody they
+// use none of the apps in the world every time a request times out — on the one
+// screen that then invites them to connect what they already live in.
+check("we could not look is a refusal, never an empty card",
+      P.detected(from: .unreachable, signedInOwner: me) == .refused(.couldNotLook))
+check("and a catalog that could name nothing is its own refusal",
+      P.detected(from: .catalogUnreadable, signedInOwner: me)
+        == .refused(.catalogUnreadable))
+check("we looked and there is nothing is the ONLY empty card",
+      P.detected(from: .nothingYet, signedInOwner: me) == .apps([]))
+check("CONTROL: and those three are not the same answer",
+      Set([P.detected(from: .unreachable, signedInOwner: me),
+           P.detected(from: .catalogUnreadable, signedInOwner: me),
+           P.detected(from: .nothingYet, signedInOwner: me)]
+            .map { "\($0)" }).count == 3)
+
+// SIGNED OUT BEATS EVERYTHING, whatever the network said. It is the more
+// fundamental fact and the one ConnectBeat.audience is deciding on at the same
+// instant.
+for answer in [P.SignalsAnswer.unreachable, .nothingYet, .catalogUnreadable,
+               .ranked([line(evidenceSlugs[0])])] {
+    check("a signed-out phone refuses that card whatever came back",
+          P.detected(from: answer, signedInOwner: nil) == .refused(.notSignedIn))
+}
+
+// THE ORDER IS THE SERVER'S AND IS NOT TOUCHED. Two definitions of which app is
+// first is a list that reorders itself between the screen and the message
+// about it.
+let eight = evidenceSlugs.map { line($0) }
+guard case .apps(let card) = P.detected(from: .ranked(eight), signedInOwner: me) else {
+    print("FAIL: a ranked answer did not produce a card at all, so nothing is offered")
+    exit(1)
+}
+check("every app the server ranked is on the card",
+      card.map { $0.key.toolkit } == evidenceSlugs)
+// AND THE CAP IS A HARD STOP RATHER THAN A TARGET. Past it the app is still on
+// the card and still one tap away; it is not ticked, because a screen of
+// pre-ticked boxes past the fold is consent nobody gave.
+check("exactly maxPreselected apps arrive ticked",
+      card.filter { $0.preselected }.count == P.maxPreselected)
+check("and they are the first ones, in the server's order",
+      card.prefix(P.maxPreselected).allSatisfy { $0.preselected })
+check("CONTROL: the ones past the cap are shown and unticked",
+      card.dropFirst(P.maxPreselected).allSatisfy { !$0.preselected })
+
+// THE TWO EXCLUSIONS, WHICH ARE NOT THE SAME EXCLUSION.
+let mixed = P.detected(from: .ranked([
+    line("ember", sources: ["connected"]),
+    line("harbour", sources: ["asked", "said"]),
+    line("lantern", sources: ["said", "mx"]),
+]), signedInOwner: me)
+check("an app already connected is not offered again",
+      mixed.offered.map { $0.key.toolkit } == ["harbour", "lantern"])
+check("an app already asked about is shown and never pre-ticked",
+      mixed.offered.first { $0.key.toolkit == "harbour" }?.preselected == false)
+check("CONTROL: and the one nobody has been asked about is ticked",
+      mixed.offered.first { $0.key.toolkit == "lantern" }?.preselected == true)
+check("an asked line does not spend a tick either",
+      mixed.offered.filter { $0.preselected }.count == 1)
+
+// NEVER INVENT A TICK OUT OF OUR OWN IGNORANCE. A source spelling or an alias
+// this build has never heard of reads as NOTHING — the enums are closed for
+// that reason — and "nothing" is not "there was nothing there". The exclusions
+// are written in terms of sources, so a spelling we cannot read is a rule we
+// cannot apply, and the safe side of a rule nobody could apply is unticked.
+let strange = P.detected(from: .ranked([
+    line("meadow", sources: ["said", "telepathy"]),
+    line("nimbus", sources: ["said"], alias: "shared"),
+    line("orchard", sources: ["said"], alias: "work"),
+]), signedInOwner: me)
+check("a line carrying a source this build cannot read is shown",
+      strange.offered.map { $0.key.toolkit } == ["meadow", "nimbus", "orchard"])
+check("and it is not pre-ticked",
+      strange.offered.first { $0.key.toolkit == "meadow" }?.preselected == false)
+check("nor is one carrying an alias this build cannot read",
+      strange.offered.first { $0.key.toolkit == "nimbus" }?.preselected == false)
+check("CONTROL: an alias this build DOES know ticks and keys the row",
+      strange.offered.first { $0.key.toolkit == "orchard" }?.preselected == true)
+check("CONTROL: and that alias reached the key, so two accounts stay two rows",
+      strange.offered.first { $0.key.toolkit == "orchard" }?.key.alias == .personal
+        ? false : strange.offered.first { $0.key.toolkit == "orchard" }?.key.alias == .work)
+
+// THE TRANSLATION ITSELF, which is where a closed enum earns its keep.
+let read = P.RankedApp(toolkit: "petrel", name: "PETREL", logo: nil,
+                       alias: "personal", lastSeenAt: nowMillis,
+                       sources: ["said", "said", "observer", "telepathy"])
+check("a repeated source is one source", read.sources == [.said, .observer])
+check("a spelling this build never heard of is kept, not guessed at",
+      read.unreadable == ["telepathy"])
+check("CONTROL: and a spelling it knows is not in that list",
+      !read.unreadable.contains("said"))
+check("the alias reaches the key", read.key == P.AppKey(toolkit: "petrel", alias: .personal))
+
+// ===================================================== 8. AND IT CAME OFF THE WIRE
+//
+// The half a source scan cannot see. `ConnectedAppsClient` is compiled into
+// this binary and driven over a fake transport, so the request that WOULD have
+// gone out is inspected rather than imagined, and the answers the Worker
+// actually serves are decoded rather than described.
+//
+// The shapes below are `routes/connections_api.ts` as it stands on 2026-09-06:
+// `signalRow` is `catalogRow` plus `alias`, `last_seen_at` and `sources`, and
+// the four states are `SIGNALS_ANSWER`.
+
+@MainActor
+final class Wire: ConnectedAppsTransport {
+    struct NoAnswer: Error {}
+    var status = 200
+    var body: [String: Any] = [:]
+    private(set) var sent: [URLRequest] = []
+    var urls: [String] { sent.compactMap { $0.url?.absoluteString } }
+
+    func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+        sent.append(request)
+        let data = (try? JSONSerialization.data(withJSONObject: body)) ?? Data()
+        return (data, HTTPURLResponse(url: request.url!, statusCode: status,
+                                      httpVersion: nil, headerFields: nil)!)
+    }
+
+    func bodyOut() -> [String: Any]? {
+        guard let data = sent.last?.httpBody else { return nil }
+        return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+    }
+}
+
+let base = URL(string: "https://api.invalid")!
+let token = "sess_2f7c1d9e"
+guard let wireOwner = OwnerId(me.raw) else {
+    print("FAIL: the suite could not build the client's owner id")
+    exit(1)
+}
+
+@MainActor
+func clientOver(_ wire: Wire, owner: OwnerId? = nil) -> ConnectedAppsClient {
+    ConnectedAppsClient(credential: {
+        guard let who = owner else { return nil }
+        return ConnectedAppsCredential(baseURL: base, owner: who, authToken: token)
+    }, transport: wire)
+}
+
+func wireRow(_ slug: String, alias: String? = nil,
+             sources: [String] = ["said"], name: String? = nil) -> [String: Any] {
+    var row: [String: Any] = [
+        "slug": slug,
+        "name": name ?? slug.uppercased(),
+        "logo": "https://logos.invalid/\(slug).png",
+        "description": NSNull(),
+        "app_url": "https://\(slug).invalid",
+        "scopes": ["read"],
+        "last_seen_at": nowMillis,
+        "sources": sources,
+    ]
+    if let alias { row["alias"] = alias }
+    return row
+}
+
+func cause(_ error: Error) -> ConnectedAppsRefusal.Cause? {
+    (error as? ConnectedAppsRefusal)?.cause
+}
+
+// THE OWNER IS NEVER ON THE WIRE. The route is under `me/` and the server
+// derives the owner from the session — this is the rule the spike broke when
+// one operator's mailbox served everybody.
+let ranked = Wire()
+ranked.body = ["state": "ranked",
+               "items": [wireRow("ember"), wireRow("harbour", alias: "work")]]
+let answered = try? await clientOver(ranked, owner: wireOwner).signals(owner: wireOwner)
+check("the evidence route is asked on the path the Worker serves",
+      ranked.sent.first?.url?.path == "/me/connections/signals")
+check("it is a GET, because reading evidence may never write any",
+      ranked.sent.first?.httpMethod == "GET")
+check("no owner id appears anywhere in the request",
+      !ranked.urls.joined().contains(me.raw))
+check("the session token rides in the header, never on the URL",
+      ranked.sent.first?.value(forHTTPHeaderField: "Authorization") == token
+        && !ranked.urls.joined().contains(token))
+guard case .ranked(let wireLines)? = answered else {
+    print("FAIL: a ranked answer off the wire did not decode as ranked at all.")
+    print("      That is gap A with a route in front of it: the card would")
+    print("      still pre-select nothing, for everybody, forever.")
+    exit(1)
+}
+check("both lines came back, in the order the server sent them",
+      wireLines.map { $0.toolkit } == ["ember", "harbour"])
+check("the catalog's own name is on the line, so no slug is shown raw",
+      wireLines.first?.name == "EMBER")
+check("the alias crosses as the server wrote it", wireLines.last?.alias == "work")
+check("and so do the sources", wireLines.first?.sources == ["said"])
+
+// AN EMPTY ANSWER IS BELIEVED ONLY WHEN THE SERVER SAID IT. "You have nothing
+// yet" is the one claim on this route that is about the PERSON, so it is a
+// floor: read from the field the far end declares, never inferred from a short
+// list.
+let empty = Wire()
+empty.body = ["state": "none", "items": []]
+check("the server's own word for an empty table is what makes the card empty",
+      (try? await clientOver(empty, owner: wireOwner).signals(owner: wireOwner))
+        == .nothingYet)
+let silent = Wire()
+silent.body = ["items": []]
+var silentCause: ConnectedAppsRefusal.Cause?
+do { _ = try await clientOver(silent, owner: wireOwner).signals(owner: wireOwner) }
+catch { silentCause = cause(error) }
+check("a 200 with nothing in it and no such word is unreadable, not empty",
+      silentCause == .unreadableAnswer)
+let unnameable = Wire()
+unnameable.body = ["state": "ranked", "items": [["slug": "ember"]]]
+var unnameableCause: ConnectedAppsRefusal.Cause?
+do { _ = try await clientOver(unnameable, owner: wireOwner).signals(owner: wireOwner) }
+catch { unnameableCause = cause(error) }
+check("rows arrived and none could be read: unreadable, not empty",
+      unnameableCause == .unreadableAnswer)
+
+// THE TWO FAILURES ARE TOLD APART BY A FIELD, NEVER BY THE PROSE BESIDE IT.
+let noCatalog = Wire()
+noCatalog.status = 503
+noCatalog.body = ["ok": false, "state": "catalog-unreadable", "message": "…"]
+var noCatalogCause: ConnectedAppsRefusal.Cause?
+do { _ = try await clientOver(noCatalog, owner: wireOwner).signals(owner: wireOwner) }
+catch { noCatalogCause = cause(error) }
+check("a catalog that could name nothing has its own cause",
+      noCatalogCause == .catalogUnreadable)
+let outage = Wire()
+outage.status = 503
+outage.body = ["ok": false, "state": "unreadable", "message": "…"]
+var outageCause: ConnectedAppsRefusal.Cause?
+do { _ = try await clientOver(outage, owner: wireOwner).signals(owner: wireOwner) }
+catch { outageCause = cause(error) }
+check("CONTROL: and an ordinary outage does not borrow it",
+      outageCause == .serverRefused)
+
+// SIGNED OUT SENDS NOTHING, and the assertion is on the recorder: a client that
+// threw AFTER building the request would pass a test that only read the throw,
+// and the request would already be at the server.
+let signedOut = Wire()
+var signedOutCause: ConnectedAppsRefusal.Cause?
+do { _ = try await clientOver(signedOut, owner: nil).signals(owner: wireOwner) }
+catch { signedOutCause = cause(error) }
+check("a signed-out phone does not ask for anybody's evidence",
+      signedOutCause == .notSignedIn && signedOut.sent.isEmpty)
+guard let neighbour = OwnerId("bbbbbbbbbbbbbbb") else {
+    print("FAIL: the suite could not build a second owner id")
+    exit(1)
+}
+let wrongPerson = Wire()
+var wrongPersonCause: ConnectedAppsRefusal.Cause?
+do { _ = try await clientOver(wrongPerson, owner: neighbour).signals(owner: wireOwner) }
+catch { wrongPersonCause = cause(error) }
+check("and a call naming somebody who is not signed in reaches the wire zero times",
+      wrongPersonCause == .anotherOwner && wrongPerson.sent.isEmpty)
+
+// THE SKIP'S BODY IS TWO FIELDS AND NEITHER OF THEM IS A LEVEL. What a refusal
+// COSTS is the ladder's answer; a client that could name the snooze could name
+// it as zero.
+let said = Wire()
+said.body = ["ok": true, "state": "recorded", "level": 1,
+             "snooze_until": nowMillis + 7 * day * 1000]
+let ack = try? await clientOver(said, owner: wireOwner)
+    .skip(toolkit: "ember", onboarding: true, owner: wireOwner)
+check("the skip goes to the route the Worker serves",
+      said.sent.first?.url?.path == "/me/connections/skip")
+check("its body is the toolkit and the surface, and nothing else",
+      (said.bodyOut()?["toolkit"] as? String) == "ember"
+        && (said.bodyOut()?["onboarding"] as? Bool) == true
+        && said.bodyOut()?.keys.sorted() == ["onboarding", "toolkit"])
+check("no owner id is on the body either", !(said.bodyOut()?.keys.contains("user_id") ?? true))
+check("what the server did comes back rather than being swallowed",
+      ack?.level == 1 && ack?.state == "recorded")
+
+// AND WHAT COMES BACK IS JUDGED BY THE PREDICATE THIS FILE ALREADY HAS.
+//
+// THE MEASUREMENT THAT KEEPS THE SKIP ON THIS PHONE. The Worker's `recordSkip`
+// reaches `recordDecline`, which stamps `declined` and `level + 1` on the very
+// event this card calls a shrug — a seven-day snooze, yes, but a real decline
+// under it, and level 1 raises the ask threshold to 0.8 against a strict
+// comparison. `serverAgreedWithSkip` reads exactly that and says no.
+check("the server's answer today is NOT what the setup card means by a skip",
+      !P.serverAgreedWithSkip(levelAfter: ack?.level, snoozeUntil: ack?.snoozeUntil,
+                              at: nowMillis))
+check("which is the fact the flow's gate is holding",
+      P.serverRecordsTheSoftSnooze == false)
+check("CONTROL: a far end that left the ladder alone WOULD agree",
+      P.serverAgreedWithSkip(levelAfter: 0, snoozeUntil: nowMillis + 7 * day * 1000,
+                             at: nowMillis))
+// A FLOOR, POINTED THE WAY A FLOOR MUST POINT: nobody answering is not a yes.
+check("a missing level is nobody answering, not a level of zero",
+      !P.serverAgreedWithSkip(levelAfter: nil, snoozeUntil: nowMillis + 7 * day * 1000,
+                              at: nowMillis))
+check("and a missing instant is nobody answering either",
+      !P.serverAgreedWithSkip(levelAfter: 0, snoozeUntil: nil, at: nowMillis))
+let mute = Wire()
+mute.body = ["ok": true, "level": 1]
+var muteCause: ConnectedAppsRefusal.Cause?
+do {
+    _ = try await clientOver(mute, owner: wireOwner)
+        .skip(toolkit: "ember", onboarding: true, owner: wireOwner)
+} catch { muteCause = cause(error) }
+check("a 2xx nobody can read is not a recorded no", muteCause == .unreadableAnswer)
+
+// ===================================================== 8B. END TO END, ON ONE CARD
+//
+// THE WHOLE OF GAP A IN ONE CHECK. A body in the shape the Worker serves, read
+// by the real client, translated the way OnboardingView.readConnectSignals
+// translates it, and handed to the policy — and what comes out has ticks on it.
+// Against the tree this closes, every one of these was false: the flow passed
+// two literal empty arrays and the card came back blank for everybody.
+//
+// The six lines below are the view's own mapping. The view cannot be compiled
+// on a laptop, so the runner greps it for exactly this shape; if these two ever
+// disagree, that leg is the one that says so.
+@MainActor
+func asPolicyAnswer(_ answer: AppSignalsAnswer) -> P.SignalsAnswer {
+    switch answer {
+    case .nothingYet:
+        return .nothingYet
+    case .ranked(let rows):
+        return .ranked(rows.map {
+            ConnectOnboardingPolicy.RankedApp(toolkit: $0.toolkit, name: $0.name,
+                                              logo: $0.logo, alias: $0.alias,
+                                              lastSeenAt: $0.lastSeenAt,
+                                              sources: $0.sources)
+        })
+    }
+}
+
+let live = Wire()
+live.body = [
+    "state": "ranked",
+    "items": [
+        wireRow("ember"),
+        wireRow("harbour", sources: ["connected"]),
+        wireRow("lantern", sources: ["asked", "said"]),
+        wireRow("meadow", alias: "work", sources: ["mx", "said"]),
+    ],
+]
+guard let offWire = try? await clientOver(live, owner: wireOwner).signals(owner: wireOwner) else {
+    print("FAIL: the card's own evidence route did not answer at all")
+    exit(1)
+}
+let endToEnd = P.detected(from: asPolicyAnswer(offWire), signedInOwner: me)
+check("the card is built from what the server said",
+      endToEnd.offered.map { $0.key.toolkit } == ["ember", "lantern", "meadow"])
+check("THE DEFECT THIS CLOSES: something is actually pre-selected",
+      endToEnd.offered.contains { $0.preselected })
+check("the app already connected is not offered", !endToEnd.offered.contains { $0.key.toolkit == "harbour" })
+check("the app already asked about is offered unticked",
+      endToEnd.offered.first { $0.key.toolkit == "lantern" }?.preselected == false)
+check("the two nobody has been asked about arrive ticked",
+      endToEnd.offered.filter { $0.preselected }.map { $0.key.toolkit } == ["ember", "meadow"])
+check("and the name on the card is the catalog's, never the slug",
+      endToEnd.offered.first?.name == "EMBER")
+// AND THE CONTROL FOR THE WHOLE SECTION: the same journey with the answer the
+// old flow forced on every person. It has to come out empty, or these checks
+// prove nothing about the wire.
+check("CONTROL: with no evidence the same card is honestly empty",
+      P.detected(from: .nothingYet, signedInOwner: me).offered.isEmpty)
+
 print(failures == 0 ? "all connect-onboarding step checks passed" : "\(failures) FAILED")
 exit(failures == 0 ? 0 : 1)

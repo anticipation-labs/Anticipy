@@ -30,6 +30,10 @@ func check(_ name: String, _ ok: Bool) {
 // goes stale in silence unless something outside it counts.
 // ---------------------------------------------------------------------------
 
+// `declined_soft` (2026-09-06) is the setup card's Skip: level 0, seven days,
+// and NOT a rung on the ladder. It sits where the contract puts it — between
+// `asked` and `declined` — because this list is compared to contract.ts IN
+// ORDER, and `NudgeState.allCases` has to match it member for member.
 let CONTRACT_NUDGE_STATES = ["never_asked", "asked", "declined_soft", "declined",
                              "connected", "needs_reconnect"]
 let CONTRACT_STATUSES = ["connected", "needs_reconnect", "disconnected"]
@@ -515,9 +519,12 @@ print("── the nudge card ──")
 var rendered: [NudgeState: NudgeCard] = [:]
 rendered[.neverAsked] = card(nudge(state: .neverAsked, trigger: nil, sentAt: nil))
 rendered[.asked] = card(nudge(state: .asked))
-rendered[.declinedSoft] = card(nudge(state: .declinedSoft, level: 0,
-                                     snoozeUntil: NOW + 7 * DAY))
 rendered[.declined] = card(nudge(state: .declined, level: 1, snoozeUntil: NOW + 14 * DAY))
+// LEVEL 0 AND A SEVEN-DAY SNOOZE, which is the whole shape of the state: a
+// setup-card skip does not climb the ladder, so a fixture at level 1 here would
+// be a row the server can no longer write.
+rendered[.declinedSoft] = card(nudge(state: .declinedSoft, level: 0,
+                                     snoozeUntil: NOW + 7 * DAY, trigger: .onboarding))
 rendered[.connected] = card(nudge(state: .connected, trigger: nil))
 rendered[.needsReconnect] = card(nudge(state: .needsReconnect))
 
@@ -525,23 +532,6 @@ check("every state in the contract has a rendering",
       NudgeState.allCases.allSatisfy { rendered[$0] != nil })
 check("the states are exactly the contract's, in order",
       NudgeState.allCases.map(\.rawValue) == CONTRACT_NUDGE_STATES)
-
-// ── THE SKIP IS NOT A NO ────────────────────────────────────────────────────
-// The server writes `declined_soft` when somebody walks past a setup card, and
-// until 2026-09-06 this enum had no such member: `ConnectNudge.parse` returned
-// nil, the row was dropped, and the card vanished with no error anywhere. These
-// four checks are what says the app can now READ what the server writes.
-check("a skipped row decodes at all rather than being dropped",
-      ConnectNudge(row: ["user_id": ME.raw, "toolkit": SLUG_A,
-                         "state": "declined_soft", "level": 0])?.state == .declinedSoft)
-let skippedCard = rendered[.declinedSoft]!
-check("a skipped card is quiet", !skippedCard.visible)
-check("and says nothing at all while it is quiet", skippedCard.lines.isEmpty)
-check("and never claims this person said no three times",
-      !skippedCard.hiddenBecause.contains("three times"))
-// The whole of what makes it different from a decline: the ladder did not move.
-check("a soft refusal is a level-0 state",
-      nudge(state: .declinedSoft, level: 0).level == 0)
 check("the statuses are exactly the contract's",
       ConnectionStatus.allCases.map(\.rawValue) == CONTRACT_STATUSES)
 check("the aliases are exactly the contract's",
@@ -555,6 +545,20 @@ check("the snooze ladder is exactly the contract's",
 // out of nowhere — which every ask in this product is forbidden to be.
 check("never_asked shows nothing", !rendered[.neverAsked]!.visible)
 check("and says so", !rendered[.neverAsked]!.hiddenBecause.isEmpty)
+
+// declined_soft: they walked past a setup card. Quiet, exactly like a decline —
+// the difference between the two is not what this screen shows, it is what the
+// ASK ENGINE may do afterwards, and that lives on the server.
+let shrugged = rendered[.declinedSoft]!
+check("a skipped setup card shows nothing", !shrugged.visible)
+check("and it does not read as a refusal",
+      shrugged.hiddenBecause != rendered[.declined]!.hiddenBecause)
+// THE POINT OF THE STATE, said in the one place this app can say it: a shrug is
+// not a no. Two states that hid for the same recorded reason would be one state
+// with two names, and the next reader would collapse them again.
+check("the two quiet states hide for reasons a person could tell apart",
+      shrugged.hiddenBecause.contains("skipped")
+          && rendered[.declined]!.hiddenBecause.contains("said no"))
 
 // asked: the card IS the text, in the other skin.
 let asked = rendered[.asked]!

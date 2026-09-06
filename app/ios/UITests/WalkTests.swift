@@ -232,6 +232,19 @@ final class WalkTests: XCTestCase {
         snap("19-pendant-connector")
         back(); back()
 
+        // CONNECTED APPS — spec page 26's Settings screen, and the other end of
+        // the setup card. It is the screen a person reaches to add an app we
+        // never asked about, to turn "let Anticipy make changes" on, and to
+        // disconnect one. It was in the app and in nobody's walk.
+        //
+        // ASSERTED, not guarded: unlike the onboarding beat, this row is always
+        // there for a signed-in owner. A walk that shrugged at its absence would
+        // be a walk that cannot tell a missing screen from a slow one.
+        row("Connected apps")
+        requireChrome("Connected apps", in: app)
+        snap("19a-connected-apps")
+        back()
+
         row("Profile")
         require("First name", in: app)
         snap("20-profile")

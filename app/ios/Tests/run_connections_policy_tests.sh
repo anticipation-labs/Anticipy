@@ -157,39 +157,21 @@ fi
 #
 # A state added on the server and not here does not fail to compile. It decodes
 # as nil, and the card silently vanishes for whoever is in that state.
-# Block comments, gone before anything looks for members.
-#
-# `union_from` harvests every double-quoted string between a declaration and its
-# semicolon, and it stripped `//` lines only. On 2026-09-06 a `/** ... */` above
-# `declined_soft` quoted the spec — "Skip records `declined_soft` with a 7-day
-# snooze, not a real decline" — and this leg reported `Page 25:` and `not a real
-# decline` as members of NudgeState. A doc comment must never be able to invent
-# a member of a closed set; a leg that can be confused by prose is a leg nobody
-# will believe the next time it goes red.
-strip_block_comments() {
-    awk '
-        {
-            line = $0; out = ""
-            while (1) {
-                if (inside) {
-                    p = index(line, "*/")
-                    if (p == 0) { line = ""; break }
-                    inside = 0; line = substr(line, p + 2); continue
-                }
-                p = index(line, "/*")
-                if (p == 0) { out = out line; break }
-                out = out substr(line, 1, p - 1)
-                line = substr(line, p + 2)
-                inside = 1
-            }
-            print out
-        }
-    '
+# BLOCK COMMENTS ARE STRIPPED TOO, and that is not tidiness. Both readers below
+# lift every double-quoted string out of a declaration, and a JSDoc block sitting
+# inside one is full of prose — contract.ts's own note on `declined_soft` quotes
+# the spec twice, and on 2026-09-06 this leg reported the union as
+# `never_asked asked " Page 25: " " not a real decline" declined_soft …`,
+# failing over an English sentence rather than over a state. `sed 's|//.*||'`
+# alone only ever handled the line-comment half; the second expression deletes
+# any line whose first non-space character opens or continues a block comment,
+# which is every line of a JSDoc and cannot be a line of a union.
+strip_comments() {
+    sed -e 's|//.*||' -e '/^[[:space:]]*[*\/]/d' "$1"
 }
-
 union_from() {
     # Every double-quoted string between the declaration and its ';'.
-    strip_block_comments < "$1" | sed 's|//.*||' \
+    strip_comments "$1" \
         | awk -v open="$2" '
             !on && $0 ~ open { on = 1 }
             on {
@@ -204,7 +186,7 @@ union_from() {
 }
 census_from() {
     # The `let NAME = [...]` literal in the suite, in declaration order.
-    sed 's|//.*||' "$suite" \
+    strip_comments "$suite" \
         | awk -v open="^let $1 " '
             !on && $0 ~ open { on = 1 }
             on {

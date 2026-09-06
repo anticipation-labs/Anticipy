@@ -122,12 +122,19 @@ sh "$HERE/run_connect_onboarding_tests.sh"
 # connect link. Its suite compiles ConnectOnboardingPolicy and FirstRunRoute
 # together, which is the only way to see that the snooze the phone stores means
 # what the policy says a snooze means — the two cannot import each other.
-# NOTE (build 141): the connect-step suite's line was HERE and is removed.
-# Build 140 committed this file while run_connect_onboarding_step_tests.sh was
-# still an uncommitted file in another session's working tree, so CI ran a
-# script that is not in the repository and exited 127 — the same half-a-change
-# failure build 132 fixed for ConnectedAppsClient.swift. Put it back in the SAME
-# commit that adds the script.
+# RESTORED (build 145). The note that stood here said: "the connect-step suite's
+# line was HERE and is removed. Build 140 committed this file while
+# run_connect_onboarding_step_tests.sh was still an uncommitted file in another
+# session's working tree, so CI ran a script that is not in the repository and
+# exited 127. Put it back in the SAME commit that adds the script."
+#
+# The script has been committed since build 142 and the line was still not back,
+# so for three builds the 129 checks that prove the setup card reads real
+# evidence and that Skip reaches the server ran NOWHERE — including every leg
+# that would have caught the two gaps this round closed. A half-a-change guard
+# that outlives its own half-a-change is just an untested suite with an apology
+# attached.
+sh "$HERE/run_connect_onboarding_step_tests.sh"
 sh "$HERE/run_job_receipt_tests.sh"
 # The same card from the other end. That one asks what the server proved
 # before it says "done"; this asks which section a job reaches at all — and

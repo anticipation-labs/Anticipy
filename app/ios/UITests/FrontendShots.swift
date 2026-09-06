@@ -183,6 +183,33 @@ final class FrontendShots: XCTestCase {
         } else {
             tap(a, "Continue without one", timeout: 5)
         }
+        // THE SETUP CARD — spec page 25's step 2, "Which apps do you live in?".
+        // It sits between the pendant and the microphone, and this walk went
+        // straight past it until 2026-09-06: the screen was in the app, in the
+        // target, and in nobody's screenshots.
+        //
+        // GUARDED, because the beat is not shown to everybody. `ConnectBeat
+        // .isShown` hides it for an owner who already has apps connected and for
+        // one still inside a seven-day skip snooze, so a walk that DEMANDED it
+        // would go red on a perfectly correct build. `row(a, …)` is not used —
+        // this is a page, not a settings row.
+        if a.staticTexts["Which apps do you live in?"].firstMatch.waitForExistence(timeout: 6) {
+            shot("23a-which-apps", settle: 1.6)
+            // The search box is the whole of "anything else" (page 25), and it
+            // is the half a screenshot of an empty card never shows.
+            let search = a.textFields["Search for another app"].firstMatch
+            if search.waitForExistence(timeout: 3) {
+                search.tap()
+                search.typeText("cal")
+                shot("23b-which-apps-search", settle: 1.8)
+            }
+            // Skip is ALWAYS visible and never buried — page 25 says so in as
+            // many words, and it is what this shot is for. It is also the way
+            // out of the beat, so the walk continues either way.
+            if !tap(a, "Skip", timeout: 4) { tap(a, "Continue", timeout: 4) }
+            Thread.sleep(forTimeInterval: 1.2)
+        }
+
         shot("22d-may-i-listen", settle: 1.8)
         tap(a, "Finish", timeout: 8)
         shot("24-finale", settle: 1.5)

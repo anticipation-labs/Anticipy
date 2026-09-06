@@ -31,6 +31,7 @@
 set -eu
 here=$(cd "$(dirname "$0")" && pwd)
 app="$here/../Anticipy"
+root=$(cd "$here/../../.." && pwd)
 out=$(mktemp -d)
 trap 'rm -rf "$out"' EXIT
 
@@ -40,7 +41,17 @@ route="$app/FirstRunRoute.swift"
 onboard="$app/Views/OnboardingView.swift"
 view="$app/Views/OnboardingConnectStep.swift"
 suite="$here/ConnectOnboardingPolicyTests.swift"
-for f in "$policy" "$handoff" "$route" "$onboard" "$view" "$suite"; do
+# The wire. The card's evidence and the phone's Skip both leave the handset
+# through this one client, so the suite below drives the REAL one over a fake
+# transport rather than a second copy of it — the same shape
+# run_connected_apps_client_tests.sh uses, for the same reason: a client that
+# is only ever exercised by its own mock is a contract nobody keeps.
+client="$app/Backend/ConnectedAppsClient.swift"
+connections="$app/Backend/ConnectionsPolicy.swift"
+model="$app/Backend/ConnectedAppsModel.swift"
+duration="$app/Audio/PlainDuration.swift"
+for f in "$policy" "$handoff" "$route" "$onboard" "$view" "$suite" \
+         "$client" "$connections" "$model" "$duration"; do
     [ -f "$f" ] || { echo "missing $f — these checks would read nothing"; exit 2; }
 done
 
@@ -230,6 +241,261 @@ if ! printf '%s\n' "$startfn" | grep -q 'guard !queue.isEmpty'; then
     exit 2
 fi
 
+# ------------------------------------------------- 4B. THE CARD IS ACTUALLY FED
+#
+# GAP A, and it is the one that made page 45's first sentence a decoration.
+# `OnboardingConnectStep` was constructed with LITERAL EMPTY ARRAYS — `detected(
+# from: [], catalog: [], …)` — so "detected apps pre-selected" pre-selected
+# nothing, for everybody, forever, while `ConnectOnboardingPolicy.detected`
+# passed 154 checks proving it would have ranked them beautifully if anything
+# had ever handed it a row.
+#
+# THE THREE EMPTY ANSWERS ARE THREE DIFFERENT FACTS and the flow may not fold
+# them together. "We looked and you use none of these" is a claim about the
+# person; "we could not look" and "the catalog could name none of it" are
+# claims about us, and a person told the first when the truth is one of the
+# other two is being told their app does not exist by a product whose request
+# failed. The policy carries all three; this leg is that the FLOW reaches them.
+detectfn=$(span "$out/onboard.code.swift" 'var connectDetection')
+[ -n "$detectfn" ] || { echo "OnboardingView has no connectDetection for this runner to read."; exit 2; }
+if printf '%s\n' "$detectfn" | grep -qE 'from: \[\]|catalog: \[\]'; then
+    echo "OnboardingView still builds the setup card out of literal empty arrays:"
+    printf '%s\n' "$detectfn" | grep -nE 'from: \[\]|catalog: \[\]'
+    echo ""
+    echo "That is not a ranking over no evidence, it is a promise never kept."
+    echo "Page 45: \"Detected apps pre-selected from the email domain signal.\""
+    echo "The rows come off the wire, through the one client, and the policy"
+    echo "ranks them. A literal here pre-selects nothing for every person alive."
+    exit 2
+fi
+if ! printf '%s\n' "$detectfn" | grep -q 'ConnectOnboardingPolicy.detected('; then
+    echo "connectDetection no longer asks the policy which apps arrive ticked."
+    exit 2
+fi
+# AND THE EMPTY ANSWERS ARE NOT INVENTED HERE. `SignalsAnswer` is the seam: the
+# view holds what the route said, the policy turns it into a card. A view that
+# built `.apps([])` or `.refused(…)` itself would be a second decision about
+# what an empty answer means, in the one place no suite compiles.
+if printf '%s\n' "$detectfn" | grep -qE '\.apps\(|\.refused\('; then
+    echo "connectDetection decides for itself what an empty answer means."
+    echo "Three empty answers are three different sentences, and which one a"
+    echo "person is told is ConnectOnboardingPolicy's decision — it is the only"
+    echo "half of this a laptop can run."
+    exit 2
+fi
+# THE READ IS FROZEN, exactly as the audience read is and for the same reason:
+# the card seeds its tick-boxes ONCE, so an answer adopted while somebody is
+# standing on the step is a row that appears with no tick and a ranking nobody
+# will ever see.
+signalsfn=$(span "$out/onboard.code.swift" 'func readConnectSignals[(]')
+[ -n "$signalsfn" ] || { echo "OnboardingView has no readConnectSignals() — nothing fetches the evidence."; exit 2; }
+if ! printf '%s\n' "$signalsfn" | grep -q 'ConnectBeat.mayAdoptAudience(standingOn:'; then
+    echo "The evidence read is adopted without asking whether the person is"
+    echo "already standing on the card it would rearrange. The step seeds its"
+    echo "ticks once; a late answer is rows nobody ticked."
+    exit 2
+fi
+# AND IT ASKS THE ONE CLIENT. Every call that leaves this phone about
+# connections goes through `ConnectedAppsClient`, which is where the owner is
+# compared, the token is put in a header and the route census lives. A second
+# way out of the app is a second one of all three.
+if ! printf '%s\n' "$signalsfn" | grep -q 'connectedAppsClient().signals(owner:'; then
+    echo "readConnectSignals does not ask ConnectedAppsClient for the evidence."
+    echo "That client is the only thing in this app allowed to make this call:"
+    echo "it compares the owner before a request exists, keeps the token off"
+    echo "the URL, and declares every route it can reach in one enum."
+    exit 2
+fi
+# ALL FOUR STATES ARE TRANSLATED, AND THE TRANSLATION IS TOTAL. The route
+# declares four (SIGNALS_ANSWER) and three of them come back EMPTY. A view that
+# handled three and let the fourth fall into a default would be choosing, in
+# the one file no suite compiles, which person gets told they use nothing.
+# The check is on the ASSIGNMENT and not on the word appearing somewhere in the
+# function: `.catalogUnreadable` is also the name of the refusal being caught,
+# so a grep for the bare word stays green while the arm that reads it hands
+# back a different answer. Measured — that mutation passed until this line.
+for state in 'nothingYet' 'ranked(' 'catalogUnreadable' 'unreachable'; do
+    if ! printf '%s\n' "$signalsfn" | grep -qF "answer = .$state"; then
+        echo "readConnectSignals never answers .$state."
+        echo "me/connections/signals has four answers and three of them are"
+        echo "empty. \"You use none of these\" is a claim about the PERSON;"
+        echo "\"I could not look\" and \"I cannot name them\" are claims about us."
+        exit 2
+    fi
+done
+# THE ANSWER IS NOT ADOPTED FOR THE WRONG PERSON. The rows on this route carry
+# no owner — the one list in this app that cannot be scoped twice — so the
+# phone's half of that check is a comparison against the id the call was made
+# for. Without it a slow answer pre-ticks one person's apps on another person's
+# setup card, which is the failure this whole feature is built around.
+if ! printf '%s\n' "$signalsfn" | grep -q 'guard session.accountID =='; then
+    echo "readConnectSignals adopts an answer without checking it is still the"
+    echo "same person's. The signals route puts no owner on any row, so this"
+    echo "comparison is the only owner check the phone has left on it."
+    exit 2
+fi
+# AND THE TRANSLATION IS THE ONE THE SUITE RUNS. OnboardingView cannot be
+# compiled on a laptop, so the suite holds a copy of these lines and drives the
+# real client through them. Two copies drift; this is what says when.
+for half in "$out/onboard.code.swift" "$suite"; do
+    if ! grep -q 'ConnectOnboardingPolicy.RankedApp(toolkit:' "$half"; then
+        echo "$(basename "$half") does not build a RankedApp from the wire's own"
+        echo "fields. The view's mapping and the suite's have to be one shape,"
+        echo "or the checked half is not the shipped half."
+        exit 2
+    fi
+done
+
+# ------------------------------------------------- 4C. AND SKIP REACHES A SERVER
+#
+# GAP C. Onboarding's Skip wrote `connectStepSnoozeUntil` into THIS HANDSET'S
+# UserDefaults and nothing else, so a reinstall forgot it and the ask engine —
+# which is the thing that actually decides whether somebody is asked again —
+# never heard it at all. The local write is the OFFLINE FALLBACK. The record is
+# the server's.
+#
+# The wire has to exist before it can be used, so the client's own route census
+# is read here rather than taken on trust.
+if ! grep -q 'static let skip = "me/connections/skip"' "$client"; then
+    echo "ConnectedAppsClient has no skip route, so a person's no has nowhere to go."
+    exit 2
+fi
+if ! grep -q 'static let signals = "me/connections/signals"' "$client"; then
+    echo "ConnectedAppsClient has no signals route, so the card has no evidence"
+    echo "to rank and pre-selects nothing whatever the policy can do."
+    exit 2
+fi
+sendfn=$(span "$out/onboard.code.swift" 'func sendConnectSkip[(]')
+[ -n "$sendfn" ] || { echo "OnboardingView has no sendConnectSkip() — the skip never leaves the phone."; exit 2; }
+# AND SOMETHING CALLS IT. This runner exists because a whole screen was written,
+# compiled and tested with zero call sites; a send that nothing invokes is the
+# same defect one function down. It is called from the Skip handler, beside the
+# local write, so the two halves of one decision cannot come apart.
+skipfn=$(span "$out/onboard.code.swift" 'func skipConnectStep[(]')
+[ -n "$skipfn" ] || { echo "OnboardingView has no skipConnectStep() for this runner to read."; exit 2; }
+for half in 'recordConnectSkip()' 'sendConnectSkip()'; do
+    if ! printf '%s\n' "$skipfn" | grep -qF "$half"; then
+        echo "Skip does not call $half"
+        echo "A skip is two writes: this handset's fallback, and the server's"
+        echo "record. Either one alone is a person who gets asked again — by a"
+        echo "reinstall, or by an ask engine that never heard them."
+        exit 2
+    fi
+done
+if ! printf '%s\n' "$sendfn" | grep -q 'ConnectOnboardingPolicy.serverRecordsTheSoftSnooze'; then
+    echo "sendConnectSkip does not consult the one fact that decides whether"
+    echo "sending is safe. Read ConnectOnboardingPolicy.serverRecordsTheSoftSnooze."
+    exit 2
+fi
+if ! printf '%s\n' "$sendfn" | grep -qE '\.skip\(toolkit:'; then
+    echo "sendConnectSkip does not call the client's skip route."
+    exit 2
+fi
+
+# THE EXPIRY, AND IT RETIRES ITSELF. REWRITTEN 2026-09-06, HALF SPENT.
+#
+# WHAT IT USED TO SAY. `POST /me/connections/skip` reached `recordSkip` ->
+# `recordDecline`, which stamped `state: "declined"` and `level: nudge.level + 1`
+# on the very event the setup card calls a shrug. Level 1 raises that same file's
+# own threshold from 0.5 to 0.8 against a STRICT comparison, so repeated_use
+# (0.6), onboarding (0.7) and in_task (0.8) were silenced for good — the two
+# triggers that can name a task which already cost this person real time. So the
+# phone did not send, and this leg read the server's source and demanded the
+# Swift constant match it.
+#
+# WHAT CHANGED. The ladder was fixed: `recordDecline` now has a soft branch that
+# writes `declined_soft` at LEVEL 0 with a seven-day snooze, and the Worker
+# carrying it is deployed. `spike/two-hands/src/connections/contract.ts`,
+# `ConnectionsPolicy.NudgeState` and live `/me/connections/skip` all know the
+# state.
+#
+# WHY THE PHONE STILL DOES NOT SEND, and why that is not this leg going stale.
+# Live D1's `connect_nudges` carries a CHECK constraint listing five states, and
+# SQLite cannot widen a CHECK — the table has to be REBUILT. Until somebody runs
+# `migration/d1/2026-09-06-connect-nudges-declined-soft.sql`, the row the fixed
+# code writes is refused by the database and the route answers 503. A phone
+# sending into that would fail every onboarding skip at the most fragile minute
+# this product has.
+#
+# SO THE PREDICATE IS NOW THREE-STATE, and the third state is the one this file
+# was missing:
+#
+#   the ladder still climbs          -> the constant MUST be false (the original
+#                                       expiry, unchanged, still armed)
+#   the ladder is soft AND the phone sends -> fine, the feature is done
+#   the ladder is soft AND the phone does not
+#                                    -> ALLOWED, but only while a RED LIVE LEG is
+#                                       tracking the reason. That is law 2's
+#                                       shape: a hold-back with an expiry
+#                                       somebody can run, not a comment.
+#
+# The live leg is `overnight/is_connect_live.py` leg 13. This checks that it
+# exists, that it names the state and the migration, and that the migration file
+# is actually in the tree — so "we are waiting on the database" cannot be a
+# sentence somebody typed.
+nudge="$root/migration/workers/src/connections/nudge.ts"
+if [ -f "$nudge" ]; then
+    decline=$(sed -n '/export function recordDecline/,/^}/p' "$nudge")
+    [ -n "$decline" ] || { echo "cannot read recordDecline out of the Worker's nudge module"; exit 2; }
+    # THE SOFT BRANCH, not the absence of the hard one. `nudge.level + 1` is
+    # still in this function and always will be — it is the ORDINARY ladder,
+    # which a setup-card skip is now the exception to. A leg that reads the old
+    # literal reports "the ladder still climbs" forever and passes by accident,
+    # which is exactly what it did for the first hour after the fix landed.
+    if printf '%s\n' "$decline" | grep -q 'state: "declined_soft"' \
+        && printf '%s\n' "$decline" | grep -q 'level: 0'; then
+        server_soft=true
+    else
+        server_soft=false
+    fi
+    swift_soft=$(grep -E '^[[:space:]]*static let serverRecordsTheSoftSnooze' "$policy" \
+        | head -1 | sed -E 's/.*=[[:space:]]*//' | tr -d ' ')
+    [ -n "$swift_soft" ] \
+        || { echo "ConnectOnboardingPolicy has no serverRecordsTheSoftSnooze constant."; exit 2; }
+
+    if [ "$server_soft" = false ] && [ "$swift_soft" = true ]; then
+        echo ""
+        echo "The constant claims the server honours a soft snooze. It does not:"
+        echo "recordDecline stamps declined and advances the level, which raises"
+        echo "the ask threshold to 0.8 against a strict comparison and silences"
+        echo "in_task and repeated_use permanently. Do not send that."
+        exit 2
+    fi
+
+    if [ "$server_soft" = true ] && [ "$swift_soft" = false ]; then
+        # HOLDING BACK IS ALLOWED, WITH A RED LEG AND NOT WITH A PARAGRAPH.
+        live="$root/overnight/is_connect_live.py"
+        migration="$root/migration/d1/2026-09-06-connect-nudges-declined-soft.sql"
+        ok=yes
+        [ -f "$live" ] || ok=no
+        [ -f "$migration" ] || ok=no
+        if [ "$ok" = yes ]; then
+            grep -q 'declined_soft' "$live" || ok=no
+            grep -q '2026-09-06-connect-nudges-declined-soft.sql' "$live" || ok=no
+        fi
+        if [ "$ok" = no ]; then
+            echo ""
+            echo "The server records the soft snooze and the phone still does not send it,"
+            echo "and nothing live is tracking why. That is tape without an expiry."
+            echo ""
+            echo "Either flip ConnectOnboardingPolicy.serverRecordsTheSoftSnooze to true,"
+            echo "or keep overnight/is_connect_live.py leg 13 — which must name"
+            echo "'declined_soft' and the migration file that repairs it — RED until the"
+            echo "live connect_nudges CHECK can hold the state."
+            exit 2
+        fi
+        echo "NOTE: the ladder is soft and the phone is deliberately not sending yet."
+        echo "      Live D1's connect_nudges CHECK cannot hold 'declined_soft', so the"
+        echo "      write would 503. overnight/is_connect_live.py leg 13 is RED until"
+        echo "      migration/d1/2026-09-06-connect-nudges-declined-soft.sql is run;"
+        echo "      flip the constant in the same change."
+    fi
+else
+    echo "NOTE: the Worker's nudge module is absent, so what the server records"
+    echo "      for a skip is UNPROVEN from here. The constant is pinned in the"
+    echo "      suite; it is not pinned against the thing it is about."
+fi
+
 # ---------------------------------------------------- 5. THE HANDOFF IS SHARED
 #
 # There is exactly one object in this app allowed to open a connect link, and it
@@ -267,8 +533,9 @@ fi
 # SF Symbol names are addresses rather than sentences and are the only literals
 # permitted, exactly as run_connect_onboarding_tests.sh permits them on the view.
 for decl in 'var connectStep' 'func connectSheet[(]' 'func skipConnectStep[(]' \
-            'func recordConnectSkip[(]' 'func startConnecting[(]' \
-            'var connectTroubleSheet'; do
+            'func recordConnectSkip[(]' 'func sendConnectSkip[(]' \
+            'func startConnecting[(]' 'var connectTroubleSheet' \
+            'var connectDetection' 'func readConnectSignals[(]'; do
     block=$(span "$out/onboard.code.swift" "$decl")
     [ -n "$block" ] || { echo "OnboardingView has no $decl for this runner to read."; exit 2; }
     stray=$(printf '%s\n' "$block" | grep -oE '"[^"]*"' | grep -vE '^"[a-z0-9.]+"$' || true)
@@ -296,7 +563,15 @@ echo "never declines; the handoff is the shared one; no app is named"
 # the policy cannot see it either. Compiling them together is what turns "the
 # flow's snooze means what the policy says a snooze means" from a paragraph into
 # a check that fails when it stops being true.
+#
+# AND THE CLIENT IS IN THE BINARY TOO, from 2026-09-06. The card's evidence and
+# the phone's Skip both leave through `ConnectedAppsClient`, and the two things
+# that can go wrong there cannot be seen from a source scan: a route that puts
+# an owner on the wire, and an answer this build reads as a fact when it is a
+# refusal. The real client is driven over a fake transport, so the request that
+# would have been sent is inspected rather than imagined.
 cp "$suite" "$out/main.swift"
-swiftc -O "$policy" "$handoff" "$route" "$out/main.swift" \
+swiftc -O "$policy" "$handoff" "$route" "$connections" "$model" "$client" \
+    "$duration" "$out/main.swift" \
     -o "$out/connectonboardingsteptests"
 "$out/connectonboardingsteptests"

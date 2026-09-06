@@ -101,6 +101,14 @@ struct OnboardingView: View {
     /// never shown the step at all.
     @AppStorage(ConnectBeat.snoozeKey) private var connectSnoozeUntil = 0.0
     @AppStorage(ConnectBeat.snoozeOwnerKey) private var connectSnoozeOwner = ""
+    /// WHAT WE ALREADY KNOW ABOUT THIS OWNER, read once over the network beside
+    /// the audience and frozen the moment the beat is reached.
+    ///
+    /// It starts at `.unreachable`, which is not pessimism: at that instant we
+    /// genuinely have not looked, and the other value — "we looked and found
+    /// none" — is a claim about the person that would be false. The card says
+    /// the two differently and never invents a tick from either.
+    @State private var connectSignals: ConnectOnboardingPolicy.SignalsAnswer = .unreachable
     /// The catalog seam the search box crosses. A reference held in `@State` so
     /// one object serves every keystroke; the credential inside it is read on
     /// every call rather than captured, exactly as `ConnectedAppsClient` demands.
@@ -163,7 +171,14 @@ struct OnboardingView: View {
         // WHETHER THE SETUP STEP IS DUE, asked once per account and asked EARLY
         // — the beat behind the pendant is several taps away, and the answer
         // may not arrive while somebody is standing on the page it removes.
-        .task(id: session.accountID) { await readConnectAudience() }
+        // The audience FIRST and the evidence behind it, in that order and in
+        // one task: the audience call is what sets the credential both of them
+        // read, and it is also the one that decides whether the beat is walked
+        // at all. Two tasks would race over the same credential.
+        .task(id: session.accountID) {
+            await readConnectAudience()
+            await readConnectSignals()
+        }
         // The connect sheet, and the queue behind it. Both belong to the step
         // and to nothing else; the sheet is raised from here rather than from
         // inside `connectStep` so it survives the page turn that ends the beat.
@@ -282,34 +297,29 @@ struct OnboardingView: View {
                               skipForNow: { skipConnectStep() })
     }
 
-    /// WHAT ARRIVES PRE-SELECTED, AND WHY IT IS EMPTY ON THIS BUILD.
+    /// WHAT ARRIVES PRE-SELECTED — page 45's first sentence, and the wire it
+    /// did not have until 2026-09-06.
     ///
-    /// The spec pre-selects from the signals table — page 42's five signals,
-    /// the sign-up address' mail exchanger among them. `app_usage_signals` has
-    /// ZERO ROWS on production (measured 2026-09-06) and `ConnectedAppsClient`
-    /// serves no route that could read one: there is no `me/connections/signals`
-    /// in its `Route` enum, so this phone has no signal rows to rank and cannot
-    /// get any.
+    /// This used to be `detected(from: [], catalog: [], …)`: two literal empty
+    /// arrays, so "detected apps pre-selected" pre-selected nothing for every
+    /// person alive, while the ranking next door passed 154 checks proving it
+    /// would have ordered them correctly if anything had ever handed it a row.
+    /// The rows now arrive off `me/connections/signals` through the one client,
+    /// carrying the owner each was written for, and the policy ranks them.
     ///
-    /// So the ranking is run over what is honestly held — nothing — and the
-    /// card opens with no ticks and a search box. That is `.apps([])`, "we
-    /// looked and found none", which is TRUE. It is deliberately not
-    /// `.refused`, which would print "I could not work out which apps you use"
-    /// to every person forever over a table that is simply empty; and it is
-    /// deliberately not a guess assembled here from the owner's email domain,
-    /// because `CatalogEntry.mailHosts` is a declared contract gap
-    /// (`ToolkitMeta` has no such column) and a guess without it is a domain
-    /// literal in this source, which is the one thing this feature may not have.
+    /// EVERY DECISION IS THE POLICY'S, including what an empty answer means.
+    /// There are three of those and they are three different things to say —
+    /// we looked and there is nothing; we could not look; the catalog could
+    /// name none of it — and this property picks none of them. It hands over
+    /// what the server said and renders the answer.
     ///
-    /// The owner still goes through the policy rather than round it: an id this
-    /// phone cannot vouch for produces a refusal on the card, not an empty list
-    /// that looks like an answer.
+    /// The owner goes through the policy rather than round it: an id this phone
+    /// cannot vouch for produces a refusal on the card, not an empty list that
+    /// looks like an answer.
     private var connectDetection: ConnectOnboardingPolicy.Detection {
         ConnectOnboardingPolicy.detected(
-            from: [],
-            catalog: [],
-            signedInOwner: ConnectOnboardingPolicy.OwnerID(session.accountID),
-            at: Date().timeIntervalSince1970 * 1000)
+            from: connectSignals,
+            signedInOwner: ConnectOnboardingPolicy.OwnerID(session.accountID))
     }
 
     /// Whether the beat is one of this launch's pages. The view asks; it does
@@ -357,6 +367,61 @@ struct OnboardingView: View {
         connectAudience = audience
     }
 
+    /// WHAT WE ALREADY KNOW ABOUT THIS OWNER — the evidence page 45 pre-selects
+    /// from. Read once, beside the audience, and over the same credential.
+    ///
+    /// FROZEN THE MOMENT THE BEAT IS REACHED, exactly as the audience is, and
+    /// for a reason of its own: the card seeds its tick-boxes ONCE, on appear.
+    /// An answer adopted while somebody is standing on the step would put rows
+    /// on the screen that nothing ticked, so the ranking would be visible and
+    /// the pre-selection it exists for would not.
+    ///
+    /// A failure is `.unreachable` and never an empty list. The two are
+    /// different sentences on the card, and telling somebody they use none of
+    /// the apps in the world because a request timed out is how a working
+    /// product gets abandoned at setup.
+    @MainActor
+    private func readConnectSignals() async {
+        guard let who = OwnerId(session.accountID) else { return }
+        let asked = session.accountID
+        let answer: ConnectOnboardingPolicy.SignalsAnswer
+        do {
+            // A TOTAL TRANSLATION AND NOT A DECISION. Every state the client
+            // can produce has exactly one state here, and the two ends were
+            // written against the same four the route declares. What an empty
+            // answer MEANS is decided one line further on, by the policy, where
+            // a suite can run it.
+            switch try await connectedAppsClient().signals(owner: who) {
+            case .nothingYet:
+                answer = .nothingYet
+            case .ranked(let rows):
+                answer = .ranked(rows.map {
+                    ConnectOnboardingPolicy.RankedApp(toolkit: $0.toolkit,
+                                                      name: $0.name,
+                                                      logo: $0.logo,
+                                                      alias: $0.alias,
+                                                      lastSeenAt: $0.lastSeenAt,
+                                                      sources: $0.sources)
+                })
+            }
+        } catch let refusal as ConnectedAppsRefusal
+            where refusal.cause == .catalogUnreadable {
+            answer = .catalogUnreadable
+        } catch {
+            answer = .unreachable
+        }
+        // WHOSE EVIDENCE IS THIS? The route carries no owner on any row — the
+        // one list in this app that cannot be scoped twice — so the phone's
+        // half of that check is here: an answer that landed after somebody
+        // signed out, or after the next person signed in, is DROPPED. Without
+        // it a slow response could pre-tick one person's apps on another
+        // person's setup card, which is the shape of the failure this whole
+        // feature is built around.
+        guard session.accountID == asked else { return }
+        guard ConnectBeat.mayAdoptAudience(standingOn: step) else { return }
+        connectSignals = answer
+    }
+
     /// SKIP IS A SEVEN-DAY SOFT SNOOZE, NOT A DECLINE — page 41, and the whole
     /// of `ConnectOnboardingPolicy.skipMeans`'s reasoning.
     ///
@@ -377,9 +442,22 @@ struct OnboardingView: View {
     private func skipConnectStep() {
         Haptics.engage()
         recordConnectSkip()
+        sendConnectSkip()
         Task { await advance() }
     }
 
+    /// THE OFFLINE FALLBACK, AND IT SAYS SO.
+    ///
+    /// WHICH ONE IS THE TRUTH: THE SERVER'S ROW. This write is one handset's
+    /// memory of a decision that belongs to a person — a reinstall forgets it,
+    /// a second phone never had it, and the ask engine, which is the thing that
+    /// actually decides whether somebody is asked again, reads neither
+    /// `UserDefaults` nor anything else on this device. It is kept because it
+    /// is the only half that works with no network and it is what stops the
+    /// card reappearing on the next launch; it is not the record.
+    ///
+    /// `sendConnectSkip` is the record, and see the constant it reads for why
+    /// nothing leaves this phone yet.
     @MainActor
     private func recordConnectSkip() {
         let now = Date().timeIntervalSince1970
@@ -388,6 +466,61 @@ struct OnboardingView: View {
                 offered: [], signedInOwner: owner, at: now * 1000) else { return }
         connectSnoozeOwner = owner.raw
         connectSnoozeUntil = ConnectBeat.snoozeUntil(now: now, days: outcome.snoozeDays)
+    }
+
+    /// THE SAME NO, WHERE THE ASK ENGINE CAN READ IT — BUILT, GATED, DORMANT.
+    ///
+    /// Gap C is that a skip never left the handset. The wire now exists at both
+    /// ends and this is its call site, and it sends NOTHING, because of one
+    /// fact checked against the Worker's own source rather than assumed:
+    /// `POST /me/connections/skip` reaches `recordSkip` -> `recordDecline`,
+    /// which stamps `declined` and `level: min(level + 1, 3)` on the very event
+    /// this card calls a shrug. The `onboarding` flag only shortens the snooze
+    /// from fourteen days to seven; THE LADDER STILL MOVES. Level 1 raises that
+    /// same module's ask threshold to 0.8 against a strict comparison, so
+    /// `in_task` (0.8), `onboarding` (0.7) and `repeated_use` (0.6) never clear
+    /// it again — the triggers that carry real evidence, silenced for good by a
+    /// shrug at a setup card. The spec asks for `declined_soft` twice (pages 41
+    /// and 45) and neither side has that state yet.
+    ///
+    /// An unsent skip costs one person one repeated ask, which their next skip
+    /// corrects. A recorded level-1 decline cannot be walked back by anything
+    /// this phone can do. So the gate points that way, and
+    /// `run_connect_onboarding_step_tests.sh` reads BOTH sources and goes red
+    /// the day they stop agreeing — including the day the server is fixed and
+    /// this constant is still false.
+    ///
+    /// ONE SKIP PER APP THE CARD ACTUALLY OFFERED. The route takes a slug, so
+    /// there is no way to say "not now" about the card itself; what a person
+    /// walked past is what they were shown, and an app that was never on the
+    /// screen was never declined. (That the card-level no cannot be expressed
+    /// at all is a gap in the route, reported and not papered over here.)
+    ///
+    /// AND THE ANSWER IS READ RATHER THAN COUNTED. The server's own snooze is
+    /// adopted only when `serverAgreedWithSkip` says the far end recorded what
+    /// this card meant; otherwise the local seven days stands. A phone that
+    /// stopped asking on an answer it never understood is the failure this
+    /// whole path exists to avoid.
+    @MainActor
+    private func sendConnectSkip() {
+        guard ConnectOnboardingPolicy.serverRecordsTheSoftSnooze else { return }
+        guard let who = OwnerId(session.accountID) else { return }
+        let apps = Set(connectDetection.offered.map { $0.key.toolkit }).sorted()
+        guard !apps.isEmpty else { return }
+        let client = connectedAppsClient()
+        let now = Date().timeIntervalSince1970
+        Task {
+            for app in apps {
+                guard let said = try? await client.skip(toolkit: app, onboarding: true,
+                                                        owner: who),
+                      let until = said.snoozeUntil,
+                      ConnectOnboardingPolicy.serverAgreedWithSkip(
+                        levelAfter: said.level, snoozeUntil: until, at: now * 1000)
+                else { continue }
+                connectSnoozeOwner = who.raw
+                connectSnoozeUntil = max(connectSnoozeUntil, until / 1000)
+            }
+        }
     }
 
     /// The Connect button. One tap, every ticked app, asked about one at a time.
@@ -424,43 +557,68 @@ struct OnboardingView: View {
         }
     }
 
-    /// The next app in the queue, or the end of the beat.
+    /// THE WHOLE TICKED SET, ON ONE LINK — spec page 25's "One Connect button
+    /// opens a multi-app connect page".
     ///
-    /// AN EMPTY QUEUE ENDS THE STEP, however it emptied — every app connected,
+    /// WHAT THIS REPLACED, and it was the shipped behaviour until 2026-09-06:
+    /// `connectQueue` was walked one app at a time, and each pass minted its own
+    /// token and opened its own browser page. Ticking four apps meant four
+    /// tokens, four hand-overs and four returns for one decision the person made
+    /// once — with the queue emptying between them, so closing the browser after
+    /// the second one lost the other two.
+    ///
+    /// AN EMPTY QUEUE ENDS THE STEP, however it emptied — every app on the page,
     /// or a catalog that could name none of them. Nobody is left standing on a
     /// card whose button has stopped doing anything.
     @MainActor
     private func connectStepMovesOn() {
         guard step == Step.connect else { return }
-        guard let next = connectQueue.first else {
+        guard let first = connectQueue.first else {
             Task { await advance() }
             return
         }
-        connectQueue.removeFirst()
-        connecting = ConnectFlow(app: next, stage: .settingUp)
-        Task { await runConnect(next) }
+        let page = connectQueue
+        // The queue is spent WHOLE. One page, one hand-over, one return: there
+        // is no second pass to come back to, and leaving apps on it would put
+        // the person through the browser again for cards the page already drew.
+        connectQueue = []
+        connecting = ConnectFlow(app: first, stage: .settingUp)
+        Task { await runConnect(page) }
     }
 
     /// The two server calls the handoff needs, in the order it needs them: the
-    /// app's own sentences first, our single-use link behind them. The same
+    /// apps' own sentences first, our single-use link behind them. The same
     /// order Settings uses, through the same session object, because there is
     /// exactly one place in this app allowed to open a connect link.
+    ///
+    /// EVERY APP'S SENTENCES, NOT THE FIRST APP'S. The disclosure in front of a
+    /// page of four has to describe four; showing one app's three lines over a
+    /// link that connects four is the shape of consent this whole feature is
+    /// built to avoid. They are fetched CONCURRENTLY — each costs a catalog read
+    /// and a trip to the sentence writer, and four in series is four times the
+    /// wait in front of somebody who has just tapped a button.
+    ///
+    /// A SINGLE APP THAT CANNOT BE DESCRIBED ENDS THE WHOLE PAGE, deliberately.
+    /// Dropping it and connecting the other three would hand over a link that
+    /// binds an app we could not put a sentence to.
     @MainActor
-    private func runConnect(_ app: ToolkitMeta) async {
+    private func runConnect(_ page: [ToolkitMeta]) async {
         guard let owner = OwnerId(session.accountID) else { return }
+        guard let first = page.first else { return }
         let client = connectedAppsClient()
         do {
-            let sentences = try await client.permissionSentences(toolkit: app.slug, owner: owner)
-            guard connecting?.app.slug == app.slug else { return }
-            guard let prompt = connect.begin(owner: owner.raw, toolkit: app.slug,
+            let sentences = try await Self.sentences(for: page, owner: owner, from: client)
+            guard connecting?.app.slug == first.slug else { return }
+            guard let prompt = connect.begin(owner: owner.raw, toolkit: first.slug,
                                              sentences: sentences) else {
                 connecting?.stage = .trouble
                 return
             }
             connecting?.stage = .asking
-            let link = try await client.connectLink(toolkit: app.slug, owner: owner,
+            let link = try await client.connectLink(toolkits: page.map { $0.slug },
+                                                    owner: owner,
                                                     attemptID: prompt.attemptID)
-            guard connecting?.app.slug == app.slug else { return }
+            guard connecting?.app.slug == first.slug else { return }
             // A link the handoff will not adopt is a link nothing may open, and
             // the attempt goes with it: one left in flight is one whose callback
             // would be believed later.
@@ -470,10 +628,39 @@ struct OnboardingView: View {
                 return
             }
         } catch {
-            guard connecting?.app.slug == app.slug else { return }
+            guard connecting?.app.slug == first.slug else { return }
             connect.ownerChanged()
             connecting?.stage = .trouble
         }
+    }
+
+    /// Every app's three sentences, in the page's own order, fetched at once.
+    ///
+    /// ORDER IS RESTORED RATHER THAN RELIED ON. A task group finishes in
+    /// whatever order the network does, and a disclosure whose lines are shuffled
+    /// against the cards the page will draw is a disclosure about a different
+    /// page. Each result carries its index home.
+    ///
+    /// `nonisolated static` so a suite can run it without a view: this is the
+    /// arithmetic of the disclosure and it touches nothing the screen holds.
+    nonisolated static func sentences(for page: [ToolkitMeta], owner: OwnerId,
+                                      from client: ConnectedAppsClient) async throws -> [String] {
+        if page.count == 1 {
+            return try await client.permissionSentences(toolkit: page[0].slug, owner: owner)
+        }
+        let numbered: [(Int, [String])] = try await withThrowingTaskGroup(
+            of: (Int, [String]).self
+        ) { group in
+            for (index, app) in page.enumerated() {
+                group.addTask {
+                    (index, try await client.permissionSentences(toolkit: app.slug, owner: owner))
+                }
+            }
+            var out: [(Int, [String])] = []
+            for try await one in group { out.append(one) }
+            return out
+        }
+        return numbered.sorted { $0.0 < $1.0 }.flatMap { $0.1 }
     }
 
     /// The disclosure, drawn from the app's own sentences and nothing else.
@@ -1342,7 +1529,15 @@ final class OnboardingCatalogBridge: OnboardingCatalogSearch {
                                                  logo: $0.logo,
                                                  blurb: $0.description,
                                                  appURL: $0.appURL,
-                                                 scopes: $0.scopes)
+                                                 scopes: $0.scopes,
+                                                 // The last hop of the MX seam.
+                                                 // `ConnectOnboardingPolicy
+                                                 // .seeds(fromMailExchanger:)`
+                                                 // reads this and nothing else;
+                                                 // dropping it here is what made
+                                                 // that reader unreachable while
+                                                 // both ends of it existed.
+                                                 mailHosts: $0.mailHosts)
         }
     }
 }

@@ -386,8 +386,18 @@ check("skip does not advance the decline level",
 check("skip says so, in a field a test can read", !skipped.declineLevelChanged)
 check("skip does not leave the row saying `declined`",
       afterSkip.state != .declined)
+// REWRITTEN 2026-09-06. This demanded `.neverAsked`, which had the right EFFECT
+// — askable again the moment the snooze ends — and told a small lie about what
+// happened: the card was on the glass and `actedAt` two lines down says they
+// answered it. The server's own ladder now writes `declined_soft` for this exact
+// event, so the offline fallback writes the same state and the two halves mean
+// one thing. What the check is actually about is unchanged and is asserted
+// twice over: the LEVEL did not move (four lines up) and the row does not say
+// `declined`.
 check("skip leaves the ladder where it was, so the server can still read the row",
-      afterSkip.state == .neverAsked && !(afterSkip.state == .asked && afterSkip.actedAt != nil))
+      afterSkip.state == .declinedSoft && afterSkip.level == 0)
+check("and it does not pretend the card was never shown",
+      afterSkip.state != .neverAsked && afterSkip.actedAt == now)
 check("a shrug is recorded as an action, not as silence", afterSkip.actedAt == now)
 check("the trigger records which moment produced it", afterSkip.trigger == .onboarding)
 
@@ -754,8 +764,8 @@ check("silence becomes a soft no at seventy-two hours",
 check("our link lives ten minutes", P.Contract.linkTTLMilliseconds == 10 * 60 * 1000)
 check("the nudge states are the contract's six",
       P.NudgeState.allCases.map { $0.rawValue }.sorted()
-          == ["asked", "connected", "declined", "declined_soft",
-              "needs_reconnect", "never_asked"])
+          == ["asked", "connected", "declined", "declined_soft", "needs_reconnect",
+              "never_asked"])
 check("the triggers are the contract's five",
       P.Trigger.allCases.map { $0.rawValue }.sorted()
           == ["in_task", "laptop_closed", "onboarding", "repeated_use", "user_named_it"])
