@@ -122,7 +122,16 @@ let theirLink = P.LinkRow(token: "tok-bbbbbbbbbbbbbbbbbbbb", owner: someoneElse,
                           toolkit: "alpha-one", expiresAt: now + P.Contract.linkTTLMilliseconds)
 let otherAppLink = P.LinkRow(token: "tok-cccccccccccccccccccc", owner: me,
                              toolkit: "gamma-one", expiresAt: now + P.Contract.linkTTLMilliseconds)
-let base = "https://connect.example/c"
+// OUR connect page's base, built from the allowlist `ConnectHandoff` owns
+// rather than typed here. Two reasons, and the second is the load-bearing one:
+// the runner refuses a domain literal anywhere in this file, and a suite that
+// wrote its own host would be testing a host nothing in the app uses — which is
+// exactly how a link check passes in a suite and fails in a person's messages.
+let ourHost = ConnectHandoff.connectLinkHosts.sorted().first!
+let base = "https://" + ourHost + "/" + ConnectHandoff.connectLinkPathSegment
+// A base nobody minted: right shape, wrong company. Named for what it is,
+// because the spike sent four of these for real.
+let vendorBase = "https://vendor-link.example/c"
 
 check("a link minted for another owner is refused, not rendered",
       P.rendering(of: P.Ask(record: mine, link: theirLink), in: .ios, catalog: catalog,
@@ -286,19 +295,77 @@ check("the copy says it works with the laptop shut",
 
 let forbidden = ["composio", "oauth", "authorize", "authorise", "grant access",
                  "permission", "integration", "api"]
-let everyWord = [P.Copy.title, P.Copy.subtitle, P.Copy.searchPlaceholder, P.Copy.connect,
-                 P.Copy.skip, P.Copy.footnote].joined(separator: " ").lowercased()
+// EVERY sentence, off the policy's own list rather than off one typed here: a
+// suite that names six of ten strings goes quietly stale the day a seventh is
+// written, and the one nobody checked is the one that says "authorize".
+let everyWord = P.Copy.everySentence.joined(separator: " ").lowercased()
 check("the owner never hears the vendor, or a permission word",
       forbidden.allSatisfy { !everyWord.contains($0) })
+check("the register gate reads every sentence the step can say, not a sample",
+      P.Copy.everySentence.count >= 10 && P.Copy.everySentence.allSatisfy { !$0.isEmpty })
 
-check("the search box finds an app by the name the catalog gave it",
-      P.visibleMatches(for: "gam", in: catalog).map { $0.slug } == ["gamma-one"])
-check("the search box is case-insensitive",
-      P.visibleMatches(for: "GAM", in: catalog).map { $0.slug } == ["gamma-one"])
-check("the search box does not re-offer what is already on the card",
-      P.visibleMatches(for: "a", in: catalog, excluding: ["alpha-one", "alpha-two"])
-          .map { $0.slug } == ["gamma-one"])
-check("an empty query lists nothing", P.visibleMatches(for: "  ", in: catalog).isEmpty)
+// =========================================================================
+// LEG 2c — the search box decides nothing (HARNESS-LAWS law 1)
+// =========================================================================
+// This box used to answer "which app did they mean" with
+// `name.lowercased().contains(needle)`, sorted by name. The sibling box in
+// ConnectedAppsModel refuses to do that and cites law 1. These cases hold this
+// one to the sibling's rule: the query leaves unread, and what the catalog
+// answered is what is shown, in the catalog's order.
+
+// THE CASE THE SUBSTRING RULE FAILED. Nothing the owner typed appears in any
+// name; the catalog matched anyway, because matching is its job and it has a
+// model. Under the old rule this screen showed an empty list and the person
+// concluded their app was not supported.
+guard case .results(let judged) =
+        P.searchState(typed: "the place my team writes things down",
+                      answer: .hits([appThree, appOne]))
+else { fatalError("a catalog answer was not rendered as results") }
+check("what the catalog answered is shown, even when no name contains the words",
+      judged.map { $0.slug } == ["gamma-one", "alpha-one"])
+check("the catalog's own order is kept — nothing here re-ranks it",
+      judged.map { $0.slug } != judged.map { $0.slug }.sorted())
+
+// THE CONTROL. A guard that shows nothing is an outage, not a guard: the
+// ordinary case still works, and a plain name still reaches the card.
+guard case .results(let plain) = P.searchState(typed: "Gamma", answer: .hits([appThree]))
+else { fatalError("the ordinary search case came back empty") }
+check("the ordinary case still works: one hit, shown",
+      plain.map { $0.slug } == ["gamma-one"])
+
+check("nobody has typed anything yet", P.searchState(typed: "   ", answer: nil)
+          == .idle(P.Copy.searchPrompt))
+check("typed, and the answer is not back yet",
+      P.searchState(typed: "gam", answer: nil) == .searching(P.Copy.searching))
+check("the catalog could not be reached says so, and does not say nothing matched",
+      P.searchState(typed: "gam", answer: .unreachable) == .trouble(P.Copy.searchTrouble))
+guard case .nothingFound(let saidNothing) =
+        P.searchState(typed: "gam", answer: .hits([]))
+else { fatalError("an empty catalog answer was not reported as nothing found") }
+check("nothing came back says nothing came back, in the owner's own words",
+      saidNothing.contains("gam"))
+check("what came back is dropped only on facts: already on the card",
+      P.searchState(typed: "a", answer: .hits([appOne, appTwo, appThree]),
+                    excluding: ["alpha-one", "alpha-two"])
+          == .results([appThree]))
+check("a row the catalog could not name is not offered",
+      P.searchState(typed: "a", answer: .hits([P.CatalogEntry(slug: "zeta-one", name: "  "),
+                                               appThree]))
+          == .results([appThree]))
+check("a query is trimmed and otherwise left alone",
+      P.searchQuery("  My Work Mail  ") == "My Work Mail")
+check("an empty query is nobody asking anything", P.searchQuery("  ") == nil)
+
+// The search hit joins the card as a ticked row, and never as a second one.
+let found = P.step(for: detected, found: [appThree], chosen: [])
+check("an app the owner found joins the card",
+      found.apps.map { $0.key.toolkit } == ["alpha-one", "alpha-two", "gamma-one"])
+check("an app they went and found arrives ticked — they just named it",
+      found.apps.last?.preselected == true)
+check("finding an app already on the card does not give it two tick-boxes",
+      P.step(for: detected, found: [appOne], chosen: []).apps.count == detected.offered.count)
+check("the card knows which slugs it is showing, so the search can exclude them",
+      P.slugsOnCard(found.apps) == ["alpha-one", "alpha-two", "gamma-one"])
 
 // =========================================================================
 // LEG 3 — skip is a soft snooze, not a decline
@@ -393,6 +460,61 @@ check("the link is ours, and it is the same bytes in both channels",
 check("the app is named from the catalog in both channels",
       cardView.appName == "Alpha" && textView.appName == "Alpha")
 check("skip is never buried, in either channel", cardView.showsSkip && textView.showsSkip)
+
+// =========================================================================
+// LEG 4b — every link is ours, and the check is not a comment
+// =========================================================================
+// `connectURL` used to trim one slash off whatever base it was handed and glue
+// the token on, under a doc comment promising "never the vendor's URL, and
+// never a vendor URL in a text". During the spike four raw provider links were
+// sent for real and every one expired unused
+// (research/2026-09-05-composio-connections.md, item 4). The allowlist lives in
+// ConnectHandoff, which is where the app already asks before it opens anything,
+// so there is one list to widen rather than two.
+
+check("our own base makes our own link",
+      P.connectURL(token: "tok-1", base: base) == base + "/tok-1")
+check("a trailing slash on the base is tolerated, not doubled",
+      P.connectURL(token: "tok-1", base: base + "/") == base + "/tok-1")
+check("another company's address is not a connect link",
+      P.connectURL(token: "tok-1", base: vendorBase) == nil)
+check("a link in the clear is not ours — it is a credential in transit",
+      P.connectURL(token: "tok-1", base: "http://" + ourHost + "/c") == nil)
+check("our host with a path we do not serve is not our connect page",
+      P.connectURL(token: "tok-1", base: "https://" + ourHost + "/x") == nil)
+check("a host that merely ends in ours is a stranger",
+      P.connectURL(token: "tok-1", base: "https://" + ourHost + ".other-host.example/c") == nil)
+check("credentials in the authority are a shape our links never have",
+      P.connectURL(token: "tok-1", base: "https://someone:pw@" + ourHost + "/c") == nil)
+check("a token our own page would not mint is not carried",
+      P.connectURL(token: "tok 1", base: base) == nil)
+check("no token at all is not a link",
+      P.connectURL(token: "", base: base) == nil)
+
+check("a card whose base is not ours refuses, rather than texting a vendor link",
+      P.rendering(of: ask, in: .sms, catalog: catalog, base: vendorBase,
+                  signedInOwner: me, at: now) == .refused(.linkNotOurs))
+check("and it refuses in the app too, so the two channels cannot disagree",
+      P.rendering(of: ask, in: .ios, catalog: catalog, base: vendorBase,
+                  signedInOwner: me, at: now) == .refused(.linkNotOurs))
+check("a bad base cannot be smuggled past the lockstep check either",
+      !P.firstTextCarriesSameLink(ask, catalog: catalog, base: vendorBase,
+                                  signedInOwner: me, at: now))
+// THE CONTROL, twice: a bad base must not break the states that have no link
+// to get wrong. A guard that refuses everything is an outage.
+check("an ask with no link renders fine whatever the base is",
+      P.rendering(of: P.Ask(record: mine, link: nil), in: .ios, catalog: catalog,
+                  base: vendorBase, signedInOwner: me, at: now)
+          == P.rendering(of: P.Ask(record: mine, link: nil), in: .ios, catalog: catalog,
+                         base: base, signedInOwner: me, at: now))
+check("an expired link renders fine whatever the base is",
+      P.rendering(of: ask, in: .ios, catalog: catalog, base: vendorBase, signedInOwner: me,
+                  at: now + 2 * P.Contract.linkTTLMilliseconds)
+          == P.rendering(of: ask, in: .ios, catalog: catalog, base: base, signedInOwner: me,
+                         at: now + 2 * P.Contract.linkTTLMilliseconds))
+check("the owner check still runs first: a foreign link is a foreign link, not a bad base",
+      P.rendering(of: P.Ask(record: mine, link: theirLink), in: .ios, catalog: catalog,
+                  base: vendorBase, signedInOwner: me, at: now) == .refused(.foreignLink))
 
 // A second channel never mints a second token: one ask, one binding.
 check("a live token is reused, never re-minted",
@@ -536,6 +658,91 @@ check("the second channel does not move the ledger",
           == P.capLedgerStamp(for: mine, at: now + 120_000))
 
 // =========================================================================
+// LEG 6 — two files, one meaning for Skip
+// =========================================================================
+// THE CONTRADICTION THIS PINS. `ConnectionsPolicy.recordDecline` and
+// `ConnectOnboardingPolicy.skipOutcome` are both reachable for the SAME event:
+// the owner refusing an ask whose trigger is `onboarding`, on the setup card or
+// as "not now" typed into the text thread that carries the same record. One
+// advanced the decline ladder to level 1 and stamped the row `declined`; the
+// other left both alone and only moved the snooze. Each file's comment argued
+// the other was wrong, and the runner printed a NOTE about it, which is how a
+// contradiction survives a green suite for as long as anybody looks.
+//
+// The decision, and the reasoning, are on `ConnectOnboardingPolicy.skipMeans`
+// and `skipOutcome`: a form refused is not an app refused, the contract calls
+// seven days a SKIP and keeps its decline table separate, and level 1 raises
+// the server's threshold to 0.8 against a strict comparison — which silences
+// `repeated_use` (0.6), `onboarding` (0.7) and `in_task` (0.8) for good. A
+// shrug during setup must cost one quiet week, not the conversation.
+//
+// So this leg holds BOTH implementations to `agreesWithSkip`. It fails while
+// they disagree. It is not a note.
+
+typealias CP = ConnectionsPolicy
+
+let secondsDay: Double = 24 * 60 * 60
+let nowSeconds: Double = 1_757_000_000
+guard let cpOwner = OwnerId(me.raw) else {
+    fatalError("the contract's own owner-id shape refused an id it minted")
+}
+
+// `ConnectNudge`, `NudgeState` and friends are ConnectionsPolicy's TOP-LEVEL
+// contract types, not members of the enum — the nested spellings in this file
+// are `P.…` and belong to the step. Both are compiled into this one binary,
+// which is what makes the comparison below a measurement.
+func daysOfSnooze(_ nudge: ConnectNudge?, from at: Double) -> Double {
+    guard let until = nudge?.snoozeUntil else { return -1 }
+    return (until - at) / secondsDay
+}
+
+func describe(_ nudge: ConnectNudge?, from at: Double) -> String {
+    let state = nudge?.state.rawValue ?? "no row"
+    let level = nudge.map { String($0.level) } ?? "-"
+    let days = String(format: "%.1f", daysOfSnooze(nudge, from: at))
+    return "state=" + state + " level=" + level + " snooze=" + days + "d"
+}
+
+// THE CONTROL FIRST: this file's own answer is the one `skipMeans` describes.
+// A pin that only ever measures somebody else's code is a pin that can be
+// satisfied by breaking this one.
+check("this step's own skip means what skipMeans says it means",
+      P.agreesWithSkip(levelBefore: mine.level, levelAfter: afterSkip.level,
+                       declinedAfter: afterSkip.state == .declined,
+                       snoozeDaysAfter: (afterSkip.snoozeUntil.map { ($0 - now) / day }) ?? -1))
+check("skipMeans is the contract's seven days, and no ladder movement",
+      P.skipMeans.snoozeDays == P.Contract.onboardingSkipSnoozeDays
+          && !P.skipMeans.advancesTheDeclineLevel && !P.skipMeans.leavesTheRowDeclined)
+// The comparison has to be able to say no, or it is decoration.
+check("agreesWithSkip rejects a refusal that advanced the ladder",
+      !P.agreesWithSkip(levelBefore: 0, levelAfter: 1, declinedAfter: true, snoozeDaysAfter: 7))
+check("agreesWithSkip rejects the ladder's fourteen days",
+      !P.agreesWithSkip(levelBefore: 0, levelAfter: 0, declinedAfter: false, snoozeDaysAfter: 14))
+check("agreesWithSkip rejects a row left saying declined",
+      !P.agreesWithSkip(levelBefore: 0, levelAfter: 0, declinedAfter: true, snoozeDaysAfter: 7))
+
+// Both shapes an onboarding ask can be in when it is refused: never sent as its
+// own record yet (the card), and sent (the text going out the same minute).
+var divergences: [String] = []
+for state in [NudgeState.neverAsked, NudgeState.asked] {
+    let row = ConnectNudge(userID: me.raw, toolkit: "alpha-one", state: state, level: 0,
+                           snoozeUntil: nil, trigger: NudgeTrigger.onboarding,
+                           sentAt: nowSeconds - 60, actedAt: nil, channel: NudgeChannel.sms)
+    let after = CP.recordDecline(row, at: nowSeconds, how: .saidNo, for: cpOwner)
+    let agrees = P.agreesWithSkip(levelBefore: row.level,
+                                  levelAfter: after?.level ?? -1,
+                                  declinedAfter: after?.state == .declined,
+                                  snoozeDaysAfter: daysOfSnooze(after, from: nowSeconds))
+    check("a setup-card refusal on a \(state.rawValue) row means the same thing in both files",
+          agrees)
+    if !agrees {
+        let was = "  a " + state.rawValue + " row: recordDecline returned "
+        divergences.append(was + describe(after, from: nowSeconds)
+            + "; skipOutcome says state=never_asked level=0 snooze=7.0d")
+    }
+}
+
+// =========================================================================
 // The contract's own numbers and spellings
 // =========================================================================
 
@@ -558,6 +765,20 @@ check("the account aliases are the contract's two",
       P.AccountAlias.allCases.map { $0.rawValue }.sorted() == ["personal", "work"])
 check("the channels are the contract's two",
       P.Channel.allCases.map { $0.rawValue }.sorted() == ["ios", "sms"])
+
+if !divergences.isEmpty {
+    print("")
+    print("TWO FILES, TWO MEANINGS FOR SKIP — and the app ships both.")
+    for line in divergences { print(line) }
+    print("")
+    print("The fix belongs in ConnectionsPolicy.recordDecline, which this agent")
+    print("does not own. An onboarding-triggered refusal is a SKIP: return the")
+    print("row with state .neverAsked, level UNCHANGED, snoozeUntil extended (never")
+    print("shortened) to now + onboardingSkipSnoozeDays, actedAt now — and leave the")
+    print("ladder to the declines it was built for. The same edit is owed to")
+    print("recordDecline in spike/two-hands/src/connections/policy.ts, whose level-1")
+    print("onboarding branch fixes the NUMBER and leaves the sentence.")
+}
 
 if failures > 0 {
     print("\nConnectOnboardingTests: \(failures) case(s) came back wrong")

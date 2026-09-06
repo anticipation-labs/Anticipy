@@ -54,14 +54,14 @@ check("the welcome beat is Hello, second of six",
 check("how-it-works is third of six",
       FirstRunTrack.name(step: 1, pageCount: pages) == "How I work"
         && FirstRunTrack.ordinal(step: 1, pageCount: pages) == 3)
-check("the microphone beat is fourth of six",
-      FirstRunTrack.name(step: 2, pageCount: pages) == "May I listen?"
+check("the name beat is fourth of six",
+      FirstRunTrack.name(step: 2, pageCount: pages) == "Your name"
         && FirstRunTrack.ordinal(step: 2, pageCount: pages) == 4)
-check("the number beat is fifth of six",
-      FirstRunTrack.name(step: 3, pageCount: pages) == "Where to reach you"
+check("the computer handoff is fifth of six",
+      FirstRunTrack.name(step: 3, pageCount: pages) == "Your computer"
         && FirstRunTrack.ordinal(step: 3, pageCount: pages) == 5)
-check("the computer handoff is last of six",
-      FirstRunTrack.name(step: 4, pageCount: pages) == "Your computer"
+check("the microphone beat is last of six",
+      FirstRunTrack.name(step: 4, pageCount: pages) == "May I listen?"
         && FirstRunTrack.ordinal(step: 4, pageCount: pages) == 6)
 
 // THE RULE, stated as a rule rather than as four examples. While the door is
@@ -88,7 +88,7 @@ check("VoiceOver hears the same count the screen prints",
 // CLAMPED, NOT TRUSTED. A Step added without a name is a subscript
 // out of range — a crash, on a stranger's first run, out of a copy change.
 check("a step past the end does not walk off the array",
-      FirstRunTrack.name(step: 99, pageCount: pages) == "Your computer")
+      FirstRunTrack.name(step: 99, pageCount: pages) == "May I listen?")
 check("a negative step does not walk off the array",
       FirstRunTrack.name(step: -5, pageCount: pages) == "Your account")
 check("more pages than names still answers",

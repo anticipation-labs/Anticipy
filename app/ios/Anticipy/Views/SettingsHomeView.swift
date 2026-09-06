@@ -11,8 +11,18 @@ struct SettingsHomeView: View {
     @State private var route: Route?
     @AppStorage(AppTheme.key) private var themeChoice = AppTheme.light.rawValue
 
+    /// CONNECTORS AND CONNECTED APPS ARE TWO ROWS AND MUST STAY TWO ROWS.
+    ///
+    /// `connectors` is about THIS iPhone and the machines around it — the
+    /// calendar, contacts and mail on the handset, the browser, the Mac, the
+    /// pendant. `connectedApps` is about the owner's own accounts ELSEWHERE,
+    /// connected through the catalog and revocable one at a time. Folding them
+    /// into one row would put "turn on calendar access on this phone" beside
+    /// "let Anticipy make changes in an account of yours", which are not the
+    /// same promise, do not fail the same way, and are not undone the same way.
     private enum Route: Hashable {
-        case profile, listening, notifications, connectors, personalization
+        case profile, listening, notifications, connectors, connectedApps
+        case personalization
         case privacyData, advanced, about
     }
 
@@ -72,6 +82,12 @@ struct SettingsHomeView: View {
                 NavRow("Connectors", systemImage: "link") {
                     Haptics.engage(); route = .connectors
                 }
+                // The screen's own title, read from the one place it is
+                // written, so the row and the page it opens cannot come to
+                // disagree about what this is called.
+                NavRow(ConnectedAppsModel.Copy.title, systemImage: "square.on.square") {
+                    Haptics.engage(); route = .connectedApps
+                }
                 NavRow("Advanced", systemImage: "slider.horizontal.3") {
                     Haptics.engage(); route = .advanced
                 }
@@ -98,6 +114,7 @@ struct SettingsHomeView: View {
             case .listening: SettingsListeningView(session: session)
             case .notifications: SettingsNotificationsView()
             case .connectors: SettingsConnectorsView(session: session)
+            case .connectedApps: connectedApps
             case .personalization: SettingsPersonalizationView(session: session)
             case .privacyData: SettingsPrivacyDataView(session: session)
             case .advanced: SettingsAdvancedView()
@@ -105,6 +122,39 @@ struct SettingsHomeView: View {
             case nil:        EmptyView()
             }
         }
+    }
+
+    /// SETTINGS → CONNECTED APPS, and the reason this destination is spelled
+    /// out rather than written inline like its neighbours.
+    ///
+    /// The screen takes two things the rest of this index does not have to
+    /// think about, and both are named here so a reader can see exactly what
+    /// this build can and cannot do:
+    ///
+    ///   THE STORE. `UnreachableConnectedAppsStore` — this build has no client
+    ///   that reads an owner's connections off the server, because the server
+    ///   serves no route to read them from yet (see the type's own comment).
+    ///   The screen therefore says "I could not read your connected apps just
+    ///   now", which is true, and never "nothing is connected yet", which
+    ///   would not be. The day a client exists it is constructed here and
+    ///   nothing else changes.
+    ///
+    ///   STARTING A CONNECTION. It cannot happen on this build either: the
+    ///   Connect button only exists on a catalog result, and the catalog is
+    ///   read through the same refusing store, so no result can be drawn. The
+    ///   assertion is the tripwire for the day that stops being true — a
+    ///   connect flow landing without its opener would otherwise be a button
+    ///   that silently does nothing, which is the failure this whole feature
+    ///   is least allowed to have.
+    @ViewBuilder
+    private var connectedApps: some View {
+        SettingsConnectedAppsView(
+            session: session,
+            store: UnreachableConnectedAppsStore(),
+            startConnect: { _ in
+                assertionFailure(
+                    "a connect was started with no connect-link flow behind it")
+            })
     }
 }
 

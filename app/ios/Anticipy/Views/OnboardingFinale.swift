@@ -40,7 +40,7 @@ enum FirstRunEnding: Equatable {
     /// She was told yes, and iOS agreed.
     case listening
     /// iOS has the microphone switched off. She cannot ask again from here —
-    /// `micPrimer` says so in the same words one screen back.
+    /// the microphone beat says so in the same words one screen back.
     case blocked
     /// Nobody refused her. Nobody has said yes yet either.
     case silent
@@ -84,10 +84,9 @@ enum FirstRunEnding: Equatable {
     }
 }
 
-/// The ending someone will describe to a friend: the mark, two rings collapsing
-/// inward, two haptics, one typed sentence, and a dissolve. The rising haze
-/// this used to open with is gone — the champagne haze is off every surface in
-/// the product, and the collapsing rings were always the thing being watched.
+/// The ending: the whole screen turns champagne, three of the mark drift off
+/// its edges, the mark itself sits small and white in the middle, and one
+/// sentence says what was decided. Two haptics, a breath, and Home.
 ///
 /// IT RECORDS NOTHING. This scene used to live inside OnboardingView and carried
 /// the only `hasOnboarded = true` in the app, at the tail of a chain that had to
@@ -140,48 +139,45 @@ struct OnboardingFinale: View {
     /// finished animation, not stuck outside its own front door.
     let onDone: () -> Void
 
+    @State private var arrived = false
+
     /// Computed off two immutable stored properties, so it is the same answer
-    /// for the whole 3.2 seconds. That matters more than it looks:
-    /// `TypewriterText` keys its typing loop on `.task(id: text)`, so a
-    /// sentence that changed mid-scene would restart the typing from empty in
-    /// front of the person.
+    /// for the whole scene.
     private var ending: FirstRunEnding {
         .of(listening: listening, micBlocked: micBlocked)
     }
 
     var body: some View {
         ZStack {
-            Theme.bg.ignoresSafeArea()
-            VStack(spacing: Theme.Space.roomy) {
-                ZStack {
-                    RadarRipple(inward: true)
-                    RadarRipple(inward: true, delay: 0.8)
-                    LogoMark(size: 132)
-                }
-                .frame(height: 190)
-                TypewriterText(text: ending.sentence,
-                               font: Theme.display(30),
-                               color: Theme.text)
+            OnboardTheme.champagne.ignoresSafeArea()
+            GiantMarks()
+            VStack(spacing: 26) {
+                OnboardMark(size: 48, stroke: .white, dot: .white)
+                Text(ending.sentence)
+                    .font(.system(size: 22))
+                    .lineSpacing(5)
+                    .foregroundStyle(.white)
                     .multilineTextAlignment(.center)
-                    // Two of the three endings are three times the length of
-                    // the one this scene was laid out for. A serif at 30pt has
-                    // to be allowed its own height or the sentence that says
-                    // she cannot hear is the sentence that gets clipped.
+                    .frame(maxWidth: 300)
+                    // Two of the three endings are twice the length of the one
+                    // this scene was laid out for; the sentence that says she
+                    // cannot hear must not be the one that gets clipped.
                     .fixedSize(horizontal: false, vertical: true)
             }
-            .padding(.horizontal, 28)
+            .padding(.horizontal, 40)
+            .opacity(arrived ? 1 : 0)
+            .scaleEffect(arrived ? 1 : 0.96)
         }
         .transition(.opacity)
         .onAppear {
+            withAnimation(Theme.springSlow) { arrived = true }
             Haptics.pairing()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.55) { Haptics.taskDone() }
         }
-        // A fixed curtain, not a chain of callbacks. The old version depended on
-        // TypewriterText calling back — and TypewriterText has a `guard typing
-        // else { return }` that can leave the loop WITHOUT calling onDone, which
-        // silently removed the only path out of onboarding.
+        // A fixed curtain, not a chain of callbacks: nothing here can leave
+        // the app without a path out of first run.
         .task {
-            try? await Task.sleep(nanoseconds: 3_200_000_000)
+            try? await Task.sleep(nanoseconds: 3_400_000_000)
             onDone()
         }
         // Tapping through is respected: this is the one screen where somebody is

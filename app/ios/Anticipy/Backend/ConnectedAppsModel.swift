@@ -56,6 +56,10 @@ final class ConnectedAppsModel: ObservableObject {
     /// opt-in is per app. The rest is this screen's wording for it.
     struct Row: Equatable, Identifiable {
         let card: ConnectionCard
+        /// WHERE THE SWITCH SITS, ANSWERED BY THE PREDICATE THAT DECIDES THE
+        /// WRITE. Stored rather than read off `card.writesEnabled`, and that
+        /// is a fix rather than a preference — see `row(for:_:)`.
+        let writesEnabled: Bool
         let statusWords: String
         let writesWords: String
         let lastUsedWords: String
@@ -66,7 +70,6 @@ final class ConnectedAppsModel: ObservableObject {
         var id: String { card.toolkit }
         var name: String { card.name }
         var accountLabel: String { card.accountLabel }
-        var writesEnabled: Bool { card.writesEnabled }
         var logoURL: URL? { card.logoURL }
     }
 
@@ -95,12 +98,27 @@ final class ConnectedAppsModel: ObservableObject {
     struct Found: Equatable, Identifiable {
         let meta: ToolkitMeta
         let alreadyConnected: Bool
+        /// The catalog's OWN sentence about the app — when it is a sentence
+        /// this product is allowed to say. Nil when there is none and nil when
+        /// it is in the register we refuse; see `shownDescription`.
+        let subtitle: String?
 
         var id: String { meta.slug }
     }
 
     /// The confirmation the screen must show before anything is disconnected.
+    ///
+    /// IT CARRIES THE OWNER IT WAS POSED FOR, and that is the fix for a real
+    /// defect rather than a tidiness: the screen keeps its OWN copy of this
+    /// question (see `SettingsConnectedAppsView.confirming`, and the comment
+    /// there for why it has to), and a copy is a place a previous account's app
+    /// name can live through a sign-out. Without this field nothing could tell
+    /// A's question from B's — the toolkit and the app name are the same string
+    /// for both — so "Disconnect Fernwood Notes?" could still be on the screen
+    /// of a phone that had just been handed to somebody else, and answering it
+    /// would be the new account answering the old one's question.
     struct PendingDisconnect: Equatable {
+        let owner: OwnerId
         let toolkit: String
         let appName: String
         let question: String
@@ -248,7 +266,7 @@ final class ConnectedAppsModel: ObservableObject {
     func rows(for viewer: OwnerId) -> [Row] {
         guard let signedIn = owner, viewer == signedIn, listingOwner == signedIn else { return [] }
         return ConnectionsPolicy.settingsCards(rows: loaded, catalog: catalog, for: signedIn)
-            .map(row(for:))
+            .map { row(for: $0, signedIn) }
     }
 
     func screen(for viewer: OwnerId?) -> Screen {
@@ -267,14 +285,52 @@ final class ConnectedAppsModel: ObservableObject {
         }
     }
 
-    private func row(for card: ConnectionCard) -> Row {
-        Row(card: card,
-            statusWords: ConnectionsPolicy.statusLine(card.status),
-            writesWords: ConnectionsPolicy.writesLine(card.writesEnabled),
-            lastUsedWords: Copy.lastUsed(card.lastUsedAt, now: now()),
-            writesTitle: Copy.writesTitle,
-            writesDetail: Copy.writesDetail(app: card.name),
-            disconnectWords: Copy.disconnectAction(app: card.name))
+    /// ONE PREDICATE FOR THE WRITE LICENCE, ASKED THE WAY THE ROUTER ASKS IT.
+    ///
+    /// `ConnectionsPolicy.writesEnabled` IS `mayUse(..., .write, ...)` — the
+    /// call anything about to send, create or change something in the owner's
+    /// app has to pass. This row's switch, and the sentence beside it, are that
+    /// same call and nothing else.
+    ///
+    /// WHY NOT `card.writesEnabled`, WHICH LOOKS LIKE THE SAME THING AND SAYS
+    /// SO IN ITS OWN COMMENT. It is not the same thing, and the comment
+    /// claiming it is is false — it is the "Same floor as `mayUse`" line on
+    /// the two-account fold in `ConnectionsPolicy.settingsCards`, and it is
+    /// still there because that file is the contract mirror and is not this
+    /// one's to edit. `settingsCards` folds the opt-in over every
+    /// row whose status is not `disconnected`; `mayUse` folds it over
+    /// `connected` rows only. The two disagree in BOTH directions, and an
+    /// adversary drove both on 2026-09-05:
+    ///
+    ///   PERMISSIVE, and this is the one that hurts. An app whose only account
+    ///   NEEDS SIGNING IN AGAIN, carrying `writes_enabled = 1` from before it
+    ///   broke, drew a switch reading ON and the sentence "On, I can also send,
+    ///   create and change things in it" — while every write to it would have
+    ///   been refused. A person reads that and believes they granted something
+    ///   the product does not have; the next thing they believe is that we
+    ///   silently did not do what they asked.
+    ///
+    ///   RESTRICTIVE. One healthy opted-in account plus one broken account that
+    ///   was never opted in drew OFF over a write that WOULD have gone through.
+    ///
+    /// Fixing this in `settingsCards` would be the tidier place for it and is
+    /// not this file's to make — `ConnectionsPolicy` is the contract mirror and
+    /// its own runner compares it against `contract.ts`. So the screen asks the
+    /// write question of the thing that answers the write question, and the
+    /// suite compares the two answers across every shape two accounts can be
+    /// in. If the card's own field is ever made to agree, this call keeps
+    /// agreeing with it and nothing here needs to change.
+    private func row(for card: ConnectionCard, _ signedIn: OwnerId) -> Row {
+        let mayWrite = ConnectionsPolicy.writesEnabled(rows: loaded, toolkit: card.toolkit,
+                                                       for: signedIn)
+        return Row(card: card,
+                   writesEnabled: mayWrite,
+                   statusWords: ConnectionsPolicy.statusLine(card.status),
+                   writesWords: ConnectionsPolicy.writesLine(mayWrite),
+                   lastUsedWords: Copy.lastUsed(card.lastUsedAt, now: now()),
+                   writesTitle: Copy.writesTitle,
+                   writesDetail: Copy.writesDetail(app: card.name),
+                   disconnectWords: Copy.disconnectAction(app: card.name))
     }
 
     private func card(for toolkit: String, _ signedIn: OwnerId) -> ConnectionCard? {
@@ -356,6 +412,7 @@ final class ConnectedAppsModel: ObservableObject {
             return
         }
         pendingDisconnect = PendingDisconnect(
+            owner: signedIn,
             toolkit: card.toolkit,
             appName: card.name,
             question: Copy.disconnectQuestion(app: card.name),
@@ -365,6 +422,54 @@ final class ConnectedAppsModel: ObservableObject {
     }
 
     func cancelDisconnect() { pendingDisconnect = nil }
+
+    /// DOES THE QUESTION THE SCREEN IS HOLDING STILL STAND?
+    ///
+    /// The view cannot answer this and must not try. It holds its own copy of
+    /// the pending question because iOS dismisses an alert AS its button fires:
+    /// an `isPresented` bound to `pendingDisconnect` cleared the model's copy
+    /// before the confirm action ran, the action found nothing pending, and the
+    /// destructive button disconnected nothing at all. The copy is the fix for
+    /// that — and it is also a previous account's app name sitting in a `@State`
+    /// that a sign-out does not touch.
+    ///
+    /// So the copy comes BACK through here before it is drawn or acted on, with
+    /// the account signed in at that instant, exactly like every other call on
+    /// this screen. Four things have to agree, and each one is a way the held
+    /// copy goes stale:
+    ///
+    ///   * somebody is signed in, and the viewer is that somebody
+    ///     (a sign-out mid-alert);
+    ///   * the question was posed FOR that same owner
+    ///     (the phone changed hands and the new account has the same app);
+    ///   * the app is still on that list
+    ///     (it was disconnected in the meantime, or from the search screen,
+    ///     which is fed by the same rows).
+    ///
+    /// The fourth clause, `listingOwner == signedIn`, is a REDUNDANCY and is
+    /// declared as one: `loaded` is only ever non-empty alongside a matching
+    /// `listingOwner` (`load` sets both with no `await` between them, and
+    /// `forgetEverything` clears both), so today no held question can pass the
+    /// card lookup and fail this. The suite cannot drive it apart, and a
+    /// predicate nothing can drive is normally a defect — this one is kept
+    /// because it makes all four methods on this screen ask the same four
+    /// questions in the same order, and because the day that invariant is
+    /// broken by an `await` landing between those two lines, the failure it
+    /// prevents is precisely the dead destructive button this copy exists to
+    /// fix: `confirmDisconnect` checks `listingOwner` and would refuse, while
+    /// the alert went on being drawn.
+    ///
+    /// Nil is the answer that closes the alert, and `confirmDisconnect` makes
+    /// the same comparisons again before it acts — this decides what is DRAWN,
+    /// never what is permitted.
+    func questionStillStands(_ held: PendingDisconnect?,
+                             for viewer: OwnerId?) -> PendingDisconnect? {
+        guard let held, let viewer, let signedIn = owner,
+              viewer == signedIn, held.owner == signedIn,
+              listingOwner == signedIn,
+              card(for: held.toolkit, signedIn) != nil else { return nil }
+        return held
+    }
 
     /// Act on the pending question, and say what actually happened.
     ///
@@ -457,7 +562,8 @@ final class ConnectedAppsModel: ObservableObject {
                 return
             }
             searchState = .results(usable.map {
-                Found(meta: $0, alreadyConnected: isConnected($0.slug, for: signedIn))
+                Found(meta: $0, alreadyConnected: isConnected($0.slug, for: signedIn),
+                      subtitle: Self.shownDescription($0.description))
             })
         } catch {
             guard generation == searchGeneration, owner == signedIn else { return }
@@ -479,8 +585,47 @@ final class ConnectedAppsModel: ObservableObject {
     private func refreshFoundFlags() {
         guard case .results(let found) = searchState, let signedIn = owner else { return }
         searchState = .results(found.map {
-            Found(meta: $0.meta, alreadyConnected: isConnected($0.meta.slug, for: signedIn))
+            Found(meta: $0.meta, alreadyConnected: isConnected($0.meta.slug, for: signedIn),
+                  subtitle: $0.subtitle)
         })
+    }
+
+    /// THE CATALOG'S OWN WORDS, THROUGH THE SAME GATE AS OURS.
+    ///
+    /// `ToolkitMeta.description` is written by a vendor, arrives at run time
+    /// from 1,400 catalog rows nobody here has read, and until 2026-09-05 was
+    /// rendered verbatim as the subtitle of every "Add an app" result — which
+    /// is also the VoiceOver hint on the button that starts a connect. It is
+    /// not in `Copy.everySentence`, so the suite's register leg never saw one:
+    /// a blurb reading "authorize our API" or naming the provider went onto the
+    /// screen of a product whose first rule is that the person never hears any
+    /// of that. The gate the rest of this screen passes is worth exactly
+    /// nothing while the one string nobody wrote goes around it.
+    ///
+    /// WITHHELD, NOT REWRITTEN. There is no cleaning pass here and there must
+    /// not be one: editing a sentence into a vendor's mouth is a worse failure
+    /// than an app with no subtitle, and the row still carries the app's name,
+    /// its logo and the button. Silence is a state this screen already has.
+    ///
+    /// THE NAME IS NOT SCREENED, on purpose, and that is `forbiddenTerm`'s own
+    /// rule: an app that calls itself something on the list gets called that,
+    /// because quoting a name is not us using the word. The check belongs to
+    /// the prose around it.
+    ///
+    /// LAW 1, SINCE THIS WIDENS A WORD LIST'S INPUT. `forbiddenTerm` justifies
+    /// itself as a CEILING on text WE are about to show, drafted by us or by
+    /// our own model, whose only outcome is "do not show this" and whose
+    /// failure mode is silence. A vendor's sentence we are about to put on our
+    /// own screen is text we are about to show; the polarity, the outcome and
+    /// the failure mode are all unchanged. Nothing here reads a human's words
+    /// and nothing here decides what anybody meant — the one meaning question
+    /// on this screen, WHICH APP a person typed at, is still asked of the
+    /// catalog and never of a list in this file.
+    static func shownDescription(_ raw: String?) -> String? {
+        guard let said = raw?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !said.isEmpty,
+              ConnectionsPolicy.saysNothingForbidden(said) else { return nil }
+        return said
     }
 
     // --------------------------------------------------------------- the copy
@@ -616,4 +761,63 @@ protocol ConnectedAppsStore: AnyObject {
     /// What comes back is what the person is told, including the case where the
     /// revoke could not be done for us.
     func disconnect(owner: OwnerId, connectedAccountID: String) async throws -> DisconnectResult
+}
+
+// ------------------------------------- the store a build without a client has
+
+/// WHAT THE SCREEN IS HANDED ON A BUILD THAT CANNOT REACH THE SERVER YET.
+///
+/// Settings now has a row that opens this screen — before 2026-09-05 nothing in
+/// the app navigated to it at all, so the screen, its model and its whole suite
+/// were a feature no person could get to. The row is the reachable half. The
+/// CLIENT that reads an owner's connections off the server is the other half,
+/// and it is not written, because there is nothing yet to write it against:
+/// `migration/workers/src/connections/` holds the D1 store and the provider,
+/// and `migration/workers/src/index.ts` serves no route in front of them
+/// (checked 2026-09-05). A client invented against routes nobody serves is a
+/// contract this repo would then have to keep — see LAW 3: repo-green is not
+/// done, and a guess about a URL is not even repo-green.
+///
+/// So this build answers every call with a refusal, and the screen says the one
+/// true thing it can say: `Copy.trouble` — "I could not read your connected
+/// apps just now. That is me failing to reach Anticipy, not a sign that nothing
+/// is connected."
+///
+/// THAT SENTENCE IS THE WHOLE REASON THIS TYPE EXISTS RATHER THAN AN EMPTY
+/// ANSWER. A store that returned `[]` would render `Copy.invitation` —
+/// "Nothing is connected yet" — to somebody who connected two apps by text,
+/// and would invite them to connect what they already have. Empty is not
+/// broken, and broken is not empty; the model already keeps those apart, and
+/// `ConnectedAppsModelTests` pins this type to the `.trouble` side of that line
+/// so no later "harmless" default can quietly move it.
+///
+/// The day a client exists it is constructed here instead, and nothing else on
+/// the screen changes: the states, the copy and the suite are already written
+/// for a store that sometimes answers.
+@MainActor
+final class UnreachableConnectedAppsStore: ConnectedAppsStore {
+
+    /// Named for what it is, so a log line reads as a missing client rather
+    /// than as a server that said no.
+    struct NoConnectionsClient: Error {}
+
+    func connections(owner: OwnerId) async throws -> [Connection] {
+        throw NoConnectionsClient()
+    }
+
+    func describe(toolkits: [String], owner: OwnerId) async throws -> [ToolkitMeta] {
+        throw NoConnectionsClient()
+    }
+
+    func catalog(matching query: String, owner: OwnerId) async throws -> [ToolkitMeta] {
+        throw NoConnectionsClient()
+    }
+
+    func setWrites(_ rows: [Connection], owner: OwnerId) async throws {
+        throw NoConnectionsClient()
+    }
+
+    func disconnect(owner: OwnerId, connectedAccountID: String) async throws -> DisconnectResult {
+        throw NoConnectionsClient()
+    }
 }

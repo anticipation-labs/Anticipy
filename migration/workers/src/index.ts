@@ -47,6 +47,7 @@ import {
 import type { FellowsEnv } from "./routes/fellows_base.ts";
 import { smsInbound, transcriptionToken, type SmsEnv } from "./routes/sms.ts";
 import { sendblueInbound, type SendblueEnv } from "./routes/sendblue.ts";
+import { connectRoute, type ConnectEnv } from "./routes/connect.ts";
 import { workerOwners, purgeAudit, authClaim, phoneRemove, profileUpsert, type ServiceEnv } from "./routes/service.ts";
 import { agentRegister, agentKey, agentLlm, agentCaptcha, agentUpgradeCredential, type AgentEnv } from "./routes/agent.ts";
 import {
@@ -168,6 +169,26 @@ export default {
     }
     if (path === "/transcription/token" && method === "POST") {
       return transcriptionToken(request, env as unknown as SmsEnv);
+    }
+
+    // OUR connect link -- /c/{token}, /c/{token}/go, /c/{token}/done. The page
+    // where an owner connects one of their own apps, the tap that mints the
+    // vendor's link (the only place one is ever produced), and the vendor's
+    // callback, which is the only signal a connection exists.
+    //
+    // Outside /api/collections/ like the reset and delete doors, so the data-API
+    // guard never sees it: it defends itself, and it has to, because a link in a
+    // text is not a credential. Every leg requires the signed-in session to BE
+    // the owner the token was minted for, and a caller who has proved nothing
+    // gets one byte-identical answer for every token there is. See
+    // routes/connect.ts.
+    //
+    // The whole prefix is handed over, including unknown methods, so the route
+    // can answer 405 with an Allow header rather than fall through to the
+    // generic 404 -- a GET on /go must be REFUSED, not routed elsewhere, or a
+    // link prefetcher spends the owner's single-use token before they tap it.
+    if (path.startsWith("/c/")) {
+      return connectRoute(request, env as unknown as ConnectEnv);
     }
 
     // --- the referral hop. fellowship.pb.js, recovered. ------------------

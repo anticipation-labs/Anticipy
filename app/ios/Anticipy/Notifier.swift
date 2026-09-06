@@ -45,7 +45,9 @@ final class Notifier {
 
     private var raised: Set<String> = []
     private var held: [(id: String, title: String, body: String)] = []
-    private var authorized = false
+    /// Readable so first run's Notifications switch can reflect the answer
+    /// rather than sit on over a refusal; only this type writes it.
+    private(set) var authorized = false
     private var asked = false
 
     /// Ask only when there is something real to ask about.

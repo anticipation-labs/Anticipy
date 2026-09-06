@@ -69,6 +69,8 @@
 		9FB3C2E50F6F7C0BE7F7DC8D /* AnticipyWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 76E33D65DC012620958D319F /* AnticipyWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		9FCDE459DE0871E64A2694E0 /* WalkTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A581005E2008896C62D01C5 /* WalkTests.swift */; };
 		A0C6AC3D27BE2A2D7D82A6D4 /* OnboardingFinale.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7458BC7F8EBF91A246AAB60C /* OnboardingFinale.swift */; };
+		7FD62A109D1E0D6F410A8E49 /* HomeTips.swift in Sources */ = {isa = PBXBuildFile; fileRef = 59D029AE4819FDB91E33E7DE /* HomeTips.swift */; };
+		7F932C37FE84C4E06FB22D8B /* OnboardingKit.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE1641FB76EF8D227E3FE0D5 /* OnboardingKit.swift */; };
 		A2E9C7BEAE17336D2AAC4448 /* HeardGroup.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC042E78CD54BA32A917FDA4 /* HeardGroup.swift */; };
 		A7D57FEE8635078FB72C3B13 /* SettingsKit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BE63B13B2A36AB4DB9EA566 /* SettingsKit.swift */; };
 		A9F3E184E914DEA54C1653A4 /* SettingsAccessView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D657B61BDB55AEC37E034E7 /* SettingsAccessView.swift */; };
@@ -97,6 +99,14 @@
 		FAF29E8319FA1B25021EE947 /* MeetingWatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DF24B489F9AF85E2D2C05BB /* MeetingWatcher.swift */; };
 		FE3F2EC49604E6841F2D92F4 /* PendantRadioPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 368691500357FCAF594BFF34 /* PendantRadioPolicy.swift */; };
 		FF9C51D6755044E050520ADE /* AuthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF9F21774275ABF326AAC99C /* AuthView.swift */; };
+		A52CD3090C332605A3E215D3 /* ConnectSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = B26F79BAAFC6A603B27D7D32 /* ConnectSession.swift */; };
+		0CC743A47E6D9313DD60F8E8 /* ConnectOnboardingPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA5C4F252F014AB5B0913B40 /* ConnectOnboardingPolicy.swift */; };
+		EEAB9114384F4A0A976E6D40 /* ConnectHandoff.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD6925E938A4968C1CCF7789 /* ConnectHandoff.swift */; };
+		35194DF560AAAF0C0B4DBDF4 /* ConnectedAppsModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE4F96A58298B884FD7C077F /* ConnectedAppsModel.swift */; };
+		45E91460C71BC0F7B2AC28AE /* ConnectionsPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6409518447821147B722AED3 /* ConnectionsPolicy.swift */; };
+		F14B359151D8E2E4C6A930D0 /* SettingsConnectedAppsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74DC98A180AD7E5F734DE7A2 /* SettingsConnectedAppsView.swift */; };
+		3F947CB493E22E5DB4490ED4 /* OnboardingConnectStep.swift in Sources */ = {isa = PBXBuildFile; fileRef = 154CC12D8CA59731B46B2066 /* OnboardingConnectStep.swift */; };
+		59413430FF3A4F37977F49B2 /* OnboardingShotsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D438EB0A29D91AFCD452A208 /* OnboardingShotsTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -179,6 +189,8 @@
 		70F94DFAC73C7499BAB34464 /* AnticipyApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnticipyApp.swift; sourceTree = "<group>"; };
 		714D2B06ED11248D1924DC9A /* SupervisedReadView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupervisedReadView.swift; sourceTree = "<group>"; };
 		7458BC7F8EBF91A246AAB60C /* OnboardingFinale.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingFinale.swift; sourceTree = "<group>"; };
+		59D029AE4819FDB91E33E7DE /* HomeTips.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeTips.swift; sourceTree = "<group>"; };
+		AE1641FB76EF8D227E3FE0D5 /* OnboardingKit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingKit.swift; sourceTree = "<group>"; };
 		7686379B8FF9FE21D398381F /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		76E33D65DC012620958D319F /* AnticipyWidget.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = AnticipyWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		7DFD99DBD9A73BB9651B95DA /* AppPreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppPreferences.swift; sourceTree = "<group>"; };
@@ -230,6 +242,14 @@
 		F85554F5FECCC71A22EE1415 /* PlainDuration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlainDuration.swift; sourceTree = "<group>"; };
 		FE83FE536791B38970763A70 /* AnticipyWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnticipyWidget.swift; sourceTree = "<group>"; };
 		FF1F2984E276ABD5C6A5B495 /* BatteryReadingPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatteryReadingPolicy.swift; sourceTree = "<group>"; };
+		B26F79BAAFC6A603B27D7D32 /* ConnectSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectSession.swift; sourceTree = "<group>"; };
+		FA5C4F252F014AB5B0913B40 /* ConnectOnboardingPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectOnboardingPolicy.swift; sourceTree = "<group>"; };
+		CD6925E938A4968C1CCF7789 /* ConnectHandoff.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectHandoff.swift; sourceTree = "<group>"; };
+		DE4F96A58298B884FD7C077F /* ConnectedAppsModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectedAppsModel.swift; sourceTree = "<group>"; };
+		6409518447821147B722AED3 /* ConnectionsPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionsPolicy.swift; sourceTree = "<group>"; };
+		74DC98A180AD7E5F734DE7A2 /* SettingsConnectedAppsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsConnectedAppsView.swift; sourceTree = "<group>"; };
+		154CC12D8CA59731B46B2066 /* OnboardingConnectStep.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingConnectStep.swift; sourceTree = "<group>"; };
+		D438EB0A29D91AFCD452A208 /* OnboardingShotsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingShotsTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -305,6 +325,11 @@
 		2C9A6E1AEB59FB1A3CB72A4D /* Backend */ = {
 			isa = PBXGroup;
 			children = (
+				6409518447821147B722AED3 /* ConnectionsPolicy.swift */,
+				DE4F96A58298B884FD7C077F /* ConnectedAppsModel.swift */,
+				CD6925E938A4968C1CCF7789 /* ConnectHandoff.swift */,
+				FA5C4F252F014AB5B0913B40 /* ConnectOnboardingPolicy.swift */,
+				B26F79BAAFC6A603B27D7D32 /* ConnectSession.swift */,
 				347F8F94513CF0FA870620CE /* AnswerRoutePolicy.swift */,
 				BE0AB97746861DA294983C3B /* AnticipyBackend.swift */,
 				82A5C0CD5302B692C964648D /* CalendarHandPolicy.swift */,
@@ -350,6 +375,8 @@
 		4C31658F3AFE696FA8FAB8EA /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				154CC12D8CA59731B46B2066 /* OnboardingConnectStep.swift */,
+				74DC98A180AD7E5F734DE7A2 /* SettingsConnectedAppsView.swift */,
 				DF9F21774275ABF326AAC99C /* AuthView.swift */,
 				7686379B8FF9FE21D398381F /* ContentView.swift */,
 				D918825F71DB13464C228B73 /* ContextAskSheet.swift */,
@@ -361,6 +388,8 @@
 				279CD122187AC50931E7FBAB /* InterviewView.swift */,
 				098931E67CC0A16625780FF6 /* ListeningDiagnosticsView.swift */,
 				7458BC7F8EBF91A246AAB60C /* OnboardingFinale.swift */,
+				59D029AE4819FDB91E33E7DE /* HomeTips.swift */,
+				AE1641FB76EF8D227E3FE0D5 /* OnboardingKit.swift */,
 				3C0E01BACE08AB40DAA1B77B /* OnboardingView.swift */,
 				5D657B61BDB55AEC37E034E7 /* SettingsAccessView.swift */,
 				C551ECE532FCDE35A4DC5A0E /* SettingsAdvancedView.swift */,
@@ -396,6 +425,7 @@
 			isa = PBXGroup;
 			children = (
 				3A581005E2008896C62D01C5 /* WalkTests.swift */,
+				D438EB0A29D91AFCD452A208 /* OnboardingShotsTests.swift */,
 			);
 			path = UITests;
 			sourceTree = "<group>";
@@ -572,6 +602,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				9FCDE459DE0871E64A2694E0 /* WalkTests.swift in Sources */,
+				59413430FF3A4F37977F49B2 /* OnboardingShotsTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -624,6 +655,15 @@
 				732C774FEFE3FE53217548CA /* LocalTranscriber.swift in Sources */,
 				DF7FA9230D7805FDA8A970B1 /* Notifier.swift in Sources */,
 				A0C6AC3D27BE2A2D7D82A6D4 /* OnboardingFinale.swift in Sources */,
+				3F947CB493E22E5DB4490ED4 /* OnboardingConnectStep.swift in Sources */,
+				F14B359151D8E2E4C6A930D0 /* SettingsConnectedAppsView.swift in Sources */,
+				45E91460C71BC0F7B2AC28AE /* ConnectionsPolicy.swift in Sources */,
+				35194DF560AAAF0C0B4DBDF4 /* ConnectedAppsModel.swift in Sources */,
+				EEAB9114384F4A0A976E6D40 /* ConnectHandoff.swift in Sources */,
+				0CC743A47E6D9313DD60F8E8 /* ConnectOnboardingPolicy.swift in Sources */,
+				A52CD3090C332605A3E215D3 /* ConnectSession.swift in Sources */,
+				7FD62A109D1E0D6F410A8E49 /* HomeTips.swift in Sources */,
+				7F932C37FE84C4E06FB22D8B /* OnboardingKit.swift in Sources */,
 				58D4754CC27965D6D4E9F986 /* OnboardingView.swift in Sources */,
 				4F03FCC48BC0DC5F44A9B300 /* OpusFrameAssembler.swift in Sources */,
 				9D99735C613237B976EDFB95 /* PendantBatteryPolicy.swift in Sources */,

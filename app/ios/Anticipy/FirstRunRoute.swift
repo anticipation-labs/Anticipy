@@ -35,16 +35,23 @@ import Foundation
 /// private `Step`, which is now a typealias onto this — so every `Step.mic`,
 /// `.tag()` and `step += 1` in that file still means what it meant.
 ///
+/// THE ORDER BEHIND THE DOOR IS: your name, your computer, then the
+/// microphone. The microphone is LAST on purpose — it is the one thing first
+/// run asks that iOS then asks again, so it is asked once everything else is
+/// settled and the finale can say what it decided. Nothing about that order
+/// moves it in front of the door: `.intro` still carries the welcome and the
+/// tour and NOTHING ELSE.
+///
 /// Computer setup used to be omitted because the old browser page was a long
 /// task nobody could complete on the phone. It is back as one OPTIONAL handoff
 /// beat: the phone opens or shares hosted setup pages, while installation still
-/// happens on the computer. Skipping it ends first run immediately.
+/// happens on the computer.
 enum FirstRunBeat {
     static let welcome = 0
-    static let howItWorks = 1
-    static let mic = 2
-    static let phone = 3
-    static let computer = 4
+    static let tour = 1
+    static let name = 2
+    static let computer = 3
+    static let mic = 4
     static let count = 5
 }
 
@@ -81,14 +88,14 @@ enum FirstRunSegment: Equatable {
     var pages: [Int] {
         switch self {
         case .intro:
-            return [FirstRunBeat.welcome, FirstRunBeat.howItWorks]
+            return [FirstRunBeat.welcome, FirstRunBeat.tour]
         case .rest:
-            return [FirstRunBeat.mic, FirstRunBeat.phone,
-                    FirstRunBeat.computer]
+            return [FirstRunBeat.name, FirstRunBeat.computer,
+                    FirstRunBeat.mic]
         case .whole:
-            return [FirstRunBeat.welcome, FirstRunBeat.howItWorks,
-                    FirstRunBeat.mic, FirstRunBeat.phone,
-                    FirstRunBeat.computer]
+            return [FirstRunBeat.welcome, FirstRunBeat.tour,
+                    FirstRunBeat.name, FirstRunBeat.computer,
+                    FirstRunBeat.mic]
         }
     }
 
@@ -106,12 +113,12 @@ enum FirstRunSegment: Equatable {
     /// segment does not carry — a blank screen, pre-auth, with no way forward.
     var lastStep: Int { pages.last ?? FirstRunBeat.welcome }
 
-    /// DERIVED, NOT PREFERRED. On howItWorks pre-auth the person has exactly
+    /// DERIVED, NOT PREFERRED. On the tour pre-auth the person has exactly
     /// one beat behind them, so the only honest ordinal is "1 of 5" — and the
     /// track's rule is that it never opens at 1. The other available number,
     /// the absolute "3 of 5", counts an account nobody has made yet. Both
-    /// permitted numbers are forbidden, so no number is shown. The same
-    /// argument bans a counting line in the prose under either pre-auth beat.
+    /// permitted numbers are forbidden, so no progress is shown in front of
+    /// the door: the welcome and the tour carry no bar at all.
     var showsTrack: Bool { self != .intro }
 
     /// Whether clearing this segment's last page ends first run. It does not

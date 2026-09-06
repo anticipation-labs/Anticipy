@@ -46,8 +46,16 @@ import Foundation
 ///   * Clock arithmetic and decay are senses/plumbing.
 ///   * WHICH app a person MEANT — "my work email", "office mail" — is the
 ///     contract's `ToolkitJudge`, a model, on the server. It is not in this
-///     file and must never be: `visibleMatches` below filters a list the owner
-///     is looking at, and the owner's TAP is the decision.
+///     file and must never be. The search box hands the typed words over the
+///     `OnboardingCatalogSearch` seam UNREAD and shows what comes back in the
+///     order it came back; `searchState` is a reducer that never sees the
+///     catalog, so it cannot match against it. This was a real violation until
+///     2026-09-05 — a `name.lowercased().contains(needle)` deciding which app
+///     somebody meant, under four comments citing the judge it never called —
+///     and the note on `searchState` records what it cost and how it was
+///     replaced. The runner greps this source so it cannot come back.
+///   * The connect link is checked against `ConnectHandoff`'s allowlist before
+///     it is shown to anyone. Scheme, host and path: transport, not meaning.
 enum ConnectOnboardingPolicy {
 
     // =====================================================================
@@ -349,6 +357,15 @@ enum ConnectOnboardingPolicy {
         /// A link minted for a different app than the record it is rendered
         /// with.
         case wrongToolkit = "wrong_toolkit"
+        /// The address this card would have opened is not one of ours.
+        ///
+        /// Reported rather than swallowed. A blank where the link should be
+        /// reads as "the ask is still loading" and gets retried forever; a
+        /// refusal names the defect — a base handed to this file that is not
+        /// the connect page, which is one configuration mistake away from a
+        /// text carrying the OTHER company's address, the exact thing the spec
+        /// forbids and the exact thing the spike did four times.
+        case linkNotOurs = "link_not_ours"
         /// A weight, a timestamp or a level this build cannot read. Fails
         /// closed: an unreadable row must not be ranked, and must not be asked.
         case unreadableRow = "unreadable_row"
@@ -365,6 +382,8 @@ enum ConnectOnboardingPolicy {
                 return "this link was minted for another owner"
             case .wrongToolkit:
                 return "this link was minted for another app"
+            case .linkNotOurs:
+                return "the address this card would open is not our connect page"
             case .unreadableRow:
                 return "a row carried a value this build cannot read"
             }
@@ -703,6 +722,43 @@ enum ConnectOnboardingPolicy {
         /// laptop shut.
         static let footnote = "Optional — the browser can do all of this too. "
             + "Connecting just makes it instant, and it works with your laptop shut."
+
+        // The four things the search area can be saying. Here rather than in
+        // the view because copy is a decision, and this is where the register
+        // gate can read all of it at once.
+        static let searchPrompt = "Type the name of an app you use. "
+            + "Anything I can reach is in here, including the ones I have never mentioned."
+        static let searching = "Looking…"
+        /// The catalog could not be reached. NOT "nothing matched": telling
+        /// somebody their app does not exist when the truth is that a request
+        /// failed is how a working product gets abandoned at setup.
+        static let searchTrouble = "I could not look just now. Try again in a moment."
+        static func nothingFound(query: String) -> String {
+            "Nothing came back for \u{201C}\(query)\u{201D}. Try another name, or skip this — "
+                + "you can add anything later."
+        }
+
+        /// What the PERSON is told when detection refused.
+        ///
+        /// Not `Refusal.sentence`, which says "the read was not scoped" and is
+        /// for the journal: a diagnostic on a setup screen tells somebody their
+        /// product is broken in a language they cannot act on. This says the
+        /// true and useful half — nothing was worked out, nothing is required,
+        /// here are the two things you can still do — and the card keeps both
+        /// of them, because a refusal must never be a dead end during setup.
+        static let detectionTrouble = "I could not work out which apps you use just now. "
+            + "Search for one, or skip this — none of it is required."
+
+        /// EVERY SENTENCE THIS STEP CAN SAY, in one list, so a suite cannot
+        /// check six of them and believe it checked the screen. The query
+        /// inside `nothingFound` is the OWNER'S OWN WORDS quoted back, so the
+        /// placeholder here stands for it: what the register gate judges is our
+        /// prose, never theirs.
+        static var everySentence: [String] {
+            [title, subtitle, searchPlaceholder, connect, skip, footnote,
+             searchPrompt, searching, searchTrouble, detectionTrouble,
+             nothingFound(query: "…")]
+        }
     }
 
     /// The whole card, decided. A view renders this and adds nothing.
@@ -724,11 +780,17 @@ enum ConnectOnboardingPolicy {
     }
 
     static func step(for detection: Detection, chosen: Set<AppKey>) -> Step {
+        step(for: detection, found: [], chosen: chosen)
+    }
+
+    /// The card, including the apps the owner went and found for themselves.
+    static func step(for detection: Detection, found: [CatalogEntry],
+                     chosen: Set<AppKey>) -> Step {
         var refusal: Refusal?
         if case .refused(let why) = detection { refusal = why }
         return Step(title: Copy.title,
                     subtitle: Copy.subtitle,
-                    apps: detection.offered,
+                    apps: offered(detection, plus: found),
                     searchPlaceholder: Copy.searchPlaceholder,
                     connectLabel: Copy.connect,
                     connectEnabled: !chosen.isEmpty,
@@ -737,31 +799,185 @@ enum ConnectOnboardingPolicy {
                     refusal: refusal)
     }
 
+    /// An app the owner went and FOUND is an app they have just named, so it
+    /// arrives ticked — unlike a detected one past the pre-selection cap, which
+    /// nobody has said anything about. Its evidence list is empty because there
+    /// honestly is none: the search box judged nothing, and their tap is the
+    /// decision.
+    static func chosenFromSearch(_ entry: CatalogEntry) -> DetectedApp {
+        DetectedApp(key: AppKey(toolkit: entry.slug, alias: nil),
+                    name: entry.name, logo: entry.logo,
+                    preselected: true, evidence: [])
+    }
+
+    /// The card's rows: what was detected, then what the owner found, with
+    /// nothing shown twice.
+    ///
+    /// The de-duplication is by `AppKey`, which is (toolkit, alias) — so an
+    /// owner who has this app under two aliases keeps both rows, and a search
+    /// hit for an app already on the card does not become a second tick-box
+    /// that can disagree with the first about whether it is ticked.
+    static func offered(_ detection: Detection, plus found: [CatalogEntry]) -> [DetectedApp] {
+        var out = detection.offered
+        var seen = Set(out.map { $0.key })
+        for entry in found {
+            let row = chosenFromSearch(entry)
+            if seen.contains(row.key) { continue }
+            seen.insert(row.key)
+            out.append(row)
+        }
+        return out
+    }
+
+    /// The slugs the card is already showing, which is what the search area
+    /// excludes. An id comparison, never a judgement about the words.
+    static func slugsOnCard(_ apps: [DetectedApp]) -> Set<String> {
+        Set(apps.map { $0.key.toolkit })
+    }
+
     /// The tick-boxes as the card opens: whatever detection pre-selected.
     static func initialSelection(_ detection: Detection) -> Set<AppKey> {
         Set(detection.offered.filter { $0.preselected }.map { $0.key })
     }
 
-    /// The search box, over the catalog.
+    // =====================================================================
+    // MARK: - The search box, which judges nothing
+    // =====================================================================
+
+    /// HARNESS-LAWS LAW 1, AND THE VIOLATION THIS REPLACED.
     ///
-    /// LAW 1: this decides nothing. It narrows a list the owner is looking at,
-    /// and the owner's TAP is the decision — which is why it may be a plain
-    /// case-insensitive containment over the name the CATALOG supplied. What it
-    /// must never become is the answer to "which app did they mean": a query
-    /// that matches nothing is a question for the contract's `ToolkitJudge`, a
-    /// model with the catalog in front of it, not for a wider rule here.
-    static func visibleMatches(for query: String, in catalog: [CatalogEntry],
-                               excluding shown: Set<String> = []) -> [CatalogEntry] {
-        let needle = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        if needle.isEmpty { return [] }
-        return catalog
-            .filter { !shown.contains($0.slug) && $0.name.lowercased().contains(needle) }
-            .sorted { $0.name.lowercased() < $1.name.lowercased() }
+    /// Until 2026-09-05 this file answered the search box with
+    /// `$0.name.lowercased().contains(needle)` — a case-insensitive substring
+    /// test over the owner's own typed words, sorted by name, with no model
+    /// anywhere behind it. That is a pattern deciding MEANING: "which app did
+    /// they mean". It is wrong in both directions and both directions are
+    /// measurable. It shows nothing for the half of the ways a person names an
+    /// app that are not a prefix of the vendor's own spelling — a work mailbox
+    /// asked for by the job it does, a product asked for by the name it had
+    /// before it was bought, a name typed with one letter out of place. And it
+    /// shows the wrong thing whenever three letters of one app's name sit
+    /// inside another's. `ToolkitJudge` in `contract.ts` exists for exactly
+    /// this question and was cited in four comments in this file with zero
+    /// call sites, which is a law obeyed in prose and broken in code.
+    ///
+    /// THE SIBLING ALREADY HAD IT RIGHT. `ConnectedAppsModel.search` refuses to
+    /// read the query at all: it hands it to the injected catalog as typed and
+    /// shows what comes back, in the order it came back. Two search boxes in
+    /// one feature must not run two rules, so this is now that rule, in the
+    /// pure-function shape this layer keeps.
+    ///
+    /// What is left here is a REDUCER over an answer somebody else produced. It
+    /// never sees the catalog, so it cannot match against it. The only two rows
+    /// it drops are dropped on facts, not on words: one the card above is
+    /// already showing (an id comparison against slugs this screen chose), and
+    /// one the catalog could not put a name to — a nameless row is a blank line
+    /// with a button on it, and a raw vendor slug is the vendor's own spelling
+    /// leaking into our voice.
+
+    /// What the catalog said when it was asked. Two states, because "it
+    /// answered with nothing" and "it could not be reached" are different
+    /// facts, and folding them together tells somebody their app does not
+    /// exist when the truth is that the network is down.
+    enum CatalogAnswer: Equatable {
+        case hits([CatalogEntry])
+        case unreachable
+    }
+
+    /// What the search area is, in five states, for the same reason the sibling
+    /// has five: "nobody has typed anything", "we are asking", "nothing came
+    /// back" and "we could not ask" are four different things to say, and a
+    /// person told the wrong one gives up on a working product.
+    enum SearchState: Equatable {
+        case idle(String)
+        case searching(String)
+        case results([CatalogEntry])
+        case nothingFound(String)
+        case trouble(String)
+    }
+
+    /// The query as it leaves for the catalog: the spaces around it removed and
+    /// NOTHING ELSE. No lowercasing, no folding, no splitting into words — the
+    /// far end is the thing entitled to interpret it, and every transform
+    /// applied here is a small decision about meaning taken by the wrong layer.
+    /// `nil` means nobody has asked anything yet.
+    static func searchQuery(_ typed: String) -> String? {
+        let asked = typed.trimmingCharacters(in: .whitespacesAndNewlines)
+        return asked.isEmpty ? nil : asked
+    }
+
+    /// The search area, given what the owner typed and what the catalog
+    /// answered. `answer` is nil while the answer is still in flight.
+    static func searchState(typed: String, answer: CatalogAnswer?,
+                            excluding shown: Set<String> = []) -> SearchState {
+        guard let asked = searchQuery(typed) else { return .idle(Copy.searchPrompt) }
+        guard let answer else { return .searching(Copy.searching) }
+        switch answer {
+        case .unreachable:
+            return .trouble(Copy.searchTrouble)
+        case .hits(let rows):
+            let usable = rows.filter { row in
+                !shown.contains(row.slug)
+                    && !row.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            }
+            return usable.isEmpty ? .nothingFound(Copy.nothingFound(query: asked))
+                                  : .results(usable)
+        }
     }
 
     // =====================================================================
     // MARK: - 2. Skip
     // =====================================================================
+
+    /// WHAT A SKIP MEANS, in three facts, so one app cannot hold two answers.
+    ///
+    /// This exists because it did hold two. `ConnectOnboardingPolicy.skipOutcome`
+    /// and `ConnectionsPolicy.recordDecline` are both reachable for the SAME
+    /// event — the owner refusing an ask whose trigger is `onboarding`, on the
+    /// card or in the text thread — and they disagreed about whether it costs a
+    /// rung of the decline ladder. Each file's comment argued the other was
+    /// wrong and neither moved, for as long as the disagreement was only ever
+    /// printed as a note. A note is not a decision, so this is one, and
+    /// `agreesWithSkip` makes it a thing a suite can hold BOTH implementations
+    /// to instead of a paragraph each of them has its own copy of.
+    ///
+    /// The reasoning is on `skipOutcome` below.
+    struct SkipMeaning: Equatable {
+        /// False. A form refused is not an app refused.
+        let advancesTheDeclineLevel: Bool
+        /// False. `declined` at level 0 is a row the server refuses to read at
+        /// all ("the ladder was not advanced, so the decline cannot be
+        /// honoured"), which means nobody is ever asked about that app again —
+        /// the opposite of a soft snooze, reached by trying to record one.
+        let leavesTheRowDeclined: Bool
+        /// Seven, the contract's own `ONBOARDING_SKIP_SNOOZE_DAYS`, not the
+        /// ladder's fourteen.
+        let snoozeDays: Int
+    }
+
+    static let skipMeans = SkipMeaning(advancesTheDeclineLevel: false,
+                                       leavesTheRowDeclined: false,
+                                       snoozeDays: Contract.onboardingSkipSnoozeDays)
+
+    /// Does another implementation of "the owner refused the setup card" mean
+    /// the same thing this one does?
+    ///
+    /// Written over the FACTS rather than over a row type on purpose: the other
+    /// implementation of this transition keeps its clock in seconds while this
+    /// one keeps milliseconds, and a comparison that could not span that would
+    /// have to be written twice — which is how the two halves drifted in the
+    /// first place. So the caller reads its own row, in its own units, and
+    /// hands over the three numbers this decision is actually about.
+    ///
+    /// The snooze is compared to within half a day, because the two sides round
+    /// their clocks differently and a disagreement worth failing over is a
+    /// disagreement about WEEKS.
+    static func agreesWithSkip(levelBefore: Int, levelAfter: Int,
+                               declinedAfter: Bool, snoozeDaysAfter: Double) -> Bool {
+        guard (levelAfter != levelBefore) == skipMeans.advancesTheDeclineLevel else { return false }
+        guard declinedAfter == skipMeans.leavesTheRowDeclined else { return false }
+        guard snoozeDaysAfter.isFinite else { return false }
+        return abs(snoozeDaysAfter - Double(skipMeans.snoozeDays)) < 0.5
+    }
 
     /// What Skip did, so a caller logs what it actually wrote.
     struct SkipOutcome: Equatable {
@@ -784,16 +1000,35 @@ enum ConnectOnboardingPolicy {
     /// `ONBOARDING_SKIP_SNOOZE_DAYS` — seven days, not the ladder's fourteen.
     ///
     /// AND THE LEVEL DOES NOT MOVE. This is the half that matters more than the
-    /// number, and it is where this file DIVERGES from `recordDecline` in
-    /// `src/connections/policy.ts`, which stamps `state: "declined"` and
-    /// `level: 1` with a seven-day snooze. Read the consequences of that on the
-    /// server's own thresholds: level 1 raises the bar from 0.5 to 0.8, and the
-    /// score must beat it STRICTLY — so a shrug at the setup card silences
+    /// number, and it is the half `recordDecline` gets wrong — in
+    /// `ConnectionsPolicy` next door and in `src/connections/policy.ts` on the
+    /// server, both of which stamp `state: declined` and `level: 1` on the same
+    /// event this function is given. `skipMeans` below is the decision between
+    /// them, made rather than noted, with the reasoning here.
+    ///
+    /// Read the consequences of level 1 on the server's own thresholds: it
+    /// raises the bar from 0.5 to 0.8, and `shouldAsk` compares STRICTLY
+    /// (`!(score > threshold)`) — so a shrug at the setup card silences
     /// `repeated_use` (0.6) and `onboarding` (0.7) outright and leaves
-    /// `in_task` (0.8) permanently one hair short. A person who tapped Skip
-    /// during setup would then never be asked again by the two triggers that
-    /// carry actual evidence. That is not a seven-day snooze; it is a life
-    /// sentence with a seven-day label.
+    /// `in_task` (0.8) permanently one hair short. The only two moments that
+    /// could ever ask again are the owner naming the app themselves and a
+    /// closed laptop. A person who tapped Skip during setup would never again
+    /// be asked by either trigger that carries EVIDENCE — the two that can name
+    /// a task which already cost them real time, which is the only argument
+    /// this product has. That is not a seven-day snooze; it is a life sentence
+    /// with a seven-day label.
+    ///
+    /// THE CONTRACT SAYS THE SAME THING IN ITS VOCABULARY, and that is what
+    /// settles it rather than this file's preference. `SNOOZE_DAYS` is
+    /// documented "Snooze after each DECLINE"; `level` is "0 while never
+    /// declined; 1, 2, 3 as DECLINES accumulate"; and the seven-day number is
+    /// a separate constant that does not live in that table and is named
+    /// `ONBOARDING_SKIP_SNOOZE_DAYS` — a SKIP, deliberately not a decline.
+    /// Two vocabularies, two things. `recordDecline`'s own comment already
+    /// agrees in words — "a card skipped during setup is a form refused, not an
+    /// app refused" — and then advances the ladder anyway, which fixes the
+    /// number and leaves the sentence. Where a comment and an assignment
+    /// disagree, the assignment is what ships.
     ///
     /// WHICH STATE A SHRUG LEAVES BEHIND, and why it is not "declined": the
     /// server refuses to read a row that says `declined` at level 0
@@ -890,9 +1125,34 @@ enum ConnectOnboardingPolicy {
     /// in a text. The base is INJECTED rather than written here: a host literal
     /// in this file is the domain hardcoding the runner refuses, and the app
     /// already knows its own base from configuration.
-    static func connectURL(token: String, base: String) -> String {
+    ///
+    /// AND INJECTED IS NOT THE SAME AS TRUSTED. Until 2026-09-05 this function
+    /// trimmed one slash off whatever it was handed and glued the token on:
+    /// no scheme check, no host check, no path check, under a doc comment
+    /// promising "never the vendor's URL, and never a vendor URL in a text".
+    /// A base read from a stale configuration, a debug build's local server, or
+    /// a provider link pasted into a settings field would all have been
+    /// rendered into the card AND into the text as if they were ours — and
+    /// during the spike a raw provider link WAS used as the ask four times
+    /// (`research/2026-09-05-composio-connections.md`, item 4). A promise in a
+    /// comment is not a check.
+    ///
+    /// THE CHECK LIVES NEXT DOOR ON PURPOSE. `ConnectHandoff` already owns the
+    /// allowlist — one host, exact match, https only, no credentials, no port,
+    /// our path segment, and a token shaped like a token — and it is the same
+    /// function the app calls before it opens anything. A second copy here
+    /// would be a second allowlist to widen, and it could not live in this file
+    /// anyway: the runner refuses a domain literal in this source, which is
+    /// precisely why the host belongs where the check is.
+    ///
+    /// `nil` means "this is not our connect page". Callers refuse; none of them
+    /// fall back to showing it.
+    static func connectURL(token: String, base: String) -> String? {
         let trimmed = base.hasSuffix("/") ? String(base.dropLast()) : base
-        return trimmed + "/" + token
+        let candidate = trimmed + "/" + token
+        guard let url = URL(string: candidate),
+              ConnectHandoff.connectLinkIsOurs(url: url) else { return nil }
+        return candidate
     }
 
     static func rendering(of ask: Ask, in channel: Channel, catalog: [CatalogEntry],
@@ -908,7 +1168,14 @@ enum ConnectOnboardingPolicy {
         let settled = ask.record.state == .connected
         var url: String?
         if let link = ask.link, link.isLive(at: now), !settled {
-            url = connectURL(token: link.token, base: base)
+            // REFUSED, not blanked. A card with an empty link where a live one
+            // belongs looks like an ask still loading and gets retried; a
+            // refusal names the defect and stops the same bad base reaching the
+            // TEXT, where a wrong address is permanent and unrecallable.
+            guard let ours = connectURL(token: link.token, base: base) else {
+                return .refused(.linkNotOurs)
+            }
+            url = ours
         }
         return .shown(Rendering(channel: channel,
                                 key: ask.record.key,
@@ -1156,4 +1423,28 @@ enum ConnectOnboardingPolicy {
         guard onboardingAskChargesTheCap else { return nil }
         return record.sentAt ?? now
     }
+}
+
+/// THE SEAM. Everything this step knows about the world outside itself.
+///
+/// One call, and it carries the owner even though a catalog lookup does not
+/// strictly need one — the same rule `ConnectedAppsStore` keeps next door, for
+/// the same reason: a call that does not take an owner is a call somebody can
+/// make while signed out, and there is no such call in this feature.
+///
+/// THE QUERY GOES OVER THIS SEAM UNREAD. Whoever implements it is the one
+/// entitled to decide which apps the owner's words point at — the contract's
+/// `ToolkitJudge`, a model with the catalog in front of it. What comes back is
+/// shown in the order it came back. Nothing on this side of the seam matches,
+/// ranks, corrects or second-guesses it; see the Law-1 note on
+/// `ConnectOnboardingPolicy.searchState`.
+///
+/// `@MainActor` because the step is: one actor, one card, no chance of a late
+/// answer landing on a copy of the state somebody else is also holding.
+/// Implementations do their waiting inside `await`.
+@MainActor
+protocol OnboardingCatalogSearch: AnyObject {
+    func catalog(matching query: String,
+                 owner: ConnectOnboardingPolicy.OwnerID)
+        async throws -> [ConnectOnboardingPolicy.CatalogEntry]
 }

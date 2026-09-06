@@ -21,8 +21,11 @@ import Foundation
 ///    option on an old OS: Google answers a sign-in inside one with
 ///    `disallowed_useragent` and the connect simply fails. `ConnectHandoffTests`
 ///    reads this file's own source and fails if either embedded-view class name
-///    appears in it at all, which is the only form of that guarantee a future
-///    refactor cannot quietly delete.
+///    appears in it at all — and, since 2026-09-05, it reads
+///    `ConnectSession.swift`, `AnticipyApp.swift` and every file in `Views/`
+///    for the same names. The scan used to cover exactly one file: the one
+///    file in the app that never opens a URL. A ban checked only where nothing
+///    opens anything is a ban on nothing.
 ///
 /// 2. `DisclosureGate` — the in-context disclosure. Google's Workspace policy
 ///    wants the owner told what will be read, in context, with a REAL TAP,
@@ -31,6 +34,22 @@ import Foundation
 ///    per ATTEMPT, not per install: a second connect needs a second tap, and an
 ///    acknowledgement that has been left behind — the app backgrounded, the
 ///    owner changed, two minutes gone by — is gone.
+///
+///    WHAT A "REAL TAP" HAD TO BECOME. Until 2026-09-05 this gate accepted an
+///    acknowledgement whenever `disclosureShown` had been called, and nothing
+///    in it could tell a person tapping a sheet from a view calling both
+///    methods in one function body having drawn nothing at all. Three things
+///    now stand between those two, and each one names a way the weak version
+///    could be satisfied without a human: the sheet must have had SENTENCES on
+///    it (a blank disclosure is not a disclosure, and the sentences come from
+///    the toolkit's own scopes, so an empty catalog answer means no connect
+///    rather than a silent one); the tap must arrive at least
+///    `minimumDwell` after the sheet appeared, because nobody reads and taps
+///    in the same instant and a synchronous fake takes no time at all; and the
+///    clock is not the caller's — `ConnectSession` stamps both moments from
+///    its own, so a view cannot supply the interval it needs. The gate is
+///    also `private` inside `ConnectSession`, and the runner refuses any other
+///    production file that constructs one or calls `acknowledge`.
 ///
 /// 3. `callbackURL` / `parseDone` — our deep link, `anticipy://connected/…`.
 ///    A custom scheme is reachable by ANYONE: any web page, any other app, a
@@ -49,18 +68,31 @@ import Foundation
 ///    rule is that WE own the ask. A raw provider link reaching this function
 ///    is a defect upstream — it means a link was minted somewhere it should
 ///    not have been — so it is refused and reported by code rather than
-///    silently opened.
+///    silently opened. And the token in that link is now KEPT: an attempt
+///    adopts exactly one link (`binding(to:)`), and `presentation` opens only
+///    the link the attempt adopted. `inspect` used to extract the token and
+///    throw it away, which meant any of our own links opened under any
+///    attempt — a link minted for this owner's calendar could be opened under
+///    an attempt for their mail, and the callback, bound to the attempt,
+///    would be believed.
 ///
 /// ── WHAT THE DONE PAGE OWES THIS FILE ───────────────────────────────────
 ///
-/// The connect page redirects to `callbackURL(for:)`, which already carries
-/// `state={attempt id}`. Preserve that query when appending `status` and
-/// `connected_account_id` and the callback is bound to one attempt exactly; a
-/// page that rebuilds the URL and drops it still parses, but then the binding
-/// is only "an attempt for this app is in flight, minted less than ten minutes
-/// ago, for the owner signed in right now". That is the residual, written down
-/// rather than assumed, and it is why `.connected` is a hint that starts a
-/// refresh rather than a row anybody writes.
+/// The connect page redirects to `callbackURL(for:)`, which carries
+/// `state={attempt id}`. IT MUST PRESERVE THAT QUERY when it appends `status`
+/// and `connected_account_id`, because a callback without it is refused
+/// (`callbackStateMissing`). That is not a tightening for its own sake: until
+/// 2026-09-05 the state was optional-when-absent, so `anticipy://connected/
+/// {toolkit}?status=connected&connected_account_id=…` — a URL any web page,
+/// any other app or a QR code on a poster can open — came back `.connected`
+/// carrying an account id a stranger chose, on the strength of nothing more
+/// than an attempt for that app being in flight. Our own page is the only
+/// thing that knows the attempt id, so requiring it is what makes the callback
+/// a reply rather than a knock.
+///
+/// Even then `.connected` is a HINT, not a record: the caller refreshes the
+/// owner's connections from the server and believes that. Nothing arriving
+/// through a URL writes a connection row.
 ///
 /// ── THE WRONG-PERSON RULE, WHICH IS WHAT THE SHAPE IS FOR ───────────────
 ///
@@ -260,10 +292,21 @@ enum ConnectHandoff {
         // Reported, not swallowed: a provider's own link arriving here means one
         // was minted somewhere the spec forbids, and the refusal carries the
         // code that says so.
+        let offered: String
         switch inspect(link: link) {
         case .notOurs(let why): return .refused(why)
-        case .ours: break
+        case .ours(let token): offered = token
         }
+        // THE LINK IS THIS ATTEMPT'S OR IT IS NOBODY'S. Our own links are all
+        // shaped alike, so "is it ours" cannot tell one owner's calendar link
+        // from the same owner's mail link, let alone from a link minted for
+        // somebody else. The attempt adopted one token when the link was
+        // fetched; only that one opens under it. Unbound is refused rather
+        // than waved through, because this is a FLOOR: an attempt that never
+        // adopted a link has nothing to compare, and nothing to compare is not
+        // a match.
+        guard let adopted = attempt.token else { return .refused(.linkNotBoundToAttempt) }
+        guard adopted == offered else { return .refused(.linkIsForAnotherAttempt) }
         if case .refused(let why) = gate.verdict(for: attempt, now: now) {
             return .refused(why)
         }
@@ -330,10 +373,22 @@ enum ConnectHandoff {
         for key in [statusKey, accountIdKey, reasonKey, stateKey] {
             if case .repeated = single(key) { return .unreadable(.callbackShapeUnreadable) }
         }
-        // The state rides on the callback URL we handed over, so a page that
-        // redirects to it gets it back for free. When it comes back it must be
-        // ours; when it does not come back the three checks above still stand.
-        if case .one(let state) = single(stateKey), state != attempt.id {
+        // THE STATE IS REQUIRED, and this is the fix for a real hole rather
+        // than a tightening for its own sake. The state rides on the callback
+        // URL we handed over, so our own done page gets it back for free by
+        // redirecting to it. It used to be optional-when-absent, and the four
+        // checks above are all things a stranger's URL satisfies for free
+        // while a connect is genuinely in flight — the app is signed in, the
+        // attempt is fresh, and the path names the app the owner just tapped.
+        // So `anticipy://connected/{toolkit}?status=connected&
+        // connected_account_id=…`, openable by any web page, any other app or
+        // a QR code on a poster, came back `.connected` carrying an account id
+        // the stranger chose. The attempt id is the one thing in this URL only
+        // our own page can know.
+        guard case .one(let state) = single(stateKey) else {
+            return .unreadable(.callbackStateMissing)
+        }
+        guard state == attempt.id else {
             return .unreadable(.callbackIsForAnotherAttempt)
         }
 
@@ -399,17 +454,43 @@ struct ConnectAttempt: Equatable {
     let owner: String
     let toolkit: String
     let startedAt: Date
+    /// THE ONE LINK THIS ATTEMPT MAY OPEN, once it has one.
+    ///
+    /// `nil` until `binding(to:)` adopts a link, because the order is fixed by
+    /// the spec: the attempt begins at the tap, the link is minted at the tap
+    /// too ("generate it when they tap, not when we send the text" — four
+    /// links minted ahead of time on 2026-09-05 all expired unused), and the
+    /// link therefore arrives a moment after the attempt exists.
+    ///
+    /// It is the token out of `https://anticipy.ai/c/{token}` and nothing
+    /// else. We never read it; we compare it, so that the link we open is the
+    /// link this attempt fetched rather than any link of ours that happens to
+    /// be lying around.
+    let token: String?
 
+    /// Validated. Every string is checked before it becomes a field.
     init?(id: String, owner: String, toolkit: String, startedAt: Date) {
         guard let owner = ConnectHandoff.ownerRef(owner),
               let toolkit = ConnectHandoff.toolkitSlug(toolkit),
               ConnectHandoff.isOpaqueToken(id, max: ConnectHandoff.maxTokenLength) else {
             return nil
         }
+        self.init(checked: id, owner: owner, toolkit: toolkit, startedAt: startedAt, token: nil)
+    }
+
+    /// For `binding(to:)` only: every value here has already been through the
+    /// checks above or through `inspect(link:)`. Private so no caller outside
+    /// this file can assemble an attempt around them.
+    private init(checked id: String,
+                 owner: String,
+                 toolkit: String,
+                 startedAt: Date,
+                 token: String?) {
         self.id = id
         self.owner = owner
         self.toolkit = toolkit
         self.startedAt = startedAt
+        self.token = token
     }
 
     /// The normal entry point. `id` is injectable so a suite can be exact
@@ -421,11 +502,52 @@ struct ConnectAttempt: Equatable {
         ConnectAttempt(id: id, owner: owner, toolkit: toolkit, startedAt: now)
     }
 
+    /// ADOPT THE LINK THIS ATTEMPT WILL OPEN. Called once, when the server
+    /// answers with our single-use link, and before anything is presented.
+    ///
+    /// Idempotent for the same link, so a retried fetch that comes back with
+    /// the same token is not a failure. A DIFFERENT link is refused rather
+    /// than swallowed: an attempt that could re-adopt would be no binding at
+    /// all — a second link fetched for a second app could be opened under the
+    /// first app's acknowledged attempt, and the callback, which is bound to
+    /// the attempt id, would be believed for the wrong app.
+    func binding(to link: URL) -> ConnectBinding {
+        switch ConnectHandoff.inspect(link: link) {
+        case .notOurs(let why):
+            return .refused(why)
+        case .ours(let offered):
+            if let token, token != offered { return .refused(.linkIsForAnotherAttempt) }
+            return .bound(ConnectAttempt(checked: id, owner: owner, toolkit: toolkit,
+                                         startedAt: startedAt, token: offered))
+        }
+    }
+
+    /// THE SAME TAP, FOR THE SAME PERSON, ON THE SAME APP.
+    ///
+    /// The link token is deliberately not compared. An attempt adopts its
+    /// token part-way through its life, so a whole-value comparison in the
+    /// disclosure gate would refuse the very attempt the owner acknowledged a
+    /// moment earlier — the gate would hold an unbound copy and the presenter
+    /// would arrive with a bound one. The three fields compared here are fixed
+    /// at the tap and never change, and the id alone is not enough: an id is
+    /// only unique among ids we minted.
+    func sameAttempt(as other: ConnectAttempt) -> Bool {
+        id == other.id && owner == other.owner && toolkit == other.toolkit
+    }
+
     /// A clock that ran backwards is as suspicious as one that ran too far.
     func isFresh(at now: Date) -> Bool {
         let age = now.timeIntervalSince(startedAt)
         return age >= 0 && age <= ConnectHandoff.attemptLifetime
     }
+}
+
+/// The answer to "may this attempt open this link". `.refused` carries the
+/// upstream defect's code, because a link that is not ours reaching this point
+/// means one was minted somewhere the spec forbids.
+enum ConnectBinding: Equatable {
+    case bound(ConnectAttempt)
+    case refused(ConnectRefusal)
 }
 
 // MARK: - The disclosure
@@ -447,7 +569,15 @@ struct ConnectAttempt: Equatable {
 ///
 /// The COPY on that sheet is the view's, and it is rendered from the catalog's
 /// own metadata — the permission sentences come from the toolkit's scopes, not
-/// from anything typed in Swift. Nothing about an app is named here.
+/// from anything typed in Swift. Nothing about an app is named here. What the
+/// gate keeps of them is only whether there were any: a sheet with nothing on
+/// it is not a disclosure, and the catalog answering with no scopes must stop
+/// the connect rather than produce a blank one somebody taps through.
+///
+/// THIS TYPE IS NOT A VIEW'S TO HOLD. `ConnectSession` owns the only one, and
+/// keeps it private, so the two calls below cannot be made in one function
+/// body by something that drew nothing; the runner refuses any other
+/// production file that constructs a gate or calls `acknowledge`.
 struct DisclosureGate: Equatable {
 
     /// How long a step of the sequence may sit. Two minutes is long enough to
@@ -455,9 +585,27 @@ struct DisclosureGate: Equatable {
     /// picked up later is still valid. It bounds a gesture, not a meaning.
     static let freshness: TimeInterval = 120
 
+    /// THE FLOOR UNDER THE WORD "TAP". A quarter second: far below anyone
+    /// reading three sentences and reaching for a button, far above zero.
+    ///
+    /// It exists because the gate's old contract — "`disclosureShown` was
+    /// called" — is satisfied perfectly by
+    /// `gate.disclosureShown(...); gate.acknowledge(...)` with no sheet ever
+    /// drawn, and that is the exact shape Google's in-context-disclosure
+    /// requirement is about. A synchronous fake takes no time; a person takes
+    /// seconds. Since `ConnectSession` stamps both moments from its own clock,
+    /// a caller cannot supply the interval it needs.
+    ///
+    /// This bounds a GESTURE, not a meaning — the same clause `freshness`
+    /// sits under. Nothing here reads words.
+    static let minimumDwell: TimeInterval = 0.25
+
     enum Stage: Equatable {
         case nothingShown
-        case shown(attempt: ConnectAttempt, at: Date)
+        /// `sentences` is what was actually put in front of the owner. It is
+        /// kept so "was anything shown" is answerable from the gate rather
+        /// than from a view's memory of itself.
+        case shown(attempt: ConnectAttempt, sentences: [String], at: Date)
         case acknowledged(attempt: ConnectAttempt, at: Date)
     }
 
@@ -466,37 +614,72 @@ struct DisclosureGate: Equatable {
         case refused(ConnectRefusal)
     }
 
+    /// What a tap did. Three states rather than a bool, because "counted",
+    /// "there was nothing to tap" and "that was not a gesture" are three
+    /// different journal entries and a bool carries one bit for all of them.
+    enum Ack: Equatable {
+        case counted
+        case refused(ConnectRefusal)
+    }
+
     private(set) var stage: Stage = .nothingShown
 
     init() {}
 
-    /// The view put the disclosure on screen for this attempt. A new attempt
-    /// replaces whatever was there: only one connect is ever in front of the
-    /// owner.
-    mutating func disclosureShown(for attempt: ConnectAttempt, now: Date) {
-        stage = .shown(attempt: attempt, at: now)
+    /// The view put the disclosure on screen for this attempt, with these
+    /// sentences on it. A new attempt replaces whatever was there: only one
+    /// connect is ever in front of the owner.
+    ///
+    /// Returns the refusal when there was nothing to show — the catalog gave
+    /// no permission sentences for this app — and leaves the gate holding
+    /// nothing, so a blank sheet cannot be acknowledged.
+    @discardableResult
+    mutating func disclosureShown(for attempt: ConnectAttempt,
+                                  sentences: [String],
+                                  now: Date) -> Ack {
+        let drawn = sentences.filter {
+            !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+        guard !drawn.isEmpty else {
+            stage = .nothingShown
+            return .refused(.disclosureHadNothingToShow)
+        }
+        stage = .shown(attempt: attempt, sentences: drawn, at: now)
+        return .counted
     }
 
-    /// The owner tapped. True when that tap counted.
+    /// The owner tapped the affirmative control on the sheet that is up.
     @discardableResult
-    mutating func acknowledge(_ attempt: ConnectAttempt, now: Date) -> Bool {
-        guard case .shown(let shownFor, let shownAt) = stage,
-              shownFor == attempt,
-              fresh(shownAt, now) else {
-            return false
+    mutating func acknowledge(_ attempt: ConnectAttempt, now: Date) -> Ack {
+        guard case .shown(let shownFor, _, let shownAt) = stage else {
+            return .refused(.disclosureNotShown)
+        }
+        guard shownFor.sameAttempt(as: attempt) else {
+            return .refused(.disclosureIsForAnotherAttempt)
+        }
+        let dwell = now.timeIntervalSince(shownAt)
+        // Negative lands here too, and correctly: no gesture takes less than
+        // no time, whatever the clock did.
+        guard dwell >= DisclosureGate.minimumDwell else {
+            return .refused(.disclosureTapWasNotAGesture)
+        }
+        guard dwell <= DisclosureGate.freshness else {
+            return .refused(.disclosureIsStale)
         }
         stage = .acknowledged(attempt: attempt, at: now)
-        return true
+        return .counted
     }
 
     func verdict(for attempt: ConnectAttempt, now: Date) -> Verdict {
         switch stage {
         case .nothingShown:
             return .refused(.disclosureNotShown)
-        case .shown:
-            return .refused(.disclosureNotAcknowledged)
+        case .shown(let shownFor, _, _):
+            return .refused(shownFor.sameAttempt(as: attempt)
+                            ? .disclosureNotAcknowledged
+                            : .disclosureIsForAnotherAttempt)
         case .acknowledged(let acknowledgedFor, let at):
-            guard acknowledgedFor == attempt else {
+            guard acknowledgedFor.sameAttempt(as: attempt) else {
                 return .refused(.disclosureIsForAnotherAttempt)
             }
             guard fresh(at, now) else { return .refused(.disclosureIsStale) }
@@ -511,7 +694,8 @@ struct DisclosureGate: Equatable {
 
     /// Spent. Called by `ConnectHandoff.presentation` as the link goes out.
     mutating func handedOver(_ attempt: ConnectAttempt) {
-        if case .acknowledged(let acknowledgedFor, _) = stage, acknowledgedFor == attempt {
+        if case .acknowledged(let acknowledgedFor, _) = stage,
+           acknowledgedFor.sameAttempt(as: attempt) {
             stage = .nothingShown
         }
     }
@@ -596,6 +780,12 @@ enum ConnectRefusal: String, CaseIterable, Equatable {
     /// The identity on this phone is not an owner row id — a signed-out
     /// device, a display name, an email, a legacy device UUID.
     case notAnOwnerId = "connect.not_an_owner_id"
+    /// The catalog named an app in a shape we cannot carry — empty, over-long,
+    /// or holding characters a slug never has. It is the CATALOG's answer that
+    /// is wrong, not the owner's words: which app they meant was decided by a
+    /// model before anything reached here, so this is a defect upstream and is
+    /// reported as one rather than guessed at.
+    case toolkitNotNamed = "connect.toolkit_not_named"
     /// The attempt was minted for a different owner than the one signed in now.
     case attemptIsForAnotherOwner = "connect.attempt_is_for_another_owner"
     /// Older than the link could possibly still be alive for.
@@ -606,8 +796,21 @@ enum ConnectRefusal: String, CaseIterable, Equatable {
     /// Our host and our path, and no token we can carry — absent, over-long,
     /// or holding characters our own tokens never have.
     case linkTokenMissing = "connect.link_token_missing"
+    /// One of ours, and this attempt never adopted a link at all. Nothing to
+    /// compare is not a match.
+    case linkNotBoundToAttempt = "connect.link_not_bound_to_attempt"
+    /// One of ours, and not the one this attempt fetched. Another owner's
+    /// link, another app's link, or a second link where the first was
+    /// acknowledged.
+    case linkIsForAnotherAttempt = "connect.link_is_for_another_attempt"
     /// The disclosure was never put on screen for this attempt.
     case disclosureNotShown = "connect.disclosure_not_shown"
+    /// There was nothing to put on the sheet: the catalog named no permission
+    /// sentences for this app, and a blank disclosure is not a disclosure.
+    case disclosureHadNothingToShow = "connect.disclosure_had_nothing_to_show"
+    /// The tap arrived in the same instant the sheet did. Nobody read
+    /// anything; something called both methods in one breath.
+    case disclosureTapWasNotAGesture = "connect.disclosure_tap_was_not_a_gesture"
     /// It was shown and nobody tapped.
     case disclosureNotAcknowledged = "connect.disclosure_not_acknowledged"
     /// It was acknowledged, for something else.
@@ -624,6 +827,9 @@ enum ConnectRefusal: String, CaseIterable, Equatable {
     case callbackToolkitMismatch = "connect.callback_toolkit_mismatch"
     /// A callback whose state is not the attempt's.
     case callbackIsForAnotherAttempt = "connect.callback_is_for_another_attempt"
+    /// A callback carrying no state at all. Our own done page always echoes
+    /// it; a URL that does not is a knock, not a reply.
+    case callbackStateMissing = "connect.callback_state_missing"
     /// A status token our own page does not mint.
     case callbackStatusUnknown = "connect.callback_status_unknown"
     /// Said connected, named no account.

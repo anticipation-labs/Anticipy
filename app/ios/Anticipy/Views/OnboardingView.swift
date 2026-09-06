@@ -2,30 +2,22 @@ import SwiftUI
 import Speech
 import UIKit
 
-/// First-run walkthrough: welcome → how it works → may I listen → where to
-/// reach you → optional computer handoff — and the sign-in door stands between
-/// the second and the third of them.
+/// First-run walkthrough: welcome → a three-page tour → the sign-in door →
+/// your name → your computer → may I listen — one screen, one question, and a
+/// circular arrow to the next.
 ///
 /// This view is instantiated with a `FirstRunSegment` and carries only that
 /// segment's pages. The reason it is split at all is that a stranger used to
 /// type an email, a password AND a phone number before the product had
 /// produced one single thing of its own; the two beats that ask for nothing
-/// moved in front of the door and the two that need an account stayed behind
-/// it. Which segment shows on which launch is `FirstRunRoute.decide`, and the
+/// sit in front of the door and the three that need an account stay behind it.
+/// Which segment shows on which launch is `FirstRunRoute.decide`, and the
 /// microphone beat may never be moved into `.intro` — `heard` pushes live
 /// before it queues, so that is a stranger's room on the server, not a demo.
 ///
-/// Two things used to be wrong at the shape level. The pendant was presented as
-/// the microphone, so a stranger with no hardware finished believing they
-/// couldn't use the product — the phone in their hand IS the product. And the
-/// microphone was asked for by iOS with no explanation at all, so the first
-/// thing the app ever said to anyone was a system alert. The primer is here to
-/// stop that. Every step is still skippable; nothing blocks the app.
-///
-/// Computer setup is an optional HANDOFF, never an install task on the phone:
-/// each hosted Railway page can be opened or sent through the native share
-/// sheet, and the whole beat has a one-tap exit. Home and Settings keep the same
-/// routes for anybody who takes that exit.
+/// The pages do not swipe between beats. Each beat is committed with its own
+/// control, and the page turn is a slide on the app's slow spring. Only the
+/// tour's three pages swipe, because they are three views of one idea.
 struct OnboardingView: View {
     @EnvironmentObject var session: AnticipySession
     /// Called the instant the last step is cleared. The CALLER writes the
@@ -33,39 +25,29 @@ struct OnboardingView: View {
     /// over Home — see AnticipyApp.
     ///
     /// This used to be a `hasOnboarded = true` at the tail of a ~2.4s animation
-    /// inside this view: the typewriter had to finish, call back, and a further
-    /// 1.4s sleep had to elapse before anything was written down. Anything that
-    /// interrupted those seconds — backgrounding the app, force-quitting, the
-    /// view being torn down — left the flag false, and the person did all five
-    /// steps again on the next launch with their name, email and number already
-    /// saved. Recording the fact and celebrating it are now two different jobs.
+    /// inside this view: anything that interrupted those seconds left the flag
+    /// false, and the person did every step again on the next launch.
+    /// Recording the fact and celebrating it are two different jobs.
     let onFinished: () -> Void
 
-    /// WHICH BEATS THIS INSTANCE IS CARRYING. The walkthrough is split across
-    /// the sign-in door now: `.intro` is the two beats in front of it, `.rest`
-    /// is the two behind it, and `.whole` is all four for somebody who reached
-    /// the tour without the introduction — a second person signing in on a
-    /// handed-on phone. `AnticipyApp` picks one through `FirstRunRoute`.
+    /// WHICH BEATS THIS INSTANCE IS CARRYING. `.intro` is the two in front of
+    /// the door, `.rest` is the three behind it, and `.whole` is all five for
+    /// somebody who reached the tour without the introduction — a second
+    /// person signing in on a handed-on phone. `AnticipyApp` picks one through
+    /// `FirstRunRoute`.
     let segment: FirstRunSegment
 
     /// Whether the two pre-auth beats have been cleared on this device. Written
     /// HERE as well as by the caller, because the beat is cleared here and a
-    /// durable fact belongs on the line that makes it true rather than at the
-    /// tail of whatever animation happens to follow.
+    /// durable fact belongs on the line that makes it true.
     @AppStorage(FirstRunOwnership.introKey) private var hasSeenIntro = false
 
     /// THE ABSOLUTE BEAT INDEX, in every segment. `.rest` starts at
-    /// `Step.mic` = 2 rather than at 0, which is what lets the progress track
-    /// stay a plain function of `step` and lets every `Step.x` comparison in
-    /// this file keep meaning what it meant.
+    /// `Step.name` rather than at 0, which is what lets the progress bar stay a
+    /// plain function of `step`.
     @State private var step: Int
-    /// The step we were on before the last change, so a *swipe* off the number
-    /// step can save it too. Only the Continue button ever used to save.
-    ///
-    /// SEEDED FROM THE SAME PLACE AS `step`. Left at 0 in `.rest` it would
-    /// record a `previous` that nobody was ever on; that cannot produce a
-    /// wrong save today, because only `previous == Step.phone` matters and
-    /// 0 is not 3, but it is a wrong value one edit away from mattering.
+    /// The step we were on before the last change, so leaving the name beat by
+    /// ANY route saves what was typed on it.
     @State private var lastStep: Int
 
     init(segment: FirstRunSegment, onFinished: @escaping () -> Void) {
@@ -75,105 +57,115 @@ struct OnboardingView: View {
         _lastStep = State(initialValue: segment.firstStep)
     }
 
-    // Phone number
-    @State private var phone = ""
+    // The tour
+    @State private var tourPage = 0
+
+    // Your name — and, only when the account is missing them, email and number
+    @State private var firstName = ""
+    @State private var email = ""
+    @State private var phoneCode = DiallingCode.forThisPhone().trimmingCharacters(in: .whitespaces)
+    @State private var phoneDigits = ""
     @State private var phoneSaved = false
     @State private var phoneSaveFailed = false
     @State private var savingPhone = false
     @State private var phoneSkipped = false
     @State private var detailsSaved = false
-    // Her name and email were never asked for anywhere in onboarding, only
-    // buried in Settings. That is why she invents them: a booking form wants a
-    // name and an email, and with none on file she fills the blank rather than
-    // admitting it. Asked here, once, beside the number — all three skippable.
-    @State private var firstName = ""
-    @State private var email = ""
-    /// Whether the person has asked to change a fact she already holds. Both
-    /// start false: the number beat is a confirmation now, and a confirmation
-    /// that opens with every box already open is the interrogation it replaced.
-    @State private var editingEmail = false
-    @State private var editingPhone = false
     @FocusState private var focus: OpenField?
     private enum OpenField { case firstName, email, phone }
 
-    // Microphone
+    // May I listen?
     @State private var micAsked = false
+    @State private var micWanted = false
+    @State private var notificationsWanted = false
+    @State private var showingPromises = false
 
-    // Computer handoff
+    // Your computer. Pairing itself — the six-digit ceremony — lives in
+    // Settings; this beat only hands the setup pages to the right machine.
     @AppStorage("backendURL") private var backendURL = "https://api.anticipy.ai"
-    @State private var pairCode = ""
-    @State private var pairOutcome: AnticipySession.PairOutcome?
-    @State private var pairingBrowser = false
 
-    /// The voice invite, raised once the walkthrough is cleared. It remains a
-    /// screen after the counted beats rather than another item in their track.
-    ///
-    /// Raised only when `EnrollmentOfferPolicy` says it can work. On the
-    /// shipping build sherpa-onnx is unlinked, `SpeakerTagger.available` is
-    /// false, and this stays false forever — first run costs a stranger nothing
-    /// it cannot pay back. See EnrollmentInvite for the whole argument.
+    /// The voice invite, raised once the walkthrough is cleared. Raised only
+    /// when `EnrollmentOfferPolicy` says it can work; on the shipping build
+    /// sherpa-onnx is unlinked and this stays false forever.
     @State private var inviting = false
 
-    /// Five beats, and they live in `FirstRunRoute.swift` now — the routing
-    /// has to name them too, and Foundation-only is what lets the six launch
-    /// states be walked without a simulator. The alias is what keeps every
-    /// `Step.mic`, `.tag(Step.phone)` and `step += 1` in this file untouched.
-    ///
-    /// The computer handoff is short and fully skippable; installation remains
-    /// on the hosted pages rather than turning this view into a setup manual.
+    /// Five beats, and they live in `FirstRunRoute.swift` — the routing has to
+    /// name them too, and Foundation-only is what lets the launch states be
+    /// walked without a simulator.
     private typealias Step = FirstRunBeat
 
     var body: some View {
         ZStack {
-            Theme.bg.ignoresSafeArea()
+            OnboardTheme.ground.ignoresSafeArea()
             VStack(spacing: 0) {
-                // NO NUMBER IS HONEST IN FRONT OF THE DOOR, so no number is
-                // shown there. On how-it-works pre-auth the person has one
-                // beat behind them, and the track's rule is that it never
-                // opens at 1; the other available number, the absolute
-                // "3 of 5", counts an account nobody has made yet. Both
-                // permitted numbers are forbidden. `FirstRunSegment.showsTrack`
-                // carries the derivation so it can be read without a screen.
-                //
-                // This does NOT replace the opacity modifier inside
-                // `progressTrack`. That one is about `.whole`, where welcome
-                // is a real page and must still not be counted. Two
-                // mechanisms, two different reasons, both needed.
-                if segment.showsTrack {
-                    progressTrack
+                // NO NUMBER IS HONEST IN FRONT OF THE DOOR, so no bar is shown
+                // there. `FirstRunSegment.showsTrack` carries the derivation;
+                // the second clause keeps the bar off the two pre-auth pages
+                // when `.whole` carries them behind the door as well.
+                if segment.showsTrack, step >= Step.name {
+                    StepperHeader(progress: progress,
+                                  spokenLabel: FirstRunTrack.spokenLabel(step: step, pageCount: Step.count))
+                        .opacity(step == Step.welcome ? 0 : 1)
+                        .accessibilityHidden(step == Step.welcome)
+                        .transition(.opacity)
                 }
-                TabView(selection: $step) {
+                ZStack {
                     // The pages this segment carries, and only those. A
                     // `micPrimer` rendered in `.intro` is not a cosmetic
                     // mistake — it is a microphone in front of an account,
                     // and `heard` pushes live before it queues.
                     ForEach(segment.pages, id: \.self) { beat in
-                        page(beat).tag(beat)
+                        if beat == step {
+                            page(beat)
+                                .transition(.asymmetric(
+                                    insertion: .move(edge: .trailing).combined(with: .opacity),
+                                    removal: .move(edge: .leading).combined(with: .opacity)))
+                        }
                     }
                 }
-                .tabViewStyle(.page(indexDisplayMode: .never))
                 .animation(Theme.springSlow, value: step)
-                footer
             }
         }
-        .grainOverlay()
-        // Leaving the number step by ANY route — Continue, Skip, or a swipe —
-        // saves it. A swipe used to throw a perfectly good number away on a
-        // perfect connection, silently.
+        .overlay(alignment: .bottom) { footer }
+        // Leaving the name beat by ANY route — the arrow, the opt-out — saves
+        // what was typed on it.
         .onChange(of: step) { newStep in
             Haptics.pageTurn()
             let previous = lastStep
             lastStep = newStep
-            guard previous == Step.phone, newStep != Step.phone else { return }
+            guard previous == Step.name, newStep != Step.name else { return }
             savePhoneOnLeaving()
         }
-        // ENROLMENT, OFFERED AT LAST. Until this existed the app presented
-        // VoiceEnrollView from exactly one place - a sheet three scrolls down
-        // in Settings - and `speaker` sat at 0% across 221 production events
-        // with the cause recorded as "enrollment unreachable".
-        //
-        // Whichever way it ends, onFinished() runs: nothing about learning a
-        // voice may be able to strand somebody outside the app.
+        // The switch starts and stops listening; the arrow is the only thing
+        // that ends the beat. Flipping it off re-arms the ask, so a second
+        // "on" asks again rather than falling through to the finish.
+        .onChange(of: micWanted) { on in
+            guard step == Step.mic else { return }
+            if on {
+                askForMicrophone()
+            } else {
+                if session.listener.isListening { session.stopListening() }
+                micAsked = false
+            }
+        }
+        .onChange(of: notificationsWanted) { on in
+            guard step == Step.mic, on else { return }
+            Task {
+                await session.notifier.askIfNeeded()
+                // iOS said no, or said no once before: the switch may not
+                // stay on over nothing.
+                if !session.notifier.authorized {
+                    withAnimation(Theme.spring) { notificationsWanted = false }
+                }
+            }
+        }
+        .onChange(of: session.listener.isListening) { on in
+            // Mirror the fact into the switch without treating it as a flip.
+            if step == Step.mic, micWanted != on { micWanted = on }
+        }
+        .sheet(isPresented: $showingPromises) { promises }
+        // ENROLMENT, OFFERED AT LAST. Whichever way it ends, onFinished() runs:
+        // nothing about learning a voice may be able to strand somebody outside
+        // the app.
         .fullScreenCover(isPresented: $inviting) {
             EnrollmentInvite(onDone: {
                 inviting = false
@@ -183,39 +175,37 @@ struct OnboardingView: View {
         }
     }
 
+    /// The bar counts beats BEHIND you over the six the track names, the
+    /// account included — so the name beat sits at three of six whichever way
+    /// the person arrived at it.
+    private var progress: Double {
+        Double(FirstRunTrack.ordinal(step: step, pageCount: Step.count) - 1)
+            / Double(FirstRunTrack.count)
+    }
+
     /// One beat by its absolute index. `default` is unreachable while
-    /// `FirstRunSegment.pages` only ever holds these four, which
-    /// `run_first_run_route_tests.sh` asserts along with `FirstRunBeat.count`
-    /// — a beat added to the indices and not to this switch goes red
-    /// there rather than rendering a blank page on a stranger's first run.
+    /// `FirstRunSegment.pages` only ever holds these five, which
+    /// `run_first_run_route_tests.sh` asserts along with `FirstRunBeat.count`.
     @ViewBuilder
     private func page(_ beat: Int) -> some View {
         switch beat {
-        case Step.welcome:    welcome
-        case Step.howItWorks: howItWorks
-        case Step.mic:        micPrimer
-        case Step.phone:      yourNumber
-        case Step.computer:   computerSetup
-        default:              EmptyView()
+        case Step.welcome:  welcome
+        case Step.tour:     tour
+        case Step.name:     yourName
+        case Step.computer: computerSetup
+        case Step.mic:      micPrimer
+        default:            EmptyView()
         }
     }
 
     /// The last beat is cleared. Offer the voice invite if it can actually
     /// work, otherwise end the walkthrough exactly as it always did.
-    ///
-    /// The policy is asked here, once, rather than re-derived from
-    /// `speakerTagger.available` at each of the two exits below - which is how
-    /// two exits come to disagree about whether a tour is over.
     @MainActor
     private func finish() {
         // IN FRONT OF THE DOOR, "the last beat is cleared" means the door is
         // next — not that first run is over. A voice-enrolment offer raised
         // here would be asking a stranger to record their voice for an account
-        // that does not exist. On the shipping build EnrollmentOfferPolicy
-        // returns false anyway, because sherpa-onnx is unlinked and
-        // `SpeakerTagger.available` is therefore false — but leaning on that
-        // is accidental safety, and accidental safety is what this whole
-        // change is about.
+        // that does not exist.
         guard segment.endsTheTour else {
             onFinished()
             return
@@ -229,180 +219,113 @@ struct OnboardingView: View {
         onFinished()
     }
 
+    private func go(_ to: Int) {
+        withAnimation(Theme.springSlow) { step = to }
+    }
 
-    /// Progress in one line: the beat you are on, and which of five it is.
-    ///
-    /// FIVE, BECAUSE THE ACCOUNT COUNTED. This opened at "1 of 4" over
-    /// somebody who had just typed an email, a password and a phone number at
-    /// the door and watched three rules turn champagne as they did it. Told
-    /// they were at the start, with the hardest screen of first run already
-    /// behind them, the count was not merely unflattering — it was wrong. The
-    /// names and the arithmetic live in `FirstRunTrack` at the foot of this
-    /// file, where they can be read without a simulator.
-    ///
-    /// `design/day-zero.md:230-231` asked for "a rule list with a live marker,
-    /// not wizard dots", and this was four 2px rules laid on their side — the
-    /// live one in the accent, finished ones dimmer, still-to-come quiet, and
-    /// only the live beat's text at full strength. The golden bars are out of
-    /// the product now, and the COLOUR of those rules was the position, so the
-    /// position moved into type rather than leaving with them: the live beat
-    /// says its name at full strength, and its number sits beside it in the
-    /// quiet register counts belong in.
-    ///
-    /// Not four dimmed names in a row instead. The four of them are 46
-    /// characters; on a 375pt phone with 28pt gutters they only fit by
-    /// shrinking to illegible, and at accessibility sizes they would wrap and
-    /// shove the TabView down the screen — the same reason only the live beat
-    /// has ever said its name here.
-    ///
-    /// -- THE INVARIANT THE NEXT AGENT WILL OTHERWISE "FIX" ---------------
-    ///
-    /// `pageCount` is ALWAYS `Step.count`, never `segment.pages.count`, and
-    /// `step` is always the absolute beat index. So the microphone beat reads
-    /// "May I listen?  4 of 5" whichever way the person got there, and that is
-    /// true of both of them rather than a rounding error: the ordinal counts
-    /// the beats BEHIND you, not a position in a fixed order. A fresh stranger
-    /// arrives having done Hello, How I work and Your account; somebody whose
-    /// tour replayed after a second person signed in arrives having done Your
-    /// account, Hello and How I work. Three beats each, so four is right for
-    /// each.
-    ///
-    /// `beatNames` is only ever RENDERED IN ORDER in `.whole`, where its order
-    /// is the true one. No screen ever shows a name in an order that is false
-    /// for the person reading it, which is why the array does not need — and
-    /// must not get — a per-segment permutation.
-    private var progressTrack: some View {
-        HStack(alignment: .firstTextBaseline, spacing: Theme.Space.tight) {
-            Text(FirstRunTrack.name(step: step, pageCount: Step.count))
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(Theme.text)
-                .lineLimit(1)
-                // A clipped progress label is survivable at AX5; a wrapped one
-                // would shove the TabView down the screen on every step that
-                // has a long name.
-                .minimumScaleFactor(0.75)
-                // A new identity per beat, so the name still crossfades on the
-                // page turn the way it did when it belonged to a live rule.
-                .id(step)
-                .transition(.opacity)
-            Text("\(FirstRunTrack.ordinal(step: step, pageCount: Step.count)) of \(FirstRunTrack.count)")
-                .font(Theme.meta)
-                .foregroundStyle(Theme.muted)
-                .lineLimit(1)
-            Spacer(minLength: 0)
-        }
-        .animation(Theme.spring, value: step)
-        .padding(.horizontal, 28)
-        .padding(.top, 18)
-        // Let the product introduce itself before it starts counting — the
-        // track turned her introduction into step 1 of 4 of a wizard.
-        .opacity(step == Step.welcome ? 0 : 1)
-        .animation(Theme.springSlow, value: step)
-        .accessibilityElement(children: .ignore)
-        // "Step N of M" is what a screen-reader user needs to know; the beat
-        // name is what the live marker adds for everyone else, so it says
-        // both rather than trading one for the other.
-        .accessibilityLabel(FirstRunTrack.spokenLabel(step: step, pageCount: Step.count))
-        // An element drawn at zero opacity that still announces its step is a
-        // wizard for VoiceOver users only.
-        .accessibilityHidden(step == Step.welcome)
+    /// The page after this one in THIS segment.
+    private var nextPage: Int? {
+        guard let i = segment.pages.firstIndex(of: step), i + 1 < segment.pages.count else { return nil }
+        return segment.pages[i + 1]
     }
 
     // MARK: - Footer
 
-    private var primaryLabel: String {
+    /// The floating footer for the three beats behind the door: nothing on the
+    /// left (there is no going back to a beat already saved), a quiet link in
+    /// the middle when the beat has an opt-out, the arrow on the right.
+    @ViewBuilder private var footer: some View {
         switch step {
-        case Step.mic:
-            if session.listener.isListening || session.micBlocked || micAsked { return "Continue" }
-            return "Yes, start listening"
-        case Step.phone:
-            return savingPhone ? "Saving…" : "Continue"
-        case Step.computer:
-            return "Start living your day"
-        default:
-            return "Continue"
-        }
-    }
-
-    /// Only the two steps that ask something of the user get an opt-out. It
-    /// used to render on four, in 13pt grey, with a tap target under 44pt.
-    private var skipLabel: String? {
-        switch step {
-        case Step.mic: return "Not right now"
-        // NAMES THE CONSEQUENCE, BECAUSE THAT IS WHAT THE CHOICE DOES. All
-        // three fields still live in Settings — first name/email in
-        // `Section("You")`, the number in `Section("Your number")` — but a
-        // promise to visit that page later hid the fact that no number means
-        // no SMS right now. The full explanation sits in ConfirmBeat below.
-        //
-        // CITED BY SECTION NAME RATHER THAN LINE NUMBER, deliberately. This
-        // comment used to give two line ranges in SettingsView, and both were
-        // wrong on the day they were written — one landed on a status pill,
-        // the other on a caption. The next agent checking whether this label
-        // tells the truth would have found no fields there and reverted a
-        // correct fix. Section titles are user-visible copy, they move with
-        // their fields, and `run_first_run_copy_tests.sh` greps for them.
-        case Step.phone: return "Use in-app alerts only"
-        case Step.computer: return "I'll connect my computer later"
-        default: return nil
-        }
-    }
-
-    private var footer: some View {
-        VStack(spacing: 4) {
-            Button {
-                Task { await advance() }
-            } label: {
-                Text(primaryLabel)
-                    .id(primaryLabel)
-                    .transition(.opacity)
-                    .animation(Theme.spring, value: primaryLabel)
+        case Step.name:
+            OnboardFooter {
+                HStack(spacing: 12) {
+                    OnboardFABSpacer()
+                    ZStack {
+                        Color.clear.frame(height: 1)
+                        // NAMES THE CONSEQUENCE, BECAUSE THAT IS WHAT THE
+                        // CHOICE DOES: no number means no text messages. Only
+                        // offered while the number box is open. Otherwise the
+                        // quiet exit for somebody who will not give a name.
+                        if showingPhoneField {
+                            Button("Use in-app alerts only") { skipCurrentStep() }
+                                .font(OnboardFont.helper)
+                                .foregroundStyle(OnboardTheme.text2)
+                                .accessibilityIdentifier("onboarding-skip")
+                        } else if !nameCanContinue, !savingPhone {
+                            Button("Not right now") { skipCurrentStep() }
+                                .font(OnboardFont.helper)
+                                .foregroundStyle(OnboardTheme.text2)
+                                .accessibilityIdentifier("onboarding-skip")
+                        }
+                    }
                     .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.glass)
-            // No hand-rolled .opacity beside this: the style dims what is
-            // disabled, so every control in the app dims by the same amount.
-            .disabled(savingPhone)
-
-            if let skip = skipLabel {
-                Button {
-                    skipCurrentStep()
-                } label: {
-                    Text(skip)
-                        .frame(maxWidth: .infinity)
+                    .animation(Theme.spring, value: nameCanContinue)
+                    OnboardFAB(enabled: nameCanContinue, label: "Continue") {
+                        Task { await advance() }
+                    }
                 }
-                .buttonStyle(.ghost)
-                .accessibilityIdentifier("onboarding-skip")
-            } else {
-                // The one control that must be the same object on every page
-                // was the one thing that moved: reserve the skip row's height
-                // so the primary capsule never jumps 44pt on a page turn.
-                Color.clear.frame(height: 44)
             }
+        case Step.computer:
+            OnboardFooter {
+                HStack(spacing: 12) {
+                    OnboardFABSpacer()
+                    Spacer()
+                    OnboardFAB(label: "Continue") { Task { await advance() } }
+                }
+            }
+        case Step.mic:
+            // The switches carry the answer; the arrow finishes either way.
+            OnboardFooter {
+                HStack(spacing: 12) {
+                    OnboardFABSpacer()
+                    Spacer()
+                    OnboardFAB(label: "Finish") { Task { await advance() } }
+                }
+            }
+        default:
+            EmptyView()
         }
-        .padding(.horizontal, 28)
-        .padding(.bottom, 18)
     }
 
     /// Skip is explicit per beat instead of incrementing an arbitrary tag.
-    /// Naming the destination makes adding or reordering a beat fail visibly
-    /// here instead of silently skipping to whichever integer comes next.
     @MainActor
     private func skipCurrentStep() {
         Haptics.engage()
         switch step {
-        case Step.mic:
-            withAnimation(Theme.spring) { step = Step.phone }
-        case Step.phone:
-            // Save anything they did provide, then take the same optional
-            // computer handoff as the primary route.
+        case Step.name:
+            // Save anything they did provide, then take the same path as the
+            // arrow.
             phoneSkipped = true
             savePhoneOnLeaving()
-            withAnimation(Theme.spring) { step = Step.computer }
-        case Step.computer:
-            finish()
+            if let next = nextPage { go(next) } else { finish() }
         default:
-            assertionFailure("Only microphone, profile, and computer beats can be skipped")
+            assertionFailure("Only the name beat can be skipped")
+        }
+    }
+
+    /// THE AFFIRMATIVE FLIP. iOS is asked for the microphone here and ONLY
+    /// here, and only on the beat that explains it: never in front of the
+    /// door, never from a switch being seeded, never from a widget URL
+    /// arriving while somebody is typing their name. `heard` pushes live
+    /// before it queues, so this gate is a safety property, not a preference.
+    @MainActor
+    private func askForMicrophone() {
+        if step == Step.mic, !micAsked, !session.micBlocked, !session.listener.isListening {
+            micAsked = true
+            session.startListening()
+        }
+    }
+
+    /// "Get started" on the welcome: past the tour, and on to whatever is
+    /// next — the door in front of it, the name beat behind it.
+    @MainActor
+    private func skipTour() {
+        Haptics.engage()
+        if segment.endsTheTour {
+            go(Step.name)
+        } else {
+            hasSeenIntro = true
+            finish()
         }
     }
 
@@ -410,22 +333,15 @@ struct OnboardingView: View {
     private func advance() async {
         Haptics.engage()
 
-        // The affirmative tap. iOS is never asked for the microphone until
-        // someone has read what it's for and said yes here — and she gets one
-        // typed line in before the system alerts appear.
-        if step == Step.mic, !micAsked, !session.micBlocked, !session.listener.isListening {
-            micAsked = true
-            withAnimation(Theme.spring) { micPriming = true }
-            try? await Task.sleep(nanoseconds: 500_000_000)
-            session.startListening()
-            return
-        }
+        // The microphone is never asked for from here: the switch on the
+        // last beat does that through `askForMicrophone()`. The arrow only
+        // ever moves on.
 
-        // This is one profile checkpoint, not three optimistic fields. The
-        // flow advances only after every non-empty fact is durably stored.
-        if step == Step.phone {
+        // One profile checkpoint, not three optimistic fields. The flow
+        // advances only after every non-empty fact is durably stored.
+        if step == Step.name {
             savingPhone = true
-            if !phoneSaved, session.e164(phone) != nil {
+            if showingPhoneField, !phoneSaved, session.e164(phone) != nil {
                 let ok = await session.saveOwnerPhone(phone)
                 guard ok else {
                     savingPhone = false
@@ -436,21 +352,10 @@ struct OnboardingView: View {
             }
             let first = firstName.trimmingCharacters(in: .whitespaces)
             let mail = email.trimmingCharacters(in: .whitespaces)
-            // AND UNCHANGED IS ALREADY SAVED — the same bug the number got a
-            // guard for one branch up, left open here in the same function.
-            // Both boxes are SEEDED from the account (`firstName` from
-            // `session.ownerFirstName`, `email` from `session.ownerEmail`,
-            // which `signIn` always writes), so somebody who signs in, leaves
-            // the first-name box alone and taps "Start living your day" was
-            // re-sending facts already on their record. On a good connection
-            // that is a wasted round trip; on a bad one the `guard ok` below
-            // holds them on the last page of first run under "I couldn't save
-            // that just now" — over an email their account already has. A
-            // false failure, and the last thing first run does.
-            //
-            // Compared at the point of sending rather than latched at seed
-            // time like `phoneSaved`, because `.onChange(of: firstName)` fires
-            // after this view's `.task` and would clear a flag set there.
+            // AND UNCHANGED IS ALREADY SAVED. Both boxes are seeded from the
+            // account, so somebody who leaves the first-name box alone is not
+            // re-sending facts already on their record — on a bad connection
+            // that was a false failure on the last page of first run.
             let detailsChanged = first != session.ownerFirstName
                 || mail != session.ownerEmail
             if !detailsSaved, detailsChanged, !first.isEmpty || !mail.isEmpty {
@@ -466,55 +371,36 @@ struct OnboardingView: View {
             phoneSaveFailed = false
         }
 
-        // THIS SEGMENT'S LAST PAGE, not the fourth beat. `Step.count - 1` is
-        // 3, so in `.intro` how-it-works (1) is less than it and Continue used
-        // to step to a page tagged 2 that this segment does not carry: a blank
-        // screen, in front of the door, with no way forward. That dead end is
-        // exactly what a routing-only version of this change produces.
-        if step < segment.lastStep {
-            withAnimation(Theme.spring) { step += 1 }
+        // THIS SEGMENT'S LAST PAGE, not the fifth beat: in `.intro` the tour
+        // is the last page and Continue must walk to the door, not to a page
+        // this segment does not carry.
+        if step < segment.lastStep, let next = nextPage {
+            go(next)
         } else {
-            // THE DURABLE FACT FIRST, then anything decorative — the rule the
-            // caller's own `onFinished` comment argues, applied one level
-            // down. Clearing the last page of `.intro` is what "they have been
-            // introduced" MEANS, and it is written synchronously here rather
-            // than left to a closure that a torn-down view may never call.
-            //
-            // AND ONLY THERE, which is the guard rather than a tidy-up. In the
-            // two segments that END the tour the caller writes both flags on
-            // consecutive lines, and writing this one first opened a window
-            // between them: `decide(hasSeenIntro: true, isSignedIn: true,
-            // hasOnboarded: false)` is `.tour(.rest)`, so in `.whole` this line
-            // changed `segment` under a live view while the person was still
-            // standing on the number beat. Nothing broke, but only because
-            // `.tour(.whole)` and `.tour(.rest)` land in the same
-            // `case .tour(let segment):` arm and SwiftUI therefore kept the
-            // @State `step` — view identity, not a guarantee, and the enrolment
-            // invite below is raised from inside that window. Idempotent in
-            // `.rest` by definition: nothing routes there without the flag
-            // already set.
+            // THE DURABLE FACT FIRST, then anything decorative. Clearing the
+            // last page of `.intro` is what "they have been introduced"
+            // MEANS, and it is written synchronously here. AND ONLY THERE: in
+            // the two segments that END the tour the caller writes both flags
+            // on consecutive lines, and writing this one first re-routes
+            // `.whole` to `.rest` under a live view.
             if !segment.endsTheTour { hasSeenIntro = true }
-            // The last step is cleared. Say so and let the caller write it
-            // down; nothing about the celebration can strand anyone now.
             finish()
         }
     }
 
     @MainActor
     private func savePhoneOnLeaving() {
-        // Name and email save INDEPENDENTLY of the number. They used to sit
-        // behind the phone's validity guard, so skipping the number — or
-        // mistyping it — silently threw away the two facts that stop her
-        // inventing an address on a booking form.
+        // Name and email save INDEPENDENTLY of the number.
         let first = firstName.trimmingCharacters(in: .whitespaces)
         let mail = email.trimmingCharacters(in: .whitespaces)
-        if !first.isEmpty || !mail.isEmpty {
+        let detailsChanged = first != session.ownerFirstName || mail != session.ownerEmail
+        if !detailsSaved, detailsChanged, !first.isEmpty || !mail.isEmpty {
             Task {
                 let ok = await session.saveOwnerDetails(first: first, last: "", email: mail)
                 if ok { detailsSaved = true }
             }
         }
-        guard !phoneSaved, !savingPhone, session.e164(phone) != nil else { return }
+        guard showingPhoneField, !phoneSaved, !savingPhone, session.e164(phone) != nil else { return }
         Task {
             savingPhone = true
             let ok = await session.saveOwnerPhone(phone)
@@ -525,33 +411,43 @@ struct OnboardingView: View {
             } else {
                 withAnimation(Theme.spring) { phoneSaveFailed = true }
                 // Bring them back once so a good number can't vanish quietly.
-                // Once they've seen why, or once they've said skip, let them go.
-                if !phoneSkipped {
-                    withAnimation(Theme.spring) { step = Step.phone }
-                }
+                if !phoneSkipped { go(Step.name) }
             }
         }
     }
 
-    /// Every step scrolls and every step centres. None of them used to sit in a
-    /// ScrollView, so at large text sizes the bottom of a step was simply cut
-    /// off with nothing to scroll.
+    /// Every beat behind the door scrolls, because at accessibility sizes a
+    /// beat that cannot scroll is a beat with its bottom cut off.
     private func stepBody<Content: View>(
-        alignment: HorizontalAlignment = .center,
-        spacing: CGFloat = 18,
+        spacing: CGFloat = 16,
         @ViewBuilder content: @escaping () -> Content
     ) -> some View {
-        GeometryReader { geo in
-            ScrollView {
-                VStack(alignment: alignment, spacing: spacing) {
-                    content()
-                }
-                .frame(maxWidth: .infinity, alignment: alignment == .leading ? .leading : .center)
-                .padding(.horizontal, 28)
-                .padding(.vertical, 20)
-                .frame(minHeight: geo.size.height, alignment: .center)
+        ScrollView {
+            VStack(alignment: .leading, spacing: spacing) {
+                content()
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, OnboardMetric.gutter)
+            .padding(.top, 34)
+            .padding(.bottom, OnboardMetric.footerClearance)
         }
+        .scrollDismissesKeyboard(.interactively)
+    }
+
+    private func question(_ text: String) -> some View {
+        Text(text)
+            .font(OnboardFont.question())
+            .tracking(-0.6)
+            .foregroundStyle(OnboardTheme.ink)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private func lead(_ text: String, muted: Bool = false) -> some View {
+        Text(text)
+            .font(OnboardFont.body)
+            .lineSpacing(4)
+            .foregroundStyle(muted ? OnboardTheme.muted : OnboardTheme.text2)
+            .fixedSize(horizontal: false, vertical: true)
     }
 
     // MARK: - Welcome
@@ -561,240 +457,119 @@ struct OnboardingView: View {
     private static let welcomeLine =
         "Capture conversations, keep track of commitments, and turn them into follow-ups."
 
+    /// Warm light, the mark in white, the one sentence, and two pills.
     private var welcome: some View {
-        stepBody(spacing: 22) {
-            // The mark alone. This is the screen the champagne haze was
-            // asked off three times: a full-screen wash behind a logo is
-            // wallpaper, and the product has no ambient gradient anywhere now.
-            LogoMark(size: 120)
-                .scaleEffect(welcomeStage >= 1 ? 1 : 0.6)
-                .opacity(welcomeStage >= 1 ? 1 : 0)
-                .accessibilityHidden(true)
-                .frame(height: 130)
-            Text("Anticipy")
-                .font(Theme.display(40))
-                .tracking(-1.0)
-                .foregroundStyle(Theme.text)
-                .opacity(welcomeStage >= 2 ? 1 : 0)
-                .offset(y: welcomeStage >= 2 ? 0 : 10)
-            // The real string, invisible, reserves the full height — so the
-            // logo and wordmark hold perfectly still while she types instead
-            // of creeping upward for the entire first sentence.
-            Text(Self.welcomeLine)
-                .font(.system(size: 17))
-                .lineSpacing(3)
-                .multilineTextAlignment(.center)
-                .opacity(0)
-                .overlay(alignment: .topLeading) {
-                    if welcomeStage >= 3 {
-                        TypewriterText(text: Self.welcomeLine)
-                            .lineSpacing(3)
-                            .multilineTextAlignment(.center)
-                    }
+        ZStack {
+            WelcomeAtmosphere()
+            VStack(spacing: 16) {
+                OnboardMark(size: 48, stroke: .white, dot: OnboardTheme.dot)
+                    .shadow(color: .black.opacity(0.35), radius: 18, y: 6)
+                    .scaleEffect(welcomeStage >= 1 ? 1 : 0.7)
+                Text(Self.welcomeLine)
+                    .font(.system(size: 21, weight: .medium))
+                    .lineSpacing(4)
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(.white)
+                    .shadow(color: .black.opacity(0.35), radius: 14, y: 2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .opacity(welcomeStage >= 2 ? 1 : 0)
+                    .offset(y: welcomeStage >= 2 ? 0 : 10)
+            }
+            .padding(.horizontal, 44)
+            .opacity(welcomeStage >= 1 ? 1 : 0)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .offset(y: -50)
+            VStack(spacing: 10) {
+                Button("Take a quick tour") {
+                    Haptics.engage()
+                    tourPage = 0
+                    go(Step.tour)
                 }
+                .buttonStyle(.onboardWhite)
+                Button("Get started") { skipTour() }
+                    .buttonStyle(.onboardBlack)
+            }
+            .padding(.horizontal, OnboardMetric.gutter)
+            .padding(.bottom, 22)
+            .opacity(welcomeStage >= 3 ? 1 : 0)
+            .offset(y: welcomeStage >= 3 ? 0 : 16)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
         }
+        .ignoresSafeArea(edges: .top)
         .task {
             guard welcomeStage == 0 else { return }
             withAnimation(Theme.springSlow) { welcomeStage = 1 }
             Haptics.herMessage()
-            // Both beats sit inside the 400ms Doherty window — outside it the
-            // intro reads as the app thinking.
             try? await Task.sleep(nanoseconds: 320_000_000)
             withAnimation(Theme.spring) { welcomeStage = 2 }
             try? await Task.sleep(nanoseconds: 260_000_000)
-            welcomeStage = 3
+            withAnimation(Theme.spring) { welcomeStage = 3 }
         }
     }
 
-    // MARK: - How it works
+    // MARK: - Tour
 
-    @State private var cardsShown = 0
+    private static let tourHeadlines = [
+        "Capture every conversation",
+        "Keep track of commitments",
+        "And turn them into follow-ups",
+    ]
 
-    private var howItWorks: some View {
-        stepBody(alignment: .leading) {
-            Text("How it works")
-                .font(Theme.display(30))
-                .tracking(-0.5)
-                .foregroundStyle(Theme.text)
-            // Phone-first. The pendant used to be described as the thing that
-            // hears you, in an app whose microphone is the phone's.
-            stepCard(icon: "iphone", title: "Listen on your phone",
-                     text: "Turn listening on when you want Anticipy to transcribe nearby speech.")
-                .opacity(cardsShown >= 1 ? 1 : 0)
-                .offset(y: cardsShown >= 1 ? 0 : 14)
-            stepCard(icon: "sparkles", title: "Keep track of commitments",
-                     text: "Anticipy collects follow-ups, names, dates, and open questions in one place.")
-                .opacity(cardsShown >= 2 ? 1 : 0)
-                .offset(y: cardsShown >= 2 ? 0 : 14)
-            stepCard(icon: "cursorarrow.click.2", title: "Approve actions",
-                     text: "Connect Chrome to complete web tasks with accounts already signed in. Anticipy asks before anything is sent.")
-                .opacity(cardsShown >= 3 ? 1 : 0)
-                .offset(y: cardsShown >= 3 ? 0 : 14)
-            Text("If you ever have an Anticipy pendant, you can pair it in Settings. You don't need one. Your phone is enough.")
-                .font(.system(size: 15))
-                .lineSpacing(2)
-                .foregroundStyle(Theme.text2)
-                .opacity(cardsShown >= 3 ? 1 : 0)
-        }
-        .task(id: step) {
-            guard step == Step.howItWorks, cardsShown == 0 else { return }
-            for i in 1 ... 3 {
-                withAnimation(Theme.spring) { cardsShown = i }
-                // 210ms total: still legible as a cascade, no longer a wait.
-                try? await Task.sleep(nanoseconds: 70_000_000)
-            }
-        }
-    }
-
-    // MARK: - Microphone primer
-
-    /// Whether this iPhone can turn speech into text without sending audio
-    /// anywhere. Mirrors the recogniser the listener actually uses. On a device
-    /// where it's false the sentence below has to change — Apple gets the audio,
-    /// and saying otherwise would be a promise the product can't keep.
-    // Computed live, never cached: on-device speech support FLIPS when iOS
-    // finishes downloading the recognition assets, and a static let froze the
-    // answer at process start — so onboarding said "audio goes to Apple"
-    // while Settings (computing live) said "stays on this iPhone" on the
-    // same device the same night (2026-08-14). The listener follows the live
-    // value, so the live value is the only honest copy.
-    private var keepsAudioOnDevice: Bool {
-        SFSpeechRecognizer(locale: Locale(identifier: "en_US"))?.supportsOnDeviceRecognition ?? false
-    }
-
-    /// One typed line before the OS alerts, so the app conducts the
-    /// permission moment instead of being ambushed by iOS mid-sentence.
-    @State private var micPriming = false
-
-    private var micPrimer: some View {
-        stepBody(alignment: .leading, spacing: 16) {
-            // The thing the page is about, sitting above the promises: the
-            // mark alone, dim until permission lands. No haze under it —
-            // the ambient champagne is gone from the whole product.
-            LogoMark(size: 88)
-                .frame(maxWidth: .infinity)
-                .frame(height: 110)
-                .opacity(session.listener.isListening ? 1.0 : 0.35)
-                .animation(Theme.springJoy, value: session.listener.isListening)
-
-            Text("May I listen?")
-                .font(Theme.display(30))
-                .tracking(-0.5)
-                .foregroundStyle(Theme.text)
-            Text("Anticipy uses your microphone only while listening is on.")
-                .font(.system(size: 17))
-                .lineSpacing(3)
-                .foregroundStyle(Theme.text)
-
-            // Five promises as a rule list — speech-shaped, not form-shaped.
-            // Evenly spaced symbol-and-card rows are the most recognisable
-            // AI-built layout there is, and this is where someone decides
-            // whether to hand over their microphone. The count is not what
-            // that argument is about; the treatment is.
-            promiseLine(title: "Nearby speech becomes text",
-                        text: "This can include other people in the room, so let them know when listening is on.")
-            promiseLine(title: "Listening can continue in the background",
-                        text: "It stays on until you stop or pause it from the app.")
-            promiseLine(title: keepsAudioOnDevice ? "Audio stays on this iPhone" : "Apple provides speech recognition on this iPhone",
-                        text: keepsAudioOnDevice
-                           ? "Anticipy sends the resulting text to its server to create follow-ups."
-                           : "Audio is handled by Apple for transcription. Anticipy receives the resulting text.")
-            promiseLine(title: "You control listening",
-                        text: "Listening starts only after you turn it on. Stop and pause controls are always available in Settings.")
-            // THE COST, WITH THE RECEIPT FOR IT, at the moment of consent.
-            // The largest cost in the product is stated two lines above this
-            // one — "I keep going in the background" — with no bound on it, and
-            // a reader with no anchor supplies their own worst case. The phone
-            // has been measuring the real one all along and this screen never
-            // said so.
-            //
-            // Every clause is a row that exists in `ListeningDiagnosticsView`:
-            // "Battery used while listening", "Time spent listening" and "The
-            // log" — reached from Settings' "Find out what listening actually
-            // did", and that file ships in RELEASE deliberately ("SHIPS IN
-            // RELEASE", in its own header) — a receipt only a debug build can
-            // show is not a receipt. Each of those rows is grepped by
-            // `run_first_run_copy_tests.sh`; the route is too.
-            //
-            // Named, not numbered. The line numbers this comment used to carry
-            // for the Settings route were wrong on the day of writing.
-            //
-            // NO PERCENTAGE, AND NO "TODAY". Not a percentage because
-            // `ListeningDiagnosticsView`'s "NO VERDICT" note states there is
-            // not one recorded
-            // drain figure in this repo to draw a line from, and an invented
-            // number on the consent screen is what law 1 exists to stop. Not
-            // "today" because it would not be true: `ListenTally.of` folds
-            // every event still on disk and `ListenJournal` rotates on BYTES,
-            // at 256KB, never at midnight — so on a quiet phone those rows
-            // cover several days. The screen's "Today" heading is a heading,
-            // not a window, and this sentence may not borrow a scope the
-            // arithmetic underneath it does not have.
-            promiseLine(title: "Review usage and activity",
-                        text: "Settings shows listening time, battery use, starts, stops, and silent periods.")
-
-            if micPriming {
-                TypewriterText(text: "iOS will ask for microphone and speech recognition access.",
-                               font: .system(size: 15), color: Theme.text2)
-                    .transition(.opacity)
-            }
-
-            if session.listener.isListening {
-                HStack(spacing: 8) {
-                    BreathingDot(size: 8)
-                    Text("Listening is on.")
-                        .font(.callout.weight(.semibold))
-                        .foregroundStyle(Theme.accent)
-                }
-                .transition(.scale.combined(with: .opacity))
-            } else if session.micBlocked {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("iOS has my microphone switched off. I can't ask again from here. It's one tap in Settings, under Microphone and Speech Recognition.")
-                        .font(.footnote)
-                        .foregroundStyle(Theme.text2)
-                    // Inside a card, so it is the card's action, not the
-                    // page's: ghost, and the page's own primary keeps being
-                    // the only glass CTA on screen.
-                    Button {
-                        Haptics.engage()
-                        session.openSystemSettings()
-                    } label: {
-                        Label("Open Settings", systemImage: "gear")
-                            .frame(maxWidth: .infinity)
+    /// Three pages, one idea each: a framed scene, a headline, the dots, and
+    /// the same commit pill under all of them.
+    private var tour: some View {
+        GeometryReader { geo in
+            // The scene is drawn at 314×370 and scaled down only when the
+            // phone is too short to hold it, so a small phone gets the same
+            // composition rather than a cropped one. The chrome reserved is
+            // what is actually there: the top inset, the headline and its
+            // gap (three lines at the largest default size), dots, pill.
+            let chrome: CGFloat = 90 + 56 + 84 + 36 + 72
+            let scale = min(1, max(0.62, (geo.size.height - chrome) / 370))
+            VStack(spacing: 0) {
+                TabView(selection: $tourPage) {
+                    ForEach(0 ..< 3, id: \.self) { i in
+                        VStack(spacing: 0) {
+                            Group {
+                                switch i {
+                                case 0: TourTranscriptHero(on: tourPage == 0)
+                                case 1: TourCommitmentsHero(on: tourPage == 1)
+                                default: TourNotificationHero(on: tourPage == 2)
+                                }
+                            }
+                            .scaleEffect(scale)
+                            .frame(width: 314 * scale, height: 370 * scale)
+                            Text(Self.tourHeadlines[i])
+                                .font(OnboardFont.question())
+                                .tracking(-0.6)
+                                .foregroundStyle(OnboardTheme.ink)
+                                .multilineTextAlignment(.center)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .frame(minHeight: 84, alignment: .top)
+                                .padding(.top, 56 * scale)
+                                .padding(.horizontal, 24)
+                            Spacer(minLength: 0)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .tag(i)
                     }
-                    .buttonStyle(.ghost)
                 }
-                .anticipyCard()
-            } else if !micPriming {
-                Text("When you say yes, iOS asks twice, once for speech, once for the microphone. Both are me.")
-                    .font(.system(size: 15))
-                    .lineSpacing(2)
-                    .foregroundStyle(Theme.text2)
+                .tabViewStyle(.page(indexDisplayMode: .never))
+                .padding(.top, 90 * scale)
+                .onChange(of: tourPage) { _ in Haptics.pageTurn() }
+                PagerDots(count: 3, index: tourPage) { i in
+                    withAnimation(Theme.spring) { tourPage = i }
+                }
+                .padding(.bottom, 36)
+                Button("Get started") { Task { await advance() } }
+                    .buttonStyle(.onboardBlack)
+                    .padding(.horizontal, OnboardMetric.gutter)
+                    .padding(.bottom, 22)
             }
         }
-        .animation(Theme.spring, value: session.listener.isListening)
     }
 
-    /// The rule-list register, now without the rule: a title, her sentence,
-    /// and the space between one promise and the next. No fill, no border, no
-    /// icon column, and no champagne edge — that edge came out with every
-    /// other golden bar, and the indent it needed came out with it.
-    private func promiseLine(title: String, text: String) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title)
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(Theme.text)
-            Text(text)
-                .font(.system(size: 17))
-                .lineSpacing(3)
-                .foregroundStyle(Theme.text2)
-        }
-        .fixedSize(horizontal: false, vertical: true)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.vertical, Theme.Space.hair)
-    }
-
-    // MARK: - Your number
+    // MARK: - Your name
 
     /// Held only if it is a number she could actually text. `ownerPhone` is
     /// written as E.164 everywhere the app writes it, but it is also read back
@@ -802,462 +577,364 @@ struct OnboardingView: View {
     /// `e164` refuses is the same false confidence in a friendlier voice.
     private var hasStoredPhone: Bool { session.e164(session.ownerPhone) != nil }
     private var hasStoredEmail: Bool { !session.ownerEmail.isEmpty }
-    /// A box is open when there is nothing to confirm, or when they asked to
-    /// change what there was.
-    private var showingEmailField: Bool { !hasStoredEmail || editingEmail }
-    private var showingPhoneField: Bool { !hasStoredPhone || editingPhone }
+    /// A box is open only when there is nothing on file for it. The facts the
+    /// account already holds are not asked for again.
+    private var showingEmailField: Bool { !hasStoredEmail }
+    private var showingPhoneField: Bool { !hasStoredPhone }
+    private var phone: String { "\(phoneCode) \(phoneDigits)" }
 
-    /// THE CONFIRMATION THE REPO SPECIFIED TWO DOCUMENTS AGO, finally whole.
-    ///
-    /// `CONSUMER-FEEL-DIRECTION-2026-08-03.md:615-616` asked for this beat by
-    /// name — "she has it from the door … the step becomes a confirmation, not
-    /// a second interrogation" — and half of it shipped: the seed below, under
-    /// a comment reading "Already told us at the door? Confirm, don't
-    /// re-interrogate." The FRAMING half never did, so the page went on wearing
-    /// a question over three identical open boxes, one of them holding an email
-    /// address the person had never typed on this screen. The same doc at `:464`
-    /// had already logged that as "the clearest possible evidence nobody walked
-    /// the flow end to end".
-    ///
-    /// So the facts she already holds are shown as SETTLED, with the change
-    /// affordance the spec itself wrote down — "I'll reach you at" and a quiet
-    /// "Change it" — and the one thing she genuinely cannot work out is the
-    /// only box left open.
-    ///
+    private var nameCanContinue: Bool {
+        guard !savingPhone else { return false }
+        let first = firstName.trimmingCharacters(in: .whitespaces)
+        guard !first.isEmpty else { return false }
+        if showingEmailField, !email.contains("@") { return false }
+        return true
+    }
+
     /// WHAT IT SAYS ABOUT THEM IS CHECKED, NEVER ASSUMED. `ConfirmBeat` at the
     /// foot of this file builds the sentence out of what is actually on file,
     /// so there is no path where this page claims an email or a number it does
-    /// not have. It says "already on your account" rather than the more natural
-    /// "came in at the door" for the same reason: on the sign-in path the
-    /// number never came in at any door — `AnticipySession.signIn` reads it
-    /// back off the account record into `ownerPhone` — and a confirmation
-    /// screen that is wrong about where it got your number is worse than one
-    /// that never mentioned it.
-    ///
-    /// (That parenthesis carried a line number until this pass, and the line
-    /// number had already drifted onto the middle of an unrelated comment.)
-    ///
-    /// LEADING, like `howItWorks` and `micPrimer`. Centred prose was survivable
-    /// over three identical boxes; over rows carrying a label, a value and a
-    /// change affordance it is not, and the page was the odd one out of four.
-    private var yourNumber: some View {
-        stepBody(alignment: .leading, spacing: 18) {
-            LogoMark(size: 72)
-                .frame(maxWidth: .infinity)
-                .accessibilityHidden(true)
-            Text(ConfirmBeat.title(hasEmail: hasStoredEmail, hasPhone: hasStoredPhone))
-                .font(Theme.display(30))
-                .tracking(-0.5)
-                .foregroundStyle(Theme.text)
-                .fixedSize(horizontal: false, vertical: true)
-            Text(ConfirmBeat.lead(hasEmail: hasStoredEmail,
-                                  hasPhone: hasStoredPhone,
-                                  hasFirstName: !session.ownerFirstName.isEmpty))
-                .font(.system(size: 17))
-                .lineSpacing(3)
-                .foregroundStyle(Theme.text2)
-                .fixedSize(horizontal: false, vertical: true)
+    /// not have. Ordinarily both are on file from the door and the only thing
+    /// asked for is a first name — the one fact she cannot work out.
+    private var yourName: some View {
+        stepBody {
+            question(hasStoredEmail && hasStoredPhone
+                     ? "What's your name?"
+                     : ConfirmBeat.title(hasEmail: hasStoredEmail, hasPhone: hasStoredPhone))
+            QuestionField(label: "First name", text: $firstName, placeholder: "First name",
+                          kind: .givenName, focus: $focus, tag: .firstName,
+                          submit: showingEmailField || showingPhoneField ? .next : .done) {
+                if showingEmailField { focus = .email }
+                else if showingPhoneField { focus = .phone }
+                else if nameCanContinue { Task { await advance() } }
+            }
+            .onChange(of: firstName) { _ in detailsSaved = false; phoneSaveFailed = false }
 
             if showingEmailField {
-                TextField("you@example.com", text: $email)
-                    .keyboardType(.emailAddress)
-                    .textContentType(.emailAddress)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .font(.title3)
-                    .foregroundStyle(Theme.text)
-                    .focused($focus, equals: .email)
-                    .padding(.vertical, 12)
-                    .padding(.horizontal, 12)
-                    .background(RoundedRectangle(cornerRadius: Theme.Radius.small, style: .continuous).fill(Theme.surface))
-                    .overlay(RoundedRectangle(cornerRadius: Theme.Radius.small, style: .continuous)
-                        .strokeBorder(Theme.edge, lineWidth: 1))
-                    // Opening a box and putting the cursor in it are one gesture
-                    // to the person doing it. Gated on `editingEmail` so this
-                    // fires only for a box they asked for: the TabView builds
-                    // every page up front, so an ungated focus here would take
-                    // the keyboard on the welcome screen.
-                    .onAppear { if editingEmail { focus = .email } }
-                    .onChange(of: email) { _ in detailsSaved = false; phoneSaveFailed = false }
-            } else {
-                confirmedRow(label: "Your email",
-                             value: session.ownerEmail,
-                             changeLabel: "Change your email") {
-                    editingEmail = true
+                QuestionField(label: "Email", text: $email, placeholder: "you@email.com",
+                              kind: .email, focus: $focus, tag: .email,
+                              submit: showingPhoneField ? .next : .done) {
+                    if showingPhoneField { focus = .phone } else if nameCanContinue { Task { await advance() } }
                 }
+                .onChange(of: email) { _ in detailsSaved = false; phoneSaveFailed = false }
             }
 
             if showingPhoneField {
-                TextField("+1 604 555 0123", text: $phone)
-                    .keyboardType(.phonePad)
-                    .textContentType(.telephoneNumber)
-                    .font(.title3.monospacedDigit())
-                    .foregroundStyle(Theme.text)
-                    .focused($focus, equals: .phone)
-                    .padding(.vertical, 12)
-                    .padding(.horizontal, 12)
-                    .background(RoundedRectangle(cornerRadius: Theme.Radius.small, style: .continuous).fill(Theme.surface))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: Theme.Radius.small, style: .continuous)
-                            .strokeBorder(session.e164(phone) != nil ? Theme.accent : Theme.edge,
-                                          lineWidth: session.e164(phone) != nil ? 1.5 : 1)
-                            .animation(Theme.spring, value: session.e164(phone) != nil)
-                    )
-                    .onAppear { if editingPhone { focus = .phone } }
-                    .onChange(of: phone) { _ in
-                        phoneSaved = false
-                        phoneSaveFailed = false
+                HStack(spacing: 8) {
+                    CountryCodeBox(code: $phoneCode)
+                    QuestionField(label: "Phone number", text: $phoneDigits, placeholder: "Phone number",
+                                  kind: .phone, focus: $focus, tag: .phone, submit: .done) {
+                        if nameCanContinue { Task { await advance() } }
                     }
-                if phoneSaved {
-                    Label("Saved. Texts and in-app alerts are on.", systemImage: "checkmark.circle.fill")
-                        .font(.footnote.weight(.semibold))
-                        .foregroundStyle(Theme.accent)
-                } else if !phone.isEmpty, session.e164(phone) != nil {
-                    Label("That's you", systemImage: "checkmark.circle.fill")
-                        .font(.footnote.weight(.semibold))
-                        .foregroundStyle(Theme.accent)
-                        .transition(.scale.combined(with: .opacity))
-                        .onAppear { Haptics.tap() }
-                } else if !phone.isEmpty {
-                    Text("That doesn't look like a full number yet — country code and all.")
-                        .font(.system(size: 15))
-                        .foregroundStyle(Theme.muted)
                 }
-            } else {
-                // "I'll reach you at" is the spec's own wording, word for word.
-                //
-                // THE TREATMENT IS NOT THE SPEC'S, and saying so cost this
-                // comment its previous sentence. The spec asks for "the number
-                // in monospace"; what ships is `.title3.monospacedDigit()`,
-                // which is not a monospaced face at all — it is the same system
-                // font this whole flow already uses, with fixed-width DIGITS.
-                // The standing constraint on this pass is no new font, so a
-                // real monospaced face was not available to spend. Digits of
-                // equal width are the part of the spec's intent that a phone
-                // number actually needs: the number stops shuffling sideways
-                // as it is typed or re-read. `.monospacedDigit()` is already
-                // the idiom here — `AuthView` sets it on the pairing code and
-                // `SettingsView` on its one measured number.
-                //
-                // So: the spec's wording, and as much of the spec's treatment
-                // as the constraint left on the table. Not the same claim.
-                confirmedRow(label: "I'll reach you at",
-                             value: session.ownerPhone,
-                             monospaced: true,
-                             changeLabel: "Change your number") {
-                    editingPhone = true
+                .onChange(of: phoneDigits) { value in
+                    let digits = String(value.filter(\.isNumber).prefix(14))
+                    if digits != value { phoneDigits = digits }
+                    phoneSaved = false
+                    phoneSaveFailed = false
+                }
+                // The four things this field can say, in the app's own words —
+                // the refusal sentence is FieldCaption's, one copy for every
+                // screen that takes a number.
+                if phoneSaved {
+                    OnboardHelper(text: "Saved. Texts and in-app alerts are on.", satisfied: true)
+                } else if session.e164(phone) != nil {
+                    OnboardHelper(text: "That's you", satisfied: true)
+                } else if !phoneDigits.isEmpty {
+                    OnboardHelper(text: "That doesn't look like a full number yet — country code and all.")
+                } else {
+                    OnboardHelper(text: "A number I can text, country code and all")
                 }
             }
 
-            // THE ONE OPEN BOX, and it is last on purpose: it is the only thing
-            // on this page anybody has to do, so it sits next to the button
-            // that ends first run. The two rows above it are there to be read.
-            TextField("First name", text: $firstName)
-                .textContentType(.givenName)
-                .autocorrectionDisabled()
-                .font(.title3)
-                .foregroundStyle(Theme.text)
-                .focused($focus, equals: .firstName)
-                .padding(.vertical, 12)
-                .padding(.horizontal, 12)
-                .background(RoundedRectangle(cornerRadius: Theme.Radius.small, style: .continuous).fill(Theme.surface))
-                .overlay(RoundedRectangle(cornerRadius: Theme.Radius.small, style: .continuous)
-                    .strokeBorder(Theme.edge, lineWidth: 1))
-                .onChange(of: firstName) { _ in detailsSaved = false; phoneSaveFailed = false }
+            // The ordinary path — email and number on file, no name yet —
+            // says the one thing that is missing and why. Anything less
+            // ordinary is built by `ConfirmBeat` from what is actually held.
+            OnboardHelper(text: hasStoredEmail && hasStoredPhone && session.ownerFirstName.isEmpty
+                          ? "The one thing I'm missing is your first name — \(ConfirmBeat.bookingForm)."
+                          : ConfirmBeat.lead(hasEmail: hasStoredEmail,
+                                             hasPhone: hasStoredPhone,
+                                             hasFirstName: !session.ownerFirstName.isEmpty),
+                          lock: true)
 
             if phoneSaveFailed {
-                VStack(spacing: 10) {
-                    Text("I couldn't save that just now. I need a connection to keep it. Everything you entered is still here.")
-                        .font(.footnote)
-                        .foregroundStyle(Theme.text2)
-                        .multilineTextAlignment(.center)
-                    Button {
-                        Task { await advance() }
-                    } label: {
-                        Text("Try again")
-                            .frame(maxWidth: .infinity)
+                OnboardCard {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("I couldn't save that just now. I need a connection to keep it. Everything you entered is still here.")
+                            .font(OnboardFont.helper)
+                            .lineSpacing(3)
+                            .foregroundStyle(OnboardTheme.text2)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Button("Try again") { Task { await advance() } }
+                            .buttonStyle(.onboardSoft)
+                            .disabled(savingPhone)
                     }
-                    .buttonStyle(.ghost)
-                    .disabled(savingPhone)
                 }
-                .anticipyCard()
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+            if savingPhone {
+                OnboardStatus(text: "Saving…")
             }
         }
-        // SEEDED HERE, NOT ON THE BOXES. These three `.task`s used to hang off
-        // the three TextFields; two of those boxes are conditional now, so a
-        // seed left on them would never run for the person whose facts are
-        // already on file — which is everybody this beat was rewritten for.
+        // SEEDED HERE, NOT ON THE BOXES: two of the boxes are conditional, so
+        // a seed left on them would never run for the person whose facts are
+        // already on file — which is everybody this beat is for.
         .task {
             if firstName.isEmpty { firstName = session.ownerFirstName }
             if email.isEmpty { email = session.ownerEmail }
-            guard phone.isEmpty else { return }
-            // Already told us at the door? Confirm, don't re-interrogate.
-            // Otherwise start from this phone's own dialling code, so the
-            // country is in front of the person rather than assumed behind
-            // them — `e164` refuses to guess one now, and a blank field plus a
-            // refusal is a dead end wearing a different hat.
-            phone = session.ownerPhone.isEmpty
-                ? DiallingCode.forThisPhone() : session.ownerPhone
-            // AND IT IS ALREADY SAVED, so say so to the one thing that asks.
-            // `advance()` re-sent this number on every first run, because
-            // `phoneSaved` began false over a value that had come off the
-            // account. On a good connection that was one wasted round trip. On
-            // a bad one it was a person held at the last page of first run by
-            // "I couldn't save that just now" over a number already on their
-            // record — a false failure, and the confirmation framing above
-            // would have been sitting right on top of it.
-            phoneSaved = hasStoredPhone && phone == session.ownerPhone
+            // AND IT IS ALREADY SAVED, so say so to the one thing that asks:
+            // `advance()` otherwise re-sends the number on every first run.
+            phoneSaved = hasStoredPhone
         }
-        .animation(Theme.spring, value: session.e164(phone) != nil)
-        .animation(Theme.spring, value: showingEmailField)
-        .animation(Theme.spring, value: showingPhoneField)
+        .task(id: step) {
+            guard step == Step.name else { return }
+            try? await Task.sleep(nanoseconds: 450_000_000)
+            focus = .firstName
+        }
+        // The phone pad has no return key, so the commit sits above it.
+        .toolbar {
+            PhonePadDoneBar(label: nameCanContinue ? "Continue" : "Done",
+                            enabled: true) {
+                if nameCanContinue, focus == .phone { Task { await advance() } } else { focus = nil }
+            }
+        }
+        .animation(Theme.spring, value: phoneSaveFailed)
+        .animation(Theme.spring, value: savingPhone)
     }
 
-    // MARK: - Computer handoff
+    // MARK: - Your computer
 
     /// One optional beat, two hosted destinations. The phone does not pretend
     /// it can install either computer surface: Open lets somebody inspect the
-    /// guide, and Send uses iOS's own share sheet so AirDrop, Messages and Mail
-    /// are available without three bespoke integrations.
+    /// guide, and Send uses iOS's own share sheet.
     private var computerSetup: some View {
-        stepBody(alignment: .leading, spacing: 16) {
-            Text("Your computer")
-                .font(Theme.display(30))
-                .tracking(-0.5)
-                .foregroundStyle(Theme.text)
-            Text("Send each setup to the computer where you’ll use it. You can do either one now or come back in Settings.")
-                .font(.system(size: 17))
-                .lineSpacing(3)
-                .foregroundStyle(Theme.text2)
-                .fixedSize(horizontal: false, vertical: true)
-
+        stepBody {
+            question("Your computer")
+            lead("Send each setup to the computer where you’ll use it. You can do either one now or come back in Settings.")
             browserHandoffCard
             macHandoffCard
-        }
-        .onChange(of: pairCode) { value in
-            pairOutcome = nil
-            let digits = String(value.filter(\.isNumber).prefix(6))
-            if digits != value { pairCode = digits }
         }
     }
 
     private var browserHandoffCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 12) {
-                Image(systemName: session.agentPaired ? "checkmark.circle.fill" : "safari")
-                    .font(.title3)
-                    .foregroundStyle(Theme.accent)
-                    .frame(width: 28)
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Browser").font(.body.weight(.semibold)).foregroundStyle(Theme.text)
+        OnboardCard {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 10) {
+                    Image(systemName: session.agentPaired ? "checkmark.circle.fill" : "safari")
+                        .font(.system(size: 19, weight: .medium))
+                        .foregroundStyle(session.agentPaired ? OnboardTheme.champagneInk : OnboardTheme.ink)
+                        .frame(width: 24)
+                        .accessibilityHidden(true)
+                    Text("Browser")
+                        .font(.system(size: 19, weight: .semibold))
+                        .foregroundStyle(OnboardTheme.ink)
+                    Spacer(minLength: 8)
                     Text(session.agentPaired ? "Connected" : "Not connected")
-                        .font(.caption).foregroundStyle(Theme.muted)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(OnboardTheme.muted)
                 }
-            }
-            Text("The setup page installs the Chrome extension, shows your six-digit code, and confirms when this browser is linked.")
-                .font(.footnote).foregroundStyle(Theme.text2)
-
-            if let url = ComputerSetupLinks.browser(baseURL: backendURL) {
-                Link(destination: url) {
-                    Label("Open browser setup", systemImage: "arrow.up.right.square")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.ghost)
-                ShareLink(item: url,
-                          subject: Text("Set up Anticipy in Chrome"),
-                          message: Text("Open this on your computer to connect Anticipy to Chrome.")) {
-                    Label("Send to computer", systemImage: "square.and.arrow.up")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.ghost)
-            }
-
-            if !session.agentPaired {
-                Divider().overlay(Theme.edge)
-                TextField("6-digit code from the setup page", text: $pairCode)
-                    .keyboardType(.numberPad)
-                    .textContentType(.oneTimeCode)
-                    .font(.title3.monospacedDigit())
-                    .foregroundStyle(Theme.text)
-                    .padding(14)
-                    .background(Theme.surface,
-                                in: RoundedRectangle(cornerRadius: Theme.Radius.small,
-                                                     style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: Theme.Radius.small,
-                                              style: .continuous)
-                        .strokeBorder(Theme.edge, lineWidth: 1))
-                    .accessibilityIdentifier("onboarding-browser-code")
-                Button {
-                    pairBrowser()
-                } label: {
-                    Text(pairingBrowser ? "Connecting…" : "Connect browser")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.glass)
-                .disabled(pairCode.count != 6 || pairingBrowser)
-                if let pairOutcomeMessage {
-                    Text(pairOutcomeMessage)
-                        .font(.caption)
-                        .foregroundStyle(pairOutcome == .noMatch ? Theme.alarm : Theme.text2)
-                        .fixedSize(horizontal: false, vertical: true)
+                Text("The setup page installs the Chrome extension, shows your six-digit code, and confirms when this browser is linked.")
+                    .font(.system(size: 15.5))
+                    .lineSpacing(3)
+                    .foregroundStyle(OnboardTheme.text2)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let url = ComputerSetupLinks.browser(baseURL: backendURL) {
+                    HStack(spacing: 8) {
+                        Link("Open browser setup", destination: url)
+                            .buttonStyle(.onboardSoft)
+                        ShareLink(item: url,
+                                  subject: Text("Set up Anticipy in Chrome"),
+                                  message: Text("Open this on your computer to connect Anticipy to Chrome.")) {
+                            Text("Send to computer")
+                        }
+                        .buttonStyle(.onboardSoft)
+                    }
+                    .padding(.top, 4)
                 }
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .anticipyCard()
     }
 
     private var macHandoffCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 12) {
-                Image(systemName: "laptopcomputer")
-                    .font(.title3)
-                    .foregroundStyle(Theme.accent)
-                    .frame(width: 28)
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Mac app").font(.body.weight(.semibold)).foregroundStyle(Theme.text)
-                    Text("Meeting recorder").font(.caption).foregroundStyle(Theme.muted)
+        OnboardCard {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 10) {
+                    Image(systemName: "laptopcomputer")
+                        .font(.system(size: 19, weight: .medium))
+                        .foregroundStyle(OnboardTheme.ink)
+                        .frame(width: 24)
+                        .accessibilityHidden(true)
+                    Text("Mac app")
+                        .font(.system(size: 19, weight: .semibold))
+                        .foregroundStyle(OnboardTheme.ink)
+                    Spacer(minLength: 8)
+                    Text("Meeting recorder")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(OnboardTheme.muted)
                 }
-            }
-            Text("The Mac app records your microphone and meeting audio as separate local tracks, then syncs transcript text to this account.")
-                .font(.footnote).foregroundStyle(Theme.text2)
-            if let url = ComputerSetupLinks.mac(baseURL: backendURL) {
-                Link(destination: url) {
-                    Label("Open Mac setup", systemImage: "arrow.up.right.square")
-                        .frame(maxWidth: .infinity)
+                Text("The Mac app records your microphone and meeting audio as separate local tracks, then syncs transcript text to this account.")
+                    .font(.system(size: 15.5))
+                    .lineSpacing(3)
+                    .foregroundStyle(OnboardTheme.text2)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let url = ComputerSetupLinks.mac(baseURL: backendURL) {
+                    HStack(spacing: 8) {
+                        Link("Open Mac setup", destination: url)
+                            .buttonStyle(.onboardSoft)
+                        ShareLink(item: url,
+                                  subject: Text("Get Anticipy for Mac"),
+                                  message: Text("Open this on your Mac to install Anticipy.")) {
+                            Text("Send to Mac")
+                        }
+                        .buttonStyle(.onboardSoft)
+                    }
+                    .padding(.top, 4)
                 }
-                .buttonStyle(.ghost)
-                ShareLink(item: url,
-                          subject: Text("Get Anticipy for Mac"),
-                          message: Text("Open this on your Mac to install Anticipy.")) {
-                    Label("Send to Mac", systemImage: "square.and.arrow.up")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.ghost)
             }
         }
+    }
+
+    // MARK: - May I listen?
+
+    /// Whether this iPhone can turn speech into text without sending audio
+    /// anywhere. Computed live, never cached: on-device speech support FLIPS
+    /// when iOS finishes downloading the recognition assets, and a static let
+    /// froze the answer at process start.
+    private var keepsAudioOnDevice: Bool {
+        SFSpeechRecognizer(locale: Locale(identifier: "en_US"))?.supportsOnDeviceRecognition ?? false
+    }
+
+    /// The last beat: two cards with a switch each, the promise under them,
+    /// and the whole page ends with the arrow. Flipping the microphone on is
+    /// the affirmative — iOS asks the moment it is flipped, on this page,
+    /// with the reason still on screen.
+    private var micPrimer: some View {
+        stepBody {
+            question("May I listen?")
+            lead("Anticipy uses your microphone only while listening is on.", muted: true)
+
+            if session.micBlocked {
+                OnboardCard(fill: OnboardTheme.warnCard) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("iOS has my microphone switched off. I can't ask again from here. It's one tap in Settings, under Microphone and Speech Recognition.")
+                            .font(.system(size: 15.5))
+                            .lineSpacing(3)
+                            .foregroundStyle(OnboardTheme.text2)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Button("Open Settings") {
+                            Haptics.engage()
+                            session.openSystemSettings()
+                        }
+                        .buttonStyle(.onboardSoft)
+                    }
+                }
+            } else {
+                PermissionCard(icon: "mic",
+                               title: "Microphone",
+                               text: Text("Nearby speech becomes text. This can include other people in the room, so ")
+                                   + Text("let them know").fontWeight(.semibold).foregroundColor(OnboardTheme.ink)
+                                   + Text(" when listening is on. It stays on until you stop or pause it from the app.")) {
+                    OnboardToggle(label: "Microphone", isOn: $micWanted)
+                }
+            }
+
+            PermissionCard(icon: "bell",
+                           title: "Notifications",
+                           text: Text("Work that needs you: a booking waiting on your OK, a result to check. This adds a nudge when the app is closed.")) {
+                OnboardToggle(label: "Notifications", isOn: $notificationsWanted)
+            }
+
+            if session.listener.isListening {
+                HStack(spacing: 8) {
+                    BreathingDot(size: 8)
+                    Text("Listening is on.")
+                        .font(.callout.weight(.semibold))
+                        .foregroundStyle(OnboardTheme.champagneInk)
+                }
+                .transition(.scale.combined(with: .opacity))
+            } else if !session.micBlocked {
+                Text("When you say yes, iOS asks twice, once for speech, once for the microphone. Both are me.")
+                    .font(OnboardFont.helper)
+                    .lineSpacing(3)
+                    .foregroundStyle(OnboardTheme.text2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            VStack(spacing: 6) {
+                Text(keepsAudioOnDevice
+                     ? "Microphone audio is turned into text on this iPhone, then the text is sent to Anticipy's server so it can create and complete work."
+                     : "This iPhone may use Apple's speech service to turn microphone audio into text. Anticipy then sends the text—not an audio recording—to its server so it can create and complete work.")
+                    .font(.system(size: 14.5))
+                    .lineSpacing(3)
+                    .foregroundStyle(OnboardTheme.muted)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                Button("Learn more") {
+                    Haptics.tap()
+                    showingPromises = true
+                }
+                .font(.system(size: 14.5, weight: .semibold))
+                .foregroundStyle(OnboardTheme.ink)
+                .underline()
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.top, 4)
+        }
+        .animation(Theme.spring, value: session.listener.isListening)
+        .animation(Theme.spring, value: session.micBlocked)
+        .onAppear {
+            // Seed both switches from the facts. A phone already listening
+            // has already been asked, so the seed must not re-enter the ask.
+            micWanted = session.listener.isListening
+            if micWanted { micAsked = true }
+            notificationsWanted = session.notifier.authorized
+        }
+    }
+
+    /// What listening costs, and the receipt for it — the five promises, one
+    /// tap behind "Learn more". Every clause of the last one names a row that
+    /// exists in `ListeningDiagnosticsView`, reached from Settings' "Find out
+    /// what listening actually did".
+    private var promises: some View {
+        ZStack {
+            OnboardTheme.ground.ignoresSafeArea()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    question("What listening means")
+                    promiseLine(title: "Nearby speech becomes text",
+                                text: "This can include other people in the room, so let them know when listening is on.")
+                    promiseLine(title: "Listening can continue in the background",
+                                text: "It stays on until you stop or pause it from the app.")
+                    promiseLine(title: keepsAudioOnDevice ? "Audio stays on this iPhone" : "Apple provides speech recognition on this iPhone",
+                                text: keepsAudioOnDevice
+                                   ? "Anticipy sends the resulting text to its server to create follow-ups."
+                                   : "Audio is handled by Apple for transcription. Anticipy receives the resulting text.")
+                    promiseLine(title: "You control listening",
+                                text: "Listening starts only after you turn it on. Stop and pause controls are always available in Settings.")
+                    promiseLine(title: "Review usage and activity",
+                                text: "Settings shows listening time, battery use, starts, stops, and silent periods.")
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 22)
+                .padding(.top, 34)
+                .padding(.bottom, 40)
+            }
+        }
+        .presentationDetents([.medium, .large])
+    }
+
+    private func promiseLine(title: String, text: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(OnboardTheme.ink)
+            Text(text)
+                .font(.system(size: 17))
+                .lineSpacing(3)
+                .foregroundStyle(OnboardTheme.text2)
+        }
+        .fixedSize(horizontal: false, vertical: true)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .anticipyCard()
-    }
-
-    private var pairOutcomeMessage: String? {
-        switch pairOutcome {
-        case .noMatch: return "That code didn’t match. Use the current code on the setup page."
-        case .unreachable: return "Anticipy couldn’t connect just now. Your code is still here; try again when you have a connection."
-        case .paired: return "Browser connected."
-        case nil: return nil
-        }
-    }
-
-    private func pairBrowser() {
-        guard pairCode.count == 6, !pairingBrowser else { return }
-        pairingBrowser = true
-        let code = pairCode
-        Task {
-            let result = await session.pairAgent(code: code)
-            pairOutcome = result
-            pairingBrowser = false
-            if result == .paired { Haptics.pairing() }
-        }
-    }
-
-    /// A fact she already holds, shown as settled instead of asked for again.
-    ///
-    /// EVERY PIECE OF THIS IS ALREADY IN THE PRODUCT. The tick, the accent and
-    /// the semibold are the treatment the number's own "That's you" line has
-    /// used since this beat shipped, lifted up into the row so that the row
-    /// itself is the confirmation. The container is `anticipyCard()`, the same
-    /// one the primer's Settings card and the save-failure card use. And
-    /// "Change it" is a ghost PILL, which `GhostLinkStyle` names as its own
-    /// job: "a pill hugs its two words — Skip, Not now, a link at the end of a
-    /// sentence."
-    ///
-    /// The whole card is the tap target as well as the pill, because a person
-    /// reading "I'll reach you at" and a wrong number reaches for the number.
-    /// The pill stays visible regardless: an affordance you have to guess at is
-    /// not one, and this row is otherwise indistinguishable from a label.
-    private func confirmedRow(label: String,
-                              value: String,
-                              monospaced: Bool = false,
-                              changeLabel: String,
-                              change: @escaping () -> Void) -> some View {
-        // Annotated rather than inferred: this is a multi-statement closure
-        // handed to two different call sites, and it is the one thing in this
-        // file no parse check can prove for me.
-        let open: () -> Void = { Haptics.tap(); withAnimation(Theme.spring) { change() } }
-        return VStack(alignment: .leading, spacing: Theme.Space.hair) {
-            Text(label)
-                .font(.caption)
-                .foregroundStyle(Theme.muted)
-            HStack(alignment: .firstTextBaseline, spacing: Theme.Space.tight) {
-                Label {
-                    Text(value)
-                        .font(monospaced ? .title3.monospacedDigit() : .title3)
-                        .foregroundStyle(Theme.text)
-                        .fixedSize(horizontal: false, vertical: true)
-                } icon: {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(Theme.accent)
-                }
-                Spacer(minLength: Theme.Space.tight)
-                Button(action: open) { Text("Change it") }
-                    .buttonStyle(.ghost)
-                    .accessibilityLabel(changeLabel)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .anticipyCard()
-        .contentShape(Rectangle())
-        .onTapGesture(perform: open)
-    }
-
-    private func stepCard(icon: String, title: String, text: String) -> some View {
-        HStack(alignment: .top, spacing: 14) {
-            Image(systemName: icon)
-                .font(.title3)
-                .foregroundStyle(Theme.accent)
-                .frame(width: 30)
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(title).font(.body.weight(.semibold)).foregroundStyle(Theme.text)
-                Text(text).font(.footnote).foregroundStyle(Theme.muted)
-            }
-            .fixedSize(horizontal: false, vertical: true)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .anticipyCard()
-    }
-}
-
-/// A repeating radar ripple for scanning states — one ring expanding and
-/// fading out from the logo, until the searching state ends. A forever-looping
-/// ring is exactly what Reduce Motion exists to stop, so with it on the ring
-/// simply sits there.
-struct RadarRipple: View {
-    /// Scanning expands outward; arrival collapses inward.
-    var inward = false
-    var delay: Double = 0
-    @State private var expand = false
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @AppStorage(AppPreferences.ambientMotionKey) private var ambientMotion = true
-
-    var body: some View {
-        Circle()
-            .stroke(Theme.accent.opacity(0.5), lineWidth: 2)
-            .frame(width: 130, height: 130)
-            .scaleEffect(expand ? (inward ? 1.0 : 1.45) : (inward ? 1.45 : 1.0))
-            .opacity(expand ? 0 : 0.8)
-            .animation(
-                (reduceMotion || !ambientMotion) ? .default
-                    // 3.2s: twice the app's 1.6s ambient harmonic, so the
-                    // ring and the breathing dot move as one organism.
-                    : .easeOut(duration: 3.2).repeatForever(autoreverses: false).delay(delay),
-                value: expand
-            )
-            .onAppear { if !reduceMotion && ambientMotion { expand = true } }
-            .accessibilityHidden(true)
     }
 }
 
@@ -1267,31 +944,25 @@ struct RadarRipple: View {
 /// happened.
 ///
 /// PURE, and lifted out of this file by `run_first_run_copy_tests.sh` rather
-/// than copied into it. This is arithmetic that renumbers every beat of the
-/// highest-stakes flow in the product, and an off-by-one here misnames the
-/// screen a person is standing on. It has to be answerable without a simulator.
+/// than copied into it. This is the arithmetic behind the progress bar of the
+/// highest-stakes flow in the product, and an off-by-one here misplaces the
+/// bar under a person's thumb. It has to be answerable without a simulator.
 ///
-/// THE FIRST NAME IS NOT A PAGE IN THIS VIEW. It is the door, cleared before
-/// `OnboardingView` exists. Counting it is the entire point: the track used to
-/// open at "1 of 4" over somebody who had just typed an email, a password and a
+/// THE ACCOUNT IS NOT A PAGE IN THIS VIEW. It is the door, cleared before
+/// `OnboardingView` exists. Counting it is the entire point: the bar used to
+/// open at nothing over somebody who had just typed an email, a password and a
 /// phone number, and told them they were at the start.
 ///
-/// Every index goes through `index(step:pageCount:)`, which CLAMPS. A fifth
-/// `Step` added without a fifth name would otherwise be a subscript out of
-/// range — a crash, on a stranger's first run, from a copy change.
+/// Every index goes through `index(step:pageCount:)`, which CLAMPS. A beat
+/// added without a name would otherwise be a subscript out of range — a
+/// crash, on a stranger's first run, from a copy change.
 enum FirstRunTrack {
-    /// Short because the live one renders on a single line beside its count on
-    /// a 375pt phone.
     static let beatNames = ["Your account", "Hello", "How I work",
-                            "May I listen?", "Where to reach you",
-                            "Your computer"]
+                            "Your name", "Your computer", "May I listen?"]
 
     static var count: Int { beatNames.count }
 
     /// How many beats are behind somebody standing on this view's first page.
-    /// DERIVED, never written down twice: a beat added to both `Step` and
-    /// `beatNames` keeps this correct on its own, and a beat added to only one
-    /// of them is wrong somewhere a test can see it rather than on a phone.
     static func offset(pageCount: Int) -> Int {
         max(0, beatNames.count - max(0, pageCount))
     }
@@ -1309,27 +980,17 @@ enum FirstRunTrack {
     }
 
     /// "Step N of M" is what a screen-reader user needs; the beat name is what
-    /// the live marker adds for everyone else. It says both rather than trading
-    /// one for the other, and it is built here so the spoken count and the
-    /// printed count cannot drift apart.
+    /// the bar adds for everyone else. Built here so the spoken count and the
+    /// drawn bar cannot drift apart.
     static func spokenLabel(step: Int, pageCount: Int) -> String {
         "Step \(ordinal(step: step, pageCount: pageCount)) of \(count), "
             + name(step: step, pageCount: pageCount)
     }
 }
 
-/// What the last beat may honestly say it already has.
+/// What the name beat may honestly say it already has.
 ///
-/// The prescription for this screen was one fixed sentence: "Your email and
-/// number came in at the door." It is a good sentence and it is not always
-/// true. On the sign-in path the number never came in at any door — `signIn`
-/// reads it back off the account record — and if the account has no number at
-/// all, the field holds nothing but this phone's dialling code and the sentence
-/// is describing something that does not exist. A confirmation screen is worth
-/// exactly its accuracy; one that confidently names a fact it does not hold is
-/// worse than the interrogation it replaced.
-///
-/// So the sentence is BUILT from what is on file. Pure, and lifted by
+/// The sentence is BUILT from what is on file. Pure, and lifted by
 /// `run_first_run_copy_tests.sh`, because "is this claim true" is a decision
 /// and decisions belong where they can be read without a screen.
 ///
@@ -1366,8 +1027,7 @@ enum ConfirmBeat {
     }
 
     /// The account can exist without a number, so the consequence of that
-    /// choice belongs on the choice screen. A missing Twilio destination is
-    /// in-app delivery, not a text that mysteriously failed to arrive.
+    /// choice belongs on the choice screen.
     static func reachChannel(hasPhone: Bool) -> String {
         hasPhone
             ? "I'll use text messages and in-app alerts."

@@ -81,20 +81,24 @@ final class WalkTests: XCTestCase {
         app.launchArguments += ["-backendURL", "http://127.0.0.1:8090"]
         app.launch()
 
-        // The two explanatory beats intentionally precede account creation.
-        require("Anticipy", in: app)
+        // The two explanatory beats intentionally precede account creation:
+        // the welcome, then the three-page tour.
+        require("Capture conversations, keep track of commitments, and turn them into follow-ups.", in: app)
         snap("01-welcome")
-        tap("Continue", in: app)
+        tap("Take a quick tour", in: app)
 
-        require("How it works", in: app)
-        snap("02-how-it-works")
-        tap("Continue", in: app)
+        require("Capture every conversation", in: app)
+        snap("02-tour")
+        tap("Get started", in: app)
 
-        // The door opens in sign-up mode; record it, then use the real sign-in
-        // path so the walkthrough does not create a new owner on every run.
+        // The door opens on the email step of sign-up; record it, then use the
+        // real sign-in path so the walkthrough does not create a new owner on
+        // every run. The switcher is one button whose label carries both the
+        // question and the answer.
         require("Let's make it yours.", in: app)
         snap("03-sign-up")
-        let signInLink = app.staticTexts["Sign in"].firstMatch
+        let signInLink = app.buttons
+            .matching(NSPredicate(format: "label CONTAINS %@", "Sign in")).firstMatch
         XCTAssertTrue(signInLink.waitForExistence(timeout: 4))
         signInLink.tap()
 
@@ -120,21 +124,41 @@ final class WalkTests: XCTestCase {
             passwordOffer.tap()
         }
 
-        // Record the consent page but take its explicit first-class exit. The
-        // visual audit does not need to start capturing a simulated room.
-        require("May I listen?", in: app, timeout: 10)
-        snap("05-microphone-consent")
-        tap("Not right now", in: app)
-
-        require("This is what I have.", in: app)
-        snap("06-account-confirmation")
+        // Behind the door: the name beat opens exactly one box. The arrow is
+        // inert until it holds something, so the walk gives it a name.
+        require("What's your name?", in: app, timeout: 10)
+        snap("05-your-name")
+        let firstName = app.textFields.firstMatch
+        XCTAssertTrue(firstName.waitForExistence(timeout: 3))
+        if (firstName.value as? String ?? "").isEmpty || firstName.value as? String == "First name" {
+            firstName.tap()
+            firstName.typeText("Walk")
+        }
         tap("Continue", in: app)
 
         require("Your computer", in: app)
         require("Send to computer", in: app)
         require("Send to Mac", in: app)
-        snap("07-computer-handoff")
-        tap("I'll connect my computer later", in: app)
+        snap("06-computer-handoff")
+        tap("Continue", in: app)
+
+        // Record the consent page and finish with both switches off. The
+        // visual audit does not need to start capturing a simulated room.
+        require("May I listen?", in: app, timeout: 10)
+        snap("07-microphone-consent")
+        tap("Finish", in: app)
+
+        // The finale plays over Home, then three tips and a coach mark. Walk
+        // through them so the Settings control underneath is reachable.
+        tap("Next", in: app, timeout: 12)
+        snap("08-home-tips")
+        tap("Next", in: app)
+        tap("Done", in: app)
+        let coach = app.buttons["Start by tapping Listen with phone"].firstMatch
+        if coach.waitForExistence(timeout: 3) {
+            snap("09-home-coach-mark")
+            coach.tap()
+        }
 
         // HOME — the Settings control is the proof that first run really
         // ended. A missing control now fails the test instead of producing a

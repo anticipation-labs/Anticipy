@@ -30,13 +30,14 @@ here=$(cd "$(dirname "$0")" && pwd)
 app="$here/../Anticipy"
 model="$app/Backend/ConnectedAppsModel.swift"
 view="$app/Views/SettingsConnectedAppsView.swift"
+home="$app/Views/SettingsHomeView.swift"
 policy="$app/Backend/ConnectionsPolicy.swift"
 duration="$app/Audio/PlainDuration.swift"
 suite="$here/ConnectedAppsModelTests.swift"
 out=$(mktemp -d)
 trap 'rm -rf "$out"' EXIT
 
-for f in "$model" "$view" "$policy" "$duration" "$suite"; do
+for f in "$model" "$view" "$home" "$policy" "$duration" "$suite"; do
     [ -f "$f" ] || { echo "missing $f"; exit 2; }
 done
 
@@ -77,7 +78,8 @@ for type in 'struct OwnerId' 'struct Connection' 'struct ToolkitMeta' \
 done
 for call in 'ConnectionsPolicy.settingsCards' 'ConnectionsPolicy.writesTransition' \
             'ConnectionsPolicy.disconnectConfirmation' 'ConnectionsPolicy.statusLine' \
-            'ConnectionsPolicy.connectedRows' 'OwnerScoped.rows'; do
+            'ConnectionsPolicy.connectedRows' 'OwnerScoped.rows' \
+            'ConnectionsPolicy.writesEnabled'; do
     if ! strip "$model" | grep -q "$call"; then
         echo "ConnectedAppsModel no longer goes through the contract: missing $call"
         echo "Every one of these is a decision the contract already owns — the"
@@ -219,9 +221,123 @@ if [ -n "$missing" ]; then
     exit 2
 fi
 
+# ------------------------------------------------ ONE PREDICATE FOR THE WRITE
+# The screen's switch and the router's permission are the SAME question, and on
+# 2026-09-05 they were two: `settingsCards` folds the opt-in over every row that
+# is not `disconnected`, `mayUse(..., .write, ...)` folds it over `connected`
+# rows only. They disagreed in BOTH directions, and the permissive one drew a
+# switch reading ON — and the sentence "I can also send, create and change
+# things in it" — over an app whose only account needed signing in again, where
+# every write would have been refused.
+#
+# The suite compares the two answers across every shape two accounts can be in.
+# This leg is the structural half: the row may not be built from the card's own
+# field, which is the field that was wrong.
+if strip "$model" | grep -qE 'writesEnabled:[[:space:]]*card\.writesEnabled'; then
+    echo "The row's switch is built from ConnectionCard.writesEnabled again."
+    echo "That field folds the opt-in over rows that are merely NOT disconnected;"
+    echo "a write is licensed by ConnectionsPolicy.mayUse, which folds over"
+    echo "CONNECTED rows only. Ask the question of the thing that answers it."
+    exit 2
+fi
+
+# ------------------------------------- THE CATALOG'S OWN WORDS GO THROUGH TOO
+# `ToolkitMeta.description` is written by a vendor, arrives at run time from
+# 1,400 catalog rows nobody here has read, and was rendered verbatim as the
+# subtitle of every "Add an app" result — which is also the VoiceOver hint on
+# the button that starts a connect. It is not in `Copy.everySentence`, so the
+# register leg above never read one: a blurb saying "integration" or "API", or
+# naming the provider, went straight onto the screen. The model now withholds
+# such a sentence (`shownDescription`); this leg is what stops the view from
+# going around it again.
+if strip "$view" | grep -qE 'meta\.description'; then
+    echo "The view renders the catalog's own description directly:"
+    strip "$view" | grep -nE 'meta\.description'
+    echo ""
+    echo "Every user-visible string goes through the register gate. The model"
+    echo "hands back ConnectedAppsModel.Found.subtitle, which is that sentence"
+    echo "only when it is one this product is allowed to say."
+    exit 2
+fi
+if ! strip "$model" | grep -q 'ConnectionsPolicy.saysNothingForbidden'; then
+    echo "The model no longer puts the catalog's own sentence through the gate."
+    exit 2
+fi
+
+# ------------------------------------ A QUESTION BELONGS TO THE ACCOUNT ASKED
+# The view keeps its OWN copy of the disconnect question, and it has to: iOS
+# dismisses an alert as its button fires, so an `isPresented` bound to the
+# model's state cleared the question before the confirm action ran and the
+# destructive button disconnected nothing. A copy is also where a previous
+# account's app name can survive a sign-out — "Disconnect <app>?" sitting on a
+# phone that has just changed hands. So the copy goes back through the model,
+# with whoever is signed in now, and it is dropped at the account boundary.
+if ! strip "$view" | grep -q 'model.questionStillStands'; then
+    echo "The held disconnect question is drawn without asking the model whose"
+    echo "it is. Only the model knows the account signed in right now, and the"
+    echo "question carries the owner it was posed for."
+    exit 2
+fi
+if ! strip "$view" | grep -qE 'task\(id: session.accountID\)'; then
+    echo "The screen no longer reacts to the account changing."
+    exit 2
+fi
+if ! awk '/task\(id: session.accountID\)/,/^        \}$/' "$view" \
+     | grep -q 'confirming = nil'; then
+    echo "The account boundary does not drop the held question."
+    echo "The model clears its own state on signIn/signOut; the view's copy of"
+    echo "the question is not the model's to clear, so it is cleared here."
+    exit 2
+fi
+
+# ------------------------------------------------------- THE SCREEN IS REACHED
+# This screen, its model and its whole suite existed for a day with NOTHING in
+# the app navigating to them — a finished feature no person could get to, which
+# is worth exactly as much as an unfinished one. Settings' index is the door.
+#
+# And it is a SECOND door, not a rename of the first: "Connectors" next to it is
+# this iPhone's own calendar, contacts and mail plus the browser, the Mac and
+# the pendant. Merging them would put "turn on calendar access on this phone"
+# beside "let Anticipy make changes in an account of yours". Both rows are
+# required here so neither can quietly absorb the other.
+if ! strip "$home" | grep -q 'SettingsConnectedAppsView('; then
+    echo "Nothing in SettingsHomeView opens SettingsConnectedAppsView."
+    echo "A screen nothing navigates to is not shipped, however green its suite."
+    exit 2
+fi
+if ! awk '/private enum Route: Hashable \{/,/^    \}$/' "$home" | grep -q 'connectedApps'; then
+    echo "SettingsHomeView's Route enum has no connectedApps case."
+    echo "The index navigates by that enum; a destination it cannot name is"
+    echo "unreachable however it is written."
+    exit 2
+fi
+for wiring in 'route = .connectedApps' 'case .connectedApps:'; do
+    if ! strip "$home" | grep -qF "$wiring"; then
+        echo "The Connected apps row is not wired end to end: missing \"$wiring\""
+        echo "A route with no row, or a row with no destination, is a chevron"
+        echo "that goes nowhere."
+        exit 2
+    fi
+done
+if ! strip "$home" | grep -q 'ConnectedAppsModel.Copy.title'; then
+    echo "The Settings row names the screen in its own words."
+    echo "The title is written once, in ConnectedAppsModel.Copy, so the row and"
+    echo "the page it opens cannot come to disagree about what this is called."
+    exit 2
+fi
+if ! strip "$home" | grep -q 'NavRow("Connectors"'; then
+    echo "The Connectors row is gone from Settings."
+    echo "This device's own calendar, contacts, mail, browser, Mac and pendant"
+    echo "are NOT the owner's connected accounts. Both rows belong."
+    exit 2
+fi
+
 echo "the model is pure, uses the contract rather than restating it, names no"
 echo "app, writes no sentence in the view, takes its owner from the account row"
-echo "id, and censuses every sentence it does write"
+echo "id, censuses every sentence it does write, puts the catalog's own sentence"
+echo "through the same gate, hands the held question back to the model, and is"
+echo "reached from the Settings index alongside Connectors rather than instead"
+echo "of it"
 
 # swiftc only permits top-level code in a file literally named main.swift, and
 # this suite is async, so it is a @main entry compiled with -parse-as-library —

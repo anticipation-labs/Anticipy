@@ -275,6 +275,55 @@ private enum ConnectedAppsModelTests {
         check("the trouble sentence says it is a reach failure, not an empty shelf",
               Model.Copy.trouble.contains("not a sign that nothing is connected"))
 
+        // THE STORE A BUILD WITHOUT A CLIENT IS HANDED.
+        //
+        // Settings reaches this screen now — `SettingsHomeView` has a
+        // "Connected apps" row, and before it nothing in the app navigated
+        // here at all. What the row opens on this build is the screen over
+        // `UnreachableConnectedAppsStore`: there is no client that reads an
+        // owner's connections off the server, because there is no route in
+        // front of the D1 store to read them from yet.
+        //
+        // The temptation, and the thing this pins shut, is to let that answer
+        // as an empty list. It would render `Copy.invitation` — "Nothing is
+        // connected yet" — to somebody who connected two apps by text, and
+        // invite them to connect what they already have. The control for this
+        // is eleven lines up: a store that ANSWERS, with nothing in it, still
+        // gets the invitation. Empty is not broken and broken is not empty.
+        let blind = Model(store: UnreachableConnectedAppsStore(), now: { rightNow })
+        blind.signIn(ownerA)
+        await blind.load()
+        check("a build with no connections client says it could not read the list",
+              blind.screen(for: ownerA) == .trouble(Model.Copy.trouble),
+              "\(blind.screen(for: ownerA))")
+        check("and never tells somebody that nothing of theirs is connected",
+              blind.screen(for: ownerA) != .invitation(Model.Copy.invitation))
+        await blind.search("anything", owner: ownerA)
+        check("the catalog cannot be searched either, and says that rather than nothing",
+              blind.searchState == .trouble(Model.Copy.searchTrouble),
+              "\(blind.searchState)")
+        // No catalog answer means no result row, which means no Connect
+        // action: the tap that this build has no connect-link flow behind
+        // cannot be drawn in the first place. That is why the missing flow is
+        // an assertion in SettingsHomeView rather than a silent no-op.
+        if case .results = blind.searchState {
+            check("no connect action can be drawn with no catalog behind it", false)
+        } else {
+            check("no connect action can be drawn with no catalog behind it", true)
+        }
+        // The switch's default, at the screen's own door. `ConnectionsPolicy`
+        // owns the constant and its suite pins it; this asks the question the
+        // way a row asks it, because "off by default" is the write opt-in the
+        // Two Hands ladder needs for rung 3 and a screen is where it is read.
+        let fresh = [connection(owner: ownerA, toolkit: "fernwood", account: "ca_new",
+                                writes: ConnectionsPolicy.writesOptedIn(nil))]
+        let (freshly, _) = await loadedModel(rows: fresh)
+        check("a newly connected app draws the changes switch OFF",
+              freshly.rows(for: ownerA)[0].writesEnabled == false)
+        check("and reading it is not held up by that switch",
+              ConnectionsPolicy.mayUse(rows: fresh, toolkit: "fernwood",
+                                       access: .read, for: ownerA))
+
         let signedOut = Model(store: FakeStore(), now: { rightNow })
         check("a screen with nobody signed in shows nothing and says so",
               signedOut.screen(for: ownerA) == .signedOut(Model.Copy.signedOut))
@@ -366,6 +415,79 @@ private enum ConnectedAppsModelTests {
                   && skewStore.writeCalls.count == 1
                   && skewStore.writeCalls[0].rows.count == 2)
 
+        // ONE PREDICATE, ASKED TWICE AND COMPARED.
+        //
+        // The screen's switch and the router's permission are the SAME
+        // question, and until 2026-09-05 they were two: the card folded the
+        // opt-in over every row that was not `disconnected`, while
+        // `mayUse(..., .write, ...)` folds over `connected` rows only. An
+        // adversary drove both directions apart, and the permissive one is the
+        // one that matters — an app whose only account NEEDS SIGNING IN AGAIN,
+        // with the opt-in stored ON, read "I can also send, create and change
+        // things in it" on a screen while a write would have been refused. A
+        // person reads that sentence and believes they gave a permission the
+        // product does not have.
+        //
+        // So this is not one example: it is every shape two accounts can be
+        // in, with the screen's answer compared against the router's for each.
+        // A single example passes under half the mutations that break this.
+        let liveStatuses: [ConnectionStatus] = [.connected, .needsReconnect]
+        for firstStatus in liveStatuses {
+            for secondStatus in liveStatuses {
+                for firstWrites in [true, false] {
+                    for secondWrites in [true, false] {
+                        let shape = [
+                            connection(owner: ownerA, toolkit: "quokka", account: "ca_p",
+                                       status: firstStatus, writes: firstWrites),
+                            connection(owner: ownerA, toolkit: "quokka", account: "ca_q",
+                                       alias: .personal, status: secondStatus,
+                                       writes: secondWrites),
+                        ]
+                        let (screen, _) = await loadedModel(rows: shape)
+                        let shown = screen.rows(for: ownerA).first?.writesEnabled
+                        let licensed = ConnectionsPolicy.mayUse(rows: shape, toolkit: "quokka",
+                                                                access: .write, for: ownerA)
+                        let where_ = "\(firstStatus.rawValue)/\(firstWrites)"
+                            + " + \(secondStatus.rawValue)/\(secondWrites)"
+                        check("the switch reads exactly what a write would be allowed: \(where_)",
+                              shown == licensed, "screen \(String(describing: shown)) vs write \(licensed)")
+                        // The sentence under the switch is the same verdict in
+                        // words. A row whose switch and whose caption disagree
+                        // is the same lie one line lower.
+                        check("and the sentence beside it says the same thing: \(where_)",
+                              screen.rows(for: ownerA).first?.writesWords
+                                  == ConnectionsPolicy.writesLine(licensed))
+                    }
+                }
+            }
+        }
+
+        // The named case, spelled out, because a fold that stops looping is a
+        // fold that proves nothing and a suite of sixteen anonymous cases is
+        // hard to read a regression out of.
+        let (stale, _) = await loadedModel(rows: [
+            connection(owner: ownerA, toolkit: "quokka", account: "ca_r",
+                       status: .needsReconnect, writes: true),
+        ])
+        check("an app that needs signing in again never claims a write licence",
+              stale.rows(for: ownerA).count == 1
+                  && stale.rows(for: ownerA)[0].writesEnabled == false)
+
+        // THE CONTROL. The floor above must not be a wall: a healthy connected
+        // account that IS opted in still reads on, and the toggle being off
+        // never withholds a READ — which is the whole reason the opt-in is a
+        // write opt-in and not an on/off switch for the product.
+        let opted = [connection(owner: ownerA, toolkit: "quokka", account: "ca_s", writes: true)]
+        let (allowed, _) = await loadedModel(rows: opted)
+        check("an app that is connected and opted in still reads as licensed",
+              allowed.rows(for: ownerA)[0].writesEnabled == true)
+        let notOpted = [connection(owner: ownerA, toolkit: "quokka", account: "ca_t", writes: false)]
+        let (reading, _) = await loadedModel(rows: notOpted)
+        check("and a switch that is off never stands in the way of a read",
+              reading.rows(for: ownerA)[0].writesEnabled == false
+                  && ConnectionsPolicy.mayUse(rows: notOpted, toolkit: "quokka",
+                                              access: .read, for: ownerA))
+
         // The account changes while the write is in the air.
         let (switching, switchStore) = await loadedModel(rows: [
             connection(owner: ownerA, toolkit: "fernwood", account: "ca_1", writes: false),
@@ -411,6 +533,78 @@ private enum ConnectedAppsModelTests {
         check("and confirming without a question does nothing",
               await asking.confirmDisconnect(owner: ownerB) == .refused
                   && askStore.disconnectCalls.isEmpty)
+
+        // A QUESTION BELONGS TO THE ACCOUNT THAT WAS ASKED IT.
+        //
+        // The screen keeps its OWN copy of this question, and it has to: iOS
+        // dismisses an alert as its button fires, so an `isPresented` bound to
+        // the model's state cleared the question before the confirm action ran
+        // and the destructive button did nothing at all. The copy is the fix
+        // for that — and a copy is a place a previous account's app name can
+        // live through a sign-out. It was not owner-scoped and nothing cleared
+        // it at an account boundary, so "Disconnect Fernwood Notes?" could
+        // still be sitting on the screen of a phone that had just been handed
+        // to somebody else, and answering it would have been the new account
+        // answering the old one's question.
+        //
+        // So the held copy is handed BACK through the model, with the account
+        // signed in right now, exactly like every other call on this screen.
+        // The question carries the owner it was posed for; nothing else can
+        // make that comparison, because nothing else knows.
+        let (held, _) = await loadedModel(rows: [
+            connection(owner: ownerA, toolkit: "fernwood", account: "ca_1"),
+        ])
+        held.askToDisconnect("fernwood", owner: ownerA)
+        let heldQuestion = held.pendingDisconnect
+        // THE CONTROL, and it is the whole reason the copy exists: the question
+        // just posed must still stand a moment later, when the alert's own
+        // dismissal has already cleared the model's copy.
+        held.cancelDisconnect()
+        check("the question the screen is holding still stands for the owner who posed it",
+              held.questionStillStands(heldQuestion, for: ownerA)?.appName == "Fernwood Notes")
+
+        held.signOut()
+        check("a sign-out takes the previous account's app name off the screen",
+              held.questionStillStands(heldQuestion, for: ownerA) == nil
+                  && held.questionStillStands(heldQuestion, for: nil) == nil)
+
+        // The same app, connected by the NEXT person to hold the phone. The
+        // question must not simply be inherited: B never tapped anything.
+        held.signIn(ownerB)
+        check("and it does not stand while the new account's list is still loading",
+              held.questionStillStands(heldQuestion, for: ownerB) == nil)
+        let (inherited, _) = await loadedModel(rows: [
+            connection(owner: ownerB, toolkit: "fernwood", account: "ca_9"),
+        ])
+        inherited.signIn(ownerB)
+        await inherited.load()
+        check("and a question posed by somebody else is never the new account's question",
+              inherited.questionStillStands(heldQuestion, for: ownerB) == nil)
+        check("even though the new account has that very app connected",
+              inherited.rows(for: ownerB).count == 1)
+        inherited.askToDisconnect("fernwood", owner: ownerB)
+        check("while their own question stands perfectly well",
+              inherited.questionStillStands(inherited.pendingDisconnect, for: ownerB) != nil)
+
+        // AND IT STOPS STANDING WHEN THE APP DOES. The held copy outlives the
+        // model's own question by design; it must not outlive the connection.
+        // The same rows feed the list and the search screen, so an app can be
+        // disconnected while this alert is on top of it — and a question about
+        // an app that is no longer connected, answered, runs a disconnect
+        // against nothing and leaves the destructive button doing nothing at
+        // all, which is the exact failure the held copy was added to fix.
+        let (gone, _) = await loadedModel(rows: [
+            connection(owner: ownerA, toolkit: "fernwood", account: "ca_1"),
+        ])
+        gone.askToDisconnect("fernwood", owner: ownerA)
+        let goneQuestion = gone.pendingDisconnect
+        // THE CONTROL: it stands perfectly well while the app is on the list.
+        check("a question about a connected app stands",
+              gone.questionStillStands(goneQuestion, for: ownerA) != nil)
+        _ = await gone.confirmDisconnect(owner: ownerA)
+        check("and stops standing the moment that app leaves the list",
+              gone.questionStillStands(goneQuestion, for: ownerA) == nil,
+              String(describing: gone.questionStillStands(goneQuestion, for: ownerA)))
 
         // Cut off at the far end and forgotten here.
         asking.askToDisconnect("fernwood", owner: ownerA)
@@ -555,6 +749,56 @@ private enum ConnectedAppsModelTests {
                       && found.first { $0.meta.slug == "quokka" }?.alreadyConnected == false)
         } else {
             check("the catalog's answer is shown in the order it came back", false,
+                  "\(searching.searchState)")
+        }
+
+        // THE CATALOG'S OWN SENTENCE GOES THROUGH THE SAME GATE AS OURS.
+        //
+        // The row under "Add an app" used to render `hit.meta.description`
+        // verbatim — as the subtitle AND as the VoiceOver hint on the button.
+        // That string is written by a vendor, arrives at run time, and is not
+        // in `Copy.everySentence`, so leg 6 below never read one: a blurb
+        // saying "integration", "API", "authorize" or naming the provider went
+        // straight onto the screen of a product whose first rule is that the
+        // person never hears any of it. 1,400 catalog rows, none of them
+        // reviewed by us, one of them a sentence away from breaking the promise
+        // the whole feature is named after.
+        //
+        // The app's NAME is deliberately exempt and stays exempt: a vendor that
+        // calls itself something on the list gets called that, because quoting
+        // a name is not us using the word. It is the prose around it that is
+        // ours to withhold. Withheld, not rewritten — putting different words
+        // in a vendor's mouth is a worse answer than saying nothing.
+        let plainSpoken = ToolkitMeta(slug: "brackish", name: "Brackish",
+                                      description: "Notes, pages and files.")
+        let vendorTalk = ToolkitMeta(slug: "gantry", name: "Gantry",
+                                     description: "The Gantry integration. Authorize our API to grant access.")
+        let namesTheVendor = ToolkitMeta(slug: "tidepool", name: "Tidepool",
+                                         description: "Runs on Composio.")
+        let sayNothing = ToolkitMeta(slug: "murmur", name: "Murmur", description: "   ")
+        searchStore.hits = [plainSpoken, vendorTalk, namesTheVendor, sayNothing]
+        await searching.search("app", owner: ownerA)
+        if case .results(let found) = searching.searchState {
+            check("a vendor blurb still names its own app on the screen",
+                  found.map(\.meta.slug) == ["brackish", "gantry", "tidepool", "murmur"],
+                  found.map(\.meta.slug).joined(separator: ","))
+            // THE CONTROL. A gate that withholds every subtitle is not a gate,
+            // it is a deleted feature: the plain sentence has to survive.
+            check("a plainly-worded catalog sentence is shown as it was written",
+                  found[0].subtitle == "Notes, pages and files.",
+                  String(describing: found[0].subtitle))
+            check("a blurb in the register we refuse is not put on the screen",
+                  found[1].subtitle == nil, String(describing: found[1].subtitle))
+            check("and neither is one that names the provider",
+                  found[2].subtitle == nil, String(describing: found[2].subtitle))
+            check("a blank sentence is nothing to say, not an empty line",
+                  found[3].subtitle == nil, String(describing: found[3].subtitle))
+            // The subtitle is also the button's VoiceOver hint, so this is the
+            // spoken screen as well as the drawn one.
+            check("every subtitle that reaches the screen passes the same gate",
+                  ConnectionsPolicy.firstForbidden(in: found.compactMap(\.subtitle)) == nil)
+        } else {
+            check("a vendor blurb still names its own app on the screen", false,
                   "\(searching.searchState)")
         }
 

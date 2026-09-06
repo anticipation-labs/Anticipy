@@ -124,7 +124,7 @@ fi
 code "$onboard" > "$out/onboard.code.swift"
 pagefn=$(span "$out/onboard.code.swift" 'func page[(]')
 [ -n "$pagefn" ] || { echo "OnboardingView has no func page(_:) for this suite to read."; exit 2; }
-for pair in 'welcome:welcome' 'howItWorks:howItWorks' 'mic:micPrimer' 'phone:yourNumber' 'computer:computerSetup'; do
+for pair in 'welcome:welcome' 'tour:tour' 'name:yourName' 'computer:computerSetup' 'mic:micPrimer'; do
     beat=${pair%%:*}
     view=${pair#*:}
     if ! printf '%s\n' "$pagefn" | grep -qE "case Step\.$beat:[[:space:]]+$view\$"; then
@@ -144,30 +144,40 @@ if [ "$primers" != "1" ]; then
     exit 2
 fi
 
-# THE TAP, NOT ONLY THE SCREEN. advance() is shared by every beat, so its
-# microphone branch has to name the beat it belongs to; without that the
-# primary button starts listening on whichever page is showing.
+# THE FLIP, NOT ONLY THE SCREEN. The microphone switch on the last beat is the
+# affirmative, and it goes through ONE function whose first line names the
+# beat it belongs to; without that gate a switch being seeded, a widget URL
+# arriving, or a listener changing under the view would start listening on
+# whichever page is showing — including one in front of the door.
 advancefn=$(span "$out/onboard.code.swift" 'func advance[(]')
 [ -n "$advancefn" ] || { echo "OnboardingView has no func advance() for this suite to read."; exit 2; }
-if ! printf '%s\n' "$advancefn" | grep -q 'if step == Step\.mic, !micAsked'; then
-    echo "advance()'s microphone branch is no longer gated on the microphone beat."
-    echo "advance() runs on every beat's primary button. Ungated, the first"
-    echo "Continue tap — on the pre-auth welcome beat — calls startListening()"
-    echo "before an account exists, and heard() pushes live before it queues."
+askfn=$(span "$out/onboard.code.swift" 'func askForMicrophone[(]')
+[ -n "$askfn" ] || { echo "OnboardingView has no func askForMicrophone() for this suite to read."; exit 2; }
+if ! printf '%s\n' "$askfn" | grep -q 'if step == Step\.mic, !micAsked'; then
+    echo "askForMicrophone() is no longer gated on the microphone beat."
+    echo "It is reached from a switch's onChange. Ungated, a seeded switch or"
+    echo "a listener change on any beat calls startListening() before an"
+    echo "account exists, and heard() pushes live before it queues."
     exit 2
 fi
-micbranch=$(printf '%s\n' "$advancefn" | awk '/if step == Step\.mic, !micAsked/ { grab = 1 } grab { print; if (/^[[:space:]]*}$/) exit }')
+micbranch=$(printf '%s\n' "$askfn" | awk '/if step == Step\.mic, !micAsked/ { grab = 1 } grab { print; if (/^[[:space:]]*}$/) exit }')
 if ! printf '%s\n' "$micbranch" | grep -q 'session.startListening()'; then
-    echo "The gated branch in advance() no longer starts listening, so whatever"
-    echo "does is somewhere this check cannot see it was gated."
+    echo "The gated branch in askForMicrophone() no longer starts listening, so"
+    echo "whatever does is somewhere this check cannot see it was gated."
     exit 2
 fi
 listens=$(code "$onboard" | grep -c 'session.startListening()' || true)
 if [ "$listens" != "1" ]; then
     echo "OnboardingView calls session.startListening() $listens times."
     echo "There is one call site and it lives inside the beat-gated branch of"
-    echo "advance(). A second one cannot be read as gated by anything here, and"
-    echo "this view is instantiated in front of the sign-in door."
+    echo "askForMicrophone(). A second one cannot be read as gated by anything"
+    echo "here, and this view is instantiated in front of the sign-in door."
+    exit 2
+fi
+# AND THE ARROW NEVER ASKS. advance() runs on every beat's arrow; a microphone
+# call in it is a microphone on whichever page is showing.
+if printf '%s\n' "$advancefn" | grep -q 'session.startListening()'; then
+    echo "advance() calls startListening(). The arrow moves on; only the switch asks."
     exit 2
 fi
 

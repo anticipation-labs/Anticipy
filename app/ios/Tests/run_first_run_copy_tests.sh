@@ -49,8 +49,7 @@ code() { grep -vE '^[[:space:]]*//' "$1"; }
 #    come from it. `beatNames[step]` left against a six-element array is this
 #    fix going half-done: the numbers read 2, 3, 4, 5 while every beat wears the
 #    name of the one before it.
-for call in 'FirstRunTrack.name(step: step' \
-            'FirstRunTrack.ordinal(step: step' \
+for call in 'FirstRunTrack.ordinal(step: step' \
             'FirstRunTrack.spokenLabel(step: step'; do
     if ! code "$onboard" | grep -qF "$call"; then
         echo "The progress track no longer reads \`$call\`."
@@ -103,18 +102,20 @@ for call in 'ConfirmBeat.title(' 'ConfirmBeat.lead('; do
         exit 2
     fi
 done
-# And it must still be a confirmation rather than three open boxes. The row is
-# the fix; a page that renders every field open has not shipped it.
-if ! code "$onboard" | grep -q 'confirmedRow('; then
-    echo "The number beat renders no confirmed row."
-    echo "CONSUMER-FEEL-DIRECTION-2026-08-03.md:615-616 specified this beat as"
-    echo "a confirmation — \"I'll reach you at\" and a quiet \"Change it\" —"
-    echo "and an open TextField holding a value the person never typed on this"
-    echo "screen is the half that kept not shipping."
+# And the facts the account already holds are NOT asked for again. The beat
+# opens exactly one box by default — the first name — and opens the email and
+# number boxes only when the account is missing them. A page that renders every
+# field open is the interrogation this beat replaced.
+if ! code "$onboard" | grep -q 'if showingEmailField'; then
+    echo "The name beat no longer gates the email box on the account lacking one."
     exit 2
 fi
-if ! code "$onboard" | grep -q "I'll reach you at"; then
-    echo "The number row lost the spec's own words for what it is."
+if ! code "$onboard" | grep -q 'if showingPhoneField'; then
+    echo "The name beat no longer gates the number box on the account lacking one."
+    exit 2
+fi
+if ! code "$onboard" | grep -q '"First name"'; then
+    echo "The name beat lost the one box it exists to open."
     exit 2
 fi
 

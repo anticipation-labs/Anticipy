@@ -21,6 +21,9 @@ enum AppPreferences {
     /// Settings away. Kept outside the signed-in surface so a browser-unpair
     /// failure cannot disappear in the same frame as sign-out.
     static let postSignOutNoticeKey = "account.postSignOutNotice"
+    /// The three tips and the coach mark that play over Home once, right after
+    /// first run ends. Durable so an app killed mid-tip does not replay them.
+    static let homeTipsSeenKey = "home.tipsSeen"
 
     static func bool(forKey key: String, default defaultValue: Bool) -> Bool {
         let defaults = UserDefaults.standard

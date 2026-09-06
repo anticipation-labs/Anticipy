@@ -43,7 +43,22 @@ struct SettingsConnectedAppsView: View {
     /// confirm action then found no pending question and disconnected nothing,
     /// so the destructive button did nothing at all. The model's question is
     /// cleared by the button that answers it, never by the sheet closing.
+    ///
+    /// AND A COPY IS A PLACE SOMEBODY ELSE'S APP NAME CAN LIVE. This `@State`
+    /// belongs to the view, so nothing in the model's sign-out touches it: a
+    /// question posed by the account that just signed out sat here holding an
+    /// app name, and the alert would have gone on asking the next person to
+    /// confirm it. So the copy is never read directly — it goes back through
+    /// `model.questionStillStands(_:for:)` with the account signed in right
+    /// now, and it is dropped outright at an account boundary below. The view
+    /// never decides whose question this is; it cannot, and the one place that
+    /// can is the model.
     @State private var confirming: ConnectedAppsModel.PendingDisconnect?
+
+    /// The held question, or nothing — asked of the model, never assumed.
+    private var standingQuestion: ConnectedAppsModel.PendingDisconnect? {
+        model.questionStillStands(confirming, for: owner)
+    }
 
     init(session: AnticipySession,
          store: ConnectedAppsStore,
@@ -95,6 +110,11 @@ struct SettingsConnectedAppsView: View {
             }
         }
         .task(id: session.accountID) {
+            // THE ACCOUNT BOUNDARY. The held question goes first, before a row
+            // is drawn or a sheet is re-evaluated under the new account: the
+            // model's own state is cleared by `signIn`/`signOut`, but this
+            // view's copy of the question is not the model's to clear.
+            confirming = nil
             if let owner {
                 model.signIn(owner)
                 await model.load()
@@ -105,12 +125,12 @@ struct SettingsConnectedAppsView: View {
         .navigationDestination(isPresented: $addingAnApp) {
             AddAnAppView(model: model, owner: owner, startConnect: startConnect)
         }
-        .alert(confirming?.question ?? "",
+        .alert(standingQuestion?.question ?? "",
                isPresented: Binding(
-                get: { confirming != nil },
+                get: { standingQuestion != nil },
                 set: { if !$0 { confirming = nil } }
                ),
-               presenting: confirming) { pending in
+               presenting: standingQuestion) { pending in
             Button(pending.confirmWords, role: .destructive) {
                 Haptics.engage()
                 guard let owner else { return }
@@ -312,8 +332,14 @@ private struct AddAnAppView: View {
             if hit.alreadyConnected {
                 StateRow(hit.meta.name, state: ConnectedAppsModel.Copy.alreadyConnected)
             } else {
+                // `hit.subtitle`, NEVER `hit.meta.description`. The catalog's
+                // own blurb is written by a vendor and arrives at run time; the
+                // model puts it through the same register gate our own
+                // sentences pass and hands back nothing when it fails. This
+                // string is also the button's VoiceOver hint, so it is the
+                // spoken screen as well as the drawn one.
                 ActionRow(ConnectedAppsModel.Copy.connectAction(app: hit.meta.name),
-                          subtitle: hit.meta.description,
+                          subtitle: hit.subtitle,
                           systemImage: "plus.circle") {
                     Haptics.engage()
                     startConnect(hit.meta)

@@ -1097,3 +1097,250 @@ CREATE INDEX IF NOT EXISTS "idx_hq_notes_track" ON "internal_notes" ("track");
 --   SELECT count(*) FROM "internal_meter";
 --       -- expected >= 3: llm, research, login
 -- =====================================================================
+
+-- =====================================================================
+-- SECTION 5 — CONNECTIONS (2026-09-05)
+--
+-- The four tables behind "connect your Notion". Source of truth for their
+-- shape: spike/two-hands/src/connections/contract.ts, which is FIXED and
+-- must not be edited. Product spec: "Connections: how Anticipy asks, learns,
+-- and never says Composio", 2026-09-05, pages 20-31. What the spike learned
+-- and what is still owed: research/2026-09-05-composio-connections.md.
+--
+-- THESE ARE THE FIRST TABLES IN THIS FILE THAT NEVER LIVED IN POCKETBASE.
+-- Nothing imports into them, no migration in backend/pb_migrations declares
+-- them, and no PocketBase model layer has ever validated a row of them. Two
+-- consequences, both deliberate:
+--
+--   1. THE `''`-INSTEAD-OF-NULL RULE AT THE TOP OF THIS FILE DOES NOT APPLY
+--      TO THE TIMESTAMP COLUMNS HERE. That rule exists so the import is a
+--      byte-for-byte copy of rows PocketBase wrote, and so `owner_ref=""`
+--      style filters (guard.pb.js:49, filter-dsl.ts, the extension) keep
+--      matching. No importer and no PocketBase filter touches these four
+--      tables. The contract declares `used_at: number | null`,
+--      `snooze_until: number | null`, `last_used_at`, `sent_at`, `acted_at`
+--      and `channel` as nullable, and the single-use gate is literally
+--      `WHERE "used_at" IS NULL` — so they are SQL NULL, which is what the
+--      contract says and what the gate reads.
+--
+--   2. THE CHECKS ARE THE ONLY VALIDATOR. Elsewhere in this file a CHECK
+--      restates a rule PocketBase already enforced in Go. Here there is no
+--      Go. Every closed enum in the contract (source, status, state, level,
+--      trigger, channel, alias) is a CHECK, because the alternative is a
+--      typo persisted as a sixth kind of evidence or a fourth nudge state
+--      that nothing can ever match and no code path will ever mention again.
+--
+-- `alias` IS THE ONE EXCEPTION TO (1), and it is not a style choice.
+-- The contract spells "we do not know which of this person's accounts this
+-- was about" as `null`. It is stored here as `''` because `alias` is part of
+-- the PRIMARY KEY of "app_usage_signals", and SQLite treats NULLs in a
+-- unique index as DISTINCT FROM EACH OTHER: with `alias` nullable, two
+-- "account unknown" rows for the same (user, toolkit, source) would BOTH
+-- insert, the upsert in store.ts would never find its prior row, and one
+-- app's evidence would double every time the observer ran. The spike's own
+-- key function already collapses it the same way (`alias ?? ""` in
+-- signals.ts keyOf). The store maps `'' <-> null` at the boundary so every
+-- caller still sees exactly the contract's shape, and all four tables spell
+-- it the same way so there is one answer to "what does no-alias look like".
+--
+-- Apply to live D1 (idempotent; safe to re-run — every statement below is
+-- IF NOT EXISTS, and this file's other 26 tables are too):
+--
+--   wrangler d1 execute anticipy-backend --remote --file=migration/d1/schema.sql
+--
+-- To apply ONLY this feature, run the seven statements of this section: the
+-- four CREATE TABLE IF NOT EXISTS and the three CREATE INDEX IF NOT EXISTS
+-- below. Then verify against the LIVE database, which is the only thing that
+-- counts (HARNESS-LAWS law 3):
+--
+--   wrangler d1 execute anticipy-backend --remote --command \
+--     "SELECT name FROM sqlite_master WHERE type='table' AND name IN
+--      ('app_usage_signals','connections','connect_nudges','connect_links')"
+--
+-- Four names back = applied. Anything less and the Worker refuses these
+-- writes by name (see store.ts's ConnectionsSchemaMissing) rather than
+-- turning every one of them into a D1 1101.
+--
+-- ***** THE LIVE TABLE IS THE AUTHORITY, NOT THIS FILE. *****
+-- On 2026-09-05 the live `events` table was MISSING two columns this file
+-- declared (heard_ms, heard_calls) and every create turned into a D1 1101
+-- for two minutes. migration/workers/src/pb/records.ts answered that with
+-- `liveColumns()` + `fillEmpties()`; store.ts follows the same pattern for
+-- these four tables, and REFUSES loudly (naming the statement to run) rather
+-- than writing a column the live table lacks.
+-- =====================================================================
+
+-- ---------------------------------------------------------------------
+-- 5.1  app_usage_signals   contract.ts:58-66 (AppUsageSignal)
+--      Weighted evidence that this owner uses this app. Signals decay
+--      (spike/two-hands/src/connections/signals.ts), so an app they stopped
+--      using stops being asked about.
+--
+--      ONE ROW PER (user_id, toolkit, source, alias). The contract carries
+--      `source` as a column, so a key of (user, toolkit) alone would hold
+--      one kind of evidence per app and silently drop the second.
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS "app_usage_signals" (
+  "user_id"       TEXT NOT NULL CHECK (length("user_id") = 15),
+      -- The owner ROW id from "owners", 15 lowercase alphanumerics
+      -- (contract.ts:29-41). The length CHECK is the database's own copy of
+      -- that rule: "omar" and "jose@anticipy.ai" are both refused HERE, not
+      -- only in TypeScript, because the one failure this whole feature is
+      -- shaped around is a connection bound to a name instead of a person.
+  "toolkit"       TEXT NOT NULL CHECK (length("toolkit") > 0),
+      -- A Composio toolkit slug, lowercase: gmail, googlecalendar, notion.
+      -- NO APP IS NAMED ANYWHERE IN THIS SCHEMA. There is no enum of app
+      -- names and there must never be one: names, logos and permission
+      -- words come from the catalog at run time.
+  "source"        TEXT NOT NULL CHECK ("source" IN ('said','observer','mx','link','connected','asked')),
+      -- contract.ts:63. said/observer are high, mx/link medium,
+      -- connected/asked certain. A source outside this list would be given
+      -- some weight by a `SOURCE_WEIGHT[source]` lookup that returns
+      -- undefined, and one NaN poisons every sum this owner has.
+  "alias"         TEXT NOT NULL DEFAULT '' CHECK ("alias" IN ('','work','personal')),
+      -- '' is the contract's `null`: see the header of this section for why
+      -- it is not SQL NULL. work/personal are the spec's normal case — one
+      -- person, two Google accounts.
+      -- DEVIATION FROM THE CONTRACT, DECLARED: `AppUsageSignal` has no
+      -- `alias`. The spike added it (signals.ts StoredSignal) and reported
+      -- it back as a contract problem: without it the table cannot say WHICH
+      -- of two accounts a piece of evidence was about, so the two would be
+      -- merged into one row and the ask that came out of it could not name
+      -- the account.
+  "weight"        REAL NOT NULL DEFAULT 0 CHECK ("weight" >= 0),
+      -- Never negative. A negative weight would let one piece of evidence
+      -- SUBTRACT another and push an app below apps with no evidence at all
+      -- — a "never ask about this" reached through arithmetic, invisible to
+      -- the nudge state machine that is supposed to own that decision.
+      -- `>= 0` and not `> 0`: a very old row decayed across many half-lives
+      -- can legitimately underflow to exactly 0.0, and refusing that write
+      -- would turn an old signal into a failed request.
+  "last_seen_at"  REAL NOT NULL DEFAULT 0,
+      -- epoch ms. REAL, like every other number in this file (PocketBase
+      -- `number` -> REAL), and the decay arithmetic is float anyway.
+  PRIMARY KEY ("user_id", "toolkit", "source", "alias")
+);
+-- The PK's own index is leftmost-prefixed by "user_id", which is the only
+-- WHERE this table is ever read with (`WHERE user_id = ?` — every accessor
+-- in store.ts). No second index needed.
+
+-- ---------------------------------------------------------------------
+-- 5.2  connections   contract.ts:68-79 (Connection)
+--      One row per connected account. The write opt-in lives here.
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS "connections" (
+  "connected_account_id" TEXT PRIMARY KEY NOT NULL CHECK (length("connected_account_id") > 0),
+      -- The VENDOR's id for this account (`ca_BNgvxQtJ703C`). It is the
+      -- primary key because it is the thing `disconnect(user, id)` is called
+      -- with and the thing the provider's own list comes back keyed by.
+      -- IT IS GLOBALLY UNIQUE ACROSS OWNERS, so an upsert on it can reach
+      -- another owner's row: store.ts's putConnection carries
+      -- `WHERE "connections"."user_id" = excluded."user_id"` on the DO
+      -- UPDATE and REFUSES a zero-change write, because a silent re-bind
+      -- here is the wrong-person failure with a green log line.
+  "user_id"              TEXT NOT NULL CHECK (length("user_id") = 15),
+  "toolkit"              TEXT NOT NULL CHECK (length("toolkit") > 0),
+  "alias"                TEXT NOT NULL DEFAULT '' CHECK ("alias" IN ('','work','personal')),
+  "status"               TEXT NOT NULL CHECK ("status" IN ('connected','needs_reconnect','disconnected')),
+      -- contract.ts:73.
+  "writes_enabled"       INTEGER NOT NULL DEFAULT 0 CHECK ("writes_enabled" IN (0,1)),
+      -- THE WRITE OPT-IN, OFF BY DEFAULT (contract.ts:74-78). This is the
+      -- Settings toggle "let Anticipy make changes"; the Two Hands ladder
+      -- cannot reach rung 3 without it and reads never require it.
+      -- `DEFAULT 0` is load-bearing: a column added later to a live table
+      -- backfills with its default, and a default of 1 would silently opt
+      -- every existing owner into writes they never agreed to.
+  "last_used_at"         REAL NULL
+      -- NULL = never used. The contract's `number | null`.
+);
+CREATE INDEX IF NOT EXISTS "idx_connections_owner" ON "connections" ("user_id", "toolkit");
+-- Every read of this table is `WHERE user_id = ?`, most of them also naming
+-- a toolkit (settings, disconnect, the writes toggle). Without this index
+-- the PK on connected_account_id makes every one of them a table scan.
+
+-- ---------------------------------------------------------------------
+-- 5.3  connect_nudges   contract.ts:98-109 (ConnectNudge)
+--      The ask state machine: never_asked -> asked -> declined L1/L2/L3 ->
+--      connected -> needs_reconnect. Snoozes 14/45/stop; one ask per owner
+--      per 7 days across ALL apps; never mid-step; 72h silence is a soft no.
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS "connect_nudges" (
+  "user_id"      TEXT NOT NULL CHECK (length("user_id") = 15),
+  "toolkit"      TEXT NOT NULL CHECK (length("toolkit") > 0),
+  "state"        TEXT NOT NULL CHECK ("state" IN ('never_asked','asked','declined','connected','needs_reconnect')),
+      -- contract.ts:81-87.
+  "level"        INTEGER NOT NULL DEFAULT 0 CHECK ("level" BETWEEN 0 AND 3),
+      -- 0 while never declined; 1, 2, 3 as declines accumulate. LEVEL 3
+      -- STOPS — LEVEL_THRESHOLD[3] is +Infinity and only the user may
+      -- reopen it. A level of 4 would index that table as `undefined`, every
+      -- comparison against it is false, and the owner who said no three
+      -- times starts being asked again.
+  "snooze_until" REAL NULL,
+      -- epoch ms; NULL = not snoozed.
+  "trigger"      TEXT NULL CHECK ("trigger" IS NULL OR "trigger" IN ('in_task','repeated_use','laptop_closed','user_named_it','onboarding')),
+      -- contract.ts:91-96 — which real moment produced the ask, never "out
+      -- of nowhere". Quoted because TRIGGER is a SQL keyword. The value is
+      -- read by the snooze arithmetic (an onboarding skip snoozes 7 days,
+      -- not 14 — policy.ts recordDecline), so a junk value here does not
+      -- just spoil a log line, it changes when somebody is asked again.
+  "sent_at"      REAL NULL,
+  "acted_at"     REAL NULL,
+      -- NULL when the decline was SILENCE rather than a "no". The spec's
+      -- timers get tuned from this column, and a silent decline that stamps
+      -- acted_at claims an action nobody took.
+  "channel"      TEXT NULL CHECK ("channel" IS NULL OR "channel" IN ('sms','ios')),
+  PRIMARY KEY ("user_id", "toolkit")
+);
+-- One nudge row per owner per app, and the PK says so. The global "one ask
+-- per owner per 7 days across all apps" rule is a MAX(sent_at) over this
+-- owner's rows, which the PK's leftmost prefix serves.
+
+-- ---------------------------------------------------------------------
+-- 5.4  connect_links   contract.ts:116-123 (ConnectLink)
+--      OUR link — https://anticipy.ai/c/{token} — single use, ten minutes,
+--      bound to one owner and one toolkit. The raw Composio link is minted
+--      only when this token is REDEEMED, because Composio's own link also
+--      expires in ten minutes: four generated ahead of time on 2026-09-05
+--      all expired unused (research/2026-09-05-composio-connections.md).
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS "connect_links" (
+  "token_handle" TEXT PRIMARY KEY NOT NULL CHECK (length("token_handle") = 64),
+      -- DEVIATION FROM THE CONTRACT, DECLARED: `ConnectLink.token` is the
+      -- raw token; this column is sha256(token) in hex, and the raw token is
+      -- NEVER WRITTEN DOWN (spike/two-hands/src/connections/links.ts
+      -- tokenHandle). D1 rows end up in backups, in `wrangler d1 execute`
+      -- output and in whatever a debugging session pastes into a terminal; a
+      -- raw single-use bearer token at rest means one database read is a
+      -- live connect link for every owner holding one. A handle cannot be
+      -- redeemed — redeeming hashes what the caller presented and compares.
+      -- `length = 64` is what makes that impossible to get wrong by
+      -- accident: a raw token is 43 url-safe base64 characters and this
+      -- CHECK refuses it outright.
+  "user_id"      TEXT NOT NULL CHECK (length("user_id") = 15),
+  "toolkit"      TEXT NOT NULL CHECK (length("toolkit") > 0),
+  "alias"        TEXT NOT NULL DEFAULT '' CHECK ("alias" IN ('','work','personal')),
+  "expires_at"   REAL NOT NULL,
+      -- epoch ms. LINK_TTL_MS is ten minutes (contract.ts:226).
+  "used_at"      REAL NULL,
+      -- THE SINGLE-USE GATE, and the reason this column is NULL and not 0:
+      --   UPDATE "connect_links" SET "used_at" = ?1
+      --    WHERE "token_handle" = ?2 AND "used_at" IS NULL
+      -- one statement, `won = (changes === 1)`. Anything that reads this
+      -- row, decides in JavaScript and writes it back is the double-redeem
+      -- bug with extra steps.
+  "completed_at" REAL NULL
+      -- DEVIATION FROM THE CONTRACT, DECLARED: not in `ConnectLink`. It is
+      -- the exactly-once gate for the vendor callback, taken as a LEASE
+      -- (links.ts complete/release) rather than filed as a receipt. Without
+      -- it a refresh of the done page records the same connection twice;
+      -- burned without a release path, one failed write leaves the token
+      -- completed with no connection row anywhere, the page says "connected"
+      -- forever, and Composio publishes NO success webhook, so nothing would
+      -- ever mention it again.
+);
+CREATE INDEX IF NOT EXISTS "idx_connect_links_owner" ON "connect_links" ("user_id", "toolkit");
+-- "how many links does this owner have outstanding" — /settings/connected,
+-- and the per-owner mint rate limit.
+CREATE INDEX IF NOT EXISTS "idx_connect_links_expiry" ON "connect_links" ("expires_at");
+-- The prune. Rows outlive their ten minutes by a lot unless something
+-- sweeps them, and a sweep that scans is a sweep that gets turned off.

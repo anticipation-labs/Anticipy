@@ -1632,6 +1632,9 @@ struct HomeView: View {
                 // wears cannot disagree.
                 .disabled(listenFace.tap == .nothing)
                 .accessibilityHint(micNeedsHelp ? "Unavailable until the microphone is switched back on in Settings." : "")
+                // Where the switch is, for the coach mark first run leaves over
+                // Home — see HomeTips.swift.
+                .anchorPreference(key: ListenControlAnchorKey.self, value: .bounds) { $0 }
                 Spacer()
                 // A listening app shows a waveform, never a spinner — and only
                 // while there is something to draw it from.

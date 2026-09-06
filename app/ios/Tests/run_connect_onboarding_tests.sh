@@ -8,7 +8,7 @@
 # production source is compiled straight in — no simulator, no scheme, no
 # signing, no network.
 #
-# Five legs live in this file rather than in the suite, because each of them is
+# Seven legs live in this file rather than in the suite, because each of them is
 # a claim about the SOURCE that no amount of passing behaviour can make true:
 #
 #   1. PURITY        the decision answers with no SwiftUI, no UIKit and no
@@ -24,11 +24,22 @@
 #                    compared. Two implementations of "how long is the snooze"
 #                    is how an owner gets re-asked on day 7 by one half of the
 #                    product while the other believes it is day 14.
-#   5. THE SUITE     ConnectOnboardingTests.swift, compiled against the real
-#                    source and run. Exit code is the result.
+#   5. LAW 1 IN THE  the search box may not match the owner's typed words
+#      SOURCE        against anything locally, and the connect link may not be
+#                    built without asking ConnectHandoff's allowlist. Both were
+#                    violations in this file on 2026-09-05 and both are the kind
+#                    that come back looking like a small convenience.
+#   6. THE SCREEN    OnboardingConnectStep.swift exists, type-checks against the
+#                    real policy, names no app, writes no sentence of its own,
+#                    and renders Skip unconditionally.
+#   7. THE SUITE     ConnectOnboardingTests.swift, compiled against the real
+#                    source AND against ConnectHandoff and ConnectionsPolicy,
+#                    and run. Exit code is the result.
 #
-# Non-zero means a case came back wrong, or the phone has drifted from the
-# server contract it renders.
+# Non-zero means a case came back wrong, the phone has drifted from the server
+# contract it renders, or the two halves of the app disagree about what a skip
+# means — which is leg 6 of the suite and is RED at the time of writing, on
+# purpose. See the note above the swiftc line.
 set -eu
 here=$(cd "$(dirname "$0")" && pwd)
 app="$here/../Anticipy"
@@ -37,13 +48,25 @@ out=$(mktemp -d)
 trap 'rm -rf "$out"' EXIT
 
 policy="$app/Backend/ConnectOnboardingPolicy.swift"
+view="$app/Views/OnboardingConnectStep.swift"
 suite="$here/ConnectOnboardingTests.swift"
+# The two siblings this step is compiled AGAINST rather than alongside a copy of.
+#   ConnectHandoff owns the connect-link allowlist — one host, exact match,
+#   https only — and this policy asks it rather than keeping a second list it
+#   could not spell here anyway (leg 2 forbids a domain literal in this source).
+#   ConnectionsPolicy owns `recordDecline`, the OTHER implementation of what a
+#   setup-card refusal means. Leg 6 of the suite holds the two to one answer.
+handoff="$app/Backend/ConnectHandoff.swift"
+connections="$app/Backend/ConnectionsPolicy.swift"
 contract="$root/spike/two-hands/src/connections/contract.ts"
 signals="$root/spike/two-hands/src/connections/signals.ts"
 nudgepolicy="$root/spike/two-hands/src/connections/policy.ts"
 
 [ -f "$policy" ] || { echo "missing $policy"; exit 2; }
 [ -f "$suite" ] || { echo "missing $suite"; exit 2; }
+[ -f "$view" ] || { echo "missing $view — the step nobody can see is not shipped"; exit 2; }
+[ -f "$handoff" ] || { echo "missing $handoff — the connect-link allowlist"; exit 2; }
+[ -f "$connections" ] || { echo "missing $connections — the other half of the skip decision"; exit 2; }
 
 # Comment-stripped source, for the legs that are about executable code.
 code() { grep -vE '^[[:space:]]*(//|///)' "$1"; }
@@ -242,26 +265,173 @@ else
     echo "      the server's own table. They are pinned as values in the suite."
 fi
 
-# A STANDING DISAGREEMENT, PRINTED RATHER THAN HIDDEN. `recordDecline` in
-# policy.ts treats an onboarding skip as decline LEVEL 1 with a seven-day
-# snooze; this policy treats it as a seven-day snooze with the level UNCHANGED,
-# because level 1 raises the server's own threshold from 0.5 to 0.8 and
-# strictly-above then silences repeated_use (0.6), onboarding (0.7) and in_task
-# (0.8) — a shrug at the setup card would end the conversation for good. One of
-# the two has to move. Until it does, a reader deserves to see it every run.
+# THE SAME DISAGREEMENT ON THE SERVER SIDE. This used to be printed as a NOTE
+# and a NOTE is how it survived: `recordDecline` in policy.ts stamps an
+# onboarding skip as decline LEVEL 1, and level 1 raises that same file's own
+# threshold from 0.5 to 0.8 against a STRICT comparison — silencing
+# repeated_use (0.6), onboarding (0.7) and in_task (0.8) for good. Leg 6 of the
+# suite now fails on the Swift half of this rather than mentioning it. The
+# TypeScript half is checked here because there is no Swift to run it in, and
+# it is a warning rather than a failure for one reason only: this runner is the
+# phone's, the file is the server's, and a phone suite that goes red on a file
+# it cannot fix teaches the next agent to stop reading its output.
 if [ -f "$nudgepolicy" ] && grep -q 'ONBOARDING_SKIP_SNOOZE_DAYS' "$nudgepolicy"; then
     if sed -n '/export function recordDecline/,/^}/p' "$nudgepolicy" | grep -q 'nudge.level + 1'; then
-        echo "NOTE: policy.ts recordDecline() advances the decline level on an"
-        echo "      onboarding skip; this policy does not. See the comment on"
-        echo "      skipOutcome() — the divergence is deliberate and owed a"
-        echo "      decision on the server side."
+        echo "OWED, SERVER SIDE: policy.ts recordDecline() still advances the"
+        echo "      decline level on an onboarding skip. The decision is made and"
+        echo "      written down — ConnectOnboardingPolicy.skipMeans — and the"
+        echo "      Swift half is pinned by leg 6 of the suite. The same edit is"
+        echo "      owed here: an onboarding-triggered refusal keeps state"
+        echo "      never_asked and the level it had, and only moves the snooze."
     fi
 fi
 
-# --------------------------------------------------------------- 5. THE SUITE
+# ------------------------------------------------------- 5. LAW 1 IN THE SOURCE
+# Two violations lived in this file until 2026-09-05 and both are the shape that
+# comes back as a small convenience. These legs read the source, because a
+# behavioural test can be satisfied by a rule that happens to agree today.
+
+# (a) THE SEARCH BOX. It hands the typed words to the catalog UNREAD and shows
+#     what comes back. Any local containment, prefix or fuzzy test over the
+#     query is a pattern deciding which app somebody meant — the exact thing
+#     ToolkitJudge exists for, and the exact thing the sibling box in
+#     ConnectedAppsModel refuses to do.
+if code "$policy" | grep -nE 'contains\(needle|needle\)|localizedCaseInsensitiveContains|hasPrefix\(query|contains\(query|\.lowercased\(\)\.contains'; then
+    echo ""
+    echo "ConnectOnboardingPolicy matches the owner's typed words locally."
+    echo "HARNESS-LAWS law 1: no string check may decide what a human's words"
+    echo "MEAN, and \"which app did they mean\" is that question exactly — \"my"
+    echo "work email\" and a half-typed brand are the same request and no local"
+    echo "list holds them both. The query goes over OnboardingCatalogSearch as"
+    echo "typed and what comes back is shown, in the order it came back."
+    exit 2
+fi
+
+# (b) THE CONNECT LINK. Every link is ours: https, our host, our path. The
+#     allowlist is ConnectHandoff's, and this file must ASK it rather than
+#     concatenating a base it was handed. A second allowlist cannot live here
+#     anyway — leg 2 above forbids the host literal — which is why a
+#     concatenation with no call is a link nobody checked.
+if ! code "$policy" | grep -q 'ConnectHandoff.connectLinkIsOurs'; then
+    echo ""
+    echo "ConnectOnboardingPolicy builds a connect link without asking the"
+    echo "allowlist. The base is injected, and injected is not trusted: a stale"
+    echo "configuration or a pasted provider address would be rendered into the"
+    echo "card AND into the text as if it were ours. Four provider links were"
+    echo "sent for real during the spike. Call ConnectHandoff.connectLinkIsOurs."
+    exit 2
+fi
+if code "$policy" | grep -qE 'static func connectURL\(token: String, base: String\) -> String[^?]'; then
+    echo ""
+    echo "connectURL still promises a String for every base it is handed."
+    echo "A base that is not ours has no answer, and a String forces one — so"
+    echo "the caller gets a link to somewhere else instead of a refusal."
+    exit 2
+fi
+
+# ------------------------------------------------------------- 6. THE SCREEN
+# The step is what a person actually meets. These legs hold it to the same two
+# rules as the policy, plus the one rule a screen breaks on its own: quietly
+# growing a condition around the way out.
+if grep -nEi '\b[a-z0-9][a-z0-9-]*\.(com|net|org|io|co|ai|dev|app|me|edu|gov|us|uk|xyz|so|sh)\b' "$view"; then
+    echo ""
+    echo "A domain literal appears in OnboardingConnectStep."
+    exit 2
+fi
+if grep -nEi '\b(gmail|googlecalendar|google|notion|slack|outlook|microsoft|dropbox|github|asana|jira|trello|hubspot|salesforce|zoom|linkedin|airtable|shopify)\b' "$view"; then
+    echo ""
+    echo "A vendor or app name appears in OnboardingConnectStep."
+    echo "Names and logos come from the catalog at run time."
+    exit 2
+fi
+# NO SENTENCE IS WRITTEN IN THE VIEW. Copy is a decision, and a decision in a
+# view is a decision the register gate above cannot read. Every user-facing
+# string on this screen comes from ConnectOnboardingPolicy.Copy, which leg 3
+# reads in full. The only literals permitted here are SF Symbol names, which
+# are addresses rather than sentences.
+stray=$(code "$view" | grep -oE '"[^"]*"' | grep -vE '^"[a-z0-9.]+"$' || true)
+if [ -n "$stray" ]; then
+    echo ""
+    echo "A sentence is written in OnboardingConnectStep:"
+    printf '%s\n' "$stray"
+    echo "Copy lives in ConnectOnboardingPolicy.Copy, where the forbidden-word"
+    echo "leg can read all of it at once. A sentence in a view is a sentence"
+    echo "nothing checks."
+    exit 2
+fi
+# SKIP IS ALWAYS VISIBLE. Page 25. A view that can put a condition in front of
+# the way out is a view that will, and the person it traps is in setup with no
+# account yet and nothing to go back to.
+#
+# Read as a WHOLE BLOCK rather than as the three lines above the control: a
+# branch five lines up wrapping the entire footer hides from a three-line window
+# and is exactly the shape a refactor produces.
+footerblock=$(code "$view" | sed -n '/private var footer/,/^    }/p')
+if [ -z "$footerblock" ]; then
+    echo ""
+    echo "OnboardingConnectStep has no footer block, so the leg that proves Skip"
+    echo "is unconditional has nothing to read. Do not delete the instrument."
+    exit 2
+fi
+if ! printf '%s\n' "$footerblock" | grep -q 'skipLabel'; then
+    echo ""
+    echo "OnboardingConnectStep's footer no longer carries the skip control."
+    exit 2
+fi
+if printf '%s\n' "$footerblock" | grep -qE '^[[:space:]]*(if|guard|switch) '; then
+    echo ""
+    echo "OnboardingConnectStep branches inside the footer that carries Skip."
+    echo "Page 25: Skip is ALWAYS VISIBLE, in every state this step can be in,"
+    echo "including the states where something upstream went wrong."
+    exit 2
+fi
+
+# THE DECISIONS COME FROM THE POLICY. A view that assembles the card itself, or
+# reads the typed words itself, is a view holding decisions the suite above
+# cannot run. Both calls are named rather than merely expected, because the
+# quiet way this breaks is a helper inlined "just for now".
+for call in 'ConnectOnboardingPolicy.step(' 'ConnectOnboardingPolicy.searchState('; do
+    if ! code "$view" | grep -qF "$call"; then
+        echo ""
+        echo "OnboardingConnectStep no longer calls $call"
+        echo "The card and the search area are decisions, and they live in the"
+        echo "policy so a laptop can run them. A view that builds them itself is"
+        echo "a screen nobody can test."
+        exit 2
+    fi
+done
+if code "$view" | grep -qE 'lowercased\(\)|localizedCaseInsensitiveContains|\.filter \{'; then
+    echo ""
+    echo "OnboardingConnectStep reads the owner's typed words itself."
+    echo "The query crosses OnboardingCatalogSearch as typed. Normalising or"
+    echo "filtering it here re-opens the law-1 violation the policy just closed,"
+    echo "one layer up where nothing greps for it."
+    exit 2
+fi
+# It has to actually compile against the real policy. SwiftUI is available to
+# swiftc on this host, so this is a full type-check of the shipped view against
+# the shipped decision — not a parse.
+if ! swiftc -typecheck "$policy" "$handoff" "$view" 2>"$out/typecheck.log"; then
+    echo ""
+    echo "OnboardingConnectStep does not type-check against the policy it renders:"
+    cat "$out/typecheck.log"
+    exit 2
+fi
+echo "the screen type-checks against the real policy, names no app and writes no sentence"
+
+# --------------------------------------------------------------- 7. THE SUITE
 # swiftc only permits top-level code in a file literally named main.swift, so
 # the suite is copied under that name — the same reason run_battery_tests.sh
 # does it.
+#
+# THREE SOURCES, ONE BINARY, AND THAT IS THE POINT. ConnectHandoff is here
+# because the policy asks it whether a link is ours, and ConnectionsPolicy is
+# here because it holds the OTHER implementation of what a setup-card refusal
+# means. Compiling them together is what makes leg 6 of the suite a measurement
+# instead of a paragraph: it runs both transitions and fails while they
+# disagree. That leg is RED as of 2026-09-05 and the fix is one edit in
+# ConnectionsPolicy.recordDecline, which the suite prints in full when it fails.
 cp "$suite" "$out/main.swift"
-swiftc -O "$policy" "$out/main.swift" -o "$out/connectonboardingtests"
+swiftc -O "$policy" "$handoff" "$connections" "$out/main.swift" \
+    -o "$out/connectonboardingtests"
 "$out/connectonboardingtests"

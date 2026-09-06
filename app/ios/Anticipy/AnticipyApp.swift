@@ -6,6 +6,20 @@ import SwiftUI
 struct AnticipyApp: App {
     @StateObject private var pendant = PendantManager()
     @StateObject private var session = AnticipySession()
+    /// THE CONNECT IN FLIGHT, held at the root for one reason: the callback
+    /// comes back through `onOpenURL`, which only the App has. A connect
+    /// started on a Settings screen and finished in Safari would otherwise
+    /// return to nobody — the connect completes at the other end, the browser
+    /// hands the URL to the app, and the app drops it because the object that
+    /// knows an attempt is in flight was destroyed when the screen went away.
+    @StateObject private var connect = ConnectSession()
+    /// Read for one thing only: an unspent disclosure does not survive the app
+    /// leaving the screen. Google's Workspace policy asks for the disclosure
+    /// to be "immediately before" the connect, and an acknowledgement found
+    /// lying around after a trip to another app would let a connect start that
+    /// nobody watched begin. `ConnectSession` decides what that costs; this
+    /// only tells it the app went away.
+    @Environment(\.scenePhase) private var scenePhase
     /// WHOSE first run this is, not merely whether one happened. The key is
     /// declared in FirstRunOwnership because the account lifecycle clears it
     /// and two copies of the string would be a clear that clears nothing.
@@ -30,6 +44,11 @@ struct AnticipyApp: App {
     /// purpose: if the app dies mid-animation the person is already onboarded
     /// and lands on Home, because the flag was written before this was set.
     @State private var celebrating = false
+    /// The three tips and the coach mark that play over Home once the
+    /// celebration has finished. Durable, so an app killed mid-tip does not
+    /// replay them; transient `showHomeTips` is what is on screen right now.
+    @AppStorage(AppPreferences.homeTipsSeenKey) private var homeTipsSeen = false
+    @State private var showHomeTips = false
 
     var body: some Scene {
         WindowGroup {
@@ -110,9 +129,32 @@ struct AnticipyApp: App {
                     // app call somebody a decliner in the one breath it has to
                     // thank them.
                     OnboardingFinale(listening: session.listener.isListening,
-                                     micBlocked: session.micBlocked) { celebrating = false }
+                                     micBlocked: session.micBlocked) {
+                        celebrating = false
+                        if !homeTipsSeen { showHomeTips = true }
+                    }
                 }
             }
+            // The tips over Home, positioned off the anchor Home reports for
+            // its listen control. A Home that reports none gets the three
+            // cards and no coach mark, never a bubble pointing at a guess.
+            .overlayPreferenceValue(ListenControlAnchorKey.self) { anchor in
+                if showHomeTips {
+                    GeometryReader { geo in
+                        HomeTipsOverlay(listenFrame: anchor.map { geo[$0] },
+                                        listening: session.listener.isListening,
+                                        micBlocked: session.micBlocked) {
+                            homeTipsSeen = true
+                            showHomeTips = false
+                        }
+                    }
+                    .ignoresSafeArea()
+                    .transition(.opacity)
+                }
+            }
+            .animation(Theme.springSlow, value: showHomeTips)
+            // The finale leaves the way it arrived: a breath, not a cut.
+            .animation(Theme.springSlow, value: celebrating)
             // The three biggest state changes in the product used to hard-cut.
             .animation(Theme.springSlow, value: session.isSignedIn)
             .animation(Theme.springSlow, value: hasOnboarded)
@@ -129,15 +171,47 @@ struct AnticipyApp: App {
             // mistake. `startListening` guards its own state (already
             // listening, mic denied), so the widget can never double-start
             // her.
+            //
+            // THE CONNECT CALLBACK IS THE SECOND KNOCK ON THIS DOOR, and it is
+            // the one anyone can make: `anticipy://connected/{toolkit}` is
+            // openable by any web page, any other app, or a QR code on a
+            // poster. So nothing here reads it. It goes to `ConnectSession`,
+            // which hands it to `ConnectHandoff.parseDone` along with the
+            // attempt this phone believes is in flight and the owner signed in
+            // AT THIS MOMENT — and a callback with no attempt, for an app we
+            // did not start, for another attempt, or after somebody else
+            // signed in comes back unreadable and changes nothing.
+            //
+            // Until this branch existed the host was ignored: a connect that
+            // finished in the system browser reached nobody and the phone sat
+            // on a spinner with no error anywhere. run_connect_handoff_tests.sh
+            // printed that as a note for a day; it is a hard leg now.
             .onOpenURL { url in
-                guard url.scheme?.lowercased() == "anticipy" else { return }
+                guard url.scheme?.lowercased() == ConnectHandoff.callbackScheme else { return }
                 let host = url.host?.lowercased() ?? ""
                 if host == "listen" {
                     session.startListening()
+                } else if host == ConnectHandoff.callbackHost {
+                    // `session.accountID` is the owner ROW id — the same id
+                    // `contract.ts` binds every connection to. NOT `ownerID`,
+                    // which is this device's pre-accounts UUID and would bind
+                    // one phone's connections to no account at all.
+                    connect.handleCallback(url: url, signedInOwner: session.accountID)
                 }
+            }
+            // A connect belongs to the person who started it. A sign-out, or a
+            // second person signing in on a handed-on phone, takes the attempt
+            // and the sheet with it rather than leaving them for the next
+            // owner to tap through.
+            .onChange(of: session.accountID) { _ in
+                connect.ownerChanged()
+            }
+            .onChange(of: scenePhase) { phase in
+                if phase != .active { connect.appMovedToBackground() }
             }
             .environmentObject(pendant)
             .environmentObject(session)
+            .environmentObject(connect)
             // Pinning the scheme is also what makes every Theme token resolve:
             // they are dynamic UIColors, so they read this trait rather than
             // being decided once at launch. One line themes the whole app.
