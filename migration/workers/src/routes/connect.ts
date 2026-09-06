@@ -1041,6 +1041,39 @@ function vendorVouchesFor(listed: unknown, row: StoredLink, accountId: string): 
  * Fails closed and NEVER throws: a route that 500s on a malformed cookie is a
  * denial of service handed to whoever can set one.
  */
+/**
+ * WHO IS ASKING — the seam, and why it is a seam rather than an import.
+ *
+ * `whoIsSignedIn` below reads the account cookie, which is the only thing a
+ * browser can have if it came from the iOS app. But the browser that matters
+ * arrived by TAPPING A TEXT, in Safari, holding nothing — and for that one
+ * there is a second way to be somebody: the phone code in
+ * `routes/connect_auth.ts`, which mints a cookie scoped to a single link.
+ *
+ * That file imports THIS one (for the store types and the page shell), so this
+ * one cannot import it back without a cycle. Hence a seam installed at start-up
+ * from `index.ts`, exactly as `installConnectWiring` is: the reader defaults to
+ * the account cookie alone, and the entry point widens it to "the account
+ * cookie OR a code cookie for this very link".
+ *
+ * The default is the NARROW one on purpose. An entry point that forgets to
+ * install the wider reader loses the phone-code path and keeps the account
+ * path — a feature missing, which somebody notices. The other default would
+ * lose the check itself.
+ */
+export type ConnectSessionReader =
+  (request: Request, env: ConnectEnv) => Promise<OwnerId | null>;
+
+let SESSION_READER: ConnectSessionReader | null = null;
+
+export function installConnectSessionReader(reader: ConnectSessionReader): void {
+  SESSION_READER = reader;
+}
+
+async function whoIsAsking(request: Request, env: ConnectEnv): Promise<OwnerId | null> {
+  return SESSION_READER ? SESSION_READER(request, env) : whoIsSignedIn(request, env);
+}
+
 export async function whoIsSignedIn(request: Request, env: ConnectEnv): Promise<OwnerId | null> {
   const raw = bearerHeader(request) ?? sessionCookie(request);
   if (!raw) return null;
@@ -1321,7 +1354,7 @@ async function handleView(
   request: Request, env: ConnectEnv, deps: ConnectDeps,
   token: string, now: number, state: string | null,
 ): Promise<Response> {
-  const who = await whoIsSignedIn(request, env);
+  const who = await whoIsAsking(request, env);
   let view: ConnectPageView;
   try {
     view = await connectPageView(token, {
@@ -1351,7 +1384,7 @@ async function handleGo(
       "Open your Anticipy link again and tap Connect on the page itself.");
   }
 
-  const who = await whoIsSignedIn(request, env);
+  const who = await whoIsAsking(request, env);
   // The hidden field the page rendered, carrying the phone's attempt id. Read
   // from the body rather than the query so it survives the form post; anything
   // that is not the phone's opaque-token shape is dropped rather than reflected.
@@ -1389,7 +1422,7 @@ async function handleDone(
   request: Request, env: ConnectEnv, deps: ConnectDeps,
   token: string, now: number, state: string | null, url: URL,
 ): Promise<Response> {
-  const who = await whoIsSignedIn(request, env);
+  const who = await whoIsAsking(request, env);
   const done = await connectPageDone(token, {
     status: url.searchParams.get("status"),
     connectedAccountId: url.searchParams.get("connected_account_id"),

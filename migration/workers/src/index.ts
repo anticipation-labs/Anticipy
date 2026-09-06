@@ -47,7 +47,13 @@ import {
 import type { FellowsEnv } from "./routes/fellows_base.ts";
 import { smsInbound, transcriptionToken, type SmsEnv } from "./routes/sms.ts";
 import { sendblueInbound, type SendblueEnv } from "./routes/sendblue.ts";
-import { connectRoute, type ConnectEnv } from "./routes/connect.ts";
+import { connectRoute, installConnectWiring, type ConnectEnv } from "./routes/connect.ts";
+import { connectAuthWiring, connectWiring } from "./connections/wiring.ts";
+import {
+  connectAuthRoute, connectSession, installConnectAuthWiring,
+  type ConnectAuthEnv,
+} from "./routes/connect_auth.ts";
+import { installConnectSessionReader } from "./routes/connect.ts";
 import { workerOwners, purgeAudit, authClaim, phoneRemove, profileUpsert, type ServiceEnv } from "./routes/service.ts";
 import { agentRegister, agentKey, agentLlm, agentCaptcha, agentUpgradeCredential, type AgentEnv } from "./routes/agent.ts";
 import {
@@ -97,6 +103,45 @@ export interface Env extends CronEnv {
  * see the request, so a guard failure is a 403 and never a 409.
  */
 const CHAIN = [guard, ownerProfileOwner, researchLane, workflowGuard] as const;
+
+/**
+ * THE CONNECT WIRING, installed once when this module loads.
+ *
+ * routes/connect.ts declares four ports and refuses to guess at any of them: an
+ * unwired Worker answers 503 on every /c/ leg rather than draw a consent page it
+ * cannot fill in. Until this line existed, nothing anywhere called
+ * `installConnectWiring`, so every /c/ leg in this repo answered 503 to every
+ * token there has ever been while five tested modules sat behind it. A part
+ * nothing calls is not a feature.
+ *
+ * MEASURED ON LIVE, 2026-09-06: `GET https://api.anticipy.ai/c/<43 chars>`
+ * answers 404 while `/api/health` answers 200 — the deployed Worker predates the
+ * whole `/c/` prefix, so this line is repo-green and NOT yet Law-3 done. The
+ * live leg goes green when that URL answers 401 (the sign-in page, for any
+ * token) rather than 404 (not deployed) or 503 (deployed, secrets unset).
+ *
+ * It is a FUNCTION of env and it runs at module load rather than per request:
+ * a Worker's bindings and secrets do not exist when a module is evaluated, so
+ * the ports are built on the first request that needs them. See
+ * src/connections/wiring.ts for what each one is, and for why a Worker missing
+ * the DB binding, the vendor secret or a model key installs this anyway and
+ * then answers the honest 503 instead of a page that never loads.
+ */
+installConnectWiring(connectWiring);
+// The phone-code half, and the reader that lets its cookie count.
+//
+// WITHOUT THESE TWO LINES THE FEATURE IS UNREACHABLE, which is not a figure of
+// speech: the connect page arrives by TEXT and opens in Safari, where the
+// browser holds no account cookie, so every leg answered "Sign in to finish"
+// to every human being. Measured live on 2026-09-06 with everything else green.
+//
+// The order matters only in that both must happen before the first request.
+// `connectAuthWiring` shares connect.ts's own link store (see wiring.ts), so
+// the two routes can never disagree about whether a link is still live, and
+// `connectSession` widens "who is asking" from the account cookie alone to
+// "the account cookie OR a code cookie minted for this very link".
+installConnectAuthWiring(connectAuthWiring);
+installConnectSessionReader(connectSession);
 
 export default {
   async fetch(request: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
@@ -188,6 +233,11 @@ export default {
     // generic 404 -- a GET on /go must be REFUSED, not routed elsewhere, or a
     // link prefetcher spends the owner's single-use token before they tap it.
     if (path.startsWith("/c/")) {
+      // The code routes first, and they answer `null` for anything that is not
+      // theirs — so this is a chain, not a branch, and connect.ts keeps owning
+      // every path it owned before.
+      const authed = await connectAuthRoute(request, env as unknown as ConnectAuthEnv);
+      if (authed) return authed;
       return connectRoute(request, env as unknown as ConnectEnv);
     }
 

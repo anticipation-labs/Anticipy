@@ -1344,3 +1344,48 @@ CREATE INDEX IF NOT EXISTS "idx_connect_links_owner" ON "connect_links" ("user_i
 CREATE INDEX IF NOT EXISTS "idx_connect_links_expiry" ON "connect_links" ("expires_at");
 -- The prune. Rows outlive their ten minutes by a lot unless something
 -- sweeps them, and a sweep that scans is a sweep that gets turned off.
+
+
+-- ---------------------------------------------------------------------------
+-- connect_codes — the one-tap phone code that lets a texted link be opened.
+-- ---------------------------------------------------------------------------
+-- The connect page opens in Safari from a text message; the account token lives
+-- in the iOS app. So the browser is nobody, and every /c/ leg answered 401 to
+-- every human being. The spec's answer is "a signed-in session OR a one-tap
+-- phone code", and this table is the code half.
+--
+-- It arrived in src/routes/connect_auth.ts as CONNECT_CODES_DDL because that
+-- change was not allowed to edit this file, and its author flagged the gap
+-- rather than shipping a TAPE: comment pointing at a gate leg that tracks
+-- something else. This is the file that owns schemas, so it lives here now and
+-- connect_auth.ts's copy is the fallback for a database that has not had this
+-- applied yet.
+--
+-- Discipline copied from "password_resets": the six digits are NEVER stored,
+-- only their SHA-256; the row carries its own expiry; attempts are charged by
+-- compare-and-set before the comparison, so concurrent guesses cannot share one
+-- increment; and used_at is NULL rather than 0 so single-use is a conditional
+-- UPDATE rather than a read-then-write.
+CREATE TABLE IF NOT EXISTS "connect_codes" (
+  "id"           TEXT PRIMARY KEY NOT NULL,
+  "token_handle" TEXT NOT NULL CHECK (length("token_handle") = 64),
+      -- sha256(token) in hex, the same handle "connect_links" is keyed by. The
+      -- raw token is never written down here either.
+  "user_id"      TEXT NOT NULL CHECK (length("user_id") = 15),
+      -- The owner ROW id. The length CHECK is the database's own copy of the
+      -- rule: a name or an email is refused HERE, not only in TypeScript.
+  "code_hash"    TEXT NOT NULL CHECK (length("code_hash") = 64),
+      -- SHA-256 of the six digits, hex. The code itself is NEVER stored, the
+      -- same way "password_resets"."code_hash" holds only a digest.
+  "expires_at"   REAL NOT NULL,
+  "attempts"     INTEGER NOT NULL DEFAULT 0 CHECK ("attempts" >= 0),
+  "used_at"      REAL NULL,
+      -- NULL = live. The single-use gate, and the reason it is NULL and not 0:
+      --   UPDATE "connect_codes" SET "used_at" = ?1
+      --    WHERE "id" = ?2 AND "used_at" IS NULL
+  "created_at"   REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS "idx_connect_codes_link"
+  ON "connect_codes" ("token_handle", "created_at");
+CREATE INDEX IF NOT EXISTS "idx_connect_codes_owner"
+  ON "connect_codes" ("user_id", "created_at");

@@ -323,6 +323,35 @@ export interface ConnectionsStore {
   /** Insert or update. REFUSES a row whose `connected_account_id` already
    *  belongs to a different owner — see `CrossOwnerWrite`. */
   putConnection(row: StoredConnection): Promise<void>;
+  /**
+   * BOTH HALVES OF A FINISHED CONNECTION, IN ONE D1 BATCH: the `connections`
+   * row upserted, and this owner's `connect_nudges` row for that toolkit
+   * flipped to `connected`.
+   *
+   * WHY IT IS ONE METHOD AND NOT TWO CALLS. It is written under the connect
+   * callback's exactly-once lease (routes/connect.ts `connectPageDone`), and
+   * that lease is a promise about ONE write. Two calls are two failure modes
+   * under one promise: the connections row lands, the nudge flip does not, the
+   * lease is either burned or released, and whichever half failed is invisible
+   * — the owner has connected the app and keeps being asked to connect it.
+   *
+   * IDEMPOTENT on (user_id, toolkit, connected_account_id), because the caller
+   * is a browser and a browser refreshes: two runs leave ONE connections row
+   * and ONE nudge row, and the second run is not an error.
+   *
+   * THE ASK'S OWN HISTORY IS NOT ERASED. `level`, `trigger`, `sent_at` and
+   * `channel` are written only when the nudge row is CREATED here; a row that
+   * already exists keeps them, because they are how the spec's timers get
+   * tuned and how "this owner declined twice" survives a connect. Only `state`
+   * and `acted_at` are this write's to set.
+   *
+   * REFUSES, ATOMICALLY, when `connected_account_id` belongs to another owner:
+   * both statements no-op (the nudge insert is conditional on the connections
+   * row being THIS owner's after the upsert), and `CrossOwnerWrite` is raised
+   * with nothing written. Order matters — a nudge flipped for a connection
+   * that was refused would tell the ask engine an app is connected that is not.
+   */
+  recordConnection(row: StoredConnection, connectedAt: number): Promise<void>;
   /** Delete THIS owner's connection. Returns false when there was no such row
    *  for this owner — which includes the case where it exists under somebody
    *  else, and that must read as "not yours", never as a delete. */
@@ -815,6 +844,43 @@ export function createD1Store(env: StoreEnv): ConnectionsStore {
   }
 
   /**
+   * THE ONE UPSERT INTO `connections`, and THE CROSS-OWNER GUARD that rides on
+   * it. Built here rather than written twice because `putConnection` and
+   * `recordConnection` must not be able to drift: the second copy of this
+   * statement would be the copy somebody edits without the predicate.
+   *
+   * `connected_account_id` is the VENDOR's id and is unique ACROSS owners, so a
+   * plain upsert on it can land on somebody else's row and re-bind their
+   * account to this owner in one statement. The predicate on DO UPDATE makes
+   * that a no-op instead; `changes === 0` is then the signal, and every caller
+   * raises rather than swallowing it — a silent no-op would tell the settings
+   * page the toggle saved when it did not.
+   *
+   * It returns the statement UNRUN so a caller can put it in a batch beside
+   * another write that has to succeed or fail with it.
+   */
+  function connectionUpsert(live: Set<string>, conn: StoredConnection): D1PreparedStatement {
+    refuseUnstorableAlias("connections", live, conn.alias);
+    const body = project(live, {
+      connected_account_id: conn.connected_account_id,
+      user_id: conn.user_id,
+      toolkit: conn.toolkit,
+      alias: aliasOut(conn.alias),
+      status: conn.status,
+      writes_enabled: conn.writes_enabled ? 1 : 0,
+      last_used_at: conn.last_used_at,
+    });
+    const setCols = body.cols.filter((c) => c !== "connected_account_id" && c !== "user_id");
+    return env.DB.prepare(
+      `INSERT INTO "connections" (${body.cols.map(q).join(", ")}) `
+        + `VALUES (${body.vals.map((_, i) => `?${i + 1}`).join(", ")}) `
+        + `ON CONFLICT("connected_account_id") DO UPDATE SET `
+        + setCols.map((c) => `${q(c)} = excluded.${q(c)}`).join(", ")
+        + ` WHERE "connections"."user_id" = excluded."user_id"`,
+    ).bind(...body.vals);
+  }
+
+  /**
    * One signal row by its full key. A named local rather than a method on the
    * returned object, because `recordSignal` below re-reads through it and a
    * `this.` there breaks the first time a caller writes
@@ -933,31 +999,55 @@ export function createD1Store(env: StoreEnv): ConnectionsStore {
     async putConnection(row) {
       const conn = checkedConnection(row);
       const live = await requireColumns(env, "connections");
-      refuseUnstorableAlias("connections", live, conn.alias);
-      const body = project(live, {
-        connected_account_id: conn.connected_account_id,
+      const res = await connectionUpsert(live, conn).run();
+      if (Number(res.meta?.changes ?? 0) !== 1) {
+        throw new CrossOwnerWrite("connections", conn.connected_account_id);
+      }
+    },
+
+    async recordConnection(row, connectedAt) {
+      const conn = checkedConnection(row);
+      const at = checkedTime(connectedAt, "connectedAt");
+      const liveConn = await requireColumns(env, "connections");
+      const liveNudge = await requireColumns(env, "connect_nudges");
+
+      // The nudge row as it should look if this is the FIRST time this owner
+      // has ever had one for this app. `level` and `snooze_until` are in the
+      // INSERT and out of the DO UPDATE below on purpose: they are defaults for
+      // a new row, and an existing row's ask history is not this write's to
+      // erase.
+      const nudge = project(liveNudge, {
         user_id: conn.user_id,
         toolkit: conn.toolkit,
-        alias: aliasOut(conn.alias),
-        status: conn.status,
-        writes_enabled: conn.writes_enabled ? 1 : 0,
-        last_used_at: conn.last_used_at,
+        state: "connected",
+        level: 0,
+        snooze_until: null,
+        acted_at: at,
       });
-      const setCols = body.cols.filter((c) => c !== "connected_account_id" && c !== "user_id");
-      // THE CROSS-OWNER GUARD. `connected_account_id` is the vendor's id and is
-      // unique ACROSS owners, so a plain upsert on it can land on somebody
-      // else's row and re-bind their account to this owner in one statement.
-      // The predicate on DO UPDATE makes that a no-op instead; `changes === 0`
-      // is then the signal, and it is raised rather than swallowed — a silent
-      // no-op would tell the settings page the toggle saved when it did not.
-      const res = await env.DB.prepare(
-        `INSERT INTO "connections" (${body.cols.map(q).join(", ")}) `
-          + `VALUES (${body.vals.map((_, i) => `?${i + 1}`).join(", ")}) `
-          + `ON CONFLICT("connected_account_id") DO UPDATE SET `
-          + setCols.map((c) => `${q(c)} = excluded.${q(c)}`).join(", ")
-          + ` WHERE "connections"."user_id" = excluded."user_id"`,
-      ).bind(...body.vals).run();
-      if (Number(res.meta?.changes ?? 0) !== 1) {
+      // Only what a connect actually decides. `state` is REQUIRED so it is
+      // always here; `acted_at` is OPTIONAL and degrades to a worse log line.
+      const setCols = nudge.cols.filter((c) => c === "state" || c === "acted_at");
+      const n = nudge.vals.length;
+      // CONDITIONAL ON THE UPSERT ABOVE HAVING LANDED ON THIS OWNER'S ROW.
+      // D1 runs a batch as one sequential transaction, so this statement sees
+      // the previous one's effect: if `connected_account_id` belongs to
+      // somebody else the upsert was a no-op, this EXISTS is false, and NOTHING
+      // is written by either half. Checking in JavaScript afterwards could not
+      // give that — the batch would already have committed the flip, and the
+      // ask engine would believe an app is connected that is not.
+      const nudgeStmt = env.DB.prepare(
+        `INSERT INTO "connect_nudges" (${nudge.cols.map(q).join(", ")}) `
+          + `SELECT ${nudge.vals.map((_, i) => `?${i + 1}`).join(", ")} `
+          + `WHERE EXISTS (SELECT 1 FROM "connections" `
+          + `WHERE "connected_account_id" = ?${n + 1} AND "user_id" = ?${n + 2}) `
+          + `ON CONFLICT("user_id", "toolkit") DO UPDATE SET `
+          + setCols.map((c) => `${q(c)} = excluded.${q(c)}`).join(", "),
+      ).bind(...nudge.vals, conn.connected_account_id, conn.user_id);
+
+      // ONE BATCH. D1's batch is a single transaction, which is the whole
+      // reason this method exists rather than two awaited calls.
+      const [connRes] = await env.DB.batch([connectionUpsert(liveConn, conn), nudgeStmt]);
+      if (Number(connRes?.meta?.changes ?? 0) !== 1) {
         throw new CrossOwnerWrite("connections", conn.connected_account_id);
       }
     },
@@ -1192,6 +1282,33 @@ export function createMemoryStore(): ConnectionsStore {
         throw new CrossOwnerWrite("connections", conn.connected_account_id);
       }
       connections.set(conn.connected_account_id, { ...conn });
+    },
+
+    async recordConnection(row, connectedAt) {
+      const conn = checkedConnection(row);
+      const at = checkedTime(connectedAt, "connectedAt");
+      const existing = connections.get(conn.connected_account_id);
+      // REFUSED BEFORE EITHER HALF IS WRITTEN, which is what D1's batch gives
+      // for real: a nudge flipped for a connection that was refused would tell
+      // the ask engine an app is connected that is not. A fake that wrote the
+      // nudge anyway would pass a test the real store fails.
+      if (existing && existing.user_id !== conn.user_id) {
+        throw new CrossOwnerWrite("connections", conn.connected_account_id);
+      }
+      const id = key(conn.user_id, conn.toolkit);
+      const prior = nudges.get(id) ?? null;
+      // `level`, `snooze_until`, `trigger`, `sent_at` and `channel` are the
+      // ask's own history: defaults on a NEW row, untouched on an existing one.
+      const nudge: StoredNudge = prior
+        ? { ...prior, state: "connected", acted_at: at }
+        : {
+            user_id: conn.user_id, toolkit: conn.toolkit, state: "connected",
+            level: 0, snooze_until: null, trigger: null, sent_at: null,
+            acted_at: at, channel: null,
+          };
+      // No await between the two writes, so nothing can observe one half.
+      connections.set(conn.connected_account_id, { ...conn });
+      nudges.set(id, checkedNudge(nudge));
     },
 
     async deleteConnection(user, connectedAccountId) {
