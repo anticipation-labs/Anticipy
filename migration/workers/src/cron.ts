@@ -28,6 +28,7 @@
  */
 import { newRecordId, pbNow } from "./pb/wire.ts";
 import { sendText, type MessagingEnv } from "./messaging.ts";
+import { connectNudgeSweep } from "./connections/nudge.ts";
 
 /**
  * The Twilio names stay required here because index.ts Env extends this and
@@ -53,10 +54,63 @@ export async function scheduled(
   event: ScheduledController, env: CronEnv, ctx: ExecutionContext,
 ): Promise<void> {
   switch (event.cron) {
-    case "*/5 * * * *": ctx.waitUntil(sweep(env)); return;
+    // TWO waitUntil CALLS, NOT ONE CHAINED PROMISE. The reminder sweep carries
+    // things somebody is waiting for; the connect ask is an interruption
+    // nobody asked for. They must not be able to take each other down, and
+    // `connectAsks` (below) is what makes that true in both directions.
+    // The reminder leg is registered FIRST so that it is already running
+    // whatever the second line does.
+    case "*/5 * * * *":
+      ctx.waitUntil(sweep(env));
+      ctx.waitUntil(connectAsks(env));
+      return;
     case "17 4 * * *":  ctx.waitUntil(prune(env)); return;
     default:
       console.log(`cron: no handler for schedule ${JSON.stringify(event.cron)}`);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// THE CONNECT ASK — src/connections/nudge.ts connectNudgeSweep.
+//
+// Five minutes is the cadence even though one owner is asked at most once a
+// week: the ask is supposed to land at a MOMENT — just after a result, with
+// the laptop shut — and a nightly sweep would only ever arrive long after
+// every such moment had passed. Who is due comes from
+// src/connections/due.ts, which is wired in through `installNudgeWiring`; with
+// no wiring installed the sweep logs that it asked nobody and returns.
+//
+// NOT LIVE YET, AND NOT BECAUSE OF THIS LINE. `wrangler.jsonc` registers only
+// `17 4 * * *`; `*/5 * * * *` is commented out there with its reason (two
+// sweeps against one database would send the team every reminder twice), and
+// only wrangler.dev.jsonc carries it. So THIS WHOLE CASE — the HQ reminder
+// sweep included — is dead in production until the cutover that file
+// describes. Do not answer that by hanging the connect ask off the nightly
+// `17 4 * * *` leg: an ask that lands at 04:17 UTC is the 3am text the policy
+// in src/connections/nudge.ts exists to prevent.
+//
+// WHY THIS WRAPPER EXISTS, rather than passing the sweep to waitUntil
+// directly. Two failures, and `.catch()` on the call would only cover one:
+//
+//   1. A SYNCHRONOUS THROW happens before any promise exists — a wiring fault,
+//      a module that did not initialise — so `.catch` is never reached and
+//      `scheduled` itself throws. An `async function` turns that into a
+//      rejection this try/catch owns.
+//   2. A REJECTED PROMISE handed to waitUntil marks this scheduled invocation
+//      as failed. `ScheduledController.noRetry()` exists in this runtime's own
+//      types because a failed invocation is a candidate for being run again —
+//      and running this tick again re-runs `sweep(env)`, THE LEG THAT SENDS
+//      REMINDER TEXTS. One broken connect ask must never be able to text
+//      somebody their reminder twice.
+//
+// So this swallows, loudly, and the tick that carries the rest survives it.
+// ---------------------------------------------------------------------------
+
+async function connectAsks(env: CronEnv): Promise<void> {
+  try {
+    await connectNudgeSweep(env);
+  } catch (err) {
+    console.log(`connect nudge sweep: failed, the rest of the tick continues: ${String(err)}`);
   }
 }
 

@@ -6,9 +6,19 @@ import Speech
 /// means navigation and no preference changes accidentally on the index.
 struct SettingsHomeView: View {
     @EnvironmentObject var session: AnticipySession
+    /// THE ONE CONNECT IN FLIGHT, held at the app root because the callback
+    /// comes back through `onOpenURL`, which only the App has. This screen is
+    /// where a connect STARTS; it reaches the same object rather than making a
+    /// second one, or an attempt begun here would be finished by nobody.
+    @EnvironmentObject var connect: ConnectSession
     @Environment(\.dismiss) private var dismiss
 
     @State private var route: Route?
+    /// The app being connected right now, and how far it has got. Nil is the
+    /// normal state; the sheet is drawn from it.
+    @State private var connecting: ConnectFlow?
+    /// Bumped ONLY when a connect actually finished. See `connectedApps`.
+    @State private var connectedCount = 0
     @AppStorage(AppTheme.key) private var themeChoice = AppTheme.light.rawValue
 
     /// CONNECTORS AND CONNECTED APPS ARE TWO ROWS AND MUST STAY TWO ROWS.
@@ -128,34 +138,217 @@ struct SettingsHomeView: View {
     /// out rather than written inline like its neighbours.
     ///
     /// The screen takes two things the rest of this index does not have to
-    /// think about, and both are named here so a reader can see exactly what
-    /// this build can and cannot do:
+    /// think about, and both are constructed here:
     ///
-    ///   THE STORE. `UnreachableConnectedAppsStore` — this build has no client
-    ///   that reads an owner's connections off the server, because the server
-    ///   serves no route to read them from yet (see the type's own comment).
-    ///   The screen therefore says "I could not read your connected apps just
-    ///   now", which is true, and never "nothing is connected yet", which
-    ///   would not be. The day a client exists it is constructed here and
-    ///   nothing else changes.
+    ///   THE STORE. `ConnectedAppsClient`, the real one, reading this owner's
+    ///   connections off the server with the session this app already holds.
+    ///   It replaced `UnreachableConnectedAppsStore`, whose every method threw.
+    ///   That type stays where it is: the model's suite drives it to pin the
+    ///   `.trouble` side of "empty is not broken" — a store that answered `[]`
+    ///   would render "Nothing is connected yet" to somebody with two apps
+    ///   connected — and nothing in the shipping app is built with it.
     ///
-    ///   STARTING A CONNECTION. It cannot happen on this build either: the
-    ///   Connect button only exists on a catalog result, and the catalog is
-    ///   read through the same refusing store, so no result can be drawn. The
-    ///   assertion is the tripwire for the day that stops being true — a
-    ///   connect flow landing without its opener would otherwise be a button
-    ///   that silently does nothing, which is the failure this whole feature
-    ///   is least allowed to have.
+    ///   STARTING A CONNECTION. `startConnect` used to be an
+    ///   `assertionFailure`: the button that begins the only flow in the
+    ///   product where somebody hands over a key did nothing at all. It now
+    ///   runs the whole handoff — sentences, the sheet, our single-use link,
+    ///   the tap, the browser — through `ConnectSession`, which is the only
+    ///   object in the app allowed to open one.
+    ///
+    /// `.id(connectedCount)` IS THE REFRESH, and it is blunt on purpose.
+    /// `ConnectDone.connected` is a HINT, not a record: the truth is whatever
+    /// the server says this owner has, and `SettingsConnectedAppsView` reads
+    /// that once, into a model it keeps for its own lifetime, with no handle
+    /// anything out here can pull. Changing this identity rebuilds that screen
+    /// against a fresh model, which re-reads the list — so an app connected a
+    /// moment ago is on it. It changes ONLY on a connect that actually
+    /// finished, so nothing else on this index can make the list flicker.
     @ViewBuilder
     private var connectedApps: some View {
         SettingsConnectedAppsView(
             session: session,
-            store: UnreachableConnectedAppsStore(),
-            startConnect: { _ in
-                assertionFailure(
-                    "a connect was started with no connect-link flow behind it")
-            })
+            store: connectedAppsClient(),
+            startConnect: startConnect)
+            .id(connectedCount)
+            .sheet(item: $connecting) { flow in
+                connectSheet(flow)
+            }
+            // The hint, turned into the one thing it licenses: go and ask.
+            .onChange(of: connect.outcome) { outcome in
+                guard case .connected = outcome else { return }
+                connectedCount += 1
+                connect.clearOutcome()
+            }
+            // A sheet whose attempt has gone — abandoned, expired, or taken
+            // away by a sign-out — is a sheet with a dead button on it.
+            .onChange(of: connect.prompt == nil) { gone in
+                if gone, connecting?.stage == .asking { connecting = nil }
+            }
     }
+
+    /// THE STORE, BUILT PER ACCESS AND CREDENTIALED PER CALL.
+    ///
+    /// `session.backend` is this app's one place for "which server, whose
+    /// session" — the same computed property every other screen reaches for —
+    /// and the closure below reads it AT THE MOMENT OF EACH REQUEST rather than
+    /// closing over a token. `SettingsConnectedAppsView` builds its model once
+    /// and keeps it across a sign-out and a second person signing in on the
+    /// same phone; a client holding one account's token would go on answering
+    /// under the next person's name.
+    ///
+    /// `session.accountID` is the owner ROW id, and `ConnectedAppsCredential`
+    /// refuses anything else — `session.ownerID` is this app's pre-accounts
+    /// device UUID, and a connection bound to that is bound to a handset.
+    private func connectedAppsClient() -> ConnectedAppsClient {
+        ConnectedAppsClient(credential: { [session] in
+            let backend = session.backend
+            return ConnectedAppsCredential(baseURL: backend.baseURL,
+                                           accountID: backend.accountID,
+                                           authToken: backend.authToken)
+        })
+    }
+
+    /// THE TAP ON A CATALOG RESULT — the beginning of the only flow in this
+    /// product where somebody hands over a key to something of theirs.
+    ///
+    /// The order is the spec's and is not this file's to rearrange: the
+    /// disclosure goes up FIRST, with the app's own sentences on it, and the
+    /// link is fetched behind it. `ConnectSession` refuses a sheet with nothing
+    /// on it, refuses a tap that arrives before the link, and spends the
+    /// acknowledgement as the browser opens.
+    private func startConnect(_ app: ToolkitMeta) {
+        guard let owner = OwnerId(session.accountID) else { return }
+        connecting = ConnectFlow(app: app, stage: .settingUp)
+        Task { await runConnect(app, owner: owner) }
+    }
+
+    /// The two server calls the handoff needs, in the order it needs them.
+    ///
+    /// Every step re-checks that the sheet on screen is still THIS app's: a
+    /// second tap on a second app starts a second flow, and an answer for the
+    /// first one landing afterwards must not be adopted under it. A failure at
+    /// any point says so plainly and nothing is opened.
+    private func runConnect(_ app: ToolkitMeta, owner: OwnerId) async {
+        let client = connectedAppsClient()
+        do {
+            let sentences = try await client.permissionSentences(toolkit: app.slug,
+                                                                 owner: owner)
+            guard connecting?.app.slug == app.slug else { return }
+            guard let prompt = connect.begin(owner: owner.raw, toolkit: app.slug,
+                                             sentences: sentences) else {
+                connecting?.stage = .trouble
+                return
+            }
+            connecting?.stage = .asking
+            let link = try await client.connectLink(toolkit: app.slug, owner: owner,
+                                                    attemptID: prompt.attemptID)
+            guard connecting?.app.slug == app.slug else { return }
+            // A link the handoff will not adopt is a link nothing may open. The
+            // attempt goes with it: an attempt left in flight is an attempt
+            // whose callback would be believed later.
+            guard connect.adopt(link: link) else {
+                connect.ownerChanged()
+                connecting?.stage = .trouble
+                return
+            }
+        } catch {
+            guard connecting?.app.slug == app.slug else { return }
+            connect.ownerChanged()
+            connecting?.stage = .trouble
+        }
+    }
+
+    /// THE DISCLOSURE SHEET. Google's Workspace policy asks for the owner to be
+    /// told what will be read, in context, with a real affirmative action,
+    /// immediately before the sign-in flow — and `DisclosureGate` enforces all
+    /// three, including a floor under the word "tap".
+    ///
+    /// NO APP IS NAMED HERE AND ALMOST NOTHING IS WRITTEN HERE. The heading and
+    /// the button are `ConnectedAppsModel.Copy.connectAction(app:)`, the claims
+    /// are the catalog's own sentences (through the register gate on the way
+    /// in), and the line saying this is optional is
+    /// `ConnectedAppsModel.Copy.optional`. The only two sentences this flow adds
+    /// live in `ConnectStartCopy`, where the suite reads them.
+    @ViewBuilder
+    private func connectSheet(_ flow: ConnectFlow) -> some View {
+        let name = ConnectionsPolicy.appName(flow.app, fallback: flow.app.slug)
+        SheetChrome(title: ConnectedAppsModel.Copy.connectAction(app: name),
+                    leading: .close,
+                    onLeading: { connecting = nil }) {
+            switch flow.stage {
+            case .settingUp:
+                GroupedCard { InfoRow(ConnectStartCopy.settingUp, systemImage: "clock") }
+            case .trouble:
+                GroupedCard {
+                    InfoRow(ConnectStartCopy.couldNotStart,
+                            systemImage: "exclamationmark.circle")
+                }
+            case .asking:
+                if let prompt = connect.prompt {
+                    GroupedCard {
+                        for sentence in prompt.sentences {
+                            InfoRow(sentence, systemImage: "checkmark.circle")
+                        }
+                    }
+                    GroupedCard {
+                        ActionRow(ConnectedAppsModel.Copy.connectAction(app: name),
+                                  systemImage: "arrow.up.right.square",
+                                  isEnabled: prompt.linkReady) {
+                            tapped(prompt)
+                        }
+                    }
+                    FootnoteText(ConnectedAppsModel.Copy.optional)
+                } else {
+                    GroupedCard {
+                        InfoRow(ConnectStartCopy.couldNotStart,
+                                systemImage: "exclamationmark.circle")
+                    }
+                }
+            }
+        }
+    }
+
+    /// The affirmative control, and the ONLY place this screen hands a consent
+    /// back. `signedInOwner` is read again here rather than trusted from the
+    /// tap that started this: a sign-out can happen in between, and an attempt
+    /// that outlived one is dead.
+    ///
+    /// A refusal leaves the sheet standing — `ConnectSession` puts the same
+    /// sentences back with a fresh consent — because the usual cause is a tap
+    /// that arrived a moment early, and closing the sheet would cost the owner
+    /// their place.
+    private func tapped(_ prompt: DisclosurePrompt) {
+        Haptics.engage()
+        switch connect.ownerTapped(prompt.consent, signedInOwner: session.accountID) {
+        case .openedInSignInSession, .openedInSystemBrowser:
+            connecting = nil
+        case .refused:
+            break
+        }
+    }
+}
+
+/// ONE CONNECT, AS THIS SCREEN DRAWS IT.
+///
+/// The app is carried rather than looked up so the sheet can name and picture
+/// it in every state, including the two where `ConnectSession` holds nothing
+/// yet. `Identifiable` by slug: a second connect on a second app is a second
+/// sheet, and starting one while another is up replaces it.
+struct ConnectFlow: Equatable, Identifiable {
+    enum Stage: Equatable {
+        /// The sentences and the link are being fetched. Nothing has been asked
+        /// of the owner and nothing has been minted for them.
+        case settingUp
+        /// The disclosure is on screen. `ConnectSession` holds the prompt.
+        case asking
+        /// It could not be started. Nothing was opened and nothing changed.
+        case trouble
+    }
+
+    let app: ToolkitMeta
+    var stage: Stage
+
+    var id: String { app.slug }
 }
 
 /// Screen 5: the info popover, as a sheet.
@@ -302,10 +495,12 @@ struct SettingsHomeView_Previews: PreviewProvider {
     static var previews: some View {
         NavigationStack { SettingsHomeView() }
             .environmentObject(sampleSession())
+            .environmentObject(ConnectSession())
             .previewDisplayName("Settings — light")
 
         NavigationStack { SettingsHomeView() }
             .environmentObject(sampleSession())
+            .environmentObject(ConnectSession())
             // `.environment(\.colorScheme, .dark)`, not `.preferredColorScheme`.
             // The theme gate allows exactly ONE preferredColorScheme pin in the
             // app — the real one in AnticipyApp.swift, which reads the owner's

@@ -48,6 +48,7 @@ import type { FellowsEnv } from "./routes/fellows_base.ts";
 import { smsInbound, transcriptionToken, type SmsEnv } from "./routes/sms.ts";
 import { sendblueInbound, type SendblueEnv } from "./routes/sendblue.ts";
 import { connectRoute, installConnectWiring, type ConnectEnv } from "./routes/connect.ts";
+import { connectionsApiRoute, type ConnectionsApiEnv } from "./routes/connections_api.ts";
 import { connectAuthWiring, connectWiring } from "./connections/wiring.ts";
 import {
   connectAuthRoute, connectSession, installConnectAuthWiring,
@@ -214,6 +215,23 @@ export default {
     }
     if (path === "/transcription/token" && method === "POST") {
       return transcriptionToken(request, env as unknown as SmsEnv);
+    }
+
+    // Settings -> Connected Apps, the six routes the phone already calls.
+    //
+    // The whole prefix is handed over, unknown methods included, so the route
+    // can answer 405 with an Allow header rather than fall through to the
+    // generic 404: a GET on /link or /writes must be REFUSED and not routed
+    // elsewhere, or a link prefetcher spends this owner's connect-link budget
+    // and an address-bar preload flips a write toggle.
+    //
+    // Outside /api/collections/ like the reset, delete and /c/ doors, so the
+    // data-API guard never sees it -- it defends itself, and the whole of that
+    // defence is that the owner comes from the token: there is no path segment,
+    // query key or body field anywhere in routes/connections_api.ts through
+    // which a caller can name somebody else. See that file's header.
+    if (path === "/me/connections" || path.startsWith("/me/connections/")) {
+      return connectionsApiRoute(request, env as unknown as ConnectionsApiEnv);
     }
 
     // OUR connect link -- /c/{token}, /c/{token}/go, /c/{token}/done. The page

@@ -307,6 +307,31 @@ enum ConnectHandoff {
         // a match.
         guard let adopted = attempt.token else { return .refused(.linkNotBoundToAttempt) }
         guard adopted == offered else { return .refused(.linkIsForAnotherAttempt) }
+        // AND THE STATE ON IT IS THIS ATTEMPT'S, IF IT CARRIES ONE.
+        //
+        // The token says which LINK this is; the state says which ATTEMPT it
+        // was fetched for, and the two are not the same fact. A link stamped
+        // with somebody else's attempt id would come back through
+        // `anticipy://connected/{toolkit}` carrying THAT id, `parseDone` would
+        // refuse it, and the owner would watch a connect that completed at the
+        // other end reach nobody at all.
+        //
+        // ABSENT IS ALLOWED, and the polarity is deliberate. This is a CEILING
+        // — "is this positively somebody else's?" — because the state is put on
+        // by `outboundLink` on the way past, and demanding one here would refuse
+        // every link that has not been through it, including the ones this
+        // suite's own presentation cases open. A repeated `state` reads
+        // whichever way the reader happens to look, so it is neither.
+        switch singleQuery(link, stateKey) {
+        case .absent:
+            break
+        case .repeated:
+            return .refused(.linkIsForAnotherAttempt)
+        case .one(let carried):
+            guard carried == stateToken(for: attempt) else {
+                return .refused(.linkIsForAnotherAttempt)
+            }
+        }
         if case .refused(let why) = gate.verdict(for: attempt, now: now) {
             return .refused(why)
         }
@@ -331,6 +356,75 @@ enum ConnectHandoff {
         parts.path = "/" + attempt.toolkit
         parts.queryItems = [URLQueryItem(name: stateKey, value: attempt.id)]
         return parts.url
+    }
+
+    // MARK: - Going out with the state on it
+
+    /// THE ONE PRODUCER OF `state`, AND IT IS THE CALLBACK ITSELF.
+    ///
+    /// The value that rides out on our connect link is READ BACK OUT of
+    /// `callbackURL(for:)` — the deep link `parseDone` will insist a callback
+    /// matches — rather than written a second time here. One producer, so the
+    /// half we send to another company and the half we will accept coming back
+    /// cannot drift apart; the day `callbackURL` changes what it carries, this
+    /// changes with it or answers nil and nothing opens.
+    ///
+    /// Nil is a real answer: an attempt whose callback cannot be built, or
+    /// whose state is not a shape we would carry, has no state to send.
+    static func stateToken(for attempt: ConnectAttempt) -> String? {
+        guard let callback = callbackURL(for: attempt),
+              case .one(let state) = singleQuery(callback, stateKey),
+              isOpaqueToken(state, max: maxTokenLength) else { return nil }
+        return state
+    }
+
+    /// OUR LINK, CARRYING THIS ATTEMPT'S STATE — the URL the attempt adopts and
+    /// the only one it may open.
+    ///
+    /// WHY THE STATE IS ON THE LINK AT ALL. It rides to our own connect page,
+    /// which puts it in a hidden field; the page hands it to the other company
+    /// on the callback URL; the company hands it back; our done page echoes it
+    /// into `anticipy://connected/{toolkit}`. That deep link is openable by any
+    /// web page, any other app or a QR code on a poster, and every other check
+    /// on it — signed in, attempt fresh, toolkit matches — is satisfied for free
+    /// by a stranger's URL while a connect is genuinely in flight. The attempt
+    /// id is the one thing in it only our own page can know.
+    ///
+    /// THREE REFUSALS, all nil rather than a guess:
+    ///
+    ///   * a link that is not ours. A raw vendor link is not hypothetical —
+    ///     four of them went into messages on 2026-09-05 — and stamping one
+    ///     would hand a person a provider URL with our attempt id on it.
+    ///   * an attempt with no usable state.
+    ///   * a link that ALREADY carries a `state`. Our server never mints one,
+    ///     so a link that has one was assembled somewhere we did not, and
+    ///     overwriting it quietly would hide that. Refusing is the floor: this
+    ///     is the value the whole callback binding rests on.
+    static func outboundLink(_ link: URL, for attempt: ConnectAttempt) -> URL? {
+        guard case .ours = inspect(link: link) else { return nil }
+        guard let state = stateToken(for: attempt) else { return nil }
+        guard case .absent = singleQuery(link, stateKey) else { return nil }
+        guard var parts = URLComponents(url: link, resolvingAgainstBaseURL: false) else {
+            return nil
+        }
+        var items = parts.queryItems ?? []
+        items.append(URLQueryItem(name: stateKey, value: state))
+        parts.queryItems = items
+        return parts.url
+    }
+
+    /// One query value off a URL, in the same three states `parseDone` reads
+    /// its own with. A repeated key is not a typo — `state=a&state=b` reads
+    /// whichever way the reader happens to look — so it is its own answer and
+    /// every caller refuses it.
+    private static func singleQuery(_ url: URL, _ key: String) -> QueryRead {
+        guard let parts = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
+            return .absent
+        }
+        let hits = (parts.queryItems ?? []).filter { $0.name == key }
+        if hits.count > 1 { return .repeated }
+        guard let value = hits.first?.value else { return .absent }
+        return .one(value)
     }
 
     /// What a deep link means, in four states and never in three.
