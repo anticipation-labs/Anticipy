@@ -310,6 +310,14 @@ sh "$HERE/run_phone_number_tests.sh"
 # All three are run by hand. If one of them ever grows a pass/fail verdict that
 # holds in seconds, it belongs above this comment instead of in it.
 
+# The input side of the word-error harness. `proof/engine_or_audio.py` has been
+# ready since 2026-08-24 and scored nothing, because no build could write the
+# microphone tap to a file. This suite is what stops the recorder handing that
+# instrument a plausible number instead of a measurement: a mislabelled arm
+# reverses the verdict, a dropped buffer reads as a starved microphone, and
+# nothing downstream can catch either.
+sh "$HERE/run_scratch_recorder_tests.sh"
+
 # Not a logic suite: it asks whether the build number still identifies these
 # bytes. Last, because it is the one leg that reads git rather than source, and
 # a red one here means "bump it before you commit", not "the code is wrong".

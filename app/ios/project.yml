@@ -785,7 +785,7 @@ settings:
     #      cut. Three circular corners made continuous, and a whole-tree motion
     #      contract that found five more files animating without ever asking
     #      about Reduce Motion, OnboardingView among them at fifteen.
-    CURRENT_PROJECT_VERSION: "152"
+    CURRENT_PROJECT_VERSION: "153"
     DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: NO
@@ -837,7 +837,7 @@ targets:
         # literal from a Mac one, and two products answering "which build
         # are you holding" with different numbers is the exact disease this
         # gate exists to prevent.
-        CURRENT_PROJECT_VERSION: "152"
+        CURRENT_PROJECT_VERSION: "153"
         DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_ENTITLEMENTS: ../macos/AnticipyMac/AnticipyMac.entitlements
@@ -972,6 +972,12 @@ targets:
       path: Anticipy/Info.plist
       properties:
         CFBundleDisplayName: Anticipy
+        # The scratch recorder writes WAVs to Documents/scratch/. Without
+        # these two keys that directory is reachable only by unpacking the
+        # container in Xcode, and the person making the recordings is holding
+        # a phone, not a Mac. Added with the recorder, 2026-09-06.
+        UIFileSharingEnabled: true
+        LSSupportsOpeningDocumentsInPlace: true
         CFBundleIconName: AppIcon
         # The widget's doorbell. A Lock Screen or home tile taps through this
         # scheme and the app's onOpenURL starts listening — no AppIntent, no

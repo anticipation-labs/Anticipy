@@ -31,6 +31,7 @@ struct SettingsListeningView: View {
     @State private var unheardLine: String?
     @State private var resumeTask: Task<Void, Never>?
     @State private var showDiagnostics = false
+    @State private var showScratch = false
 
     private var pauseEnds: Date? {
         guard pauseUntil != 0 else { return nil }
@@ -125,9 +126,27 @@ struct SettingsListeningView: View {
                     showDiagnostics = true
                 }
             }
+
+            // THE EXPERIMENT NOBODY COULD RUN. `proof/engine_or_audio.py` has
+            // been ready since 2026-08-24 and has scored nothing, because no
+            // build could write the microphone tap to a file. This row is the
+            // way in. It ships in release for the same reason the row above
+            // does: the recording has to be made on a real handset in a real
+            // room, and TestFlight is a release build.
+            GroupedCard {
+                DisclosureRow("Recording for the harness",
+                              subtitle: "Read a page aloud three times so the Mac can score what the microphone actually heard.",
+                              systemImage: "waveform.badge.magnifyingglass") {
+                    Haptics.engage()
+                    showScratch = true
+                }
+            }
         }
         .navigationDestination(isPresented: $showDiagnostics) {
             ListeningDiagnosticsView()
+        }
+        .navigationDestination(isPresented: $showScratch) {
+            ScratchRecorderView(session: session)
         }
         .task(id: listeningIntent) { unheardLine = await Self.unheardLine() }
         .onAppear(perform: syncPause)

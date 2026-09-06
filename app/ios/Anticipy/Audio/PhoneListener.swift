@@ -155,6 +155,15 @@ final class PhoneListener: NSObject, ObservableObject {
     /// and terminates the process, when AVFAudio still sees the old tap during
     /// route churn.
     private var tapInstalled = false
+    /// The format the tap is actually installed with, published so the scratch
+    /// recorder can open a file that needs no conversion.
+    ///
+    /// Read from the node rather than assumed: nothing in this app ever calls
+    /// `setPreferredSampleRate`, so the rate is whatever the current route
+    /// hands us and it changes with the route. A recorder that guessed 48 kHz
+    /// would throw on a Bluetooth headset and record silence on a device that
+    /// gave it 44.1.
+    private(set) var captureFormat: AVAudioFormat?
     /// Route notifications are delivered synchronously on the main queue.
     /// Re-entering AVFAudio from inside one is what the build 75/109/111 crash
     /// reports show, so the rebuild happens on the next main-queue turn and
@@ -521,7 +530,41 @@ final class PhoneListener: NSObject, ObservableObject {
         }
 
         let input = engine.inputNode
+        // ── ARM B OF THE ENGINE-OR-AUDIO EXPERIMENT ─────────────────────────
+        //
+        // `proof/RECORDING-PROTOCOL.md` arm B is "identical to today, plus
+        // voice processing". This is the one line that makes arm B a different
+        // recording rather than a second copy of arm A, and
+        // `proof/engine_or_audio.py`'s R3 verdict (MEASUREMENT MODE) is
+        // entirely about whether that toggle moves the number.
+        //
+        // It must be set BEFORE the format is read: voice processing changes
+        // the input node's output format, and a tap installed with the old
+        // format against a reconfigured node is the mismatch that raises an
+        // exception rather than an error.
+        //
+        // OFF in the product. `ScratchRecorder.voiceProcessingWanted` is a
+        // diagnostics switch, false unless somebody turned it on for a
+        // recording, and the read-back below records what the node ACTUALLY
+        // became — because `setVoiceProcessingEnabled` throws, and an arm B
+        // that silently stayed arm A would print the strongest possible
+        // finding (identical recordings, no difference) off a toggle that
+        // never took.
+        //
+        // The refusal is reported on the diagnostics SCREEN, not in the
+        // journal: `ListenJournal` has no free-text case on purpose, and the
+        // only reader who can act on this is the person holding the phone.
+        if ScratchRecorder.voiceProcessingWanted != input.isVoiceProcessingEnabled {
+            do {
+                try input.setVoiceProcessingEnabled(ScratchRecorder.voiceProcessingWanted)
+                ScratchRecorder.voiceProcessingRefusal = nil
+            } catch {
+                ScratchRecorder.voiceProcessingRefusal = error.localizedDescription
+            }
+        }
+        ScratchRecorder.voiceProcessingActual = input.isVoiceProcessingEnabled
         let format = input.outputFormat(forBus: 0)
+        captureFormat = format
         // While a phone call owns the session, the input format can be
         // 0 Hz / 0 channels — installTap with it raises an NSException that
         // no try? can catch. Stand down; the watchdog retries after the call.
@@ -570,6 +613,20 @@ final class PhoneListener: NSObject, ObservableObject {
                 // it: five cues, a rate limit on the only repeating one, and a
                 // tail measured in fractions of a second.
                 if self.deafUntil > CACurrentMediaTime() { return }
+                // ── THE SCRATCH RECORDER, AND WHY IT SITS EXACTLY HERE ───────
+                //
+                // BELOW the deafen gate, ABOVE the sinks. That position is the
+                // whole point: the WAV must be the same audio the recognizer
+                // received, or the file and the transcript scored against it
+                // describe two different signals and the comparison means
+                // nothing. Above the gate it would record our own cues, which
+                // the recognizer never heard.
+                //
+                // It is off unless a person turned it on in diagnostics, and
+                // `accept` returns immediately when it is off — one lock and a
+                // Bool, on a thread that already takes this cost for the
+                // orphan queue below.
+                ScratchRecorder.shared.accept(buffer)
                 // The same audio the recognizer hears also feeds the on-device
                 // voice check — a short rolling window, never stored, never
                 // sent. Only its one-word verdict ever leaves the phone.
