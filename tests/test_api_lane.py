@@ -358,7 +358,7 @@ def test_the_constants_the_worker_route_shares_are_the_routes():
     assert hands.LANE_FOR[hands.HAND_API] == hands.LANE_API == W.LANE_API
 
 
-def test_the_measured_hole_in_the_extensions_claim_filter_is_recorded():
+def test_the_extensions_claim_filter_now_excludes_the_api_lane():
     """A MEASUREMENT, not a wish. extension/background.js polls
     `workflow_id!="" && lane!="research"`: it names `lane`, so the Worker's
     research_lane hook appends nothing, and it excludes only research — an
@@ -370,10 +370,17 @@ def test_the_measured_hole_in_the_extensions_claim_filter_is_recorded():
     doc = hands.__doc__ or ""
     m = re.search(r'const BROWSER_LANE = \'([^\']+)\';', ext)
     assert m, "the extension's claim filter moved"
-    assert m.group(1) == 'workflow_id!="" && lane!="research"'
-    assert 'lane!="api"' not in m.group(1)
-    assert 'EXCLUDED_LANES = ["research", SUPERVISED_LANE, DEVICE_LANE]' in hook
+    # THE HOLE IS CLOSED, and this test pins the closed state on both layers.
+    # Until 2026-09-06 it pinned the OPEN state -- the extension filter that
+    # excluded only research, and a server leg with no api rule -- as a
+    # measurement, so the grip round's fix correctly turned it red. Now: the
+    # extension names both lanes (the courtesy), and the SERVER excludes api
+    # in EXCLUDED_LANES (the floor). The leg-5 claimant check is unchanged and
+    # is BACKLOG's "keys on the claimant's NAME" item, pinned here as-is.
+    assert m.group(1) == 'workflow_id!="" && lane!="research" && lane!="api"'
+    assert 'lane!="api"' in m.group(1)
+    assert 'EXCLUDED_LANES = ["research", SUPERVISED_LANE, DEVICE_LANE, API_LANE]' in hook
     assert 'lane === "research" && b.claimed_by !== WORKER_CLAIMANT' in hook
-    assert '"api"' not in hook
+    assert '"api"' in hook
     assert 'workflow_id!="" &&\nlane!="research"' in doc or \
         'workflow_id!="" && lane!="research"' in doc.replace("\n", " ")

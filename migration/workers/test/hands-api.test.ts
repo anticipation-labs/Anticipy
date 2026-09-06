@@ -623,6 +623,19 @@ await check("an auth failure marks the connection needs_reconnect — the webhoo
   assert.equal(rows[0]!.writes_enabled, true, "the opt-in is a decision about an app, not a credential");
   const nudge = await r.store.readNudge(OWNER, APP as never);
   assert.ok(nudge && nudge.state === "needs_reconnect", "the ask engine was not told");
+  // THE OWNER THE FLIP USES IS THE ROW'S, NEVER THE BODY'S. With a body owner
+  // equal to the row's, `owner: claimedOwner` and `owner: row.owner_ref` are
+  // indistinguishable and mutation M10 survived (wire verifier finding 3). A
+  // body naming a STRANGER is refused 403 before the hand runs, so the real
+  // owner's connection must stay exactly as it was -- which only a wrong-owner
+  // body can prove.
+  const r2 = rig();
+  await r2.store.putConnection(connection());
+  seedJob(r2.db);
+  const other = await run(r2, scripted(failed("auth")), { job: JOB, owner: STRANGER });
+  assert.equal(other.status, 403, "a body naming another owner must be refused: " + other.text);
+  const kept = await r2.store.connectionsForOwner(OWNER);
+  assert.equal(kept[0]!.status, "connected", "a refused run flipped the real owner's connection");
   const row = readJob(r.db);
   assert.equal(row.lane, BROWSER_LANE);
   assert.equal(row.p._hand.outcome.connection, "marked");

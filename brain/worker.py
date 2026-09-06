@@ -2012,6 +2012,17 @@ API_HAND_TIMEOUT = 60
 _api_hand_down_until = 0.0
 
 
+
+def _says_no_such_job(answer) -> bool:
+    """True only when the route itself said "no such job" -- its own 404 body
+    (hands_api.ts refuseWith(404, "no such job")). Any other 404 -- the
+    router's, an HTML page, an empty body -- reads as the door being absent."""
+    try:
+        body = answer.json() or {}
+    except Exception:
+        return False
+    return isinstance(body, dict) and body.get("message") == "no such job"
+
 def _api_note(job: dict) -> dict:
     try:
         params = json.loads(job.get("params") or "{}") or {}
@@ -2058,7 +2069,16 @@ def release_stranded_api(anticipy,
             params = json.loads(job.get("params") or "{}") or {}
         except Exception:
             params = {}
-        effect = str(_api_note(job).get("effect") or "")
+        note = _api_note(job)
+        # THE EFFECT THE HAND RAN WITH, not the one somebody declared. The
+        # route writes what runStep executed under `_hand.outcome.effect`
+        # (hint-tightened: a read declared for a tool tagged createHint ran as
+        # a write). A row stranded BEFORE the route wrote anything has no
+        # `outcome`; then the planner's own `_hand.effect` -- already tightened
+        # by the tool's hints since 2026-09-06 -- is the next-most-honest word.
+        # Both absent is the severe case below. Wire verifier finding 1.
+        ran = note.get("outcome") if isinstance(note.get("outcome"), dict) else {}
+        effect = str(ran.get("effect") or note.get("effect") or "")
         # A read that stopped landed nothing. Anything else may have, and an
         # effect nobody declared is read as the severe case, never the gentle
         # one — the same polarity hands._read_reply gives a garbled effect.
@@ -2218,6 +2238,17 @@ def run_api_jobs(anticipy, poster=None) -> None:
                       f"reached ({e!r}); leaving the claim for the sweep")
                 continue
             code = getattr(answer, "status_code", None)
+            # A 404 WITH A BODY is the route answering "no such job" -- the row
+            # vanished between the claim and the POST (cancelled, deleted).
+            # That is one dead row, not a missing door: releasing it fails
+            # (nothing to release) and pausing the whole lane for it would hold
+            # every other owner's api job five minutes for a route that is up.
+            # Only a 404 with NO recognisable body is the router's own 404.
+            # Wire verifier finding 2.
+            if code == 404 and _says_no_such_job(answer):
+                print(f"api hand: {job['id']} vanished between claim and run; "
+                      "nothing to release, lane stays open")
+                continue
             if code in (401, 404):
                 why = ("the Worker has no /hands/api/run route deployed"
                        if code == 404 else
