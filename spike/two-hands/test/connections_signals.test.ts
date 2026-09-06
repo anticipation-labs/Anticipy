@@ -22,6 +22,7 @@ import {
   DEFAULT_HALF_LIFE_MS,
   SOURCE_DECAYS,
   SOURCE_WEIGHT,
+  compareRankedApps,
   createSignalTable,
   decayedWeight,
   hostToToolkit,
@@ -31,7 +32,7 @@ import {
 } from "../src/connections/signals.ts";
 import type { HostMatch, RankedApp, StoredSignal } from "../src/connections/signals.ts";
 import { ownerId } from "../src/connections/contract.ts";
-import type { ToolkitMeta, ToolkitVerdict } from "../src/connections/contract.ts";
+import type { AccountAlias, ToolkitMeta, ToolkitVerdict } from "../src/connections/contract.ts";
 
 // ---------------------------------------------------------------------------
 // Fixtures.
@@ -227,9 +228,9 @@ test("rank: the order does not depend on the order rows arrived", () => {
     { user_id: OWNER, toolkit: "kit-b", source: "mx", weight: 0.4, last_seen_at: NOW - 3 * DAY, alias: null },
     { user_id: OWNER, toolkit: "kit-a", source: "observer", weight: 0.7, last_seen_at: NOW - 2 * DAY, alias: null },
   ];
-  const forwards = rankRows(rows, NOW);
-  const backwards = rankRows([...rows].reverse(), NOW);
-  const shuffled = rankRows([rows[2], rows[0], rows[3], rows[1]], NOW);
+  const forwards = rankRows(OWNER, rows, NOW);
+  const backwards = rankRows(OWNER, [...rows].reverse(), NOW);
+  const shuffled = rankRows(OWNER, [rows[2], rows[0], rows[3], rows[1]], NOW);
 
   assert.deepEqual(forwards, backwards);
   assert.deepEqual(forwards, shuffled);
@@ -242,8 +243,8 @@ test("rank: an exact tie is broken by name, never by arrival", () => {
     { user_id: OWNER, toolkit: "kit-a", source: "said", weight: 0.7, last_seen_at: NOW, alias: null },
     { user_id: OWNER, toolkit: "kit-m", source: "said", weight: 0.7, last_seen_at: NOW, alias: null },
   ];
-  assert.deepEqual(slugsOf(rankRows(rows, NOW)), ["kit-a", "kit-m", "kit-z"]);
-  assert.deepEqual(slugsOf(rankRows([...rows].reverse(), NOW)), ["kit-a", "kit-m", "kit-z"]);
+  assert.deepEqual(slugsOf(rankRows(OWNER, rows, NOW)), ["kit-a", "kit-m", "kit-z"]);
+  assert.deepEqual(slugsOf(rankRows(OWNER, [...rows].reverse(), NOW)), ["kit-a", "kit-m", "kit-z"]);
 });
 
 test("rank: floating-point dust does not reorder two equal lines", () => {
@@ -255,7 +256,7 @@ test("rank: floating-point dust does not reorder two equal lines", () => {
     { user_id: OWNER, toolkit: "kit-z", source: "mx", weight: 0.2, last_seen_at: NOW, alias: null },
     { user_id: OWNER, toolkit: "kit-a", source: "link", weight: 0.3, last_seen_at: NOW, alias: null },
   ];
-  const ranked = rankRows(rows, NOW);
+  const ranked = rankRows(OWNER, rows, NOW);
   assert.notEqual(ranked[0].weight, ranked[1].weight, "the fixture must actually produce dust");
   assert.deepEqual(slugsOf(ranked), ["kit-a", "kit-z"]);
 });
@@ -302,9 +303,9 @@ test("rank: two owners' rows in one call is refused, not summed", () => {
     { user_id: OWNER, toolkit: "kit-a", source: "said", weight: 0.7, last_seen_at: NOW, alias: null },
     { user_id: OTHER_OWNER, toolkit: "kit-b", source: "said", weight: 0.7, last_seen_at: NOW, alias: null },
   ];
-  assert.throws(() => rankRows(mixed, NOW), /owners/i);
-  assert.deepEqual(slugsOf(rankRows([mixed[0]], NOW)), ["kit-a"]);
-  assert.deepEqual(rankRows([], NOW), []);
+  assert.throws(() => rankRows(OWNER, mixed, NOW), /owners/i);
+  assert.deepEqual(slugsOf(rankRows(OWNER, [mixed[0]], NOW)), ["kit-a"]);
+  assert.deepEqual(rankRows(OWNER, [], NOW), []);
 });
 
 test("rank: a line reports its newest signal so a caller need not re-read the rows", () => {
@@ -320,6 +321,142 @@ test("rank: the returned rows are copies, so a caller cannot edit the table by a
   const rows = t.rows(OWNER);
   rows[0].weight = 999;
   assert.equal(t.rank(OWNER, NOW)[0].weight, SOURCE_WEIGHT.said);
+});
+
+// ---------------------------------------------------------------------------
+// THE TOTAL ORDER — the tie-break itself, not the order the rows arrived in.
+// ---------------------------------------------------------------------------
+// A tie is the NORMAL case in this table, not an exotic one: every source band
+// hands several apps the same starting weight, so two apps with equal decayed
+// weight is what a fresh owner looks like.
+//
+// FINDING 15, and why these tests are on the comparator rather than only on
+// `rankRows`. `rankRows` sums rows in a sorted order for float determinism, and
+// that pre-sort happens to hand the output array to a STABLE sort in tie order
+// already — so on 2026-09-05 both tie-break comparisons were deleted and the
+// whole suite (890 tests) stayed exactly as green as before. A promise no test
+// can break is a promise nobody is keeping, so the promise is pinned where it
+// is decided.
+
+function line(toolkit: string, alias: AccountAlias | null, weight: number): RankedApp {
+  return { toolkit, alias, weight, lastSeenAt: NOW, sources: ["said"] };
+}
+
+/** Every ordering of `items`. Four lines is 24 permutations — small enough to
+ *  sweep, big enough that a comparator returning 0 for a real difference cannot
+ *  hide behind the one arrangement a hand-written fixture happened to use. */
+function permutations<T>(items: readonly T[]): T[][] {
+  if (items.length <= 1) return [[...items]];
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += 1) {
+    const rest = [...items.slice(0, i), ...items.slice(i + 1)];
+    for (const tail of permutations(rest)) out.push([items[i], ...tail]);
+  }
+  return out;
+}
+
+test("order: ties break by toolkit, then by alias, in both directions", () => {
+  assert.ok(compareRankedApps(line("kit-z", null, 0.7), line("kit-a", null, 0.7)) > 0);
+  assert.ok(compareRankedApps(line("kit-a", null, 0.7), line("kit-z", null, 0.7)) < 0);
+  assert.ok(compareRankedApps(line("kit-a", "work", 0.7), line("kit-a", "personal", 0.7)) > 0);
+  assert.ok(compareRankedApps(line("kit-a", "personal", 0.7), line("kit-a", "work", 0.7)) < 0);
+  // An unattributed line is its own line, and it sorts before both named
+  // accounts rather than being folded into either of them.
+  assert.ok(compareRankedApps(line("kit-a", null, 0.7), line("kit-a", "personal", 0.7)) < 0);
+  // Two lines that really are the same line compare equal. A comparator that
+  // never returns 0 is not a total order, and it sorts differently on engines
+  // whose sort is not stable.
+  assert.equal(compareRankedApps(line("kit-a", "work", 0.7), line("kit-a", "work", 0.7)), 0);
+});
+
+test("order: weight still outranks the name, and float dust still does not", () => {
+  assert.ok(compareRankedApps(line("kit-z", null, 0.9), line("kit-a", null, 0.7)) < 0, "heavier first");
+  // 0.1 + 0.2 is not 0.3. The same evidence summed in two orders lands a few
+  // ulps apart, and that must read as a tie and be broken by name.
+  assert.ok(compareRankedApps(line("kit-z", null, 0.1 + 0.2), line("kit-a", null, 0.3)) > 0);
+});
+
+test("order: every arrangement of the same lines sorts to the same table", () => {
+  // The property the tie-break exists for, and the one that goes red the moment
+  // either comparison is deleted: with the comparator returning 0 for these
+  // four lines a stable sort hands back whatever order it was given, and the
+  // owner's table changes with nothing about the owner having changed.
+  const lines = [
+    line("kit-a", "work", 0.7),
+    line("kit-a", "personal", 0.7),
+    line("kit-b", null, 0.7),
+    line("kit-a", null, 0.7),
+  ];
+  const expected = ["kit-a|", "kit-a|personal", "kit-a|work", "kit-b|"];
+  const arrangements = permutations(lines);
+  assert.equal(arrangements.length, 24);
+  for (const arrangement of arrangements) {
+    const sorted = [...arrangement].sort(compareRankedApps).map((l) => `${l.toolkit}|${l.alias ?? ""}`);
+    assert.deepEqual(sorted, expected);
+  }
+});
+
+test("order: rankRows hands back the comparator's order, aliases included", () => {
+  // The behavioural half: the ranked table the caller reads is the order the
+  // comparator promises, whichever way storage returned the rows.
+  const rows: StoredSignal[] = [
+    { user_id: OWNER, toolkit: "kit-b", source: "said", weight: 0.7, last_seen_at: NOW, alias: null },
+    { user_id: OWNER, toolkit: "kit-a", source: "said", weight: 0.7, last_seen_at: NOW, alias: "work" },
+    { user_id: OWNER, toolkit: "kit-a", source: "said", weight: 0.7, last_seen_at: NOW, alias: null },
+    { user_id: OWNER, toolkit: "kit-a", source: "said", weight: 0.7, last_seen_at: NOW, alias: "personal" },
+  ];
+  const expected = [
+    ["kit-a", null],
+    ["kit-a", "personal"],
+    ["kit-a", "work"],
+    ["kit-b", null],
+  ];
+  const shape = (r: RankedApp[]) => r.map((l) => [l.toolkit, l.alias]);
+  assert.deepEqual(shape(rankRows(OWNER, rows, NOW)), expected);
+  assert.deepEqual(shape(rankRows(OWNER, [...rows].reverse(), NOW)), expected);
+});
+
+// ---------------------------------------------------------------------------
+// THE SWAP — one owner's rows, whole and well-formed, selected for another.
+// ---------------------------------------------------------------------------
+
+test("rank: rows belonging to the WRONG owner are refused, not ranked", () => {
+  // FINDING 16. The fan-out guard below catches two owners' rows arriving in
+  // one call. It cannot catch a SWAP, which is the failure that actually
+  // reaches production: one owner's rows, internally consistent and perfectly
+  // readable, selected for somebody else — a `WHERE user_id = ?` bound to the
+  // wrong variable, a cache keyed by the previous request. Ranked silently, it
+  // is one operator's mailbox serving everybody all over again, reached by a
+  // query instead of by a constant. The expected owner is the only thing that
+  // can tell the two apart, so the caller must say it.
+  const theirs: StoredSignal[] = [
+    { user_id: OTHER_OWNER, toolkit: "kit-theirs", source: "said", weight: 0.7, last_seen_at: NOW, alias: null },
+  ];
+  assert.throws(() => rankRows(OWNER, theirs, NOW), /owner/i);
+
+  // CONTROL: the very same rows rank normally for the owner they belong to. A
+  // guard that refuses every table is an outage, not a fix.
+  assert.deepEqual(slugsOf(rankRows(OTHER_OWNER, theirs, NOW)), ["kit-theirs"]);
+
+  // The expectation is an owner ROW id, never a display name: a caller that
+  // passes what it CALLS somebody has not stated whose rows these are. Checked
+  // against an empty table and against rows carrying that same bad id, because
+  // a name compared against rows that disagree with it throws for the wrong
+  // reason — the swap guard fires and the id itself is never examined. That is
+  // exactly how this assertion first passed against a `rankRows` that had
+  // stopped checking the id at all (mutation M6, 2026-09-05).
+  for (const bad of ["omar", "someone@an.address", "", "SXKOTD1H02QB6GW", "sxkotd1h02qb6g", null, undefined]) {
+    const matching: StoredSignal[] = [
+      { user_id: bad as never, toolkit: "kit-a", source: "said", weight: 0.7, last_seen_at: NOW, alias: null },
+    ];
+    assert.throws(() => rankRows(bad as never, [], NOW), /owner/i, `accepted ${JSON.stringify(bad)} over no rows`);
+    assert.throws(() => rankRows(bad as never, matching, NOW), /owner/i, `accepted ${JSON.stringify(bad)}`);
+    assert.throws(() => rankRows(bad as never, theirs, NOW), /owner/i, `accepted ${JSON.stringify(bad)}`);
+  }
+
+  // An owner with no rows at all is an empty table, not an error. A new owner
+  // has no evidence yet and that is not a fault.
+  assert.deepEqual(rankRows(OWNER, [], NOW), []);
 });
 
 // ---------------------------------------------------------------------------
@@ -404,6 +541,55 @@ test("host: a registrable domain covering two of one vendor's apps is ambiguous,
   assert.deepEqual(hostToToolkit("vendor-one.example", CATALOG), {
     kind: "ambiguous",
     slugs: ["kit-alpha", "kit-beta"],
+  });
+});
+
+test("host: a host that only CONTAINS a catalog entry is a shortlist, never a verdict", () => {
+  // FINDING 14, measured on 2026-09-05: with exactly ONE catalog entry under
+  // it, a bare registry suffix came back `{kind:"toolkit"}` — a confident match
+  // — and `observedHostSignal` turned that into a HIGH weight on an app the
+  // owner may never have opened, which is the top of the table and an ask.
+  //
+  // Without a suffix list this file cannot tell "the vendor's own domain, one
+  // app under it" from "a registry suffix that one catalog app happens to live
+  // under". That is a question about what a name MEANS, and law 1 gives those
+  // to a model: the weak reading is handed to the caller as a shortlist for the
+  // judge instead of being answered here on a coin.
+  const one = [meta("kit-only", "https://one-app.hosted-suffix.example")];
+  assert.deepEqual(hostToToolkit("hosted-suffix.example", one), {
+    kind: "ambiguous",
+    slugs: ["kit-only"],
+  });
+  assert.equal(
+    observedHostSignal(OWNER, "hosted-suffix.example", one, NOW),
+    null,
+    "an unresolved host must add no weight at all",
+  );
+
+  // Two entries under the same host were already ambiguous; one entry now
+  // reads the same way, which is what the comment above this code always
+  // claimed and only now does.
+  const two = [...one, meta("kit-other", "https://another.hosted-suffix.example")];
+  assert.deepEqual(hostToToolkit("hosted-suffix.example", two), {
+    kind: "ambiguous",
+    slugs: ["kit-only", "kit-other"],
+  });
+});
+
+test("host CONTROL: the two readings that need no suffix list still name an app", () => {
+  // A door that never opens is an outage. Both strong readings survive intact —
+  // the same host, and a page inside the app's own site — so a browser run that
+  // ended somewhere the catalog actually claims is still HIGH evidence.
+  assert.deepEqual(hostToToolkit("alpha.vendor-one.example", CATALOG), { kind: "toolkit", slug: "kit-alpha" });
+  assert.deepEqual(hostToToolkit("docs.vendor-two.example", CATALOG), { kind: "toolkit", slug: "kit-gamma" });
+  assert.ok(observedHostSignal(OWNER, "alpha.vendor-one.example", CATALOG, NOW), "exact host adds evidence");
+  assert.ok(observedHostSignal(OWNER, "docs.vendor-two.example", CATALOG, NOW), "a page inside adds evidence");
+  // And the strongest tier still wins outright even when a weaker one matches:
+  // an exact entry is not dragged down to a shortlist by a vendor-wide one.
+  const withVendorWide = [...CATALOG, meta("kit-wide", "https://vendor-one.example")];
+  assert.deepEqual(hostToToolkit("alpha.vendor-one.example", withVendorWide), {
+    kind: "toolkit",
+    slug: "kit-alpha",
   });
 });
 

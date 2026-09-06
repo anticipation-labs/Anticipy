@@ -21,6 +21,7 @@ import {
   mapConnectionStatus,
   readAlias,
   readLastUsedAt,
+  readOwnerEcho,
   requireOwner,
   revokeIsDefinitivelyUnavailable,
   toolkitSlug,
@@ -102,9 +103,17 @@ function sessionReply(id = "sess-A", over: Record<string, unknown> = {}) {
   };
 }
 
+/** A connected account as the vendor lists it, INCLUDING the owner echo.
+ *
+ *  The echo is part of the default fixture because the adapter refuses a row it
+ *  cannot read as this owner's — a row that names nobody is a row whose only
+ *  scoping is a query string we cannot check, and `disconnect()` turns that
+ *  list into permission to call two endpoints that take an account id and no
+ *  user scoping at all. A test world that omits it is not the world. */
 function accountItem(over: Record<string, unknown> = {}) {
   return {
     id: "ca_BNgvxQtJ703C",
+    user_id: OWNER_A,
     toolkit: { slug: "gmail" },
     status: "ACTIVE",
     ...over,
@@ -122,7 +131,11 @@ function happyWorld(sessions: Record<string, string> = { [OWNER_A]: "sess-A", [O
       return { body: { redirect_url: "https://connect.composio.dev/link/TOKEN-9" } };
     }
     if (call.path.startsWith("/connected_accounts?")) {
-      return { body: { items: [accountItem()] } };
+      // Echo back whoever was asked for, the way a correctly-scoped vendor
+      // does — so a test that lists OWNER_B's accounts is not silently reading
+      // OWNER_A's row.
+      const asked = new URL(call.url).searchParams.get("user_ids") ?? "";
+      return { body: { items: [accountItem({ user_id: asked })] } };
     }
     if (call.path.endsWith("/revoke")) return { body: { status: "revoked" } };
     if (call.method === "DELETE") return { body: { deleted: true } };
@@ -251,6 +264,129 @@ test("connections() refuses a response carrying somebody else's user_id", async 
     "ConnectionsOwnerMismatch",
     /different user_id/,
   );
+});
+
+/** A world whose only override is the connected-accounts list. */
+function accountsWorld(items: unknown[]) {
+  return (call: Recorded): Reply =>
+    call.path.startsWith("/connected_accounts?") ? { body: { items } } : happyWorld()(call);
+}
+
+test("a stranger's id in ANY spelling is a mismatch, not a row we adopt", async () => {
+  // The check used to fire only for a BARE non-empty string under `user_id` or
+  // `user_ids`. Every spelling below read as "the vendor said nothing", so the
+  // stray row was stamped with our own validated owner id and handed back as
+  // this owner's connection. The request itself sends the plural `user_ids`,
+  // so an array echo is the likeliest shape of all.
+  const spellings: Array<[string, Record<string, unknown>]> = [
+    ["user_ids as the array the request itself uses", { user_ids: [OWNER_B] }],
+    ["user_id as a one-element array", { user_id: [OWNER_B] }],
+    ["camelCase userId", { userId: OWNER_B }],
+    ["camelCase userIds array", { userIds: [OWNER_B] }],
+    ["nested under user.id", { user: { id: OWNER_B } }],
+    ["nested under user.user_id", { user: { user_id: OWNER_B } }],
+    ["ours AND a stranger in one array", { user_ids: [OWNER_A, OWNER_B] }],
+    // A stranger named ANYWHERE outranks every other verdict. A row that is
+    // both malformed and foreign is foreign: "we could not read this" is the
+    // quieter answer and it must not be the one that gets reported.
+    ["a stranger beside a field we cannot read", { user_id: null, user_ids: [OWNER_B] }],
+    ["a stranger beside a blank in the same array", { user_ids: [OWNER_B, ""] }],
+  ];
+  for (const [what, over] of spellings) {
+    const f = fakeFetch(accountsWorld([accountItem({ id: "ca_STRANGER", user_id: undefined, ...over })]));
+    await rejectsNamed(
+      () => provider(f).connections(OWNER_A),
+      "ConnectionsOwnerMismatch",
+      /different user_id/,
+    );
+  }
+});
+
+test("an owner echo we cannot read refuses — unreadable is not agreement", async () => {
+  // A floor: "does anything confirm this row is ours?" A value we cannot resolve
+  // to an owner row id answers nothing, and answering nothing must refuse, or
+  // the guard lifts itself exactly when the response is malformed enough to be
+  // dangerous.
+  const unreadable: Array<Record<string, unknown>> = [
+    { user_id: 4210 },
+    { user_id: "" },
+    { user_id: "   " },
+    { user_id: null },
+    { user_id: true },
+    { user_ids: [] },
+    { user_ids: [{ id: OWNER_A }] },
+    { user: {} },
+    { user: { email: "jose@anticipy.ai" } },
+  ];
+  for (const over of unreadable) {
+    const f = fakeFetch(accountsWorld([accountItem({ user_id: undefined, ...over })]));
+    await rejectsNamed(
+      () => provider(f).connections(OWNER_A),
+      "ConnectionsResponseShape",
+      /could not be read/,
+    );
+  }
+});
+
+test("a row that names no owner at all is refused, not adopted under ours", async () => {
+  // The vendor's own scoping is the query string, and the query string is not
+  // something we can check in the answer. If this refusal ever fires against
+  // the live endpoint the fix is to read the field it DOES send — never to let
+  // an unowned row through, because `disconnect()` treats this list as proof
+  // of ownership over two endpoints that have none.
+  const f = fakeFetch(accountsWorld([{ id: "ca_1", toolkit: { slug: "gmail" }, status: "ACTIVE" }]));
+  await rejectsNamed(
+    () => provider(f).connections(OWNER_A),
+    "ConnectionsResponseShape",
+    /named no owner/,
+  );
+});
+
+test("disconnect() cannot be walked onto a stranger's account by an unreadable echo", async () => {
+  // The whole point of the guard, end to end. `/{id}/revoke` and `DELETE /{id}`
+  // take an account id and no user scoping, so a row laundered into this
+  // owner's list is a stranger's connection deleted with a 200 for it.
+  for (const over of [{ user_ids: [OWNER_B] }, { userId: OWNER_B }, { user_id: 77 }, {}]) {
+    const f = fakeFetch(
+      accountsWorld([{ id: "ca_STRANGER", toolkit: { slug: "gmail" }, status: "ACTIVE", ...over }]),
+    );
+    let threw = false;
+    await provider(f).disconnect(OWNER_A, "ca_STRANGER").then(() => {}, () => { threw = true; });
+    assert.ok(threw, `disconnect resolved for ${inspect(over)}`);
+    // Looked, and then touched nothing.
+    assert.deepEqual(seq(f), ["GET /connected_accounts?user_ids=sxkotd1h02qb6gw"]);
+  }
+});
+
+test("CONTROL: every correctly-scoped spelling of our own id still lists", async () => {
+  // A guard that refuses everything is an outage. These are the answers a
+  // correctly-scoped vendor gives, and all of them must come back as rows.
+  const ours: Array<Record<string, unknown>> = [
+    { user_id: OWNER_A },
+    { user_id: ` ${OWNER_A} ` },
+    { user_ids: [OWNER_A] },
+    { userId: OWNER_A },
+    { userIds: [OWNER_A] },
+    { user: { id: OWNER_A } },
+    { user_id: OWNER_A, user_ids: [OWNER_A] },
+  ];
+  for (const over of ours) {
+    const f = fakeFetch(accountsWorld([accountItem({ user_id: undefined, ...over })]));
+    const rows = await provider(f).connections(OWNER_A);
+    assert.equal(rows.length, 1, `no row for ${inspect(over)}`);
+    assert.equal(rows[0].user_id, OWNER_A);
+    assert.equal(rows[0].toolkit, "gmail");
+  }
+});
+
+test("CONTROL: a correctly-scoped disconnect still revokes and deletes", async () => {
+  const f = fakeFetch(accountsWorld([accountItem({ user_id: undefined, user_ids: [OWNER_A] })]));
+  const out = await provider(f).disconnect(OWNER_A, "ca_BNgvxQtJ703C");
+  assert.deepEqual(out, { revoked: true, deleted: true, revokeUnavailable: false });
+  assert.deepEqual(seq(f).slice(1), [
+    "POST /connected_accounts/ca_BNgvxQtJ703C/revoke",
+    "DELETE /connected_accounts/ca_BNgvxQtJ703C",
+  ]);
 });
 
 test("connections() stamps OUR validated owner on every row it returns", async () => {
@@ -386,6 +522,96 @@ test("a session that confirms nothing is refused — the floor does not lift its
     "ConnectionsResponseShape",
     /nothing confirms the connection tool is off/,
   );
+});
+
+test("a tool list whose entries hide their identifier confirms NOTHING", async () => {
+  // The floor used to lift itself here. Entries spelled under any key other
+  // than the three it knew produced an EMPTY list of identifiers, and empty
+  // read as "the connection tool is confirmed absent" — so a session was
+  // accepted on the strength of a list nobody could parse, with the config
+  // unreadable too. The model then holds a tool that texts people raw vendor
+  // links and nothing anywhere reports it.
+  for (const tools of [
+    [{ tool_id: "COMPOSIO_SEARCH_TOOLS" }, { tool_id: MANAGE_CONNECTIONS_TOOL }],
+    [{ label: "search" }],
+    // A uuid under `id` is not an identifier. Reading one would turn "we could
+    // not name this entry" into a confident non-match, which is this same hole
+    // wearing a hat — so `id` is deliberately not one of the keys read.
+    [{ id: "01hv8z4k9rq2mn", enabled: true }],
+    [{ name: 7 }],
+    [{}],
+    [null],
+    [[MANAGE_CONNECTIONS_TOOL]],
+  ]) {
+    const f = fakeFetch(() => sessionReply("sess-A", { config: {}, tool_router_tools: tools }));
+    await rejectsNamed(
+      () => provider(f).session(OWNER_A),
+      "ConnectionsResponseShape",
+      /nothing confirms the connection tool is off/,
+    );
+  }
+});
+
+test("ONE unreadable entry among readable ones voids the verdict", async () => {
+  // The unreadable entry is the one that could be the manage tool. A partial
+  // read is not a read.
+  const f = fakeFetch(() =>
+    sessionReply("sess-A", {
+      config: {},
+      tool_router_tools: [...TOOLS_WITHOUT_MANAGE, { tool_id: "something" }],
+    }),
+  );
+  await rejectsNamed(() => provider(f).session(OWNER_A), "ConnectionsResponseShape");
+});
+
+test("CONTROL: an unreadable tool list is still fine when the CONFIG says off", async () => {
+  // Two independent confirmations, and only ONE has to answer. Refusing when
+  // the config plainly says `enabled: false` would be an outage on the connect
+  // path in exchange for nothing.
+  const f = fakeFetch(() =>
+    sessionReply("sess-A", {
+      config: { manage_connections: { enabled: false } },
+      tool_router_tools: [{ tool_id: "COMPOSIO_SEARCH_TOOLS" }],
+    }),
+  );
+  assert.equal((await provider(f).session(OWNER_A)).sessionId, "sess-A");
+});
+
+test("CONTROL: readable tool lists still confirm, in every spelling the vendor uses", async () => {
+  // Reachability for the identifier reader itself: strings, `name`, `slug`,
+  // `tool_slug`, `tool_name` and the nested `function.name` of an OpenAI-shaped
+  // tool list all parse, so a session with the manage tool absent is accepted
+  // and a session with it present is still caught.
+  const spellings: Array<(id: string) => unknown> = [
+    (id) => id,
+    (id) => ({ name: id }),
+    (id) => ({ slug: id }),
+    (id) => ({ tool_slug: id }),
+    (id) => ({ tool_name: id }),
+    (id) => ({ function: { name: id } }),
+  ];
+  for (const spell of spellings) {
+    const clean = fakeFetch(() =>
+      sessionReply("sess-A", { config: {}, tool_router_tools: TOOLS_WITHOUT_MANAGE.map(spell) }),
+    );
+    assert.equal((await provider(clean).session(OWNER_A)).sessionId, "sess-A", inspect(spell("x")));
+
+    const dirty = fakeFetch(() =>
+      sessionReply("sess-A", {
+        config: {},
+        tool_router_tools: [...TOOLS_WITHOUT_MANAGE, MANAGE_CONNECTIONS_TOOL].map(spell),
+      }),
+    );
+    await rejectsNamed(() => provider(dirty).session(OWNER_A), "ConnectionsManageConnectionsOn");
+  }
+});
+
+test("an EMPTY tool list is a readable answer: the tool is not in it", async () => {
+  // Zero entries is not the same failure as entries nobody could parse. The
+  // vendor said the model is handed nothing, and nothing does not contain the
+  // connection tool.
+  const f = fakeFetch(() => sessionReply("sess-A", { config: {}, tool_router_tools: [] }));
+  assert.equal((await provider(f).session(OWNER_A)).sessionId, "sess-A");
 });
 
 test("a session response with no session_id is a shape refusal, not a blank id", async () => {
@@ -559,7 +785,7 @@ test("connections refuses an unreadable item instead of reporting an app as unco
   // app they connected yesterday.
   const f = fakeFetch((call) =>
     call.path.startsWith("/connected_accounts?")
-      ? { body: { items: [accountItem(), { toolkit: { slug: "notion" } }] } }
+      ? { body: { items: [accountItem(), { user_id: OWNER_A, toolkit: { slug: "notion" } }] } }
       : happyWorld()(call),
   );
   await rejectsNamed(
@@ -615,6 +841,26 @@ test("a 409 revoke sets revokeUnavailable and still deletes", async () => {
     "POST /connected_accounts/ca_BNgvxQtJ703C/revoke",
     "DELETE /connected_accounts/ca_BNgvxQtJ703C",
   ]);
+});
+
+test("a request-side revoke failure is NOT 'this account cannot be revoked'", async () => {
+  // 400/404/405/422 say the REQUEST was wrong — a bad path, a stale id, a body
+  // the vendor rejected. Reading them as "this account cannot be revoked
+  // programmatically" did two harmful things at once: it deleted the row, which
+  // destroys the only handle that could ever revoke a token that is still live
+  // at Google, and it drove copy telling the owner to go clear their own Google
+  // settings for a failure that was ours.
+  for (const status of [400, 404, 405, 410, 422]) {
+    const f = fakeFetch((call) =>
+      call.path.endsWith("/revoke") ? { status, body: { error: { code: "bad_request" } } } : happyWorld()(call),
+    );
+    await rejectsNamed(
+      () => provider(f).disconnect(OWNER_A, "ca_BNgvxQtJ703C"),
+      "ConnectionsRequestFailed",
+      new RegExp(`HTTP ${status}`),
+    );
+    assert.equal(seq(f).some((s) => s.startsWith("DELETE")), false, `deleted after ${status}`);
+  }
 });
 
 test("a retryable revoke failure aborts — the delete would strand a live token", async () => {
@@ -913,9 +1159,32 @@ test("the exported readers map enums and identifiers, and nothing else", () => {
   assert.equal(isRetryableStatus(409), false);
   assert.equal(isRetryableStatus(404), false);
 
+  // 409 — "not in a revocable state" — is the ONE measured answer that means
+  // this account cannot be revoked programmatically. Everything else is our
+  // request, our key, or a bad day at the vendor, and none of those may drive
+  // copy telling a person to go clear their own Google settings.
   assert.equal(revokeIsDefinitivelyUnavailable(409), true);
-  assert.equal(revokeIsDefinitivelyUnavailable(404), true);
+  assert.equal(revokeIsDefinitivelyUnavailable(400), false);
+  assert.equal(revokeIsDefinitivelyUnavailable(404), false);
+  assert.equal(revokeIsDefinitivelyUnavailable(405), false);
+  assert.equal(revokeIsDefinitivelyUnavailable(410), false);
+  assert.equal(revokeIsDefinitivelyUnavailable(422), false);
   assert.equal(revokeIsDefinitivelyUnavailable(401), false);
   assert.equal(revokeIsDefinitivelyUnavailable(403), false);
   assert.equal(revokeIsDefinitivelyUnavailable(500), false);
+
+  // The owner echo, four states, because "a stranger", "unreadable" and
+  // "nobody said" are three different answers and only one of them is ours.
+  assert.equal(readOwnerEcho({ user_id: OWNER_A }, OWNER_A), "ours");
+  assert.equal(readOwnerEcho({ user_ids: [OWNER_A] }, OWNER_A), "ours");
+  assert.equal(readOwnerEcho({ user: { id: OWNER_A } }, OWNER_A), "ours");
+  assert.equal(readOwnerEcho({ user_ids: [OWNER_B] }, OWNER_A), "foreign");
+  assert.equal(readOwnerEcho({ userId: OWNER_B }, OWNER_A), "foreign");
+  assert.equal(readOwnerEcho({ user_ids: [OWNER_A, OWNER_B] }, OWNER_A), "foreign");
+  assert.equal(readOwnerEcho({ user_id: null, user_ids: [OWNER_B] }, OWNER_A), "foreign");
+  assert.equal(readOwnerEcho({ user_id: 1 }, OWNER_A), "unreadable");
+  assert.equal(readOwnerEcho({ user_id: "" }, OWNER_A), "unreadable");
+  assert.equal(readOwnerEcho({ user_ids: [] }, OWNER_A), "unreadable");
+  assert.equal(readOwnerEcho({ id: "ca_1" }, OWNER_A), "absent");
+  assert.equal(readOwnerEcho({ user_id: undefined }, OWNER_A), "absent");
 });

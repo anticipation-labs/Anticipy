@@ -25,7 +25,9 @@ import type { ToolkitMeta } from "../src/connections/contract.ts";
 import {
   CONNECT_LINK_PREFIX,
   FORBIDDEN_TERMS,
-  MAX_ASK_CHARS,
+  MAX_ASK_CHARS_GSM7,
+  MAX_ASK_CHARS_UCS2,
+  MAX_ASK_SEGMENTS,
   MAX_SENTENCE_CHARS,
   PermissionWordsRefused,
   SENTENCE_COUNT,
@@ -33,6 +35,7 @@ import {
   askText,
   makePermissionWords,
   permissionSentences,
+  smsShape,
 } from "../src/connections/words.ts";
 import type { AskEvidence, AskInput, Refusal } from "../src/connections/words.ts";
 
@@ -89,6 +92,67 @@ function throwingWriter(message: string) {
   };
   return { write, calls };
 }
+
+// ---------------------------------------------------------------------------
+// THE REGISTER, WRITTEN OUT INDEPENDENTLY OF THE MODULE.
+// ---------------------------------------------------------------------------
+// These two lists used to be read straight off `FORBIDDEN_TERMS` and
+// `STIFF_FORMS`, which meant every test was GENERATED FROM THE IMPLEMENTATION:
+// delete a term and you delete its only test. Measured, not argued — with
+// `STIFF_FORMS` emptied outright and every `FORBIDDEN_TERMS` entry but the
+// vendor's name removed, this file ran 69 tests, 69 passing, 0 failing, and the
+// register it exists to enforce was gone. An oracle that is a copy of the thing
+// it checks is not an oracle.
+//
+// So these come from the spec ("Connections: how Anticipy asks, learns, and
+// never says Composio", 2026-09-05, pages 20-31) and the module has to satisfy
+// THEM. Deleting a term from `words.ts` now fails here twice: once in the
+// coverage leg below, and once in the behaviour test that still runs.
+const FORBIDDEN_BY_THE_SPEC = [
+  "authorize",
+  "authorise",
+  "authorization",
+  "authorisation",
+  "grant access",
+  "grants access",
+  "granting access",
+  "granted access",
+  "permission",
+  "permissions",
+  "integration",
+  "integrations",
+  "api",
+  "apis",
+  "oauth",
+  // Not a register problem but a promise: the product never says the vendor's
+  // name, so a draft that does is not sent.
+  "composio",
+];
+
+const STIFF_BY_THE_SPEC = [
+  "do not",
+  "does not",
+  "did not",
+  "cannot",
+  "can not",
+  "will not",
+  "would not",
+  "should not",
+  "is not",
+  "are not",
+  "was not",
+  "were not",
+  "have not",
+  "has not",
+  "i am",
+];
+
+/** Anything the module forbids beyond the spec is still exercised — a tightening
+ *  deserves a test too — but it can never be the only thing under test. */
+const EXTRA_FORBIDDEN = FORBIDDEN_TERMS.filter((t) => !FORBIDDEN_BY_THE_SPEC.includes(t));
+const EXTRA_STIFF = STIFF_FORMS.filter((t) => !STIFF_BY_THE_SPEC.includes(t));
+const EVERY_FORBIDDEN = [...FORBIDDEN_BY_THE_SPEC, ...EXTRA_FORBIDDEN];
+const EVERY_STIFF = [...STIFF_BY_THE_SPEC, ...EXTRA_STIFF];
 
 const GOOD_SENTENCES = [
   "Read and send email as you.",
@@ -185,7 +249,7 @@ for (const [label, app] of APPS) {
       assert.equal(r.cause, "too-long");
     });
 
-    for (const term of FORBIDDEN_TERMS) {
+    for (const term of EVERY_FORBIDDEN) {
       it(`refuses a permission sentence containing "${term}"`, async () => {
         const model = stubWriter([
           `Read your mail (${term}).`,
@@ -218,6 +282,32 @@ for (const [label, app] of APPS) {
       const model = stubWriter([GOOD_SENTENCES[0], GOOD_SENTENCES[1], GOOD_SENTENCES[0]]);
       const r = refusal(await permissionSentences(app(), model.write));
       assert.equal(r.cause, "duplicate");
+    });
+
+    it("refuses a sentence that is really a scope URL with no scheme", async () => {
+      // `https://` is not what makes a string a link to a phone. The scope
+      // strings a model is most likely to echo back arrive without one, and a
+      // permission line reading "www.googleapis.com/auth/gmail.readonly" is the
+      // same non-consent as the version with a scheme on the front.
+      const model = stubWriter([
+        "www.googleapis.com/auth/gmail.readonly",
+        GOOD_SENTENCES[1],
+        GOOD_SENTENCES[2],
+      ]);
+      const r = refusal(await permissionSentences(app(), model.write));
+      assert.equal(r.cause, "not-plain");
+    });
+
+    it("prose with a full stop in it is still plain language — the control", async () => {
+      // A URL check widened carelessly refuses good copy, and on this surface a
+      // refusal is a connect page that never renders.
+      const model = stubWriter([
+        "Read what arrived in the last 3.5 hours.",
+        "See threads you have replied to, e.g. this week's.",
+        "Draft a reply.Nothing is sent without you.",
+      ]);
+      const result = await permissionSentences(app(), model.write);
+      assert.equal(result.ok, true, `refused good copy: ${JSON.stringify(result)}`);
     });
 
     it("refuses a sentence that is really a scope URL", async () => {
@@ -294,16 +384,81 @@ for (const [label, app] of APPS) {
   });
 }
 
+describe("the register, pinned to the spec rather than to the code", () => {
+  it("the module still forbids every term the spec forbids", () => {
+    // The leg that goes red the moment somebody shortens a list. It is written
+    // as a subset check rather than an equality so that TIGHTENING the register
+    // — adding a term — stays a one-file change, while LOOSENING it cannot.
+    const gone = FORBIDDEN_BY_THE_SPEC.filter((t) => !FORBIDDEN_TERMS.includes(t));
+    assert.deepEqual(gone, [], `words.ts stopped forbidding: ${gone.join(", ")}`);
+    const soft = STIFF_BY_THE_SPEC.filter((t) => !STIFF_FORMS.includes(t));
+    assert.deepEqual(soft, [], `words.ts stopped catching: ${soft.join(", ")}`);
+  });
+
+  it("the leg can see a term go missing", () => {
+    // The negative control. A coverage leg whose list happened to be empty would
+    // pass over nothing, which is the failure this whole section is about.
+    const pretend = FORBIDDEN_BY_THE_SPEC.filter((t) => t !== "oauth");
+    assert.deepEqual(FORBIDDEN_BY_THE_SPEC.filter((t) => !pretend.includes(t)), ["oauth"]);
+    assert.ok(FORBIDDEN_BY_THE_SPEC.length >= 16, "the spec list emptied itself");
+    assert.ok(STIFF_BY_THE_SPEC.length >= 15, "the spec list emptied itself");
+  });
+});
+
 describe("the three numbers, pinned to the spec rather than to the code", () => {
-  it("three sentences, eighty characters, one message", () => {
+  it("three sentences, eighty characters, two messages", () => {
     // These come out of the product spec, not out of a preference: three
     // sentences on the connect page, a line short enough to be read on a phone,
-    // and one text message. Changing one of them is a product decision, so it
-    // fails here first and gets argued with on purpose.
+    // and one text that leaves in no more than two pieces. Changing one of them
+    // is a product decision, so it fails here first and gets argued with on
+    // purpose.
     assert.equal(SENTENCE_COUNT, 3);
     assert.equal(MAX_SENTENCE_CHARS, 80);
-    assert.equal(MAX_ASK_CHARS, 320);
+    assert.equal(MAX_ASK_SEGMENTS, 2);
+    // The two real ceilings, each with its condition. 320 was neither.
+    assert.equal(MAX_ASK_CHARS_GSM7, 306);
+    assert.equal(MAX_ASK_CHARS_UCS2, 134);
     assert.equal(CONNECT_LINK_PREFIX, "https://anticipy.ai/c/");
+  });
+
+  it("the segment arithmetic is the carrier's, not ours", () => {
+    // Every number below is the GSM 03.38 / concatenated-SMS spec, written out.
+    // One message alone holds more than one part of a concatenated pair does,
+    // because the concatenation header eats into every part.
+    assert.deepEqual(
+      { encoding: smsShape("x".repeat(160)).encoding, segments: smsShape("x".repeat(160)).segments },
+      { encoding: "gsm-7", segments: 1 },
+    );
+    assert.equal(smsShape("x".repeat(161)).segments, 2);
+    assert.equal(smsShape("x".repeat(306)).segments, 2);
+    assert.equal(smsShape("x".repeat(307)).segments, 3);
+
+    // One character outside GSM-7 re-prices the whole message.
+    assert.equal(smsShape("x".repeat(70)).segments, 1);
+    assert.equal(smsShape(`${"x".repeat(69)}\u2019`).encoding, "ucs-2");
+    assert.equal(smsShape(`${"x".repeat(69)}\u2019`).segments, 1);
+    assert.equal(smsShape(`${"x".repeat(70)}\u2019`).segments, 2);
+    assert.equal(smsShape(`${"x".repeat(133)}\u2019`).segments, 2);
+    assert.equal(smsShape(`${"x".repeat(134)}\u2019`).segments, 3);
+
+    // The extension characters are sendable and cost two septets each, so a
+    // character count over-estimates the room a draft has left.
+    assert.equal(smsShape("a").units, 1);
+    assert.equal(smsShape("{").units, 2);
+    assert.equal(smsShape("\u20ac").encoding, "gsm-7");
+    assert.equal(smsShape("\u20ac").units, 2);
+    // An emoji is two UTF-16 units, and the carrier charges for both.
+    assert.equal(smsShape("\u{1f600}").encoding, "ucs-2");
+    assert.equal(smsShape("\u{1f600}").units, 2);
+    // Accented names and em dashes are the everyday way copy leaves GSM-7 — but
+    // NOT all of them, and guessing which is how a ceiling gets set wrong. GSM-7
+    // carries e-acute and a-grave; it has no slot for e-diaeresis or o-circumflex,
+    // so one owner called Zoe with a diaeresis re-prices every text she gets.
+    assert.equal(smsShape("caf\u00e9").encoding, "gsm-7");
+    assert.equal(smsShape("Zo\u00eb").encoding, "ucs-2");
+    assert.equal(smsShape("\u00e0 bient\u00f4t").encoding, "ucs-2");
+    assert.equal(smsShape("\u2014").encoding, "ucs-2");
+    assert.equal(smsShape("\u00e4\u00f6\u00fc\u00c9").encoding, "gsm-7");
   });
 });
 
@@ -312,14 +467,22 @@ describe("the three numbers, pinned to the spec rather than to the code", () => 
 // ---------------------------------------------------------------------------
 
 /** A message of EXACTLY `n` characters that breaks no other rule, so a length
- *  test measures length and nothing else. */
+ *  test measures length and nothing else. The fixed parts are kept short so the
+ *  same helper can reach the UCS-2 ceiling, which is less than half the GSM-7
+ *  one. Every character in it is in the GSM-7 alphabet, apostrophe included. */
 function askOfLength(n: number): string {
-  const head = "That took a while in the browser, ";
-  const tail = `. Connect it once and I'll be quicker: ${LINK} It's optional, the browser `
-    + "can keep doing this.";
+  const head = "Quicker next time, ";
+  const tail = `: ${LINK} It's up to you.`;
   const pad = n - head.length - tail.length;
   assert.ok(pad > 0, "test helper: asked for a message shorter than its own fixed parts");
   return `${head}${"x".repeat(pad)}${tail}`;
+}
+
+/** The same message with ONE straight apostrophe swapped for a curly one. The
+ *  character count does not move; the real ceiling more than halves, because
+ *  GSM-7 has no slot for U+2019 and the whole message goes out as UCS-2. */
+function curlyAskOfLength(n: number): string {
+  return askOfLength(n).replace("'", "\u2019");
 }
 
 for (const [label, app] of APPS) {
@@ -339,20 +502,27 @@ for (const [label, app] of APPS) {
       assert.equal(input.evidence.link, LINK);
     });
 
-    // 320 and 321 are written out, not derived from `MAX_ASK_CHARS`. See the
-    // note on the sentence boundary above: a test that imports the number it is
-    // checking goes green for any number.
-    it("exactly 320 characters is still one message", async () => {
-      const text = askOfLength(320);
-      assert.equal(text.length, 320);
+    // THE BOUNDARY IS AN ENCODING, NOT A NUMBER. The old ceiling was 320, and
+    // it did not deliver its own promise in either direction: concatenated
+    // GSM-7 holds 306, so 307-320 went out in three pieces, and one curly
+    // apostrophe forces UCS-2, where the real ceiling is 134 and a 320-character
+    // ask arrives in five. The half that arrives second — or reordered, or not
+    // at all — is the half with the link in it.
+    //
+    // 306, 307, 134 and 135 are written out, not derived from the constants.
+    // See the note on the sentence boundary above: a test that imports the
+    // number it is checking goes green for any number.
+    it("306 GSM-7 characters still arrive as two messages", async () => {
+      const text = askOfLength(306);
+      assert.equal(text.length, 306);
 
       const result = await askText("in_task", app(), evidence(), stubWriter(text).write);
       assert.equal(result.ok, true, `expected the boundary to pass: ${JSON.stringify(result)}`);
     });
 
-    it("321 characters is refused, not trimmed", async () => {
-      const text = askOfLength(321);
-      assert.equal(text.length, 321);
+    it("307 is refused, not trimmed", async () => {
+      const text = askOfLength(307);
+      assert.equal(text.length, 307);
 
       const r = refusal(await askText("in_task", app(), evidence(), stubWriter(text).write));
       assert.equal(r.cause, "too-long");
@@ -361,7 +531,42 @@ for (const [label, app] of APPS) {
       assert.equal((r as { text?: unknown }).text, undefined);
     });
 
-    for (const term of FORBIDDEN_TERMS) {
+    it("one curly apostrophe drops the real ceiling to 134, and 134 still sends", async () => {
+      const text = curlyAskOfLength(134);
+      assert.equal(text.length, 134);
+      assert.ok(text.includes("\u2019"), "test helper: the apostrophe was not swapped");
+
+      const result = await askText("in_task", app(), evidence(), stubWriter(text).write);
+      assert.equal(result.ok, true, `expected the boundary to pass: ${JSON.stringify(result)}`);
+    });
+
+    it("135 characters with one curly apostrophe is refused", async () => {
+      const text = curlyAskOfLength(135);
+      assert.equal(text.length, 135);
+
+      const r = refusal(await askText("in_task", app(), evidence(), stubWriter(text).write));
+      assert.equal(r.cause, "too-long");
+    });
+
+    it("the same 200 characters send or refuse on ONE character's account", async () => {
+      // The whole of finding 13 in two assertions. A character-count ceiling
+      // cannot tell these two apart, and the carrier can: the first goes out in
+      // two pieces, the second in three.
+      const plain = askOfLength(200);
+      const curly = curlyAskOfLength(200);
+      assert.equal(plain.length, curly.length);
+
+      const sent = await askText("in_task", app(), evidence(), stubWriter(plain).write);
+      assert.equal(sent.ok, true, `expected the plain one to send: ${JSON.stringify(sent)}`);
+
+      const r = refusal(await askText("in_task", app(), evidence(), stubWriter(curly).write));
+      assert.equal(r.cause, "too-long");
+      // And the refusal has to say the real number for the encoding it found,
+      // or the next person reads 320 in a log and looks for a bug elsewhere.
+      assert.ok(/134/.test(r.refusal), r.refusal);
+    });
+
+    for (const term of EVERY_FORBIDDEN) {
       it(`refuses an ask containing "${term}"`, async () => {
         const text = `That went through the browser, ${term}. Connect it once: ${LINK} `
           + "It's optional, the browser can keep doing it.";
@@ -371,7 +576,7 @@ for (const [label, app] of APPS) {
       });
     }
 
-    for (const stiff of STIFF_FORMS) {
+    for (const stiff of EVERY_STIFF) {
       it(`refuses an ask that writes "${stiff}" instead of contracting it`, async () => {
         const text = `That took a while and I ${stiff} enjoying it. Connect it once: ${LINK} `
           + "It's optional, the browser can keep doing it.";
@@ -415,6 +620,41 @@ for (const [label, app] of APPS) {
         + "https://connect.composio.dev/link/abc123 works. It's optional.";
       const r = refusal(await askText("in_task", app(), evidence(), stubWriter(text).write));
       assert.equal(r.cause, "forbidden-word");
+    });
+
+    it("refuses a schemeless second link, which a phone linkifies anyway", async () => {
+      // The recorded shape: a vendor's own sign-in URL riding along beside ours.
+      // It arrives with no scheme because that is how people write hosts, and a
+      // containment that only looked for "https://" was blind to exactly the
+      // link it was built to stop.
+      const text = `That took a while. Connect it once: ${LINK} or start at `
+        + "accounts.google.com/o/v2/auth instead. It's optional.";
+      const r = refusal(await askText("in_task", app(), evidence(), stubWriter(text).write));
+      assert.equal(r.cause, "extra-link");
+    });
+
+    it("the vendor's schemeless link is caught twice over", async () => {
+      // The vendor's NAME is forbidden vocabulary, so this one never reaches the
+      // link count — which is the point of listing it in both places.
+      const text = `That took a while. Connect it once: ${LINK} or connect.composio.dev/link/abc `
+        + "if you'd rather. It's optional.";
+      const r = refusal(await askText("in_task", app(), evidence(), stubWriter(text).write));
+      assert.equal(r.cause, "forbidden-word");
+    });
+
+    it("ordinary prose is not a second link — the control", async () => {
+      // Each refusal spends the one interruption this app ever gets, so a widened
+      // check that fires on "browser.Connect" or "e.g." costs an ask for nothing.
+      for (const body of [
+        "That took a while in the browser.Connect it once",
+        "That took about 3.5 minutes, e.g. longer than it should have",
+        "That took a while. No. 4 this fortnight",
+        "That took a while, and anticipy.ai is quicker when it's connected",
+      ]) {
+        const text = `${body}: ${LINK} It's optional, the browser can keep doing it.`;
+        const result = await askText("in_task", app(), evidence(), stubWriter(text).write);
+        assert.equal(result.ok, true, `refused good copy: ${JSON.stringify(result)}`);
+      }
     });
 
     it("refuses a link with characters welded onto the token", async () => {

@@ -28,6 +28,7 @@ import {
   recordDecline,
   shouldAsk,
 } from "../src/connections/policy.ts";
+import type { AskingFor } from "../src/connections/policy.ts";
 import {
   GLOBAL_ASK_INTERVAL_DAYS,
   LEVEL_THRESHOLD,
@@ -45,6 +46,11 @@ const HOUR = 60 * 60 * 1000;
 const DAY = 24 * HOUR;
 const NOW = Date.UTC(2026, 8, 5, 17, 0, 0);
 const OWNER = ownerId("sxkotd1h02qb6gw");
+const OTHER_OWNER = ownerId("qeuy6sv1raof9rw");
+
+/** Whose row, and about what. Every call below states it, because the caller
+ *  that skips it is the caller that texts the wrong person. */
+const ASKING: AskingFor = { owner: OWNER };
 
 /** A row for an owner nobody has ever asked about anything. */
 function row(over: Record<string, unknown> = {}): ConnectNudge {
@@ -80,7 +86,7 @@ function moment(over: Record<string, unknown> = {}): NudgeContext {
 }
 
 function decisionOf(n: ConnectNudge, c: NudgeContext): string {
-  return shouldAsk(n, c).decision;
+  return shouldAsk(n, c, ASKING).decision;
 }
 
 // ---------------------------------------------------------------------------
@@ -88,7 +94,7 @@ function decisionOf(n: ConnectNudge, c: NudgeContext): string {
 // ---------------------------------------------------------------------------
 
 test("CONTROL: a clean, evidenced, in-hours, post-result moment asks", () => {
-  const v = shouldAsk(row(), moment());
+  const v = shouldAsk(row(), moment(), ASKING);
   assert.equal(v.decision, "ask");
   assert.ok(v.reason.length > 0, "every verdict carries a reason for the log");
 });
@@ -104,8 +110,21 @@ test("CONTROL: every trigger the contract knows can ask a never-asked owner", ()
 });
 
 test("the class adapter and the free function are the same policy", () => {
-  const policy = new DefaultNudgePolicy();
-  assert.deepEqual(policy.shouldAsk(row(), moment()), shouldAsk(row(), moment()));
+  const policy = new DefaultNudgePolicy(ASKING);
+  assert.deepEqual(policy.shouldAsk(row(), moment()), shouldAsk(row(), moment(), ASKING));
+});
+
+test("the class adapter carries the owner the contract's interface cannot", () => {
+  // FINDING 17, the seam half. `NudgePolicy.shouldAsk(nudge, ctx)` in the
+  // contract takes two arguments and the contract is fixed, so an injected
+  // policy has nowhere to put "whose row this must be" except the object it was
+  // built from. A policy that cannot perform the check cannot be built.
+  const policy = new DefaultNudgePolicy({ owner: OWNER });
+  assert.equal(policy.shouldAsk(row(), moment()).decision, "ask");
+  assert.equal(policy.shouldAsk(row({ user_id: OTHER_OWNER }), moment()).decision, "no-verdict");
+  for (const bad of [undefined, null, {}, { owner: "omar" }, { owner: "" }]) {
+    assert.throws(() => new DefaultNudgePolicy(bad as never), /owner/i, JSON.stringify(bad));
+  }
 });
 
 // ---------------------------------------------------------------------------
@@ -121,6 +140,72 @@ test("only an explicit ask is a licence to interrupt", () => {
   // were licences, a crash upstream would become a text message.
   assert.equal(askIsLicensed(null), false);
   assert.equal(askIsLicensed(undefined), false);
+});
+
+// ---------------------------------------------------------------------------
+// WHOSE ROW IS THIS — the one question the shape check cannot answer.
+// ---------------------------------------------------------------------------
+
+test("a nudge row fetched for another owner is unaskable, not askable", () => {
+  // FINDING 17. This row is not malformed: `user_id` is a real owner ROW id,
+  // every field reads, the shape check passes. It is simply somebody ELSE's
+  // row — a D1 read bound to the wrong variable, a cache keyed by the previous
+  // request, a batch loop reusing the last iteration's id. Before this argument
+  // existed the verdict was a flat "ask", which is a connect link about another
+  // person's app sent to this one, and that is the spike's own recorded
+  // catastrophe (research/2026-09-05-composio-connections.md, item 2) reached
+  // by a query instead of by a constant.
+  const theirs = row({ user_id: OTHER_OWNER });
+  assert.equal(shouldAsk(theirs, moment(), { owner: OWNER }).decision, "no-verdict");
+
+  // CONTROL: the very same row, asked on behalf of the owner it belongs to,
+  // still asks. A guard that refuses every row is an outage, not a fix.
+  assert.equal(shouldAsk(theirs, moment(), { owner: OTHER_OWNER }).decision, "ask");
+  assert.equal(shouldAsk(row(), moment(), { owner: OWNER }).decision, "ask");
+});
+
+test("an expectation that is not an owner ROW id licenses nothing", () => {
+  // The floor's polarity: not knowing whose row this is cannot mean "go ahead".
+  // A display name where an id belongs is the exact confusion between "who is
+  // this" and "what do we call them" that bound one operator's mailbox to
+  // everybody, so it is refused rather than compared loosely.
+  for (const bad of ["omar", "someone@an.address", "", "SXKOTD1H02QB6GW", "sxkotd1h02qb6g", 7]) {
+    assert.equal(
+      shouldAsk(row(), moment(), { owner: bad as never }).decision,
+      "no-verdict",
+      JSON.stringify(bad),
+    );
+  }
+  // And saying nothing at all is not a licence either: an ask is a privilege
+  // and a caller that never named the owner has not established one.
+  assert.equal(shouldAsk(row(), moment(), undefined as never).decision, "no-verdict");
+  assert.equal(shouldAsk(row(), moment(), null as never).decision, "no-verdict");
+  assert.equal(shouldAsk(row(), moment(), {} as never).decision, "no-verdict");
+});
+
+test("a row about another APP is unaskable once the caller names the app it asked for", () => {
+  // The sibling half of the same failure, and the shape ../onboarding.ts
+  // already checks: applying one app's decline history to another silences a
+  // nudge nobody refused, or re-asks somebody who said no. The caller names the
+  // app when it knows it; this file still cannot tell one app from another by
+  // itself, which the law-1 test above pins.
+  const other = row({ toolkit: "app-theta" });
+  assert.equal(
+    shouldAsk(other, moment(), { owner: OWNER, toolkit: "app-zeta" }).decision,
+    "no-verdict",
+  );
+  // CONTROL 1: the same row with the app it is actually about.
+  assert.equal(shouldAsk(other, moment(), { owner: OWNER, toolkit: "app-theta" }).decision, "ask");
+  // CONTROL 2: spelling is not a mismatch — a slug is a slug however it was
+  // cased on the way out of storage.
+  assert.equal(shouldAsk(other, moment(), { owner: OWNER, toolkit: " APP-THETA " }).decision, "ask");
+  // CONTROL 3: a caller that names no app still gets a verdict. The app half is
+  // optional; the owner half never is.
+  assert.equal(shouldAsk(other, moment(), { owner: OWNER }).decision, "ask");
+  // A named app that is not a slug is a caller bug, and guessing which app was
+  // meant is precisely the judge's question, not this file's.
+  assert.equal(shouldAsk(other, moment(), { owner: OWNER, toolkit: "   " }).decision, "no-verdict");
+  assert.equal(shouldAsk(other, moment(), { owner: OWNER, toolkit: 7 as never }).decision, "no-verdict");
 });
 
 // ---------------------------------------------------------------------------
@@ -143,7 +228,7 @@ test("the toolkit slug never changes a verdict, not even a slug invented today",
     [row({ state: "declined", level: 3, snooze_until: NOW + 3000 * DAY }), moment()],
   ];
   for (const [n, c] of scenarios) {
-    const verdicts = slugs.map((toolkit) => shouldAsk({ ...n, toolkit }, c));
+    const verdicts = slugs.map((toolkit) => shouldAsk({ ...n, toolkit }, c, ASKING));
     for (const v of verdicts) assert.deepEqual(v, verdicts[0]);
   }
 });
@@ -656,7 +741,7 @@ test("the policy never mutates what it is handed", () => {
   const c = Object.freeze(moment({ trigger: "laptop_closed" }));
   const nBefore = JSON.stringify(n);
   const cBefore = JSON.stringify(c);
-  shouldAsk(n as ConnectNudge, c as NudgeContext);
+  shouldAsk(n as ConnectNudge, c as NudgeContext, ASKING);
   assert.equal(JSON.stringify(n), nBefore);
   assert.equal(JSON.stringify(c), cBefore);
 });
@@ -687,7 +772,7 @@ test("an ask is only ever returned when EVERY floor is clear", () => {
                   tasksThatWouldHaveUsedIt,
                   lastAskAnyAppAt,
                 });
-                const v = shouldAsk(n, c);
+                const v = shouldAsk(n, c, ASKING);
                 assert.ok(
                   ["ask", "hold", "never-again", "no-verdict"].includes(v.decision),
                   `unknown decision ${v.decision}`,

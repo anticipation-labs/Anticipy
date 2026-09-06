@@ -66,12 +66,54 @@ interface AuthorizeCall {
   alias: string | null | undefined;
 }
 
-function stubProvider(opts: { authorize?: () => never | { redirectUrl: unknown }; failToolkit?: boolean } = {}) {
+/**
+ * An account the vendor really is holding for an owner.
+ *
+ * The callback's `connected_account_id` is the VENDOR's handle for whichever
+ * credential answered, and a query string is not evidence of whose it is. So
+ * every `done` test below has to say what the vendor would actually report if
+ * asked — which is the whole point of asking.
+ */
+function acct(
+  id: string,
+  over: { user?: string; toolkit?: string; alias?: "work" | "personal" | null } = {},
+): Connection {
+  return {
+    user_id: (over.user ?? OWNER) as Connection["user_id"],
+    toolkit: over.toolkit ?? SLUG_A,
+    connected_account_id: id,
+    alias: over.alias ?? "work",
+    status: "connected",
+    writes_enabled: false,
+    last_used_at: null,
+  };
+}
+
+function stubProvider(opts: {
+  authorize?: () => never | { redirectUrl: unknown };
+  failToolkit?: boolean;
+  /** What `connections(user)` will report. Empty by default: a vendor that has
+   *  never heard of the account on the callback is the DEFAULT case, not the
+   *  exotic one, and a stub that vouched for anything would make the ownership
+   *  check untestable. */
+  accounts?: Connection[];
+  failConnections?: boolean;
+} = {}) {
   const authorizeCalls: AuthorizeCall[] = [];
   const toolkitCalls: string[] = [];
+  const connectionsCalls: string[] = [];
   return {
     authorizeCalls,
     toolkitCalls,
+    connectionsCalls,
+    /** The vendor's own list for this owner. Scoped by the argument, so a stub
+     *  that returned somebody else's row would be modelling a broken vendor —
+     *  which one test below does deliberately. */
+    async connections(user: string): Promise<Connection[]> {
+      connectionsCalls.push(user);
+      if (opts.failConnections) throw new Error("composio 503 — connected_accounts unreachable");
+      return (opts.accounts ?? []).map((c) => ({ ...c }));
+    },
     async toolkit(slug: string): Promise<ToolkitMeta> {
       toolkitCalls.push(slug);
       if (opts.failToolkit) throw new Error("catalog unreachable");
@@ -126,14 +168,17 @@ function sink() {
 class YieldingStore implements ConnectLinkStore {
   inner = new MemoryConnectLinkStore();
   puts = 0;
+  reads = 0;
   claims = 0;
   completes = 0;
+  releases = 0;
   async put(row: StoredLink): Promise<void> {
     this.puts++;
     await tick();
     return this.inner.put(row);
   }
   async read(handle: string): Promise<StoredLink | null> {
+    this.reads++;
     await tick();
     const row = await this.inner.read(handle);
     await tick();
@@ -150,6 +195,13 @@ class YieldingStore implements ConnectLinkStore {
     this.completes++;
     await tick();
     const out = await this.inner.complete(handle, at);
+    await tick();
+    return out;
+  }
+  async release(handle: string, at: number): Promise<ClaimOutcome> {
+    this.releases++;
+    await tick();
+    const out = await this.inner.release(handle, at);
     await tick();
     return out;
   }
@@ -176,6 +228,9 @@ class StaleReplicaStore implements ConnectLinkStore {
   }
   complete(handle: string, at: number) {
     return this.inner.complete(handle, at);
+  }
+  release(handle: string, at: number) {
+    return this.inner.release(handle, at);
   }
 }
 
@@ -493,6 +548,7 @@ test("a store that answers with the wrong row is refused, not obeyed", async () 
     }
     claim(handle: string, usedAt: number) { return this.inner.claim(handle, usedAt); }
     complete(handle: string, at: number) { return this.inner.complete(handle, at); }
+    release(handle: string, at: number) { return this.inner.release(handle, at); }
   }
   const store = new WildcardReadStore();
   await freshLink(store);
@@ -509,6 +565,7 @@ test("a row that vanishes under the claim is the unknown answer, not the used on
     read(handle: string) { return this.inner.read(handle); }
     async claim(): Promise<ClaimOutcome> { return { won: false, row: null }; }
     complete(handle: string, at: number) { return this.inner.complete(handle, at); }
+    release(handle: string, at: number) { return this.inner.release(handle, at); }
   }
   const store = new VanishingStore();
   const link = await freshLink(store);
@@ -568,7 +625,10 @@ test("the callback is not an oracle either", async () => {
   const store = new MemoryConnectLinkStore();
   const s = sink();
   const real = await freshLink(store);
-  const base = { signedInAs: OWNER, store, onConnected: s.onConnected, now: T0 + 1 };
+  const base = {
+    signedInAs: OWNER, store, onConnected: s.onConnected, now: T0 + 1,
+    provider: stubProvider({ accounts: [acct("ca_BNgvxQtJ703C")] }),
+  };
   const params = { status: CALLBACK_SUCCESS, connectedAccountId: "ca_BNgvxQtJ703C" };
   // A `done` for a token that never went through `/go` is forged or out of
   // order; it answers exactly what an unknown token answers.
@@ -779,7 +839,12 @@ test("a success records one connection, bound to the mint-time owner, with write
   const done = await connectPageDone(
     link.token,
     { status: CALLBACK_SUCCESS, connectedAccountId: "  ca_sHENw6KtQ8Kx " },
-    { signedInAs: OWNER, store, onConnected: s.onConnected, now: T0 + 60_000 },
+    {
+      signedInAs: OWNER, store, onConnected: s.onConnected, now: T0 + 60_000,
+      provider: stubProvider({
+        accounts: [acct("ca_sHENw6KtQ8Kx", { toolkit: SLUG_B, alias: "personal" })],
+      }),
+    },
   );
   assert.equal(done.state, "connected");
   assert.equal(done.state === "connected" && done.recorded, true);
@@ -815,7 +880,10 @@ test("THE CALLBACK CANNOT NAME ITS OWN OWNER", async () => {
       user_id: STRANGER,
       owner: STRANGER,
     } as never,
-    { signedInAs: OWNER, store, onConnected: s.onConnected, now: T0 + 60_000 },
+    {
+      signedInAs: OWNER, store, onConnected: s.onConnected, now: T0 + 60_000,
+      provider: stubProvider({ accounts: [acct("ca_BNgvxQtJ703C")] }),
+    },
   );
   assert.equal(done.state, "connected");
   assert.equal(s.recorded[0]!.user_id, OWNER);
@@ -826,7 +894,10 @@ test("a refreshed callback shows the same page and records exactly once", async 
   const s = sink();
   const link = await tapped(store);
   const params = { status: CALLBACK_SUCCESS, connectedAccountId: "ca_BNgvxQtJ703C" };
-  const opts = { signedInAs: OWNER, store, onConnected: s.onConnected, now: T0 + 60_000 };
+  const opts = {
+    signedInAs: OWNER, store, onConnected: s.onConnected, now: T0 + 60_000,
+    provider: stubProvider({ accounts: [acct("ca_BNgvxQtJ703C")] }),
+  };
   const first = await connectPageDone(link.token, params, opts);
   const second = await connectPageDone(link.token, params, { ...opts, now: T0 + 61_000 });
   const third = await connectPageDone(link.token, params, { ...opts, now: T0 + 62_000 });
@@ -845,6 +916,7 @@ test("concurrent callbacks record exactly once", async () => {
     Array.from({ length: 10 }, () =>
       connectPageDone(link.token, params, {
         signedInAs: OWNER, store, onConnected: s.onConnected, now: T0 + 60_000,
+        provider: stubProvider({ accounts: [acct("ca_BNgvxQtJ703C")] }),
       })),
   );
   assert.equal(results.filter((r) => r.state === "connected" && r.recorded).length, 1);
@@ -859,7 +931,10 @@ test("a callback that is not a success writes nothing", async () => {
     const done = await connectPageDone(
       link.token,
       { status: status as never, connectedAccountId: "ca_BNgvxQtJ703C" },
-      { signedInAs: OWNER, store, onConnected: s.onConnected, now: T0 + 60_000 },
+      {
+        signedInAs: OWNER, store, onConnected: s.onConnected, now: T0 + 60_000,
+        provider: stubProvider({ accounts: [acct("ca_BNgvxQtJ703C")] }),
+      },
     );
     assert.deepEqual(done, { state: "not-connected" }, `status ${JSON.stringify(status)}`);
   }
@@ -877,7 +952,10 @@ test("a success with no account id writes nothing", async () => {
     const done = await connectPageDone(
       link.token,
       { status: CALLBACK_SUCCESS, connectedAccountId: id as never },
-      { signedInAs: OWNER, store, onConnected: s.onConnected, now: T0 + 60_000 },
+      {
+        signedInAs: OWNER, store, onConnected: s.onConnected, now: T0 + 60_000,
+        provider: stubProvider({ accounts: [acct("ca_BNgvxQtJ703C")] }),
+      },
     );
     assert.deepEqual(done, { state: "not-connected" });
   }
@@ -891,7 +969,10 @@ test("the vendor's spelling of success is configuration, not code", async () => 
   const done = await connectPageDone(
     link.token,
     { status: "ACTIVE", connectedAccountId: "ca_x" },
-    { signedInAs: OWNER, store, onConnected: s.onConnected, successStatus: "ACTIVE", now: T0 + 60_000 },
+    {
+      signedInAs: OWNER, store, onConnected: s.onConnected, successStatus: "ACTIVE",
+      now: T0 + 60_000, provider: stubProvider({ accounts: [acct("ca_x")] }),
+    },
   );
   assert.equal(done.state, "connected");
   assert.equal(s.recorded.length, 1);
@@ -912,7 +993,10 @@ test("A COMPLETED OAUTH ROUND TRIP SURVIVES THE TEN-MINUTE LINK TTL", async () =
   const done = await connectPageDone(
     link.token,
     { status: CALLBACK_SUCCESS, connectedAccountId: "ca_BNgvxQtJ703C" },
-    { signedInAs: OWNER, store, onConnected: s.onConnected, now: wellPastTheTtl },
+    {
+      signedInAs: OWNER, store, onConnected: s.onConnected, now: wellPastTheTtl,
+      provider: stubProvider({ accounts: [acct("ca_BNgvxQtJ703C")] }),
+    },
   );
   assert.equal(done.state, "connected");
   assert.equal(s.recorded.length, 1);
@@ -924,13 +1008,16 @@ test("the callback window closes at the instant it expires", async () => {
   const link = await tapped(store);
   const usedAt = T0 + 1;
   const params = { status: CALLBACK_SUCCESS, connectedAccountId: "ca_BNgvxQtJ703C" };
+  const provider = stubProvider({ accounts: [acct("ca_BNgvxQtJ703C")] });
   const late = await connectPageDone(link.token, params, {
-    signedInAs: OWNER, store, onConnected: s.onConnected, now: usedAt + CALLBACK_WINDOW_MS,
+    signedInAs: OWNER, store, onConnected: s.onConnected, provider,
+    now: usedAt + CALLBACK_WINDOW_MS,
   });
   assert.deepEqual(late, { state: "expired" });
   assert.equal(s.recorded.length, 0);
   const justInTime = await connectPageDone(link.token, params, {
-    signedInAs: OWNER, store, onConnected: s.onConnected, now: usedAt + CALLBACK_WINDOW_MS - 1,
+    signedInAs: OWNER, store, onConnected: s.onConnected, provider,
+    now: usedAt + CALLBACK_WINDOW_MS - 1,
   });
   assert.equal(justInTime.state, "connected");
 });
@@ -942,7 +1029,10 @@ test("a stranger cannot complete somebody else's connection", async () => {
   const done = await connectPageDone(
     link.token,
     { status: CALLBACK_SUCCESS, connectedAccountId: "ca_theirs" },
-    { signedInAs: STRANGER, store, onConnected: s.onConnected, now: T0 + 60_000 },
+    {
+      signedInAs: STRANGER, store, onConnected: s.onConnected, now: T0 + 60_000,
+      provider: stubProvider({ accounts: [acct("ca_theirs", { toolkit: SLUG_B })] }),
+    },
   );
   assert.deepEqual(done, { state: "wrong-user" });
   assert.equal(s.recorded.length, 0);
@@ -956,7 +1046,10 @@ test("a signed-out callback records nothing", async () => {
   const done = await connectPageDone(
     link.token,
     { status: CALLBACK_SUCCESS, connectedAccountId: "ca_x" },
-    { signedInAs: null, store, onConnected: s.onConnected, now: T0 + 60_000 },
+    {
+      signedInAs: null, store, onConnected: s.onConnected, now: T0 + 60_000,
+      provider: stubProvider({ accounts: [acct("ca_x")] }),
+    },
   );
   assert.deepEqual(done, { state: "sign-in-required" });
   assert.equal(s.recorded.length, 0);
@@ -982,7 +1075,7 @@ test("no refusal anywhere carries the token, and the fingerprint is not the toke
     await connectPageView(spent.token, { signedInAs: OWNER, store, provider, words, now: T0 + 2 }),
     await connectPageGo(link.token, { signedInAs: STRANGER, store, provider, now: T0 + 1 }),
     await connectPageDone(link.token, { status: "no", connectedAccountId: null }, {
-      signedInAs: OWNER, store, onConnected: s.onConnected, now: T0 + 2,
+      signedInAs: OWNER, store, onConnected: s.onConnected, now: T0 + 2, provider,
     }),
   ];
   for (const r of refusals) {
@@ -1083,7 +1176,10 @@ test("a toolkit nobody has ever heard of runs the whole flow, with zero code", a
     const done = await connectPageDone(
       link.token,
       { status: CALLBACK_SUCCESS, connectedAccountId: `ca_${slug}` },
-      { signedInAs: OWNER, store, onConnected: s.onConnected, now: T0 + 3 },
+      {
+        signedInAs: OWNER, store, onConnected: s.onConnected, now: T0 + 3,
+        provider: stubProvider({ accounts: [acct(`ca_${slug}`, { toolkit: slug })] }),
+      },
     );
     return { view, go, done, recorded: s.recorded, authorize: provider.authorizeCalls };
   };
@@ -1102,4 +1198,490 @@ test("a toolkit nobody has ever heard of runs the whole flow, with zero code", a
   assert.deepEqual(shape(a.go, SLUG_A), shape(b.go, SLUG_B));
   assert.deepEqual(shape(a.done, SLUG_A), shape(b.done, SLUG_B));
   assert.deepEqual(shape(a.recorded, SLUG_A), shape(b.recorded, SLUG_B));
+});
+
+// ---------------------------------------------------------------------------
+// FINDING 6 — THE ROUTES ARE NOT A TOKEN ORACLE
+// ---------------------------------------------------------------------------
+
+test("AN UNAUTHENTICATED CALLER CANNOT TELL A LIVE TOKEN FROM A MADE-UP ONE", async () => {
+  // The file's own privacy model says a link alone must be worth nothing to
+  // whoever reads the text over a shoulder. It was worth one thing: a signed-out
+  // request could sort strings into "a real Anticipy token" and "not one",
+  // because a live token answered `sign-in-required` while an invented one
+  // answered `expired`. That is an oracle, and it answers before anybody has
+  // proved who they are — so it is available to exactly the person the SMS
+  // threat model is about. Every shape below must give one answer.
+  const store = new MemoryConnectLinkStore();
+  const s = sink();
+  const provider = stubProvider({ accounts: [acct("ca_x")] });
+
+  const live = await freshLink(store);
+  const stale = await freshLink(store);
+  const spent = await freshLink(store);
+  await redeem(spent.token, { signedInAs: OWNER, store, now: T0 + 1 });
+  const claimed = await tapped(store); // through /go, waiting on the vendor
+  const invented = "F".repeat(43);
+  const nonsense = "../../etc/passwd";
+
+  const late = stale.expires_at + 5_000;
+  const probes: Array<[string, number]> = [
+    [live.token, T0 + 2],
+    [stale.token, late],
+    [spent.token, T0 + 2],
+    [claimed.token, T0 + 2],
+    [invented, T0 + 2],
+    [nonsense, T0 + 2],
+  ];
+
+  const redeems: unknown[] = [];
+  for (const [tok, at] of probes) {
+    redeems.push(await redeem(tok, { signedInAs: null, store, now: at }));
+  }
+  for (const r of redeems) {
+    assert.deepEqual(r, redeems[0], "redeem told an anonymous caller which token was real");
+  }
+
+  const views: unknown[] = [];
+  for (const [tok, at] of probes) {
+    views.push(await connectPageView(tok, { signedInAs: null, store, provider, words, now: at }));
+  }
+  for (const v of views) {
+    assert.deepEqual(v, views[0], "the connect page told an anonymous caller which token was real");
+  }
+  assert.equal(provider.toolkitCalls.length, 0, "and the catalog was never asked");
+
+  const gos: unknown[] = [];
+  for (const [tok, at] of probes) {
+    gos.push(await connectPageGo(tok, { signedInAs: null, store, provider, now: at }));
+  }
+  for (const g of gos) {
+    assert.deepEqual(g, gos[0], "the tap told an anonymous caller which token was real");
+  }
+
+  const dones: unknown[] = [];
+  for (const [tok, at] of probes) {
+    dones.push(await connectPageDone(
+      tok,
+      { status: CALLBACK_SUCCESS, connectedAccountId: "ca_x" },
+      { signedInAs: null, store, onConnected: s.onConnected, provider, now: at },
+    ));
+  }
+  for (const d of dones) {
+    assert.deepEqual(d, dones[0], "the callback told an anonymous caller which token was real");
+  }
+
+  // And no anonymous probe spent, completed or recorded anything.
+  assert.equal(s.recorded.length, 0);
+  assert.equal(provider.authorizeCalls.length, 0);
+  assert.equal(store.all().filter((r) => r.completed_at !== null).length, 0);
+  assert.equal(
+    store.all().filter((r) => r.used_at !== null).length,
+    2,
+    "only the owner's own redeem and the owner's own tap",
+  );
+});
+
+test("the signed-in owner is still told the four answers apart — the control", async () => {
+  // A guard that refuses everything is an outage. Collapsing the ANONYMOUS case
+  // must not collapse the case the page exists for: a signed-in person has to
+  // be told "this worked", "this is too old", "you already used this" and "this
+  // link is not yours", or there is nothing to put on the screen.
+  const store = new MemoryConnectLinkStore();
+  const provider = stubProvider();
+  const ok = await freshLink(store);
+  const old = await freshLink(store);
+  const used = await freshLink(store);
+  await redeem(used.token, { signedInAs: OWNER, store, now: T0 + 1 });
+  const theirs = await freshLink(store);
+
+  assert.equal((await redeem(ok.token, { signedInAs: OWNER, store, now: T0 + 2 })).outcome, "ok");
+  assert.equal((await redeem(old.token, { signedInAs: OWNER, store, now: old.expires_at })).outcome, "expired");
+  assert.equal((await redeem(used.token, { signedInAs: OWNER, store, now: T0 + 2 })).outcome, "already-used");
+  assert.equal((await redeem(theirs.token, { signedInAs: STRANGER, store, now: T0 + 2 })).outcome, "wrong-user");
+
+  const view = (tok: string, who: string | null, now: number) =>
+    connectPageView(tok, { signedInAs: who, store, provider, words, now });
+  const fresh = await freshLink(store);
+  assert.equal((await view(fresh.token, OWNER, T0 + 2)).state, "ok");
+  assert.equal((await view(old.token, OWNER, old.expires_at)).state, "expired");
+  assert.equal((await view(used.token, OWNER, T0 + 2)).state, "already-used");
+  assert.equal((await view(fresh.token, STRANGER, T0 + 2)).state, "wrong-user");
+  assert.equal((await view(fresh.token, null, T0 + 2)).state, "sign-in-required");
+});
+
+test("an anonymous request never touches the store, so it cannot be timed either", async () => {
+  // The states matching is half of it. If a signed-out request still ran the
+  // lookup, a real handle and an invented one would differ by a round trip —
+  // the same oracle, read off a stopwatch instead of a status code.
+  const store = new YieldingStore();
+  const provider = stubProvider({ accounts: [acct("ca_x")] });
+  const s = sink();
+  const link = await freshLink(store);
+  const before = store.reads;
+
+  await redeem(link.token, { signedInAs: null, store, now: T0 + 1 });
+  await connectPageView(link.token, { signedInAs: null, store, provider, words, now: T0 + 1 });
+  await connectPageGo(link.token, { signedInAs: null, store, provider, now: T0 + 1 });
+  await connectPageDone(
+    link.token,
+    { status: CALLBACK_SUCCESS, connectedAccountId: "ca_x" },
+    { signedInAs: null, store, onConnected: s.onConnected, provider, now: T0 + 1 },
+  );
+
+  assert.equal(store.reads, before, "a signed-out caller must not be able to time a row lookup");
+  assert.equal(store.claims, 0);
+  assert.equal(store.completes, 0);
+});
+
+// ---------------------------------------------------------------------------
+// FINDING 3 — REDEEM VERIFIES THE ROW THE COMPARE-AND-SET HANDED BACK
+// ---------------------------------------------------------------------------
+
+/**
+ * A store whose compare-and-set WINS but answers with a neighbouring row. These
+ * are the same D1 shapes `locate` already defends the READ against — a COLLATE
+ * NOCASE column, a stray LIKE, a trimmed key, a cache — aimed at the write,
+ * which is the half nobody was checking.
+ */
+class WildcardClaimStore implements ConnectLinkStore {
+  inner = new MemoryConnectLinkStore();
+  corrupt = true;
+  put(row: StoredLink) { return this.inner.put(row); }
+  read(handle: string) { return this.inner.read(handle); }
+  async claim(handle: string, usedAt: number): Promise<ClaimOutcome> {
+    const out = await this.inner.claim(handle, usedAt);
+    if (!out.won || !out.row || !this.corrupt) return out;
+    return {
+      won: true,
+      row: { ...out.row, token_handle: "0".repeat(64), user_id: STRANGER, toolkit: SLUG_B },
+    };
+  }
+  complete(handle: string, at: number) { return this.inner.complete(handle, at); }
+  release(handle: string, at: number) { return this.inner.release(handle, at); }
+}
+
+test("REDEEM REFUSES A ROW THAT IS NOT THE ROW IT ASKED FOR", async () => {
+  // `locate` runs exactly this check thirty lines earlier and says why. redeem
+  // was the one path that took the store's word for it — and it is the path
+  // that decides which owner gets authorized at the vendor.
+  const store = new WildcardClaimStore();
+  const link = await freshLink(store);
+  const r = await redeem(link.token, { signedInAs: OWNER, store, now: T0 + 1 });
+  assert.deepEqual(r, { outcome: "expired" });
+  // The write already happened, so the link stays spent. That is the correct
+  // direction to fail: a store answering wrongly is not a reason to hand out a
+  // second live link.
+  assert.equal(store.inner.all()[0]!.used_at, T0 + 1);
+});
+
+test("and the vendor is never asked to authorize the neighbour's owner", async () => {
+  // The concrete failure, end to end: without the check, `connectPageGo` takes
+  // the returned link at face value and opens an OAuth flow for STRANGER, on a
+  // toolkit nobody asked for, in the owner's browser.
+  const store = new WildcardClaimStore();
+  const provider = stubProvider();
+  const link = await freshLink(store);
+  const go = await connectPageGo(link.token, { signedInAs: OWNER, store, provider, now: T0 + 1 });
+  assert.notEqual(go.state, "ok");
+  assert.deepEqual(provider.authorizeCalls, []);
+});
+
+test("the same store, answering honestly, still redeems and still authorizes — the control", async () => {
+  const store = new WildcardClaimStore();
+  store.corrupt = false;
+  const provider = stubProvider();
+  const link = await freshLink(store, { toolkit: SLUG_B, alias: "personal" });
+  const go = await connectPageGo(link.token, { signedInAs: OWNER, store, provider, now: T0 + 1 });
+  assert.equal(go.state, "ok");
+  assert.equal(provider.authorizeCalls.length, 1);
+  assert.equal(provider.authorizeCalls[0]!.user, OWNER);
+  assert.equal(provider.authorizeCalls[0]!.toolkit, SLUG_B);
+
+  const other = new WildcardClaimStore();
+  other.corrupt = false;
+  const plain = await freshLink(other);
+  const r = await redeem(plain.token, { signedInAs: OWNER, store: other, now: T0 + 1 });
+  assert.equal(r.outcome, "ok");
+  assert.equal(r.outcome === "ok" && r.link.user_id, OWNER);
+  assert.equal(r.outcome === "ok" && r.link.used_at, T0 + 1);
+});
+
+// ---------------------------------------------------------------------------
+// FINDING 2 — THE ACCOUNT ON THE CALLBACK MUST BE THIS OWNER'S
+// ---------------------------------------------------------------------------
+
+test("A CALLBACK CANNOT BIND AN ACCOUNT THE VENDOR DOES NOT HOLD FOR THIS OWNER", async () => {
+  // `user_id` says who WE think this is. `connected_account_id` is the vendor's
+  // handle for whose credential actually answers, and it arrives on a query
+  // string a browser can edit. Written verbatim it produces a row saying "this
+  // owner's Kettlebright is ca_somebody_elses" — and the first step that runs
+  // against it reaches into another person's account holding our key. The old
+  // docstring called that impossible; it was not.
+  const store = new MemoryConnectLinkStore();
+  const s = sink();
+  const link = await tapped(store);
+  const done = await connectPageDone(
+    link.token,
+    { status: CALLBACK_SUCCESS, connectedAccountId: "ca_somebody_elses" },
+    {
+      signedInAs: OWNER, store, onConnected: s.onConnected, now: T0 + 60_000,
+      provider: stubProvider({ accounts: [acct("ca_mine")] }),
+    },
+  );
+  assert.deepEqual(done, { state: "not-connected" });
+  assert.equal(s.recorded.length, 0);
+  assert.ok(!JSON.stringify(done).includes("ca_somebody_elses"));
+});
+
+test("an account the vendor holds for a DIFFERENT owner is refused, not obeyed", async () => {
+  // The provider seam gets the same treatment as the store seam: the call is
+  // scoped by owner, so a row that comes back bound to somebody else means the
+  // scoping did not hold, and it is not evidence about our owner.
+  const store = new MemoryConnectLinkStore();
+  const s = sink();
+  const link = await tapped(store);
+  const done = await connectPageDone(
+    link.token,
+    { status: CALLBACK_SUCCESS, connectedAccountId: "ca_theirs" },
+    {
+      signedInAs: OWNER, store, onConnected: s.onConnected, now: T0 + 60_000,
+      provider: stubProvider({ accounts: [acct("ca_theirs", { user: STRANGER })] }),
+    },
+  );
+  assert.deepEqual(done, { state: "not-connected" });
+  assert.equal(s.recorded.length, 0);
+});
+
+test("an account the vendor holds on a DIFFERENT toolkit is refused", async () => {
+  // The link is bound to one toolkit at mint time. Filing a calendar credential
+  // under the mail row sends every future mail step at the wrong account.
+  const store = new MemoryConnectLinkStore();
+  const s = sink();
+  const link = await tapped(store, { toolkit: SLUG_A });
+  const done = await connectPageDone(
+    link.token,
+    { status: CALLBACK_SUCCESS, connectedAccountId: "ca_x" },
+    {
+      signedInAs: OWNER, store, onConnected: s.onConnected, now: T0 + 60_000,
+      provider: stubProvider({ accounts: [acct("ca_x", { toolkit: SLUG_B })] }),
+    },
+  );
+  assert.deepEqual(done, { state: "not-connected" });
+  assert.equal(s.recorded.length, 0);
+});
+
+test("a vendor that cannot be asked is a retry, never a connection", async () => {
+  // Recording is the privilege here, so it needs positive evidence rather than
+  // the absence of an objection. But a vendor outage is not a failed connect —
+  // the account may well exist — so the answer must be a state the person can
+  // retry, and nothing may be consumed by it.
+  const store = new MemoryConnectLinkStore();
+  const s = sink();
+  const link = await tapped(store);
+  const params = { status: CALLBACK_SUCCESS, connectedAccountId: "ca_real" };
+  const down = await connectPageDone(link.token, params, {
+    signedInAs: OWNER, store, onConnected: s.onConnected, now: T0 + 60_000,
+    provider: stubProvider({ accounts: [acct("ca_real")], failConnections: true }),
+  });
+  assert.deepEqual(down, { state: "could-not-confirm" });
+  assert.equal(s.recorded.length, 0);
+  assert.equal(store.all()[0]!.completed_at, null, "an outage must not burn the exactly-once bit");
+  // The vendor's error text names them; the person is owed one sentence.
+  assert.ok(!JSON.stringify(down).toLowerCase().includes("composio"));
+
+  const back = await connectPageDone(link.token, params, {
+    signedInAs: OWNER, store, onConnected: s.onConnected, now: T0 + 61_000,
+    provider: stubProvider({ accounts: [acct("ca_real")] }),
+  });
+  assert.equal(back.state === "connected" && back.recorded, true);
+  assert.equal(s.recorded.length, 1);
+});
+
+test("a confirmed account is recorded, and the vendor was asked about the ROW's owner — the control", async () => {
+  // Without this the whole check could be `return not-connected` and every test
+  // above would still pass, while nobody could ever connect anything.
+  const store = new MemoryConnectLinkStore();
+  const s = sink();
+  const link = await tapped(store, { toolkit: SLUG_A, alias: "personal" });
+  const provider = stubProvider({
+    // The vendor's own spelling of the slug, which is not guaranteed to match
+    // our normalized one. Case and padding are plumbing, not two apps.
+    accounts: [acct("ca_real", { toolkit: ` ${SLUG_A.toUpperCase()} ` })],
+  });
+  const done = await connectPageDone(
+    link.token,
+    { status: CALLBACK_SUCCESS, connectedAccountId: "ca_real" },
+    { signedInAs: OWNER, store, onConnected: s.onConnected, now: T0 + 60_000, provider },
+  );
+  assert.equal(done.state, "connected");
+  assert.equal(done.state === "connected" && done.recorded, true);
+  assert.equal(s.recorded.length, 1);
+  assert.equal(s.recorded[0]!.connected_account_id, "ca_real");
+  assert.equal(s.recorded[0]!.user_id, OWNER);
+  assert.equal(s.recorded[0]!.alias, "personal", "the alias is ours, from the mint, not the vendor's");
+  assert.equal(s.recorded[0]!.writes_enabled, false);
+  // Asked about the STORED row's owner — never the session, never the query.
+  assert.deepEqual(provider.connectionsCalls, [OWNER]);
+});
+
+// ---------------------------------------------------------------------------
+// FINDING 5 — A FAILED WRITE IS NOT A CONNECTION
+// ---------------------------------------------------------------------------
+
+test("A FAILED WRITE DOES NOT LEAVE THE PAGE SAYING CONNECTED FOREVER", async () => {
+  // The exactly-once bit used to be burned BEFORE the write. One failing
+  // `onConnected` — a D1 blip, a constraint, a cold container — and the token
+  // was completed with no row anywhere: every refresh answered "connected,
+  // recorded: false", the person was told they were done, and the connection
+  // existed at the vendor with nothing on our side pointing at it. Composio
+  // publishes no success webhook, so nothing would ever mention it again. That
+  // is permanent, silent data loss, and it is one `throw` away at all times.
+  const store = new MemoryConnectLinkStore();
+  const recorded: Connection[] = [];
+  let failures = 1;
+  const onConnected = async (c: Connection) => {
+    if (failures-- > 0) throw new Error("D1_ERROR: no such table: connections");
+    recorded.push(c);
+  };
+  const link = await tapped(store);
+  const params = { status: CALLBACK_SUCCESS, connectedAccountId: "ca_real" };
+  const opts = {
+    signedInAs: OWNER, store, onConnected, now: T0 + 60_000,
+    provider: stubProvider({ accounts: [acct("ca_real")] }),
+  };
+
+  const first = await connectPageDone(link.token, params, opts);
+  assert.deepEqual(first, { state: "not-recorded" }, "a write that failed is not a connection");
+  assert.equal(recorded.length, 0);
+
+  // THE RECOVERY. The lease is released, so the refresh the person is about to
+  // make is the one that writes the row.
+  const second = await connectPageDone(link.token, params, { ...opts, now: T0 + 61_000 });
+  assert.equal(second.state === "connected" && second.recorded, true);
+  assert.equal(recorded.length, 1);
+
+  // And it is exactly-once again the moment it succeeds.
+  const third = await connectPageDone(link.token, params, { ...opts, now: T0 + 62_000 });
+  assert.equal(third.state === "connected" && third.recorded, false);
+  assert.equal(recorded.length, 1);
+});
+
+test("a store that cannot release the lease still refuses to say connected", async () => {
+  // `release` is on the interface, but a week-2 D1 store that ships without it
+  // must degrade to an honest refusal — not to a TypeError thrown from inside
+  // the error path, and above all not to the old answer, "connected".
+  class NoReleaseStore implements ConnectLinkStore {
+    inner = new MemoryConnectLinkStore();
+    put(row: StoredLink) { return this.inner.put(row); }
+    read(handle: string) { return this.inner.read(handle); }
+    claim(handle: string, usedAt: number) { return this.inner.claim(handle, usedAt); }
+    complete(handle: string, at: number) { return this.inner.complete(handle, at); }
+  }
+  const store = new NoReleaseStore() as unknown as ConnectLinkStore;
+  const link = await tapped(store);
+  const done = await connectPageDone(
+    link.token,
+    { status: CALLBACK_SUCCESS, connectedAccountId: "ca_real" },
+    {
+      signedInAs: OWNER,
+      store,
+      onConnected: async () => { throw new Error("D1_ERROR: write failed"); },
+      now: T0 + 60_000,
+      provider: stubProvider({ accounts: [acct("ca_real")] }),
+    },
+  );
+  assert.deepEqual(done, { state: "not-recorded" });
+});
+
+test("release clears only the completion it took", async () => {
+  // Conditional, like every other write in this module. An unconditional
+  // release would let a stale caller re-open the exactly-once window under a
+  // connection somebody else has already recorded.
+  const store = new MemoryConnectLinkStore();
+  const link = await freshLink(store);
+  const handle = tokenHandle(link.token);
+  await store.claim(handle, T0 + 1);
+  assert.equal((await store.complete(handle, T0 + 2)).won, true);
+
+  const notMine = await store.release(handle, T0 + 999);
+  assert.equal(notMine.won, false, "a caller that does not hold the lease cannot release it");
+  assert.equal((await store.read(handle))!.completed_at, T0 + 2);
+
+  const mine = await store.release(handle, T0 + 2);
+  assert.equal(mine.won, true);
+  assert.equal((await store.read(handle))!.completed_at, null);
+});
+
+// ---------------------------------------------------------------------------
+// FINDING 7 — NOBODY CAN CONSENT TO AN EMPTY LIST
+// ---------------------------------------------------------------------------
+
+test("A CONNECT PAGE WITH NO PERMISSION SENTENCES REFUSES RATHER THAN RENDERING", async () => {
+  // The page's whole job is to say what Anticipy will be able to do before the
+  // person agrees to it. Rendering `state: "ok"` with an empty list asks them to
+  // consent to nothing, and it looks exactly like a page that finished loading.
+  // This module cannot audit the words, but it can refuse to publish silence.
+  const store = new MemoryConnectLinkStore();
+  const provider = stubProvider();
+  const link = await freshLink(store);
+  const empties: unknown[] = [
+    [], [""], ["   "], ["\n\t "], ["a real sentence.", ""], [null], [7],
+    null, undefined, "three sentences", {},
+  ];
+  for (const bad of empties) {
+    const brokenWords = { async sentences(): Promise<string[]> { return bad as never; } };
+    await assert.rejects(
+      () => connectPageView(link.token, {
+        signedInAs: OWNER, store, provider, words: brokenWords, now: T0 + 1,
+      }),
+      /permission sentences/,
+      `rendered a consent page from ${JSON.stringify(bad)}`,
+    );
+  }
+  assert.equal(store.all()[0]!.used_at, null, "and the refusal consumed nothing");
+});
+
+test("one real sentence is enough to render — the control", async () => {
+  // How MANY sentences there are is the words module's question, not this
+  // one's. A count rule here would be an outage the first time a toolkit with
+  // one scope reaches the catalog.
+  const store = new MemoryConnectLinkStore();
+  const provider = stubProvider();
+  const link = await freshLink(store);
+  const oneLine = {
+    async sentences(): Promise<string[]> { return ["Anticipy can read your calendar."]; },
+  };
+  const view = await connectPageView(link.token, {
+    signedInAs: OWNER, store, provider, words: oneLine, now: T0 + 1,
+  });
+  assert.equal(view.state, "ok");
+  assert.deepEqual(view.state === "ok" && view.sentences, ["Anticipy can read your calendar."]);
+});
+
+test("everything the caller is handed comes from the row LOCATE verified", async () => {
+  // The other half of the same check. Here the write answers with the right key
+  // and a mangled payload — a join that picked up a neighbouring alias, a column
+  // served from a cache. `alias` is which of two Google accounts this becomes,
+  // and `expires_at` is what the page prints; both must come from the row that
+  // was checked against the handle, not from the write's echo of it.
+  class MangledEchoStore implements ConnectLinkStore {
+    inner = new MemoryConnectLinkStore();
+    put(row: StoredLink) { return this.inner.put(row); }
+    read(handle: string) { return this.inner.read(handle); }
+    async claim(handle: string, usedAt: number): Promise<ClaimOutcome> {
+      const out = await this.inner.claim(handle, usedAt);
+      if (!out.won || !out.row) return out;
+      return { won: true, row: { ...out.row, alias: "personal", expires_at: 1 } };
+    }
+    complete(handle: string, at: number) { return this.inner.complete(handle, at); }
+    release(handle: string, at: number) { return this.inner.release(handle, at); }
+  }
+  const store = new MangledEchoStore();
+  const link = await freshLink(store, { alias: "work" });
+  const r = await redeem(link.token, { signedInAs: OWNER, store, now: T0 + 1 });
+  assert.equal(r.outcome, "ok");
+  assert.equal(r.outcome === "ok" && r.link.alias, "work");
+  assert.equal(r.outcome === "ok" && r.link.expires_at, link.expires_at);
+  assert.equal(r.outcome === "ok" && r.link.used_at, T0 + 1, "only the used bit comes from the write");
 });

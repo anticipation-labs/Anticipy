@@ -47,6 +47,27 @@ sh "$HERE/run_owner_mirror_tests.sh"
 # response must not repopulate account B's jobs, event feed, notifications, or
 # browser-agent state after sign-out/sign-in yields the main actor.
 sh "$HERE/run_refresh_account_race_tests.sh"
+# The same question a third time, about a different table. Owner-mirror asks
+# whose device answers this phone holds; the race suite asks whose job feed a
+# late response lands in; this asks whose ACCOUNT a connection, a nudge and a
+# write opt-in belong to. It is not a hypothetical: during the week-1 spike one
+# operator's own Gmail and Calendar were connected by hand under the user_id
+# "omar" — a display name, which is one person's tokens serving everybody. It
+# was revoked and deleted (research/2026-09-05-composio-connections.md).
+# The suite's first section hands every door a MIXED list and checks the other
+# owner's rows are dropped. Beside its two siblings, and early, for the
+# reachability reason above.
+sh "$HERE/run_connections_policy_tests.sh"
+# The same question on the surface a person actually touches: Settings →
+# Connected apps. The policy above decides what a connection IS; this decides
+# what the SCREEN does with it — whose rows are drawn after a sign-in and after
+# a response that lands during one, whether the "let Anticipy make changes"
+# switch goes back when the write does not land (a switch that silently lies
+# about being on is the router believing it may write), and whether a list that
+# could not be READ renders as "you have nothing connected". Its scans hold the
+# two rules a screen quietly breaks: no app name in the source, and no sentence
+# written in the view where the register gate cannot see it.
+sh "$HERE/run_connected_apps_tests.sh"
 # A question-card answer has no job status to reconcile against. Its own
 # account/question idempotency id and exact event lookup are what make response
 # loss and process restart safe instead of leaving a disabled card forever.
@@ -65,6 +86,18 @@ sh "$HERE/run_retry_reconciliation_tests.sh"
 # reason above.
 sh "$HERE/run_first_run_copy_tests.sh"
 sh "$HERE/run_enrollment_offer_tests.sh"
+# The other onboarding step that asks for something: "Which apps do you live
+# in?", plus the lockstep that keeps the card and the first text ONE ask. Beside
+# the enrolment offer because it is the same question in a different room — what
+# may we ask a person during setup, and what does walking past it cost them.
+# Skip there is a SEVEN-DAY SOFT SNOOZE, not a decline: the server's own
+# thresholds turn a level-1 decline into permanent silence for the two triggers
+# that carry evidence, so a shrug at the card would end the conversation for
+# good. Its law legs live in the runner — no app name and no domain in the
+# source, in code or in prose, and every constant read back out of
+# spike/two-hands/src/connections/contract.ts. Early, for the reachability
+# reason above.
+sh "$HERE/run_connect_onboarding_tests.sh"
 sh "$HERE/run_job_receipt_tests.sh"
 # The same card from the other end. That one asks what the server proved
 # before it says "done"; this asks which section a job reaches at all — and
@@ -99,6 +132,16 @@ sh "$HERE/run_consumer_experience_contract_tests.sh"
 # name. Early, like the three above it: `set -eu` stops this file at the first
 # failure, so a suite placed late is a suite that may never run.
 sh "$HERE/run_calendar_hand_tests.sh"
+# The connect handoff — the twenty seconds between the owner's tap and another
+# company's sign-in page. Beside the calendar hand for the same reason it sits
+# beside the receipt: both ask what has to be true before the phone reaches
+# outside itself. Its load-bearing leg is that the connect NEVER opens in an
+# embedded web view — Google answers a sign-in inside one with
+# `disallowed_useragent` and the connect dies — so the suite reads the
+# production source and fails on the class names appearing at all. Early, for
+# the reachability reason above: `set -eu` stops this file at the first
+# failure, and a compliance leg placed late is a compliance leg nobody runs.
+sh "$HERE/run_connect_handoff_tests.sh"
 # LOCAL-FIRST rule 1, the iOS half: no vendor socket, no vendor credential, no
 # retry loop against a permanent refusal, and copy that says what is true.
 sh "$HERE/run_local_ears_tests.sh"

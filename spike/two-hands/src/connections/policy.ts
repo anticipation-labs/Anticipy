@@ -32,10 +32,13 @@
 //     enum. A number attached to "the lid is shut" is not a threshold deciding
 //     meaning; it is a rank over event types, which is what law 1 permits.
 //   - clocks, hours and elapsed-time comparisons are plumbing ("senses").
-//   - `nudge.toolkit` is never read. Not once, in any branch. Gmail and a
-//     toolkit slug invented tomorrow get identical treatment, which is the
-//     spec's "NO APP IS HARDCODED" made structural rather than promised.
-//     `test/connections_policy.test.ts` pins it behaviourally.
+//   - `nudge.toolkit` is read in exactly ONE place and only ever compared
+//     against a slug the CALLER supplied, to refuse a row that is not the row
+//     the caller asked about. No branch anywhere compares it against a literal,
+//     so a slug shipped a year ago and one invented tomorrow get identical
+//     treatment — the spec's "NO APP IS HARDCODED" made structural rather than
+//     promised. `test/connections_policy.test.ts` pins that behaviourally, by
+//     sweeping slugs through every scenario and demanding identical verdicts.
 //
 // Spec: "Connections: how Anticipy asks, learns, and never says Composio",
 // 2026-09-05, page 24 (the state machine) and pages 25-26 (the right-time
@@ -53,6 +56,8 @@ import {
   type NudgeContext,
   type NudgePolicy,
   type NudgeVerdict,
+  type OwnerId,
+  type Toolkit,
 } from "./contract.ts";
 
 const HOUR_MS = 60 * 60 * 1000;
@@ -88,6 +93,45 @@ const NUDGE_STATES: readonly string[] = [
  *  of `NudgeTrigger`, not two words from a sentence. */
 const LEVEL_2_TRIGGERS: readonly string[] = ["in_task", "laptop_closed"];
 
+/**
+ * WHOSE ROW THIS MUST BE, and about what — stated by the caller, because
+ * nothing in the inputs can establish it.
+ *
+ * THE HOLE THIS CLOSES. `whatIsMissing` checks that `nudge.user_id` has the
+ * SHAPE of an owner row id, and until this argument existed it had nothing to
+ * compare it against: `NudgeContext` carries no owner and no toolkit, so a
+ * perfectly well-formed row belonging to somebody else read cleanly and asked
+ * cleanly. A D1 read bound to the wrong variable, a cache keyed by the previous
+ * request, or a batch loop reusing the last iteration's id would each send this
+ * owner a connect link about another person's app — the spike's own recorded
+ * catastrophe (research/2026-09-05-composio-connections.md, item 2) reached by
+ * a query instead of by a constant.
+ *
+ * CONTRACT NOTE, reported rather than patched: the right home for these two is
+ * `NudgeContext` in ./contract.ts, which this module may not edit. Until they
+ * live there, `NudgePolicy.shouldAsk` — a two-argument interface — cannot carry
+ * them, so `DefaultNudgePolicy` takes them at construction instead. The sibling
+ * ../onboarding.ts has both already (`ctx.userId` and the `app` argument), and
+ * cross-checks the row against both.
+ */
+export interface AskingFor {
+  /** The owner this ask would be SENT to. The row must belong to them. */
+  owner: OwnerId | string;
+  /** The app this ask would be ABOUT, when the caller knows it. Optional
+   *  because a caller sweeping an owner's rows is asking "which of these", and
+   *  has no single answer to state; the owner half is never optional. */
+  toolkit?: Toolkit | null;
+}
+
+/** A slug as stored, for comparing one against another. Lowercasing is
+ *  plumbing — the contract says slugs are lowercase, and two spellings of one
+ *  slug reading as two different apps would refuse a row that is in fact the
+ *  row the caller asked for. It compares two strings somebody else supplied and
+ *  cannot express "this app in particular". */
+function slugOf(raw: unknown): string {
+  return typeof raw === "string" ? raw.trim().toLowerCase() : "";
+}
+
 function hold(reason: string): NudgeVerdict {
   return { decision: "hold", reason };
 }
@@ -111,7 +155,11 @@ function isNullableTimestamp(x: unknown): boolean {
  * input to `NudgeContext` without teaching this function about it shows up as
  * a hole rather than as a default.
  */
-function whatIsMissing(nudge: ConnectNudge, ctx: NudgeContext): string | null {
+function whatIsMissing(
+  nudge: ConnectNudge,
+  ctx: NudgeContext,
+  asking: AskingFor | null | undefined,
+): string | null {
   if (nudge === null || typeof nudge !== "object") {
     // An absent nudge row is not "never asked". It is a read that failed, or a
     // row for an owner whose D1 shard was unreachable — and treating it as
@@ -123,9 +171,21 @@ function whatIsMissing(nudge: ConnectNudge, ctx: NudgeContext): string | null {
     return "no moment to judge: without a context there is no such thing as a good time";
   }
 
-  // THE OWNER ID. This is the spike's catastrophic failure in miniature: a
-  // connection bound to "omar" rather than to `sxkotd1h02qb6gw` is one
-  // operator's mailbox serving everybody, and it happened for real on
+  // WHO THE CALLER IS ABOUT TO TEXT. Not knowing cannot mean "go ahead": this
+  // is a floor, so an ask needs a licence rather than merely the absence of an
+  // objection. A caller that never said whose row this is has not established
+  // one, and the first bug upstream would otherwise convert straight into a
+  // message about somebody else's app.
+  let expected: string;
+  try {
+    expected = ownerId((asking ?? ({} as AskingFor)).owner as unknown as string);
+  } catch {
+    return "nobody said whose nudge this is: an ask needs the owner it would be sent to, as a ROW id";
+  }
+
+  // THE ROW'S OWN OWNER ID. This is the spike's catastrophic failure in
+  // miniature: a connection bound to "omar" rather than to `sxkotd1h02qb6gw` is
+  // one operator's mailbox serving everybody, and it happened for real on
   // 2026-09-05 (research/2026-09-05-composio-connections.md, item 2). A nudge
   // row carrying a display name would send a connect link that binds to the
   // wrong person, so it is not askable — it is unreadable.
@@ -133,6 +193,29 @@ function whatIsMissing(nudge: ConnectNudge, ctx: NudgeContext): string | null {
     ownerId(nudge.user_id as unknown as string);
   } catch {
     return `nudge row has no owner ROW id (got ${JSON.stringify(nudge.user_id)}): a name cannot be asked`;
+  }
+
+  // AND THEY MUST BE THE SAME PERSON. Two well-formed ids that disagree is the
+  // SWAP: a row that reads perfectly and belongs to somebody else. Nothing in
+  // the row can show it, which is why the caller has to say.
+  if (String(nudge.user_id) !== expected) {
+    return `this nudge row belongs to another owner (row ${JSON.stringify(nudge.user_id)}, asking for ${JSON.stringify(expected)})`;
+  }
+
+  // THE APP, WHEN THE CALLER NAMED ONE. Applying one app's decline history to
+  // another silences a nudge nobody refused, or re-asks somebody who already
+  // said no — the same check ../onboarding.ts makes against its `app` argument.
+  // A named app that is not a slug is a caller bug, and guessing which app was
+  // meant is the judge's question, never this file's.
+  const named = (asking as AskingFor).toolkit;
+  if (named !== undefined && named !== null) {
+    const want = slugOf(named);
+    if (want === "") {
+      return `the caller named an app that is not a slug: ${JSON.stringify(named)}`;
+    }
+    if (slugOf(nudge.toolkit) !== want) {
+      return `this nudge row is about a different app (row ${JSON.stringify(nudge.toolkit)}, asking about ${JSON.stringify(named)})`;
+    }
   }
 
   if (!NUDGE_STATES.includes(nudge.state as unknown as string)) {
@@ -229,13 +312,22 @@ export function recordDecline(
  * MAY WE ASK? Four states, because "no" and "nobody could tell" are different
  * facts and a boolean carries two of three.
  *
+ * `asking` is REQUIRED even though its type allows the absence: this function
+ * never throws, so a caller that omits it is answered `no-verdict` rather than
+ * with an exception. It is the only way this file can tell a row that IS this
+ * owner's from a row that merely looks like one — see `AskingFor` above.
+ *
  * Pure, synchronous, and it never throws: a policy that throws is a policy
  * every caller wraps in a try/catch, and the only honest thing to do in that
  * catch is what this function already does — decline to ask.
  */
-export function shouldAsk(nudge: ConnectNudge, ctx: NudgeContext): NudgeVerdict {
+export function shouldAsk(
+  nudge: ConnectNudge,
+  ctx: NudgeContext,
+  asking: AskingFor | null | undefined,
+): NudgeVerdict {
   // ---- 0. NO GUESSING -----------------------------------------------------
-  const missing = whatIsMissing(nudge, ctx);
+  const missing = whatIsMissing(nudge, ctx, asking);
   if (missing !== null) return noVerdict(missing);
 
   // ---- 1. Nothing to ask about -------------------------------------------
@@ -441,10 +533,28 @@ export function askIsLicensed(verdict: NudgeVerdict | null | undefined): boolean
 }
 
 /** The contract's interface, for callers that inject a policy. The free
- *  function above is the implementation; this is a two-line adapter so that
- *  nothing has to construct an object to ask a pure question. */
+ *  function above is the implementation; this is a thin adapter so that nothing
+ *  has to construct an object to ask a pure question.
+ *
+ *  IT HOLDS THE EXPECTATION because the interface cannot: `NudgePolicy.shouldAsk`
+ *  takes two arguments and ./contract.ts is fixed, so an injected policy has
+ *  nowhere else to put "whose nudges am I deciding". One instance per owner is
+ *  the shape a request-scoped caller already has. */
 export class DefaultNudgePolicy implements NudgePolicy {
+  readonly asking: AskingFor;
+
+  constructor(asking: AskingFor) {
+    // Refused at WIRING time rather than at decision time. A policy object that
+    // could not say whose nudges it decides would answer `no-verdict` to
+    // everything, and a product that has quietly stopped asking looks exactly
+    // like a product nobody has needed to ask anything — it would ship.
+    this.asking = {
+      owner: ownerId((asking ?? ({} as AskingFor)).owner as unknown as string),
+      toolkit: asking?.toolkit ?? null,
+    };
+  }
+
   shouldAsk(nudge: ConnectNudge, ctx: NudgeContext): NudgeVerdict {
-    return shouldAsk(nudge, ctx);
+    return shouldAsk(nudge, ctx, this.asking);
   }
 }

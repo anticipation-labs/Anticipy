@@ -323,14 +323,46 @@ function keyOf(user: string, toolkit: string, alias: AccountAlias | null, source
 }
 
 /**
- * Rank rows into the table a nudge is allowed to read from. PURE: the D1-backed
- * caller selects this owner's rows and calls exactly this, so the ordering that
- * ships is the ordering the tests measure.
+ * THE ORDER, and the only definition of it: weight descending, then toolkit,
+ * then alias, both ascending, with two weights inside `TIE_EPSILON` of each
+ * other counting as equal. Exported for two reasons.
  *
- * ORDER IS TOTAL AND DOES NOT DEPEND ON ARRIVAL. Weight descending; ties broken
- * by toolkit and then by alias, both ascending. Rows are summed in a sorted
- * order too, so the same evidence arriving in a different order produces the
- * same float, not one a few ulps away that could reorder two neighbours.
+ * IT IS THE PROMISE, SO IT MUST BE BREAKABLE BY A TEST. `rankRows` sums rows in
+ * a sorted order (for float determinism), and that pre-sort happens to hand its
+ * output array to a stable sort in tie order already — so on 2026-09-05 both
+ * tie-break comparisons were deleted and the entire 890-test suite stayed
+ * green. A promise no test can break is a promise nobody is keeping, and ties
+ * are the NORMAL case here rather than an exotic one: every source band starts
+ * several apps at the same weight, so a fresh owner is mostly ties. Keeping the
+ * comparison here, reachable on its own, is what lets
+ * `test/connections_signals.test.ts` hold it — see "order:" there.
+ *
+ * A CALLER THAT BUILDS ITS OWN LINES NEEDS IT. In production the rows come from
+ * D1, and a caller that pages, merges or re-sorts lines outside this module
+ * must reach for this rather than write the ordering a second time: two
+ * definitions of "which app is first" is a table that reorders itself between
+ * the screen and the text message about it.
+ */
+export function compareRankedApps(a: RankedApp, b: RankedApp): number {
+  const d = b.weight - a.weight;
+  const scale = Math.max(1, Math.abs(a.weight), Math.abs(b.weight));
+  if (Math.abs(d) > TIE_EPSILON * scale) return d > 0 ? 1 : -1;
+  if (a.toolkit !== b.toolkit) return a.toolkit < b.toolkit ? -1 : 1;
+  const aliasA = a.alias ?? "";
+  const aliasB = b.alias ?? "";
+  if (aliasA !== aliasB) return aliasA < aliasB ? -1 : 1;
+  return 0;
+}
+
+/**
+ * Rank one owner's rows into the table a nudge is allowed to read from. PURE:
+ * the D1-backed caller selects that owner's rows and calls exactly this, so the
+ * ordering that ships is the ordering the tests measure.
+ *
+ * ORDER IS TOTAL AND DOES NOT DEPEND ON ARRIVAL — `compareRankedApps` above is
+ * the whole definition. Rows are summed in a sorted order too, so the same
+ * evidence arriving in a different order produces the same float, not one a few
+ * ulps away that could reorder two neighbours.
  *
  * WORK AND PERSONAL STAY APART. Lines are keyed by (toolkit, alias), so the same
  * app held twice ranks twice and the caller can ask about the right account.
@@ -338,8 +370,13 @@ function keyOf(user: string, toolkit: string, alias: AccountAlias | null, source
  * line: it is not folded into either named account, because folding it would be
  * this module deciding which of the owner's two accounts somebody meant, and
  * that is the judge's question, not ours.
+ *
+ * WHY THE OWNER IS AN ARGUMENT AND NOT AN INFERENCE. It is the caller's own
+ * `WHERE user_id = ?` said out loud, and it is the only way the two different
+ * ways a query goes wrong can be told apart. See the guard below.
  */
 export function rankRows(
+  owner: OwnerId | string,
   rows: readonly StoredSignal[],
   now: number,
   opts: RankOptions = {},
@@ -347,17 +384,35 @@ export function rankRows(
   const halfLifeMs = opts.halfLifeMs ?? DEFAULT_HALF_LIFE_MS;
   const at = checkedTime(now, "now");
 
-  // ONE OWNER'S ROWS, OR NONE. This function is exported and the production
-  // caller feeds it a query result; a `WHERE user_id = ?` that was dropped, or
-  // a join that fanned out, would arrive here as two people's evidence and be
-  // summed into one table with nothing to show for it. That is the same failure
-  // as one operator's mailbox serving everybody, reached by arithmetic instead
-  // of by a constant, and it must be loud rather than plausible.
+  // WHOSE TABLE IS THIS. Two failures live here and only one of them used to be
+  // catchable.
+  //
+  //   FAN-OUT — two people's rows in one call, from a dropped `WHERE` or a join
+  //   that multiplied. Visible in the rows themselves, and refused below.
+  //
+  //   SWAP — ONE person's rows, whole, consistent and perfectly readable,
+  //   selected for somebody else: a `WHERE user_id = ?` bound to the wrong
+  //   variable, a cache keyed by the previous request, a batch loop reusing the
+  //   last iteration's id. Nothing in the rows can show it. Without being told
+  //   whose table this is meant to be, this function would rank another
+  //   person's apps and the caller would text THIS owner about them — one
+  //   operator's mailbox serving everybody, reached by a query instead of by a
+  //   constant. That is why the expected owner is a required argument: an
+  //   optional one is a check the production caller can forget exactly once.
+  const expected = checkedOwner(owner);
+
   const owners = new Set((rows ?? []).map((r) => String(r?.user_id)));
   if (owners.size > 1) {
     throw new Error(
       `rankRows was given ${owners.size} owners' rows at once — signals rank per owner, and a mixed table would ask one person about another person's apps`,
     );
+  }
+  for (const only of owners) {
+    if (only !== expected) {
+      throw new Error(
+        `rankRows was asked for owner ${expected}'s table and handed owner ${only}'s rows — ranking them would ask one person about another person's apps`,
+      );
+    }
   }
 
   // Code-unit order, never `localeCompare`: collation depends on the ICU data
@@ -388,16 +443,7 @@ export function rankRows(
 
   const out = [...lines.values()];
   for (const line of out) line.sources.sort();
-  out.sort((a, b) => {
-    const d = b.weight - a.weight;
-    const scale = Math.max(1, Math.abs(a.weight), Math.abs(b.weight));
-    if (Math.abs(d) > TIE_EPSILON * scale) return d > 0 ? 1 : -1;
-    if (a.toolkit !== b.toolkit) return a.toolkit < b.toolkit ? -1 : 1;
-    const aliasA = a.alias ?? "";
-    const aliasB = b.alias ?? "";
-    if (aliasA !== aliasB) return aliasA < aliasB ? -1 : 1;
-    return 0;
-  });
+  out.sort(compareRankedApps);
   return out;
 }
 
@@ -494,7 +540,10 @@ export function createSignalTable(opts: SignalTableOptions = {}): SignalTable {
   }
 
   function rank(user: OwnerId | string, now: number, rankOpts: RankOptions = {}): RankedApp[] {
-    return rankRows(rows(user), now, { halfLifeMs, ...rankOpts });
+    // One id both selects the rows and is checked against them, so the filter
+    // and the ranker cannot drift apart without one of them throwing.
+    const id = checkedOwner(user);
+    return rankRows(id, rows(id), now, { halfLifeMs, ...rankOpts });
   }
 
   return { record, rank, rows };
@@ -516,26 +565,50 @@ export function createSignalTable(opts: SignalTableOptions = {}): SignalTable {
 // readings. That is string plumbing; it cannot name an app because it has no
 // name to reach for.
 //
-// THE KNOWN LIMIT, stated rather than papered over. Without a suffix list this
-// file cannot tell a registrable domain from a public suffix, so if a caller
-// ever handed it a bare suffix it would read as an ancestor of every catalog
-// entry under that suffix and come back ambiguous. It comes back ambiguous —
-// not wrong — and the caller supplying the host has already promised a
-// registrable domain. An ambiguous answer costs a missed signal. A suffix list
-// here would cost the no-hardcoding promise, and would rot silently the first
-// time a registry added one.
+// THE KNOWN LIMIT, and what it costs, stated rather than papered over. Without
+// a suffix list this file cannot tell a name somebody registered from a name a
+// registry hands out — so the WEAKEST reading, where the observed host merely
+// CONTAINS a catalog entry, is handed back as a SHORTLIST and never as a
+// verdict, however few entries are on it.
+//
+// That is a real defect being closed, not a hypothetical. Measured 2026-09-05:
+// with exactly ONE catalog entry under it, a bare registry suffix came back as
+// a confident match and `observedHostSignal` turned that into a HIGH weight on
+// an app the owner may never have opened — the top of the owner's table, and an
+// ask. One entry is not less ambiguous than two; it is the same guess with
+// nothing to compare it against, which is worse. The comment that used to sit
+// here claimed a bare suffix "comes back ambiguous"; it did not, and a comment
+// is not a guard.
+//
+// Whether a name sitting ABOVE an app's own url is that app is a question about
+// what a name means, and law 1 gives those to a model: the caller may put the
+// shortlist to the judge, which has the owner's context and this file does not.
+// The cost is a missed signal whenever a one-app vendor's catalog url sits
+// below the host the observer reduced to — real, and the cheap direction to be
+// wrong in, because the expensive one is a text asking somebody to connect an
+// app they do not use. A suffix list here would cost the no-hardcoding promise
+// and would rot silently the first time a registry added an entry.
 
 export type HostMatch =
   | { kind: "toolkit"; slug: Toolkit }
   /** Nothing in the catalog claims this host. Say so; do not fall back to the
    *  nearest entry, the first entry, or the highest-ranked one. */
   | { kind: "none" }
-  /** More than one catalog entry claims it, at the same strength — the usual
-   *  cause being one vendor's several apps sharing a registrable domain, which
-   *  is exactly what a host reduced to eTLD+1 cannot tell apart. Two candidates
-   *  and a coin is a wrong answer half the time, and the wrong answer here is a
-   *  text asking somebody to connect an app they do not use. The caller may put
-   *  the shortlist to the judge; this file will not pick. */
+  /** A SHORTLIST, one entry or several, and never a pick. Two causes, and both
+   *  are the same coin toss:
+   *
+   *  Several entries claim the host at the same strength — one vendor's several
+   *  apps sharing a registrable domain, which is exactly what a host reduced to
+   *  eTLD+1 cannot tell apart. Two candidates and a coin is a wrong answer half
+   *  the time.
+   *
+   *  Or the observed host merely CONTAINS the entries, however few: with no
+   *  suffix list this file cannot tell the vendor's own name from a name a
+   *  registry hands out, so "one entry under it" is not evidence of anything.
+   *
+   *  The wrong answer here is a text asking somebody to connect an app they do
+   *  not use, so the caller may put the shortlist to the judge; this file will
+   *  not pick. */
   | { kind: "ambiguous"; slugs: Toolkit[] };
 
 const NO_HOST_MATCH: HostMatch = { kind: "none" };
@@ -629,9 +702,10 @@ function relate(observed: string[], catalog: string[]): HostRelation | null {
  *      that product;
  *   3. the catalog's url is under the OBSERVED host — the weak reading, and the
  *      one a host reduced to a registrable domain produces. It is kept because
- *      it is right whenever one vendor has one app, and it is the tier that
- *      most often comes back ambiguous, which is the honest answer when a
- *      vendor has several.
+ *      it is often right when a vendor has one app, and it is returned as a
+ *      SHORTLIST rather than as a pick however many entries are on it: this
+ *      tier is the one a bare registry suffix produces, and nothing available
+ *      here can tell those two apart. See the note above this section.
  *
  * Two entries matching at the strongest tier is `ambiguous`, never a pick.
  */
@@ -655,6 +729,13 @@ export function hostToToolkit(host: string, catalog: readonly ToolkitMeta[]): Ho
   for (const relation of RELATION_STRENGTH) {
     const slugs = [...(byRelation.get(relation) ?? [])].sort();
     if (slugs.length === 0) continue;
+    // The weak tier is a shortlist even at one candidate. A host that only
+    // CONTAINS a catalog entry may be the vendor's own name or a name a
+    // registry hands out, and this file has nothing to tell those apart with —
+    // so it names no app, and the HIGH observer weight is never spent on the
+    // guess. Comparing the relation is comparing a closed enum three lines up,
+    // not reading a hostname for what it means.
+    if (relation === "catalog-under-observed") return { kind: "ambiguous", slugs };
     if (slugs.length === 1) return { kind: "toolkit", slug: slugs[0] };
     return { kind: "ambiguous", slugs };
   }
@@ -669,11 +750,11 @@ export function hostToToolkit(host: string, catalog: readonly ToolkitMeta[]): Ho
 // the top of this file.
 
 /**
- * A signal from a browser run that ended on a known site. `null` when the
- * catalog does not claim the host, and equally when more than one entry does —
- * an ambiguous host must not silently become weight on whichever app sorted
- * first, because the weight it would add is HIGH and would carry that app to
- * the top of the table on no evidence at all.
+ * A signal from a browser run that ended on a known site. `null` unless exactly
+ * one catalog entry NAMES the host — an ambiguous host (several entries, or a
+ * host that merely contains one) must not silently become weight on whichever
+ * app sorted first, because the weight it would add is HIGH and would carry
+ * that app to the top of the table on no evidence at all.
  */
 export function observedHostSignal(
   user: OwnerId | string,

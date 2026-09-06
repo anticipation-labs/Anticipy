@@ -159,7 +159,11 @@ const MAX_SCAN_BYTES = 2_000_000;
 
 function extensionOf(name: string): string {
   const dot = name.lastIndexOf(".");
-  return dot < 0 ? "" : name.slice(dot);
+  // LOWERCASED, because macOS and Windows filesystems are case-insensitive
+  // while a Set lookup is not. `helper.MJS` is loaded by node exactly like
+  // `helper.mjs`, and an extension set that misses it means the file is never
+  // opened by any leg — a module inside the spike importing brain/, invisible.
+  return dot < 0 ? "" : name.slice(dot).toLowerCase();
 }
 
 /** What a walk found: the files to scan, and every symlink met on the way.
@@ -168,10 +172,19 @@ function extensionOf(name: string): string {
 interface Tree {
   files: string[];
   symlinks: string[];
+  /** Files the walker REFUSED to open because they exceed MAX_SCAN_BYTES.
+   *
+   *  This list exists because the byte cap was the same defect as the skip-list
+   *  and the symlink case, in the same function, added after both were fixed: a
+   *  `continue` that removes a file from every leg and tells nobody. A 2MB
+   *  bundled .js inside the spike could import brain/ and pass all seven legs.
+   *  Refusing to read something enormous is reasonable; refusing SILENTLY is
+   *  how a fence becomes a comment. */
+  oversize: string[];
 }
 
 function emptyTree(): Tree {
-  return { files: [], symlinks: [] };
+  return { files: [], symlinks: [], oversize: [] };
 }
 
 /**
@@ -207,7 +220,11 @@ function walk(dir: string, keep: (path: string) => boolean, skip: Set<string>, o
     }
     if (!entry.isFile()) continue;
     if (!keep(full)) continue;
-    if (statSync(full).size > MAX_SCAN_BYTES) continue;
+    if (statSync(full).size > MAX_SCAN_BYTES) {
+      // Not scanned, but SAID. See Tree.oversize.
+      out.oversize.push(full);
+      continue;
+    }
     out.files.push(full);
   }
   return out;
@@ -1288,6 +1305,75 @@ test("a planted import of production code is caught in every shape, file type an
 // to show that a link which stays inside the spike is still fine, or the next
 // person who symlinks a fixture gets a red they cannot explain and deletes the
 // check.
+test("nothing inside the spike is too big for the fence to read", () => {
+  // THE THIRD SILENT DROP IN walk(), found after the other two were fixed.
+  // The skip-list dropped whole directories, the symlink case dropped links,
+  // and MAX_SCAN_BYTES drops any file over 2MB — each with a bare `continue`
+  // that removes the file from all seven legs and reports nothing. A bundled
+  // 2MB .js inside the spike importing brain/ would have been invisible.
+  //
+  // Refusing to read something enormous is still right; the fix is that the
+  // refusal is now SAID. If this ever goes red the answer is not to raise the
+  // cap, it is to look at what that file is doing in a spike whose whole
+  // source is a few hundred KB.
+  // TWO ASSERTIONS, AND THE ORDER MATTERS. The second one alone is a tautology:
+  // with no oversize file in the tree, `oversize === []` holds whether the
+  // walker reports the refusal or swallows it, and deleting the fix left this
+  // leg green. Mutation testing caught that. So the refusal is DRIVEN first,
+  // against a planted file, and only then is the real tree asserted clean.
+  const huge = join(SPIKE, "test", "zzOversize.mjs");
+  writeFileSync(huge, `// ${"x".repeat(2_100_000)}\nexport default 1;\n`);
+  try {
+    const withPlant = spikeTree();
+    assert.ok(
+      withPlant.oversize.some((f) => f.endsWith("zzOversize.mjs")),
+      "a file too big to scan must be REPORTED as unread, not dropped in silence",
+    );
+    assert.ok(
+      !withPlant.files.some((f) => f.endsWith("zzOversize.mjs")),
+      "and it must not be counted as scanned",
+    );
+  } finally {
+    rmSync(huge, { force: true });
+  }
+
+  const tree = spikeTree();
+  assert.deepEqual(
+    tree.oversize,
+    [],
+    `the fence refused to read ${tree.oversize.length} file(s) inside the spike, so no leg `
+      + `covered them: ${tree.oversize.join(", ")}`,
+  );
+});
+
+test("extension matching is case-insensitive, because the filesystem is", () => {
+  // macOS and Windows resolve `helper.MJS` and `helper.mjs` to the same file
+  // and node loads either. A case-SENSITIVE extension set therefore never
+  // opens the uppercase one, and a module inside the spike could import brain/
+  // from a file no leg reads. Driven rather than asserted about the source: a
+  // planted uppercase module must be caught exactly like a lowercase one.
+  // The specifier is BUILT, never written as a literal, for the same reason the
+  // plant table above builds its own: leg "a path literal that escapes the
+  // spike" scans this file too, and a violating string sitting in the fence's
+  // own source is a violation. Caught exactly that way on the first run.
+  const spec = "../".repeat(3) + "br" + "ain/llm.ts";
+  const planted = join(SPIKE, "test", "zzUpperCase.MJS");
+  writeFileSync(planted, `import { hear } from "${spec}";\nexport default hear;\n`);
+  try {
+    const tree = spikeTree();
+    assert.ok(
+      tree.files.some((f) => f.endsWith("zzUpperCase.MJS")),
+      "the walker never opened an uppercase-extension module, so no leg could object to it",
+    );
+    assert.ok(
+      outsideSpikeViolations(tree).length > 0,
+      "an import of brain/ from an uppercase-extension file must be a violation",
+    );
+  } finally {
+    rmSync(planted, { force: true });
+  }
+});
+
 test("a symlink out of the spike is a violation; one that stays inside is not", () => {
   const q = '"';
   const probeDir = PROBE_DIR;

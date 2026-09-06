@@ -438,6 +438,54 @@ export function unclearReply(): string {
   );
 }
 
+/** OUR link and nobody else's, single use, ten minutes, bound to one owner.
+ *
+ *  Written out here rather than imported: this module imports nothing but the
+ *  contract, deliberately, so that it cannot reach the vendor even by accident,
+ *  and `words.ts` holds the same prefix for the same reason. The copy is guarded
+ *  by each suite pinning the literal independently rather than reading it off
+ *  the other module — an oracle that is a copy of the implementation catches
+ *  nothing, which this layer has already measured once. */
+const OUR_LINK_PREFIX = "https://anticipy.ai/c/";
+
+/**
+ * Is this the link WE minted?
+ *
+ * `slice` rather than `startsWith`, and a character walk rather than a regex,
+ * because this file's own law-1 legs forbid substring tests and regexes
+ * outright. The legs cannot tell a check on a URL we minted from a check on
+ * somebody's sentence, and their being blunt is the property worth keeping.
+ */
+function isOurLink(url: string): boolean {
+  if (url.length <= OUR_LINK_PREFIX.length) return false;
+  if (url.slice(0, OUR_LINK_PREFIX.length) !== OUR_LINK_PREFIX) return false;
+  for (const ch of url) {
+    // Whitespace inside the string means a second address is riding along, and
+    // a phone linkifies both of them.
+    if (ch.trim() === "") return false;
+  }
+  return true;
+}
+
+/**
+ * Raised when something hands this module a connect link that is not ours.
+ *
+ * It THROWS rather than returning a softer sentence, on the same reasoning as
+ * `PermissionWordsRefused` next door: the empty-url branch below already covers
+ * "the mint failed" with copy the owner can act on, so a url that is not ours is
+ * not a failed mint — it is our own plumbing offering somebody else's address,
+ * and a polite "want me to try again?" would bury that defect under an owner
+ * retrying forever.
+ */
+export class ForeignConnectLink extends Error {
+  readonly url: string;
+  constructor(url: string) {
+    super(`refusing to send a connect link that is not ours: ${JSON.stringify(url)}`);
+    this.name = "ForeignConnectLink";
+    this.url = url;
+  }
+}
+
 export function connectReply(meta: ToolkitMeta | null, link: { url: string }): string {
   const app = appName(meta, meta?.slug ?? "");
   const url = link && typeof link.url === "string" ? link.url.trim() : "";
@@ -447,6 +495,13 @@ export function connectReply(meta: ToolkitMeta | null, link: { url: string }): s
   if (url === "") {
     return `I couldn't make you a link for ${app} just now. Want me to try again?`;
   }
+  // THE SPEC'S FIRST RULE, WITH A FLOOR UNDER IT. Until this check existed the
+  // sentence below interpolated whatever the injected minter returned, so a raw
+  // vendor link reached a person inside a promise that it lasts ten minutes —
+  // false about anybody else's URL, because the vendor's own link dies ten
+  // minutes after it is MINTED rather than after it is sent. Four were pasted
+  // into messages on 2026-09-05 and all four were dead before they were tapped.
+  if (!isOurLink(url)) throw new ForeignConnectLink(url);
   // The spec's unconditional rule: every ask that ends in a connect link says
   // in one sentence that it is optional, because the browser does the same
   // work either way and somebody who feels cornered by an app they like will
@@ -463,6 +518,19 @@ export interface DisconnectOutcome {
   /** How many of the owner's accounts on this app we tried to disconnect. Zero
    *  means there was nothing connected. */
   attempted: number;
+  /** How many of them actually left our table, and how many actually had their
+   *  token revoked at the vendor.
+   *
+   *  These exist because `result` CANNOT express a partial. `combineResults`
+   *  folds two accounts with `every`, so one clean disconnect beside one failure
+   *  collapses to `{revoked:false, deleted:false}` — byte-identical to a run
+   *  where the provider refused everything. The reply built from that said
+   *  "nothing has changed" while `settingsView` had already dropped the row that
+   *  DID come off, and two surfaces contradicting each other about whether
+   *  somebody's mailbox is still reachable is the trust failure this product
+   *  cannot afford. */
+  deletedCount: number;
+  revokedCount: number;
   result: DisconnectResult;
 }
 
@@ -500,7 +568,41 @@ export function disconnectReply(meta: ToolkitMeta | null, outcome: DisconnectOut
       + "own settings, so clear it there if you want it gone at both ends."
     );
   }
+
+  // NEITHER ALL NOR NOTHING. Reaching here with a non-zero count means some of
+  // this owner's accounts on this app came off and some did not, and the old
+  // sentence — "nothing has changed" — was a lie the person could check: the
+  // Settings screen has already lost the rows that were deleted. Say the two
+  // numbers, because "which one is still connected" is the only thing they can
+  // act on, and still do not say "revoked", which is EVERY and did not happen.
+  const gone = countOf(outcome.deletedCount, deleted, outcome.attempted);
+  if (gone > 0 && gone < outcome.attempted) {
+    return partialLine(`I disconnected ${gone} of your ${outcome.attempted} ${app} accounts.`,
+      outcome.attempted - gone);
+  }
+  const off = countOf(outcome.revokedCount, revoked, outcome.attempted);
+  if (off > 0 && off < outcome.attempted) {
+    // Rarer, and worse to get wrong: nothing left our table, so both accounts
+    // still LOOK connected, while one of them has quietly stopped working.
+    return partialLine(`${app} access is off for ${off} of your ${outcome.attempted} accounts.`,
+      outcome.attempted - off);
+  }
+
   return `I couldn't disconnect ${app} just now, so nothing has changed. Want me to try again?`;
+}
+
+function partialLine(head: string, left: number): string {
+  return `${head} The other ${left} ${left === 1 ? "is" : "are"} still connected — want me to `
+    + "try again?";
+}
+
+/** A count, or the all-or-nothing reading when a caller predates the counts.
+ *  Types are stripped at run time, so "the field is there" is a claim to check
+ *  rather than one the compiler makes — and falling back to the combined result
+ *  keeps an older caller's sentence exactly as honest as it already was. */
+function countOf(given: unknown, all: boolean, attempted: number): number {
+  if (typeof given === "number" && given >= 0) return Math.min(given, attempted);
+  return all ? attempted : 0;
 }
 
 export interface WritesOutcome {
@@ -702,6 +804,8 @@ export function createCommands(deps: CommandDeps): Commands {
       return {
         toolkit,
         attempted: 0,
+        deletedCount: 0,
+        revokedCount: 0,
         result: { revoked: false, deleted: false, revokeUnavailable: false },
       };
     }
@@ -726,7 +830,16 @@ export function createCommands(deps: CommandDeps): Commands {
         await table.put({ ...row, status: "disconnected", writes_enabled: false });
       }
     }
-    return { toolkit, attempted: live.length, result: combineResults(results) };
+    // Counted per account, not folded. The fold is what loses a partial, and a
+    // lost partial is the reply telling somebody nothing changed while their
+    // mailbox has already come off the Settings screen.
+    return {
+      toolkit,
+      attempted: live.length,
+      deletedCount: results.filter((r) => r.deleted === true).length,
+      revokedCount: results.filter((r) => r.revoked === true).length,
+      result: combineResults(results),
+    };
   }
 
   async function chooseAccount(

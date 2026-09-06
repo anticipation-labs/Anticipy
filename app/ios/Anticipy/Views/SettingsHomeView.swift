@@ -9,17 +9,36 @@ struct SettingsHomeView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var route: Route?
+    @AppStorage(AppTheme.key) private var themeChoice = AppTheme.light.rawValue
 
     private enum Route: Hashable {
         case profile, listening, notifications, connectors, personalization
-        case privacyData, appearance, advanced, about
+        case privacyData, advanced, about
+    }
+
+    /// The root now carries the appearance choice inline — the design puts it on
+    /// the settings root, not behind a row. It writes the same @AppStorage key
+    /// the Appearance sub-screen used, so the whole app repaints through the
+    /// dynamic `themed(...)` tokens with no observation graph. There is no
+    /// "System" case, on purpose — see AppTheme.swift.
+    private var appearanceBinding: Binding<AppTheme> {
+        Binding(
+            get: { AppTheme(rawValue: themeChoice) },
+            set: { newValue in
+                Haptics.engage()
+                themeChoice = newValue.rawValue
+            }
+        )
     }
 
     var body: some View {
         SheetChrome(
             title: "Settings",
             leading: .back,
-            onLeading: { dismiss() }
+            onLeading: { dismiss() },
+            trailing: SheetAction(systemImage: "info", label: "About") {
+                Haptics.engage(); route = .about
+            }
         ) {
             GroupedCard {
                 InfoRow(session.ownerEmail.isEmpty
@@ -33,52 +52,42 @@ struct SettingsHomeView: View {
                            ? nil : session.ownerFirstName) {
                     Haptics.engage(); route = .profile
                 }
-            }
-
-            SectionHeader("Anticipy")
-            GroupedCard {
-                NavRow("Listening", systemImage: "waveform",
-                       value: session.listener.isListening ? "On" : "Off") {
-                    Haptics.engage(); route = .listening
-                }
                 NavRow("Notifications", systemImage: "bell") {
                     Haptics.engage(); route = .notifications
+                }
+                NavRow("Privacy & Data", systemImage: "hand.raised") {
+                    Haptics.engage(); route = .privacyData
                 }
                 NavRow("Personalization", systemImage: "person.text.rectangle") {
                     Haptics.engage(); route = .personalization
                 }
             }
 
-            SectionHeader("Connections")
+            SectionHeader("App")
             GroupedCard {
+                NavRow("Listening", systemImage: "waveform",
+                       value: session.listener.isListening ? "On" : "Off") {
+                    Haptics.engage(); route = .listening
+                }
                 NavRow("Connectors", systemImage: "link") {
                     Haptics.engage(); route = .connectors
-                }
-            }
-
-            SectionHeader("Privacy")
-            GroupedCard {
-                NavRow("Privacy & Data", systemImage: "hand.raised") {
-                    Haptics.engage(); route = .privacyData
-                }
-            }
-
-            SectionHeader("Preferences")
-            GroupedCard {
-                NavRow("Appearance", systemImage: "circle.lefthalf.filled") {
-                    Haptics.engage(); route = .appearance
                 }
                 NavRow("Advanced", systemImage: "slider.horizontal.3") {
                     Haptics.engage(); route = .advanced
                 }
             }
 
-            SectionHeader("About")
-            GroupedCard {
-                NavRow("About Anticipy", systemImage: "info.circle") {
-                    Haptics.engage(); route = .about
+            SectionHeader("Appearance")
+            SelectGroup(
+                [AppTheme.light, AppTheme.dark],
+                selection: appearanceBinding,
+                title: { $0 == .light ? "Light" : "Dark" },
+                subtitle: {
+                    $0 == .light
+                        ? "A white background with dark text."
+                        : "A black background with light text."
                 }
-            }
+            )
         }
         .navigationDestination(isPresented: Binding(
             get: { route != nil },
@@ -91,7 +100,6 @@ struct SettingsHomeView: View {
             case .connectors: SettingsConnectorsView(session: session)
             case .personalization: SettingsPersonalizationView(session: session)
             case .privacyData: SettingsPrivacyDataView(session: session)
-            case .appearance: SettingsAppearanceView()
             case .advanced: SettingsAdvancedView()
             case .about: SettingsAboutView()
             case nil:        EmptyView()
@@ -233,3 +241,40 @@ private struct SettingsAboutView: View {
         }
     }
 }
+
+#if DEBUG
+/// Previews the redesigned settings index with a bare session — no account,
+/// no server, no listener running. `PreviewProvider` rather than the `#Preview`
+/// macro because the deployment floor is iOS 16 (same reason SupervisedReadView
+/// uses it). Populated with sample identity so the pill and Profile row read
+/// like a real account; it reaches no network.
+struct SettingsHomeView_Previews: PreviewProvider {
+    static var previews: some View {
+        NavigationStack { SettingsHomeView() }
+            .environmentObject(sampleSession())
+            .previewDisplayName("Settings — light")
+
+        NavigationStack { SettingsHomeView() }
+            .environmentObject(sampleSession())
+            // `.environment(\.colorScheme, .dark)`, not `.preferredColorScheme`.
+            // The theme gate allows exactly ONE preferredColorScheme pin in the
+            // app — the real one in AnticipyApp.swift, which reads the owner's
+            // stored choice. A second pin anywhere means two things claim to
+            // decide the theme, and the gate cannot tell a preview from the app.
+            // This previews dark without adding a pin.
+            .environment(\.colorScheme, .dark)
+            .previewDisplayName("Settings — dark")
+    }
+
+    /// `AnticipySession` is `@MainActor`, like every observable in this app,
+    /// and `PreviewProvider` is itself `@MainActor` — so this helper can build
+    /// and populate it here.
+    @MainActor
+    private static func sampleSession() -> AnticipySession {
+        let s = AnticipySession()
+        s.ownerEmail = "you@anticipy.ai"
+        s.ownerFirstName = "Omar"
+        return s
+    }
+}
+#endif

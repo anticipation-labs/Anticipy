@@ -58,10 +58,97 @@ export const SENTENCE_COUNT = 3;
  *  not consent — it is a checkbox with a paragraph behind it. */
 export const MAX_SENTENCE_CHARS = 80;
 
-/** Two GSM segments, and the last accepted length: 320 passes, 321 refuses.
- *  Past this a carrier splits the message, and the half that arrives second —
- *  or reordered, or not at all — is the half with the link in it. */
-export const MAX_ASK_CHARS = 320;
+// ---------------------------------------------------------------------------
+// HOW LONG "ONE TEXT" ACTUALLY IS.
+// ---------------------------------------------------------------------------
+// This used to be `MAX_ASK_CHARS = 320`, described as "two GSM segments". It was
+// neither. A concatenated GSM-7 message carries 153 septets per part, so two
+// parts hold 306 — every ask between 307 and 320 went out in THREE pieces while
+// the constant said it was safe. And a single curly apostrophe forces the whole
+// message to UCS-2, where two parts hold 134: the same 320 characters then
+// arrive in five. The part that turns up second, reordered, or not at all is the
+// part with the link in it, and the ask is the only interruption this app gets.
+//
+// So the ceiling is COMPUTED from the encoding the carrier will pick, and the
+// two real numbers are exported with the condition attached to each. This is
+// transport arithmetic over text we are about to send — HARNESS-LAWS law 1's
+// "senses", not a reading of anybody's words.
+
+/** One text as far as a person is concerned; two parts as far as the carrier
+ *  is. Past two, the odds of a reordered or missing part stop being ignorable. */
+export const MAX_ASK_SEGMENTS = 2;
+
+const GSM7_ALONE = 160;
+const GSM7_PER_PART = 153;
+const UCS2_ALONE = 70;
+const UCS2_PER_PART = 67;
+
+/** The true ceiling when every character is in the GSM-7 alphabet. */
+export const MAX_ASK_CHARS_GSM7 = GSM7_PER_PART * MAX_ASK_SEGMENTS;
+
+/** The true ceiling the moment ONE character is not — a curly apostrophe, an
+ *  em dash, an emoji, an accented name. Less than half. */
+export const MAX_ASK_CHARS_UCS2 = UCS2_PER_PART * MAX_ASK_SEGMENTS;
+
+/** GSM 03.38's basic alphabet: one septet each. Written out rather than derived,
+ *  because the derivation IS this table and a clever range check would quietly
+ *  admit a character the carrier cannot send. */
+const GSM7_ONE_SEPTET: ReadonlySet<string> = new Set([
+  ..."@£$¥èéùìòÇØøÅåΔ_ΦΓΛΩΠΨΣΘΞÆæßÉ !\"#¤%&'()*+,-./0123456789:;<=>?",
+  ..."¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ§¿abcdefghijklmnopqrstuvwxyzäöñüà",
+  "\n",
+  "\r",
+]);
+
+/** The extension table. Each of these is sendable, and each costs TWO septets
+ *  because it goes out behind an escape — so a draft full of braces runs out of
+ *  room sooner than its character count suggests. */
+const GSM7_TWO_SEPTETS: ReadonlySet<string> = new Set([...'^{}\\[~]|€', "\f"]);
+
+export interface SmsShape {
+  /** What a carrier will encode this as. */
+  encoding: "gsm-7" | "ucs-2";
+  /** Septets for GSM-7, UTF-16 code units for UCS-2. Not characters. */
+  units: number;
+  /** How many messages actually leave. */
+  segments: number;
+  /** The most units that fit in `MAX_ASK_SEGMENTS`, for this encoding. */
+  ceiling: number;
+}
+
+/** What the carrier will do with this string. */
+export function smsShape(text: string): SmsShape {
+  const body = typeof text === "string" ? text : "";
+  let septets = 0;
+  let gsm = true;
+  for (const ch of body) {
+    if (GSM7_ONE_SEPTET.has(ch)) {
+      septets += 1;
+    } else if (GSM7_TWO_SEPTETS.has(ch)) {
+      septets += 2;
+    } else {
+      gsm = false;
+      break;
+    }
+  }
+  if (gsm) {
+    return {
+      encoding: "gsm-7",
+      units: septets,
+      segments: septets <= GSM7_ALONE ? 1 : Math.ceil(septets / GSM7_PER_PART),
+      ceiling: MAX_ASK_CHARS_GSM7,
+    };
+  }
+  // UCS-2 is billed in UTF-16 code units, which is what `.length` counts — so a
+  // character outside the BMP costs two of them, exactly as the carrier charges.
+  const units = body.length;
+  return {
+    encoding: "ucs-2",
+    units,
+    segments: units <= UCS2_ALONE ? 1 : Math.ceil(units / UCS2_PER_PART),
+    ceiling: MAX_ASK_CHARS_UCS2,
+  };
+}
 
 /** OUR link, never the vendor's. Single use, ten minutes, bound to one owner
  *  (`ConnectLink` in the contract). The vendor's own link expires in ten
@@ -285,7 +372,26 @@ function firstTermIn(text: string, terms: readonly string[]): string | null {
   return null;
 }
 
-const URL_LIKE = /https?:\/\/\S+/gi;
+/**
+ * What a PHONE will treat as a link, not what a parser would.
+ *
+ * `https?://` alone was blind to the shape that actually rides into a text: a
+ * bare `accounts.google.com/o/v2/auth` or `connect.<vendor>.dev/link/abc`, which
+ * every messaging app on every handset linkifies on sight. That blindness meant
+ * the "exactly one URL and it must be ours" containment could be satisfied by a
+ * message carrying two tappable links, one of them the vendor's and dead.
+ *
+ * The second alternative REQUIRES a slash after the host, and that is a
+ * deliberate trade rather than an oversight. Without it, "in the browser.Connect
+ * it once" and "e.g. this" read as hosts, and every one of those is a good ask
+ * refused — which costs the one interruption this app ever gets. Every link this
+ * containment was built to stop carries a path, so the path is the cheap half of
+ * the trade.
+ *
+ * This is transport plumbing on text WE are about to send, not a reading of
+ * anybody's words — HARNESS-LAWS law 1, "senses", and the module header.
+ */
+const URL_LIKE = /https?:\/\/\S+|(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}\/\S*/gi;
 
 function urlCount(text: string): number {
   return (text.match(URL_LIKE) ?? []).length;
@@ -595,11 +701,17 @@ export async function askText(
     return refuse("malformed-reply", `the ask for ${meta.name} is empty`);
   }
 
-  if (text.length > MAX_ASK_CHARS) {
+  // Measured against the encoding the carrier will actually pick, not against a
+  // character count. The refusal names the real ceiling AND the encoding that
+  // set it, so the next person reading a log is not left wondering why a
+  // 200-character ask was refused: it had a curly apostrophe in it.
+  const sms = smsShape(text);
+  if (sms.segments > MAX_ASK_SEGMENTS) {
     return refuse(
       "too-long",
-      `the ask is ${text.length} characters, over the ${MAX_ASK_CHARS} that stay in one `
-        + "message; past that a carrier splits it and the half with the link can arrive second",
+      `the ask is ${sms.units} ${sms.encoding} units and would leave in ${sms.segments} `
+        + `messages, over the ${sms.ceiling} that fit in ${MAX_ASK_SEGMENTS}; past that a `
+        + "carrier splits it further and the part with the link can arrive second, or not at all",
     );
   }
 

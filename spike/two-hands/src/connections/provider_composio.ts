@@ -16,7 +16,9 @@
 //   * the session cache is keyed by owner and carries a REVERSE index, so a
 //     session id handed to two owners is a refusal, not a shared mailbox;
 //   * `connections()` refuses a response carrying somebody else's `user_id`
-//     rather than stamping ours over it;
+//     rather than stamping ours over it — and refuses just as hard when the
+//     row's owner cannot be read at all, because "the vendor did not say" is
+//     not "the vendor agreed";
 //   * `disconnect()` proves the account belongs to this owner BEFORE touching
 //     it, because the vendor's revoke and delete endpoints take an account id
 //     and no user scoping at all — an unscoped id in an unscoped endpoint is a
@@ -210,15 +212,28 @@ export function isRetryableStatus(status: number): boolean {
 
 /** Did the vendor give a DEFINITE answer that this particular account cannot be
  *  revoked programmatically? Only then may `revokeUnavailable` be reported,
- *  because that flag drives copy shown to a human: "access was removed here,
- *  you may need to clear it in the app's own settings".
+ *  because that flag does two irreversible things at once: `disconnect()` goes
+ *  on to DELETE the row, and the confirmation copy tells a human "access was
+ *  removed here, you may need to clear it in the app's own settings".
  *
- *  401/403 are excluded on purpose. They mean OUR key is wrong, not that THEIR
- *  account resists revoking — telling somebody to go clean up Google's settings
- *  because we misconfigured a header is a lie about their own security. */
+ *  409 is the only status that carries that meaning, and it is the measured one
+ *  — "the account is not in a revocable state". It is an ALLOW-LIST rather than
+ *  "everything that is not retryable" because that inverse read the whole 4xx
+ *  range as a statement about the owner's account:
+ *    * 401/403 mean OUR key is wrong. Telling somebody to go clean up Google's
+ *      settings because we misconfigured a header is a lie about their own
+ *      security.
+ *    * 400/404/405/422 mean OUR REQUEST was wrong — a stale id, a renamed path,
+ *      a body the vendor rejected. Deleting on one of those destroys the only
+ *      handle that could ever revoke a token that is still live at Google, and
+ *      the person is told to go fix it themselves.
+ *    * anything unmeasured (410, 418, a status added next quarter) is not
+ *      understood, and a claim about somebody's security is not a thing to make
+ *      out of a number we have never seen.
+ *  Everything outside the allow-list falls through to `disconnect()`'s refusal
+ *  branch: no delete, and a named failure the owner can retry. */
 export function revokeIsDefinitivelyUnavailable(status: number): boolean {
-  if (status === 401 || status === 403) return false;
-  return !isRetryableStatus(status);
+  return status === 409;
 }
 
 /** Composio's connected-account status enum, mapped fail-closed.
@@ -264,6 +279,81 @@ export function readLastUsedAt(raw: unknown): number | null {
   if (!text) return null;
   const ms = Date.parse(text);
   return Number.isFinite(ms) ? ms : null;
+}
+
+/** Whose account is this row, as far as the vendor's own answer can say?
+ *
+ *  FOUR states, because three of them are not the same thing. "a stranger",
+ *  "there is something here and it is not an owner id we can read", and "this
+ *  row names nobody" all used to collapse into the one answer the caller then
+ *  treated as agreement.
+ *
+ *  Only `ours` may be adopted. This is a FLOOR — does anything confirm this row
+ *  belongs to the owner we asked for? — and a floor that waves through when
+ *  nobody answers is a decoration. What gets waved through here is a stranger's
+ *  connection, stamped with our validated owner id and handed to `disconnect()`
+ *  as ownership proof over `/{id}/revoke` and `DELETE /{id}`, two endpoints
+ *  that take an account id and no user scoping at all. */
+export type OwnerEcho = "ours" | "foreign" | "unreadable" | "absent";
+
+/** The keys a connected-account row is known or likely to name its owner
+ *  under. `user_ids` plural is first among equals: it is the spelling the
+ *  REQUEST uses, so an array echo is the likeliest shape of all — and it read
+ *  as silence for as long as only a bare string was handled. */
+const OWNER_ECHO_KEYS = ["user_id", "user_ids", "userId", "userIds", "user"] as const;
+
+export function readOwnerEcho(item: Record<string, unknown>, owner: string): OwnerEcho {
+  let ours = false;
+  let foreign = false;
+  let unreadable = false;
+
+  const one = (v: unknown): void => {
+    const text = typeof v === "string" ? v.trim() : "";
+    if (text.length === 0) unreadable = true;
+    else if (text === owner) ours = true;
+    else foreign = true;
+  };
+
+  for (const key of OWNER_ECHO_KEYS) {
+    const value = item[key];
+    // `undefined` is not a JSON value, so a key holding it is indistinguishable
+    // from a key that is not there. `null` IS a JSON value and is unreadable,
+    // not absent: the vendor sent an owner field and put nothing in it.
+    if (value === undefined) continue;
+
+    if (Array.isArray(value)) {
+      // An empty array names nobody. A multi-element array naming us AND
+      // somebody else is not agreement either — `foreign` wins below.
+      if (value.length === 0) unreadable = true;
+      else for (const element of value) one(element);
+      continue;
+    }
+    const nested = asRecord(value);
+    if (nested !== null) {
+      const inner = nested.id ?? nested.user_id ?? nested.userId;
+      if (inner === undefined) unreadable = true;
+      else one(inner);
+      continue;
+    }
+    one(value);
+  }
+
+  // A stranger named ANYWHERE in the row outranks everything else: the scoping
+  // did not hold, and that is the loudest thing this adapter can say.
+  if (foreign) return "foreign";
+  if (unreadable) return "unreadable";
+  return ours ? "ours" : "absent";
+}
+
+/** Which owner-ish FIELDS the row carried, names only and never values.
+ *
+ *  A refusal is only useful if the next person can act on it, and the action
+ *  here is always "read the field the vendor actually sends". Key names are
+ *  constants from the list above, so nothing of the owner's leaks into a log
+ *  line by this route. */
+function ownerEchoFields(item: Record<string, unknown>): string {
+  const seen = OWNER_ECHO_KEYS.filter((key) => item[key] !== undefined);
+  return seen.length === 0 ? "none" : seen.join(", ");
 }
 
 /** Re-validate an owner id at runtime.
@@ -325,7 +415,20 @@ function requireCallbackUrl(op: string, raw: unknown): string {
 
 /** Every tool identifier in a session's tool list, however the vendor spells
  *  the entries — plain strings today, objects with a `name` in some responses.
- *  Upper-cased for an EXACT identifier comparison, never a substring search. */
+ *  Upper-cased for an EXACT identifier comparison, never a substring search.
+ *
+ *  `null` means NO VERDICT, and one unreadable entry is enough to produce it.
+ *  This used to skip an entry it could not name and return the rest, so a list
+ *  whose entries carried their identifier under any other key came back as an
+ *  EMPTY array — and the caller reads "empty and readable" as "the connection
+ *  tool is confirmed absent". That is a floor lifting itself: the entry nobody
+ *  could parse is precisely the entry that might BE the connection tool, and
+ *  the session would have been accepted with the model holding a tool that
+ *  texts people raw vendor links.
+ *
+ *  A genuinely empty array is a different answer and stays a verdict: zero
+ *  entries is the vendor saying the model is handed nothing, and nothing does
+ *  not contain the tool. */
 function toolIdentifiers(raw: unknown): string[] | null {
   if (!Array.isArray(raw)) return null;
   const out: string[] = [];
@@ -336,9 +439,19 @@ function toolIdentifiers(raw: unknown): string[] | null {
       continue;
     }
     const record = asRecord(entry);
-    if (!record) continue;
-    const named = asString(record.name) ?? asString(record.slug) ?? asString(record.tool_slug);
-    if (named) out.push(named.trim().toUpperCase());
+    // The spellings a tool list is known to use, including the nested
+    // `function.name` of an OpenAI-shaped entry. Deliberately NOT `id`: a row
+    // whose `id` is a uuid and whose identifier lives elsewhere would read as a
+    // confidently parsed non-match, which is the hole above wearing a hat.
+    const named = record === null
+      ? null
+      : asString(record.name)
+        ?? asString(record.slug)
+        ?? asString(record.tool_slug)
+        ?? asString(record.tool_name)
+        ?? asString(asRecord(record.function)?.name);
+    if (named === null) return null;
+    out.push(named.trim().toUpperCase());
   }
   return out;
 }
@@ -737,11 +850,34 @@ export class ComposioConnections implements ConnectionProvider {
       // OUR owner id over the vendor's would launder a stranger's mailbox into
       // this owner's connections table under the right name, which is exactly
       // the failure this contract's `OwnerId` type was created for.
-      const echoed = asString(item.user_id) ?? asString(item.user_ids);
-      if (echoed !== null && echoed.trim() !== owner) {
+      //
+      // It fails CLOSED in all three non-answers. It used to check only a bare
+      // non-empty string under `user_id`/`user_ids`, so an array — the plural
+      // the request itself sends — a camelCase key, a nested `user.id`, a
+      // number or an empty string all read as "the vendor did not say", the
+      // check was skipped, and the stray row was adopted. `disconnect()` then
+      // used that laundered list as its ownership proof for two endpoints with
+      // no user scoping, and deleting a stranger's connection returns 200.
+      const echo = readOwnerEcho(item, owner);
+      if (echo === "foreign") {
         throw new ConnectionsOwnerMismatch(
           "connections",
           "the vendor returned an account bound to a different user_id than the one queried",
+        );
+      }
+      if (echo !== "ours") {
+        // A shape refusal rather than a mismatch: we are not claiming this row
+        // belongs to somebody else, only that nothing in it says it is ours.
+        // If this ever fires against the live endpoint, the fix is to read the
+        // field the vendor actually sends — never to let an unowned row
+        // through, because nothing downstream can tell the difference.
+        throw new ConnectionsResponseShape(
+          "connections",
+          echo === "absent"
+            ? "a connected account named no owner at all, so nothing in the response ties it "
+              + "to the owner that was queried"
+            : "a connected account named an owner that could not be read as the one queried "
+              + `(owner fields present: ${ownerEchoFields(item)})`,
         );
       }
 
@@ -837,11 +973,13 @@ export class ComposioConnections implements ConnectionProvider {
       // not happen.
       revokeUnavailable = true;
     } else {
-      // Retryable, or our own credential. STOP — do not delete. The delete
-      // destroys the account id, and that id is the only handle we will ever
-      // have for revoking this token. Failing now leaves a person still
-      // connected, which they can retry; deleting now leaves a live token at
-      // Google that nobody can ever reach again.
+      // Retryable, our own credential, our own request, or a status nobody has
+      // measured. STOP — do not delete. The delete destroys the account id, and
+      // that id is the only handle we will ever have for revoking this token.
+      // Failing now leaves a person still connected, which they can retry;
+      // deleting now leaves a live token at Google that nobody can ever reach
+      // again — and the copy for `revokeUnavailable` would have sent them off
+      // to clear settings for a failure that was ours.
       throw new ConnectionsRequestFailed(
         "disconnect revoke",
         revoke.status,

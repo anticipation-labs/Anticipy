@@ -22,9 +22,18 @@
 // somebody else's Anticipy, or attach the owner's mailbox to their own. That is
 // the failure connections/contract.ts opens with — one operator's Gmail serving
 // everybody — reached from the other end. So redeeming requires the signed-in
-// session to BE the owner the token was minted for, and a redeem by anybody
-// else is told nothing: not the toolkit, not the owner, not whether the token
-// was ever real.
+// session to BE the owner the token was minted for, and a caller who has not
+// proved they are anybody is told NOTHING: not the toolkit, not the owner, not
+// whether the token was ever real.
+//
+// That last clause was written before it was true. Until 2026-09-05 a signed-out
+// request could sort strings into "a real Anticipy token" and "not one" — a live
+// token answered `sign-in-required` and an invented one answered `expired` — so
+// the routes confirmed an intercepted text was worth keeping, to a caller who
+// had proved nothing. `locate` now settles the session BEFORE it looks anything
+// up, which collapses unknown, expired, used and not-yours into one answer for
+// an anonymous caller and takes the row lookup (and its round trip, which is the
+// same oracle read off a stopwatch) out of the anonymous path entirely.
 //
 // HARNESS-LAWS LAW 1. Nothing here decides what a person MEANT. Which app
 // somebody wants is a model's answer (contract.ts `ToolkitJudge`) and arrives
@@ -254,8 +263,26 @@ export interface ConnectLinkStore {
   claim(handle: string, usedAt: number): Promise<ClaimOutcome>;
   /** THE EXACTLY-ONCE GATE for the callback, same shape:
    *    UPDATE connect_links SET completed_at = ?1
-   *     WHERE token_handle = ?2 AND completed_at IS NULL */
+   *     WHERE token_handle = ?2 AND completed_at IS NULL
+   *
+   *  Read this as taking a LEASE, not as filing a receipt: it says "I am the
+   *  one who will write this connection", and `release` below gives it back if
+   *  the write does not happen. */
   complete(handle: string, completedAt: number): Promise<ClaimOutcome>;
+  /**
+   * GIVE THE LEASE BACK when the write it was taken for failed. Conditional,
+   * like every other write here, so a stale caller cannot re-open the
+   * exactly-once window under a connection somebody else has already recorded:
+   *    UPDATE connect_links SET completed_at = NULL
+   *     WHERE token_handle = ?1 AND completed_at = ?2
+   *
+   * WHY IT EXISTS. `complete` used to be burned before `onConnected`, so one
+   * failed write left the token completed with no row anywhere: the page said
+   * "connected" on every refresh, the account existed at the vendor, and
+   * Composio publishes no success webhook — nothing would ever mention it
+   * again. Permanent, silent data loss, one `throw` away at all times.
+   */
+  release(handle: string, completedAt: number): Promise<ClaimOutcome>;
 }
 
 /**
@@ -305,6 +332,18 @@ export class MemoryConnectLinkStore implements ConnectLinkStore {
     const done: StoredLink = { ...row, completed_at: completedAt };
     this.#rows.set(handle, done);
     return { won: true, row: { ...done } };
+  }
+
+  async release(handle: string, completedAt: number): Promise<ClaimOutcome> {
+    const row = this.#rows.get(handle);
+    if (!row) return { won: false, row: null };
+    // Only the caller HOLDING the lease may hand it back. Unconditional, this
+    // would let a late retry clear the completion of a connection another
+    // callback already wrote, and the next refresh would write it twice.
+    if (row.completed_at !== completedAt) return { won: false, row: { ...row } };
+    const open: StoredLink = { ...row, completed_at: null };
+    this.#rows.set(handle, open);
+    return { won: true, row: { ...open } };
   }
 
   /** Tests and the `/settings/connected` page both want to count outstanding
@@ -429,24 +468,42 @@ function asOwnerIdOrNull(raw: unknown): OwnerId | null {
 /**
  * THE ORDER OF THESE CHECKS IS THE PRIVACY MODEL. Read it before changing one.
  *
- * 1. NOT-A-TOKEN, NO-SUCH-ROW and EXPIRED collapse into one answer, `dead`.
- *    That is what stops the endpoint being an oracle: a person who intercepted
- *    a text cannot use these routes to learn whether the string they have is a
- *    real Anticipy token, because a real expired one and a made-up one give
- *    back the identical object.
+ * 1. NO SESSION, NO ANSWER — and this check comes first, before the token is
+ *    even parsed. A caller who has not proved they are anybody gets `signed-out`
+ *    for every token there is: live, expired, spent, forged, malformed, or
+ *    somebody else's. Nothing else in this function runs for them.
  *
- * 2. Expiry is checked BEFORE the owner. If the owner check came first, a
+ *    This was the oracle. With the lookup first, a signed-out request could sort
+ *    strings into "a real Anticipy token" (answered `sign-in-required`) and "not
+ *    one" (answered `expired`), which is precisely the fact an intercepted text
+ *    is worth checking — available to the anonymous reader the SMS threat model
+ *    is about, for free, and without ever spending the link. Ordering it first
+ *    also keeps the STORE out of the anonymous path, so the same fact cannot be
+ *    read off the round trip with a stopwatch instead of a status code.
+ *
+ * 2. NOT-A-TOKEN, NO-SUCH-ROW and EXPIRED collapse into one answer, `dead`.
+ *    That is what keeps a SIGNED-IN caller from being told which strings are
+ *    real either: a genuine expired token and a made-up one give back the
+ *    identical object.
+ *
+ * 3. Expiry is checked BEFORE the owner. If the owner check came first, a
  *    real-but-expired token would answer "wrong-user" forever, which tells an
  *    interceptor the token was genuine — permanently, and long after it could
  *    do anything. The cost of this order is small and is paid by the owner, not
  *    by an attacker: a link the owner already used and comes back to an hour
  *    later reads "expired" rather than "already used".
  *
- * 3. `already-used` is NOT decided here at all. The used bit is the one field
+ * 4. `already-used` is NOT decided here at all. The used bit is the one field
  *    that changes under a race, so reading it and acting on it is exactly the
  *    bug this module exists to avoid. `redeem` asks the store's compare-and-set
  *    and believes only that; `connectPageView` reads it only to draw a page it
  *    is not going to consume.
+ *
+ * A SIGNED-IN STRANGER still gets `wrong-user` rather than `dead`, and that is
+ * deliberate rather than an oversight in step 1. They have proved which owner
+ * they are, so the fact leaks to a known, revocable account rather than to
+ * nobody — and the page has to be able to say "you are signed in as someone
+ * else" or a household sharing a laptop can never be told why the link failed.
  */
 async function locate(
   token: unknown,
@@ -455,6 +512,9 @@ async function locate(
   store: ConnectLinkStore,
   deadline: (row: StoredLink) => number,
 ): Promise<Located> {
+  const who = asOwnerIdOrNull(signedInAs);
+  if (who === null) return SIGNED_OUT;
+
   if (!isWellFormedToken(token)) return DEAD;
   const handle = tokenHandle(token);
   const row = await store.read(handle);
@@ -462,11 +522,25 @@ async function locate(
   if (!constantTimeEqual(handle, row.token_handle)) return DEAD;
   if (now >= deadline(row)) return DEAD;
 
-  const who = asOwnerIdOrNull(signedInAs);
-  if (who === null) return SIGNED_OUT;
   if (!constantTimeEqual(who, row.user_id)) return WRONG_USER;
 
   return { kind: "row", row };
+}
+
+/**
+ * Is the row a WRITE handed back the row the write was aimed at?
+ *
+ * The handle is the primary key, so it is the answer on its own; the owner and
+ * the toolkit are checked too because a store that assembles a row from a join
+ * can get the key right and the payload wrong, and those are the two fields
+ * that decide whose account gets connected to what. Everything a caller is
+ * handed is then built from the row `locate` verified, so this is a refusal,
+ * never a repair.
+ */
+function isTheSameRow(asked: StoredLink, answered: StoredLink): boolean {
+  if (!constantTimeEqual(asked.token_handle, answered.token_handle)) return false;
+  if (!constantTimeEqual(asked.user_id, answered.user_id)) return false;
+  return asked.toolkit === answered.toolkit;
 }
 
 /** The deadline for every leg except the callback: the link's own TTL. Dead AT
@@ -524,6 +598,11 @@ const WRONG_USER_RESULT: RedeemResult = Object.freeze({ outcome: "wrong-user" })
  * unauthenticated request never reaches the compare-and-set, so it cannot burn
  * a link somebody else is about to tap.
  *
+ * It is the SAME `wrong-user` for every token a signed-out caller can present,
+ * because `locate` settles the session before it looks anything up. An
+ * anonymous caller therefore cannot use this function to sort strings into real
+ * tokens and invented ones, which is what it was doing until 2026-09-05.
+ *
  * THE USED BIT IS NOT READ. Not once. The row that came back from `locate` is
  * advisory about it — on D1 that read may be served by a replica that is
  * seconds behind, and a redeem that trusted a stale `used_at: null` would hand
@@ -545,16 +624,35 @@ export async function redeem(token: string, opts: RedeemOptions): Promise<Redeem
     return claim.row === null ? EXPIRED : ALREADY_USED;
   }
 
-  const row = claim.row ?? { ...found.row, used_at: now };
+  // THE STORE WON — BUT ON WHICH ROW? `locate` runs exactly this check thirty
+  // lines up, and for the same D1 reasons: a COLLATE NOCASE column, a stray
+  // LIKE, a trimmed key or a cache returning a near neighbour all produce a row
+  // that is not the one asked for. Those reasons do not stop applying because
+  // the statement was an UPDATE. This was the one path in the module that took
+  // the store's word for it, and it is the path whose answer decides which
+  // owner `connectPageGo` then opens an OAuth flow for — so an unchecked
+  // neighbouring row here is a vendor authorization in a stranger's name,
+  // started from the owner's own browser.
+  //
+  // The claim already wrote, so a refusal leaves the link spent. That is the
+  // correct direction to fail: a store answering wrongly is not a reason to
+  // hand out a second live link.
+  if (claim.row !== null && !isTheSameRow(found.row, claim.row)) return EXPIRED;
+
+  // Every field but `used_at` comes from the row LOCATE verified, not from the
+  // row the write handed back. A store that wins without returning a row is
+  // still serviceable — `found.row` was checked against the handle that was
+  // asked for — so the flow does not fall over on an implementation that
+  // updates and re-reads instead of using RETURNING.
   return {
     outcome: "ok",
     link: {
       token,
-      user_id: row.user_id,
-      toolkit: row.toolkit,
-      alias: row.alias,
-      expires_at: row.expires_at,
-      used_at: row.used_at,
+      user_id: found.row.user_id,
+      toolkit: found.row.toolkit,
+      alias: found.row.alias,
+      expires_at: found.row.expires_at,
+      used_at: claim.row?.used_at ?? now,
     },
   };
 }
@@ -582,7 +680,9 @@ export type ConnectPageView =
     }
   /** Carries NOTHING. Before a session exists we cannot tell the owner from
    *  whoever is holding their phone, so naming the app on this page would print
-   *  the answer above the lock screen. */
+   *  the answer above the lock screen. It is also the answer to EVERY token a
+   *  signed-out caller can present — unknown, expired, spent, somebody else's —
+   *  so the page cannot be asked which strings are real Anticipy tokens. */
   | { state: "sign-in-required" }
   | { state: "expired" }
   | { state: "already-used" }
@@ -623,9 +723,44 @@ export async function connectPageView(
     state: "ok",
     toolkit: meta,
     alias: found.row.alias,
-    sentences,
+    sentences: checkedSentences(sentences, found.row.toolkit),
     expires_at: found.row.expires_at,
   };
+}
+
+/**
+ * A consent page has to say what the person is agreeing to.
+ *
+ * `PermissionWords` is injected, so what comes back is whatever the caller
+ * wired up, and `Promise<string[]>` has no way to say "I have nothing" — the
+ * two values that fit the type are `[]` and a made-up sentence. This module
+ * cannot audit the WORDS (that is words.ts's job, with a model), but it can
+ * refuse to publish silence: an `ok` page carrying an empty list renders a
+ * consent screen with a button and no claims above it, and it looks exactly
+ * like a page that finished loading. A person cannot consent to nothing.
+ *
+ * A blank among good ones is refused too, not filtered: quietly dropping one of
+ * three sentences shows the person less than they are about to agree to, which
+ * is the same defect with better manners.
+ *
+ * It throws for the reason the catalog outage above throws — nothing has been
+ * consumed, so this is a retry, and folding it into a `state` would teach the
+ * page to render the empty list under a different name. HOW MANY sentences
+ * there should be is deliberately not checked: that is the words module's
+ * question, and a count rule here would be an outage the first time a toolkit
+ * with one scope reaches the catalog.
+ */
+function checkedSentences(sentences: unknown, slug: Toolkit): string[] {
+  const lines = Array.isArray(sentences)
+    ? sentences.filter((s): s is string => typeof s === "string" && s.trim() !== "")
+    : [];
+  if (!Array.isArray(sentences) || lines.length === 0 || lines.length !== sentences.length) {
+    throw new Error(
+      `no permission sentences for ${JSON.stringify(slug)} — a connect page cannot ask `
+        + "somebody to agree to a blank list",
+    );
+  }
+  return lines;
 }
 
 /** POST /c/{token}/go. */
@@ -714,15 +849,26 @@ export type ConnectPageDone =
   | {
       state: "connected";
       connection: Connection;
-      /** True for the caller whose compare-and-set won, i.e. the one call that
-       *  recorded. A refresh of this page is `connected` with `recorded:
-       *  false`, so the person sees the right page and the connection is
-       *  written exactly once. */
+      /** True for the caller that actually WROTE the row. A refresh is
+       *  `connected` with `recorded: false`, so the person sees the right page
+       *  and the connection is written once. */
       recorded: boolean;
     }
-  /** The vendor came back without a success. Say the connection did not
-   *  finish; do not guess at why. */
+  /** The vendor came back without a success, or the account it named is not one
+   *  the vendor holds for this owner on this toolkit. Say the connection did
+   *  not finish; do not guess at why, and offer another go — a vendor that has
+   *  not yet listed a brand-new account is indistinguishable from a forged id,
+   *  and nothing has been consumed either way. */
   | { state: "not-connected" }
+  /** The vendor could not be ASKED whether the account is this owner's. Not a
+   *  failed connect: the account may well exist, we simply have no evidence
+   *  yet, and recording on no evidence is the failure below. Nothing is
+   *  written, nothing is consumed, and a refresh retries. */
+  | { state: "could-not-confirm" }
+  /** The connection is real and confirmed, and OUR write of it failed. The
+   *  exactly-once lease has been handed back, so a refresh retries; saying
+   *  "connected" here is what used to lose the connection permanently. */
+  | { state: "not-recorded" }
   | { state: "expired" }
   | { state: "sign-in-required" }
   | { state: "wrong-user" };
@@ -737,9 +883,22 @@ export interface DoneParams {
 export interface DoneOptions {
   signedInAs: OwnerId | string | null;
   store: ConnectLinkStore;
+  /** WHOSE CREDENTIAL ANSWERED? `connections(user)` is the vendor's own list
+   *  for one owner, and it is the only thing that can turn the account id on
+   *  the query string from a claim into a fact. Required: recording a binding
+   *  nobody confirmed is the highest-severity defect this file has. */
+  provider: Pick<ConnectionProvider, "connections">;
   /** Where a finished connection is written. A callback, not an import: the
    *  `connections` table belongs to another module and this one must not own
-   *  it. Called at most once per token. */
+   *  it.
+   *
+   *  Called at most once per successful completion, and it MUST BE IDEMPOTENT
+   *  on (user_id, toolkit, connected_account_id). A write that throws hands the
+   *  exactly-once lease back so the person's refresh can retry — which means a
+   *  write that committed and THEN failed (a timeout after the commit) will be
+   *  attempted again. Delivering the same connection twice is a repaired row;
+   *  delivering it zero times is a connection that exists at the vendor and
+   *  nowhere here, with no webhook that will ever mention it again. */
   onConnected: (connection: Connection) => Promise<void>;
   /** The vendor's spelling of success. Config, not code. */
   successStatus?: string;
@@ -762,21 +921,33 @@ export interface DoneOptions {
  * did not happen leaves a row the router will route to and the ledger will
  * count, and the first the owner hears of it is a step that fails.
  *
- * THE RESIDUAL RISK, WRITTEN DOWN RATHER THAN LEFT FOR SOMEBODY TO FIND. Both
- * facts below arrive on a query string the browser can edit, so a signed-in
- * owner holding their own spent token can hand themselves a `connected` row for
- * an account id that does not exist. The blast radius is their own account —
- * the owner is the stored row's, never the request's — so this cannot bind one
- * person's mailbox to another, which is the failure that matters. It still ends
- * in a step that fails against a connection that was never real.
+ * AND `connected_account_id` IS CONFIRMED, NOT COPIED. This paragraph used to
+ * say the opposite — that writing the id verbatim "cannot bind one person's
+ * mailbox to another, which is the failure that matters" — and that was false,
+ * which makes it worse than no comment at all. `user_id` says who WE think this
+ * is; `connected_account_id` is the VENDOR's handle for whichever credential
+ * actually answers, and it arrives on a query string a browser can edit. Copied
+ * verbatim it writes "this owner's Gmail is <somebody else's account>", and the
+ * first step that runs against that row reaches into another person's mailbox
+ * holding our key. Same failure, other end of the same table.
  *
- * WHAT CLOSES IT: confirming with the provider before recording, which is what
- * Composio's `wait_for_connection` is for (they publish no success webhook,
- * only `expired`, so the callback plus a confirm is the whole signal). It is
- * not done here because `ConnectionProvider` in connections/contract.ts has no
- * method for it — `authorize` returns a `redirectUrl` and nothing to poll with,
- * so this module has nothing to ask. That is a contract gap, reported as one,
- * and it is the first thing to fix in this file when the seam grows the method.
+ * So the account is checked against the vendor's own list for THIS owner —
+ * `connections(user)`, scoped by the row's owner and never by the request —
+ * and it must appear there on this toolkit or nothing is written. Two shapes
+ * are refused rather than filtered, for the reason `locate` refuses a wrong
+ * row: an entry carrying a different `user_id` means the scoping did not hold,
+ * and an entry on a different toolkit would file a calendar credential under
+ * the mail row. Status is deliberately NOT matched — the vendor's own status
+ * races with the callback that reports it, and the callback already carries the
+ * vendor's word for success.
+ *
+ * THE RESIDUAL RISK, WRITTEN DOWN RATHER THAN LEFT FOR SOMEBODY TO FIND. A
+ * concurrent refresh that loses the lease answers `connected, recorded: false`
+ * on the winner's behalf; if the winner's write then fails, that one page said
+ * "connected" about a row that does not exist yet. The lease is handed back, so
+ * the next callback in the hour-long window writes it and the page self-heals —
+ * which is the whole difference from the old behaviour, where the same sentence
+ * was permanent and no later call could ever repair it.
  */
 export async function connectPageDone(
   token: string,
@@ -801,6 +972,32 @@ export async function connectPageDone(
     return { state: "not-connected" };
   }
 
+  // A missing provider is a WIRING bug in the Worker, not a person's problem,
+  // and it must not degrade into telling every owner "try again" forever. It
+  // throws where an operator will see it, and only on the path that needs it,
+  // so every refusal above still answers normally.
+  if (typeof opts?.provider?.connections !== "function") {
+    throw new TypeError(
+      "connectPageDone needs a provider: the account id on the callback has to be "
+        + "confirmed against this owner's own accounts before it is bound",
+    );
+  }
+
+  // ASKED ABOUT THE STORED ROW'S OWNER. Not the session (which was only proved
+  // equal to it), and not anything on the request.
+  let listed: unknown;
+  try {
+    listed = await opts.provider.connections(found.row.user_id);
+  } catch {
+    // Nothing has been consumed, so this is a retry rather than a verdict. The
+    // vendor's error text is theirs and may name them; the person is owed one
+    // sentence. The caller logs with `tokenFingerprint`, never the token.
+    return { state: "could-not-confirm" };
+  }
+  if (!vendorVouchesFor(listed, found.row, accountId)) {
+    return { state: "not-connected" };
+  }
+
   const connection: Connection = {
     user_id: found.row.user_id,
     toolkit: found.row.toolkit,
@@ -816,12 +1013,65 @@ export async function connectPageDone(
     last_used_at: null,
   };
 
-  // Exactly-once. A callback URL gets refreshed, back-buttoned and prefetched;
-  // without this the same connection is written as many times as the page is
-  // opened.
-  const first = await opts.store.complete(found.row.token_handle, now);
-  if (!first.won) return { state: "connected", connection, recorded: false };
+  // THE LEASE, NOT A RECEIPT. A callback URL gets refreshed, back-buttoned and
+  // prefetched, so exactly one caller is allowed to do the writing — but taking
+  // the lease is a promise to write, not proof that the write happened. Reading
+  // it as proof is what turned one failed `onConnected` into a page that said
+  // "connected" forever with no row anywhere: the account existed at the
+  // vendor, Composio publishes no success webhook, and nothing would ever
+  // mention it again.
+  const lease = await opts.store.complete(found.row.token_handle, now);
+  if (!lease.won) return { state: "connected", connection, recorded: false };
 
-  await opts.onConnected(connection);
+  try {
+    await opts.onConnected(connection);
+  } catch {
+    // GIVE THE LEASE BACK so the person's next refresh is the one that writes.
+    // Guarded rather than assumed: a store that shipped without `release`, or
+    // whose release itself fails, must still get the honest answer below and
+    // not a second exception thrown from inside the error path.
+    try {
+      if (typeof opts.store.release === "function") {
+        await opts.store.release(found.row.token_handle, now);
+      }
+    } catch {
+      // Nothing to add. The lease stays taken, refreshes will read as
+      // `connected, recorded: false`, and a fresh link is then the only way
+      // through — which is exactly why `release` is on the store interface.
+    }
+    return { state: "not-recorded" };
+  }
   return { state: "connected", connection, recorded: true };
+}
+
+/**
+ * Does the vendor itself say this account is this owner's, on this toolkit?
+ *
+ * Nothing here reads prose or guesses at an app from a name: it compares one
+ * opaque vendor id against a list the vendor returned, and one slug against the
+ * slug the link was minted with. Case and padding on the slug are plumbing —
+ * a catalog that says "Notion" and one that says "notion" are one app, exactly
+ * as `checkedToolkit` decides at mint time. The ACCOUNT ID is compared
+ * case-sensitively: it is an opaque primary key, and folding `CA_X` onto `ca_x`
+ * would be inventing a match.
+ *
+ * A FLOOR, so it answers false on anything it cannot read: a non-array, an
+ * entry that is not an object, a missing field. "Nobody said yes" and "somebody
+ * said no" are the same answer when the question is whether to bind a
+ * stranger's mailbox.
+ */
+function vendorVouchesFor(listed: unknown, row: StoredLink, accountId: string): boolean {
+  if (!Array.isArray(listed)) return false;
+  return listed.some((entry) => {
+    if (entry === null || typeof entry !== "object") return false;
+    const item = entry as Partial<Connection>;
+    if (typeof item.connected_account_id !== "string") return false;
+    if (item.connected_account_id.trim() !== accountId) return false;
+    // The list was asked for by owner, so a row bound to anybody else means the
+    // scoping did not hold — and an unscoped list is not evidence about ours.
+    if (typeof item.user_id !== "string") return false;
+    if (!constantTimeEqual(item.user_id, row.user_id)) return false;
+    if (typeof item.toolkit !== "string") return false;
+    return item.toolkit.trim().toLowerCase() === row.toolkit;
+  });
 }

@@ -41,6 +41,7 @@ import {
   connectReply,
   createCommands,
   disconnectReply,
+  ForeignConnectLink,
   interpret,
   listReply,
   mayUse,
@@ -292,8 +293,39 @@ test("the app-wide question does not spend a second model call", async () => {
 // 2. THE FLOOR: A MISSING ANSWER ASKS, IT DOES NOT ACT.
 // ===========================================================================
 
+// Every non-toolkit verdict below CARRIES A SLUG, and that is the whole point.
+// Measured: with the stubs answering `{kind:"unclear"}` and nothing else, the
+// module's headline floor — only `{kind:"toolkit"}` licenses a toolkit — could
+// be deleted outright and all 215 tests in this cluster stayed green, because
+// `resolveSlug(undefined)` refuses on its own and the guard never did any work.
+// A model that says "they named no app" while leaving a slug in the reply is
+// not a hypothetical: it is the ordinary shape of a JSON answer whose fields do
+// not all get cleared.
+const answerWithSlug = (kind: string, slug = "app-zeta"): unknown => ({ kind, slug });
+
+test("only a toolkit verdict licenses a toolkit, whatever else the reply carries", async () => {
+  for (const kind of ["none", "unclear", "no-verdict", "action", "toolkits", ""]) {
+    const judge = stubJudge(act("disconnect"), answerWithSlug(kind));
+    assert.deepEqual(
+      await interpret("get rid of it", CATALOG_A, judge),
+      { kind: "unclear" },
+      `a "${kind}" verdict carrying a slug licensed a disconnect`,
+    );
+  }
+  // The control: the one kind that IS a licence still resolves, or the floor has
+  // become a wall and no owner can disconnect anything by text.
+  assert.deepEqual(
+    await interpret("get rid of it", CATALOG_A, stubJudge(act("disconnect"), names("app-zeta"))),
+    { kind: "disconnect", toolkit: "app-zeta" },
+  );
+});
+
 test("an unclear toolkit asks rather than acting", async () => {
-  for (const answer of [{ kind: "unclear" }, { kind: "no-verdict" }, { kind: "none" }]) {
+  for (const answer of [
+    answerWithSlug("unclear"),
+    answerWithSlug("no-verdict"),
+    answerWithSlug("none"),
+  ]) {
     const judge = stubJudge(act("disconnect"), answer);
     assert.deepEqual(
       await interpret("get rid of it", CATALOG_A, judge),
@@ -310,7 +342,11 @@ test("the only candidate in the catalog is still not an answer", async () => {
   // and it is wrong on the day somebody with one connected app types something
   // about a second one, which is the day they are most likely to be watching.
   const only = [meta("app-zeta", "Zeta")];
-  for (const answer of [{ kind: "unclear" }, { kind: "no-verdict" }, { kind: "none" }]) {
+  for (const answer of [
+    answerWithSlug("unclear"),
+    answerWithSlug("no-verdict"),
+    answerWithSlug("none"),
+  ]) {
     const judge = stubJudge(act("disconnect"), answer);
     assert.deepEqual(
       await interpret("get rid of it", only, judge),
@@ -321,7 +357,7 @@ test("the only candidate in the catalog is still not an answer", async () => {
   }
   // An empty catalog is not an answer either, and it must still be ASKED — the
   // judge is the thing that knows whether the person named an app at all.
-  const empty = stubJudge(act("connect"), { kind: "none" });
+  const empty = stubJudge(act("connect"), answerWithSlug("none"));
   assert.deepEqual(await interpret("connect it", [], empty), { kind: "unclear" });
   assert.equal(empty.calls.match.length, 1);
 });
@@ -437,7 +473,9 @@ test("the whole surface behaves identically against an unrelated catalog", async
     for (const action of COMMAND_ACTIONS) {
       out.push(await interpret("x", catalog, stubJudge(act(action), names(first))));
       out.push(await interpret("x", catalog, stubJudge(act(action), names(second))));
-      out.push(await interpret("x", catalog, stubJudge(act(action), { kind: "unclear" })));
+      // Carrying a slug, so the battery exercises the floor rather than
+      // `resolveSlug`'s own refusal of an absent one.
+      out.push(await interpret("x", catalog, stubJudge(act(action), answerWithSlug("unclear", first))));
       out.push(await interpret("x", catalog, stubJudge(act(action), names("not-in-catalog"))));
     }
     return out;
@@ -455,8 +493,23 @@ test("the whole surface behaves identically against an unrelated catalog", async
 // 4. DISCONNECT HONESTY — "revoked" is a claim, not a formality.
 // ===========================================================================
 
-function outcome(result: DisconnectResult, attempted = 1): DisconnectOutcome {
-  return { toolkit: "app-zeta", attempted, result };
+function outcome(
+  result: DisconnectResult,
+  attempted = 1,
+  over: Partial<DisconnectOutcome> = {},
+): DisconnectOutcome {
+  return {
+    toolkit: "app-zeta",
+    attempted,
+    // Derived so the all-or-nothing cases below read exactly as they did before
+    // the counts existed. A PARTIAL case has to pass its own counts, because
+    // "one of two came off" is precisely the state the combined result cannot
+    // express — see the partial-disconnect tests.
+    deletedCount: result.deleted === true ? attempted : 0,
+    revokedCount: result.revoked === true ? attempted : 0,
+    result,
+    ...over,
+  };
 }
 
 test("a clean disconnect says revoked", () => {
@@ -532,6 +585,109 @@ test("one account out of two failing to revoke sinks the whole claim", () => {
   assert.deepEqual(combined, { revoked: false, deleted: true, revokeUnavailable: true });
   const reply = disconnectReply(meta("app-zeta", "Zeta"), outcome(combined, 2));
   assert.equal(/revok/i.test(reply), false, reply);
+});
+
+test("one of two accounts gone is neither 'done' nor 'nothing has changed'", () => {
+  // The combined result cannot express a partial: one account revoked and
+  // deleted, one untouched, collapses to `{revoked:false, deleted:false}` —
+  // byte-identical to a disconnect where the provider refused everything. The
+  // sentence built from it said "nothing has changed" while one of the owner's
+  // mailboxes had just had its token revoked and its row written away.
+  const reply = disconnectReply(
+    meta("app-zeta", "Zeta"),
+    outcome({ revoked: false, deleted: false, revokeUnavailable: false }, 2, {
+      deletedCount: 1,
+      revokedCount: 1,
+    }),
+  );
+  assert.equal(/nothing has changed/i.test(reply), false, reply);
+  assert.equal(/^Done/.test(reply), false, reply);
+  // It must say how many came OFF — not merely that something happened. Caught
+  // by mutation: with the deleted-partial branch removed, the revoke-only branch
+  // below picked the message up and said "access is off for 1 of your 2", which
+  // is true and useless, because the row that is gone from Settings is the fact
+  // the owner needs.
+  assert.ok(/I disconnected 1 of your 2 Zeta accounts/.test(reply), reply);
+  assert.ok(/still connected/i.test(reply), reply);
+  // And it still may not claim the word: `revoked` is EVERY, and one of the two
+  // did not come back.
+  assert.equal(/revok/i.test(reply), false, reply);
+});
+
+test("access off on one of two accounts is not 'nothing has changed' either", () => {
+  // The rarer half of the same shape: the provider revoked one account's token
+  // but deleted nothing, so our table is untouched and the owner's app has
+  // quietly stopped working. Telling them nothing changed is the one sentence
+  // that guarantees they will not think to reconnect it.
+  const reply = disconnectReply(
+    meta("app-zeta", "Zeta"),
+    outcome({ revoked: false, deleted: false, revokeUnavailable: false }, 2, {
+      deletedCount: 0,
+      revokedCount: 1,
+    }),
+  );
+  assert.equal(/nothing has changed/i.test(reply), false, reply);
+  assert.ok(/access is off for 1 of your 2 accounts/.test(reply), reply);
+  assert.ok(/still connected/i.test(reply), reply);
+});
+
+test("the two surfaces agree after a partial disconnect", async () => {
+  // Reproduced against the shipped module before this test existed: the text
+  // read "nothing has changed" while `settings` had already dropped the
+  // personal account. Two surfaces disagreeing about whether somebody's mailbox
+  // is still reachable is the trust failure this product cannot afford.
+  const table = tableOf([
+    conn({ connected_account_id: "ca_1", alias: "personal" }),
+    conn({ connected_account_id: "ca_2", alias: "work" }),
+  ]);
+  const cmds = createCommands({
+    table,
+    provider: providerOf({ throwOn: "ca_2" }),
+    links: minterOf(),
+  });
+
+  const got = await cmds.disconnect(OWNER, "app-zeta");
+  // The counts have to be COUNTED, per account. Caught by mutation: deriving
+  // them from the combined result again put `deletedCount` back to 0 here, and
+  // every loose assertion below still passed.
+  assert.deepEqual(
+    { attempted: got.attempted, deleted: got.deletedCount, revoked: got.revokedCount },
+    { attempted: 2, deleted: 1, revoked: 1 },
+  );
+
+  const reply = disconnectReply(meta("app-zeta", "Zeta"), got);
+  const view = await cmds.settings(OWNER);
+
+  assert.equal(view.apps[0]?.accounts, 1, "precondition: the screen has already lost a row");
+  assert.deepEqual(view.apps[0]?.aliases, ["work"]);
+  assert.equal(/nothing has changed/i.test(reply), false, reply);
+  assert.ok(/I disconnected 1 of your 2 Zeta accounts/.test(reply), reply);
+  assert.ok(/still connected/i.test(reply), reply);
+  assert.equal(/revok/i.test(reply), false, reply);
+});
+
+test("a whole-app disconnect still reads exactly as it did — the control", async () => {
+  // The whole-app cases still have to survive: two accounts, both clean, is
+  // "done", and nothing connected is still "nothing to disconnect". A partial
+  // branch that swallowed those would be an outage wearing an honesty badge.
+  const table = tableOf([
+    conn({ connected_account_id: "ca_1" }),
+    conn({ connected_account_id: "ca_2" }),
+  ]);
+  const cmds = createCommands({ table, provider: providerOf({}), links: minterOf() });
+  const both = await cmds.disconnect(OWNER, "app-zeta");
+  assert.equal(both.attempted, 2);
+  assert.equal(both.deletedCount, 2);
+  assert.equal(both.revokedCount, 2);
+  assert.equal(
+    disconnectReply(meta("app-zeta", "Zeta"), both),
+    "Done. Zeta disconnected and access revoked.",
+  );
+
+  const none = await cmds.disconnect(OWNER, "app-theta");
+  assert.equal(none.attempted, 0);
+  assert.equal(none.deletedCount, 0);
+  assert.ok(/isn't connected/.test(disconnectReply(meta("app-theta", "Theta"), none)));
 });
 
 test("combining nothing is not a revoke", () => {
@@ -796,6 +952,69 @@ test("the connect reply carries our own link and says it is optional", () => {
   assert.ok(reply.includes("https://anticipy.ai/c/tok_abc"), reply);
   assert.ok(reply.includes("10 minutes"), reply);
   assert.ok(/up to you|browser either way/i.test(reply), reply);
+});
+
+test("a link that is not ours never reaches a person", () => {
+  // THE SPEC'S FIRST RULE. Reproduced against the shipped module before this
+  // test existed: `connectReply` interpolated whatever the minter handed it, so
+  // a raw vendor link went out inside a sentence promising it lasts ten minutes
+  // — a promise that is false about anybody else's URL, because the vendor's own
+  // link expires ten minutes after it is MINTED, not after it is sent. Four for
+  // four, dead on arrival, 2026-09-05.
+  const foreign = [
+    "https://connect.some-vendor.example/link/abc123",
+    "https://accounts.example.com/o/v2/auth?client_id=1",
+    // The near misses, which are the ones that would actually get through a
+    // check written casually: our host with the wrong path, our path on
+    // somebody else's host, and the prefix with nothing after it.
+    "https://anticipy.ai/settings",
+    "https://anticipy.ai.evil.example/c/tok_abc",
+    "http://anticipy.ai/c/tok_abc",
+    "https://anticipy.ai/c/",
+    // A second address riding along inside one string: a phone linkifies both.
+    "https://anticipy.ai/c/tok_abc https://evil.example/x",
+  ];
+  for (const url of foreign) {
+    assert.throws(
+      () => connectReply(meta("app-zeta", "Zeta"), { url }),
+      (err: unknown) => {
+        assert.ok(err instanceof ForeignConnectLink, `expected a refusal for ${url}`);
+        assert.equal(err.url, url);
+        return true;
+      },
+      `this went out to a person: ${url}`,
+    );
+  }
+});
+
+test("our own link still goes out, with the sentence intact — the control", () => {
+  // A floor that refused every link would be an outage: the connect text is the
+  // only way an owner ever connects anything by phone.
+  const reply = connectReply(meta("app-zeta", "Zeta"), { url: "https://anticipy.ai/c/tok_abc" });
+  assert.ok(reply.includes("https://anticipy.ai/c/tok_abc"), reply);
+  assert.ok(reply.includes("10 minutes"), reply);
+  // Trailing whitespace is the minter's formatting, not a second address.
+  assert.equal(connectReply(meta("app-zeta", "Zeta"), { url: "  https://anticipy.ai/c/t9  " }), reply
+    .replace("tok_abc", "t9"));
+});
+
+test("handle refuses to send a foreign link rather than dressing it up", async () => {
+  // The empty-url branch already covers "the mint failed" with a sentence the
+  // owner can act on. A url that is NOT ours is not a failed mint — it is our
+  // own plumbing handing us somebody else's address — and a polite "want me to
+  // try again?" would hide that defect behind an owner retrying forever.
+  const cmds = createCommands({
+    table: tableOf([]),
+    provider: providerOf({}),
+    links: minterOf("https://connect.some-vendor.example/link/abc123"),
+  });
+  await assert.rejects(
+    () => cmds.handle(OWNER, { kind: "connect", toolkit: "app-zeta" }),
+    (err: unknown) => {
+      assert.ok(err instanceof ForeignConnectLink);
+      return true;
+    },
+  );
 });
 
 test("no link means no link sentence", () => {
