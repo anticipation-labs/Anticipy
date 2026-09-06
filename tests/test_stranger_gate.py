@@ -1246,7 +1246,7 @@ def test_the_gate_says_which_legs_read_production():
     """HARNESS-LAWS Law 3. A gate that mixes source-green and live-green
     without labelling them is how repo-green got mistaken for done twice."""
     live = {num for num, _, where, _ in sg.LEGS if where == "LIVE"}
-    assert live == {1, 9}, (
+    assert live == {1, 9, 11}, (
         "the set of legs that read production changed. Update this test AND "
         "the module docstring together — the label is the only thing telling "
         "a reader which greens survive a deploy.")
@@ -1298,3 +1298,235 @@ def test_the_ready_message_counts_the_legs_rather_than_remembering_them():
     finally:
         sg.LEGS[:] = saved
     assert "1 of these 3 legs (legs 3) read THIS" in out.getvalue()
+
+
+# ==========================================================================
+# LEG 10 — THE COMMITTED MAC APP IS CURRENT  (tree)
+# LEG 11 — THE MAC IS DOWNLOADABLE  (LIVE)
+#
+# Issue #37. Build 119 of the Mac recorder was committed on 2026-09-01 from a
+# source that has since moved; the public site's /download handed a stranger a
+# 2.5 GB disk image of a different product while `curl -I` said 200. Both legs
+# are driven both ways here, and the first bytes of a disk image are pinned so
+# the live leg can never be satisfied by a 200 that is not a zip.
+# ==========================================================================
+import plistlib  # noqa: E402
+
+
+def mac_zip(version="1.1.0", build="119", extra=b"") -> bytes:
+    plist = plistlib.dumps({"CFBundleIdentifier": "ai.anticipy.mac",
+                            "CFBundleShortVersionString": version,
+                            "CFBundleVersion": build})
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("AnticipyMac.app/Contents/Info.plist", plist)
+        z.writestr("AnticipyMac.app/Contents/MacOS/AnticipyMac",
+                   b"\xcf\xfa\xed\xfe" + extra)
+    return buf.getvalue()
+
+
+def mac_tree(tmp_path, blob=None) -> str:
+    root = str(tmp_path)
+    write(root, sg.MAC_ZIP, blob if blob is not None else mac_zip())
+    write(root, "app/macos/AnticipyMac/PocketBase.swift", "// the mouth\n")
+    return root
+
+
+def commits_of(zip_at: int | None, source_at: int | None):
+    """A stand-in for git: the newest commit touching the zip, and the newest
+    touching the Mac sources, as (hash, epoch) — or None for no answer."""
+    def newest(root, paths):
+        if sg.MAC_ZIP in paths:
+            return None if zip_at is None else ("zipzipzip", zip_at)
+        return None if source_at is None else ("srcsrcsrc", source_at)
+    return newest
+
+
+# A real DMG begins with a compressed UDIF block, not "PK". The four bytes
+# below are what https://www.anticipy.ai/download actually served on
+# 2026-09-06 through two redirects.
+DMG_HEAD = b"\x78\x01\xed\xd0"
+
+
+def probe_of(head: bytes, total="2516712351", ctype="application/x-apple-diskimage",
+             final="https://bucket.example/Anticipy_1.0.0_aarch64.dmg"):
+    return lambda url: {"url": final, "status": 206, "type": ctype,
+                        "total": total, "head": head}
+
+
+def test_mac_zip_facts_reads_version_build_and_bytes():
+    facts = sg.mac_zip_facts(mac_zip("1.1.0", "119"), "x")
+    assert facts["version"] == "1.1.0" and facts["build"] == "119"
+    assert facts["bytes"] == len(mac_zip("1.1.0", "119"))
+    assert len(facts["sha256"]) == 64
+
+
+def test_mac_zip_facts_refuses_a_disk_image_by_shape():
+    why = fails(sg.mac_zip_facts, DMG_HEAD + b"\x00" * 64, "the download")
+    assert "is not a zip" in why
+
+
+def test_mac_zip_facts_refuses_a_zip_that_is_not_the_app():
+    why = fails(sg.mac_zip_facts, zip_bytes({"readme.txt": b"hi"}), "x")
+    assert "no AnticipyMac.app/Contents/Info.plist" in why
+
+
+def zip_bytes(files: dict) -> bytes:
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        for name, data in files.items():
+            z.writestr(name, data)
+    return buf.getvalue()
+
+
+def test_mac_zip_facts_refuses_an_app_with_no_build_number():
+    plist = plistlib.dumps({"CFBundleShortVersionString": "1.1.0"})
+    blob = zip_bytes({"AnticipyMac.app/Contents/Info.plist": plist})
+    why = fails(sg.mac_zip_facts, blob, "x")
+    assert "no version or build number" in why
+
+
+# ------------------------------------------------------------------ leg 10
+def test_leg10_green_when_the_zip_is_newer_than_the_source(tmp_path):
+    root = mac_tree(tmp_path)
+    detail = sg.leg_10_mac_app_is_current(root, newest_commit=commits_of(200, 100))
+    assert "1.1.0 (119)" in detail
+    assert "no Mac source has moved" in detail
+
+
+def test_leg10_green_when_zip_and_source_land_in_one_commit(tmp_path):
+    root = mac_tree(tmp_path)
+    detail = sg.leg_10_mac_app_is_current(root, newest_commit=commits_of(100, 100))
+    assert "no Mac source has moved" in detail
+
+
+def test_leg10_red_when_the_source_moved_after_the_zip(tmp_path):
+    """The #37 shape: the source was rewired to a different backend and the
+    committed build still carries the old one."""
+    root = mac_tree(tmp_path)
+    why = fails(sg.leg_10_mac_app_is_current, root, newest_commit=commits_of(100, 200))
+    assert "moved AFTER it" in why
+    assert "build_release.sh" in why
+
+
+def test_leg10_red_when_history_cannot_answer(tmp_path):
+    root = mac_tree(tmp_path)
+    why = fails(sg.leg_10_mac_app_is_current, root, newest_commit=commits_of(None, 200))
+    assert "cannot be tested" in why
+    why = fails(sg.leg_10_mac_app_is_current, root, newest_commit=commits_of(100, None))
+    assert "cannot be tested" in why
+
+
+def test_leg10_red_when_the_committed_zip_is_gone(tmp_path):
+    root = str(tmp_path)
+    why = fails(sg.leg_10_mac_app_is_current, root, newest_commit=commits_of(200, 100))
+    assert "not in this tree" in why
+
+
+def test_leg10_red_when_the_committed_zip_is_not_the_app(tmp_path):
+    root = mac_tree(tmp_path, blob=zip_bytes({"readme.txt": b"hi"}))
+    why = fails(sg.leg_10_mac_app_is_current, root, newest_commit=commits_of(200, 100))
+    assert "not the Mac app" in why
+
+
+def test_leg10_reads_the_real_repo_history():
+    """The default `newest_commit` is git. Against the real tree it must at
+    least ANSWER for both paths; the verdict itself is not pinned, because a
+    red-today expectation would go red the day somebody rebuilds the app."""
+    assert sg.git_newest_commit(ROOT, [sg.MAC_ZIP]) is not None
+    assert sg.git_newest_commit(ROOT, list(sg.MAC_SOURCES)) is not None
+    assert sg.git_newest_commit(ROOT, ["no/such/path/anywhere"]) is None
+
+
+# ------------------------------------------------------------------ leg 11
+def test_leg11_green_when_the_download_is_the_committed_zip(tmp_path):
+    blob = mac_zip()
+    root = mac_tree(tmp_path, blob=blob)
+    detail = sg.leg_11_mac_downloadable(
+        root, fetch=fetch_of(blob), probe=probe_of(blob[:4], final="https://api.test/mac/Anticipy-for-Mac.zip"),
+        site="http://site.test")
+    assert "byte for byte" in detail
+    assert "1.1.0 (119)" in detail
+    assert "http://site.test/download" in detail
+
+
+def test_leg11_red_when_download_hands_over_a_disk_image(tmp_path):
+    """Measured 2026-09-06: two redirects to a 2.5 GB DMG of a different
+    product. The leg reads four bytes and stops."""
+    root = mac_tree(tmp_path)
+    fetched = []
+
+    def fetch(url):
+        fetched.append(url)
+        return b"never read"
+
+    why = fails(sg.leg_11_mac_downloadable, root, fetch=fetch,
+                probe=probe_of(DMG_HEAD), site="http://site.test")
+    assert "not a zip" in why
+    assert "2516712351 bytes of application/x-apple-diskimage" in why
+    assert "Anticipy_1.0.0_aarch64.dmg" in why
+    assert fetched == [], "a disk image must be refused before it is downloaded"
+
+
+def test_leg11_red_when_download_is_a_different_build(tmp_path):
+    """Version equality is not enough (leg 1's lesson): the bytes decide."""
+    root = mac_tree(tmp_path, blob=mac_zip("1.1.0", "119"))
+    served = mac_zip("1.1.0", "119", extra=b"different code")
+    why = fails(sg.leg_11_mac_downloadable, root, fetch=fetch_of(served),
+                probe=probe_of(served[:4]), site="http://site.test")
+    assert "the bytes differ" in why
+
+
+def test_leg11_red_when_download_is_an_older_build(tmp_path):
+    root = mac_tree(tmp_path, blob=mac_zip("1.1.0", "151"))
+    served = mac_zip("1.1.0", "119")
+    why = fails(sg.leg_11_mac_downloadable, root, fetch=fetch_of(served),
+                probe=probe_of(served[:4]), site="http://site.test")
+    assert "serves build 119" in why and "holds build 151" in why
+
+
+def test_leg11_red_when_the_site_cannot_be_reached(tmp_path):
+    root = mac_tree(tmp_path)
+
+    def boom(url):
+        raise OSError("connection refused")
+
+    why = fails(sg.leg_11_mac_downloadable, root, fetch=boom, probe=boom,
+                site="http://site.test")
+    assert "cannot verify the download" in why
+
+
+def test_leg11_red_when_the_zip_answers_and_then_fails(tmp_path):
+    blob = mac_zip()
+    root = mac_tree(tmp_path, blob=blob)
+
+    def boom(url):
+        raise OSError("reset by peer")
+
+    why = fails(sg.leg_11_mac_downloadable, root, fetch=boom,
+                probe=probe_of(blob[:4]), site="http://site.test")
+    assert "then failed" in why
+
+
+def test_leg11_red_when_a_200_is_an_html_page(tmp_path):
+    """A 200 is not an answer. An error page starts with '<', not 'PK'."""
+    root = mac_tree(tmp_path)
+    why = fails(sg.leg_11_mac_downloadable, root, fetch=fetch_of(b"<html>"),
+                probe=probe_of(b"<htm", total="512", ctype="text/html"),
+                site="http://site.test")
+    assert "not a zip" in why
+
+
+def test_leg11_red_when_the_tree_has_no_committed_zip(tmp_path):
+    """Nothing to compare against is a failed leg, not a skipped one."""
+    root = str(tmp_path)
+    blob = mac_zip()
+    why = fails(sg.leg_11_mac_downloadable, root, fetch=fetch_of(blob),
+                probe=probe_of(blob[:4]), site="http://site.test")
+    assert "not in this tree" in why
+
+
+def test_the_two_mac_legs_are_registered():
+    names = {num: (name, where) for num, name, where, _ in sg.LEGS}
+    assert names[10] == ("THE COMMITTED MAC APP IS CURRENT", "tree")
+    assert names[11] == ("THE MAC IS DOWNLOADABLE", "LIVE")

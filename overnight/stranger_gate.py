@@ -37,8 +37,8 @@ Rules, the same as done_gate.py, tejas_gate.py and tape_gate.py:
   * Legs run in order and the FIRST failure sets the verdict; later legs still
     run, so the whole picture is visible in one screen.
   * LIVE where LIVE is what bites (HARNESS-LAWS.md Law 3). Repo-green is not
-    done: prod has served stale code twice. Legs 1 and 9 read production. Every
-    other leg reads the tree and says so.
+    done: prod has served stale code twice. Legs 1, 9 and 11 read production.
+    Every other leg reads the tree and says so.
 
 --------------------------------------------------------------------------
 WHAT THIS GATE CANNOT SEE — stated out loud, so green is never read as safe
@@ -50,8 +50,8 @@ provisioning profile outlives the week, whether the Twilio account is trial
 speaker engine actually judges correctly once enrolled, and whether the worker
 running in production is this worker.
 
-And, in the seven legs that read the tree: WHAT PRODUCTION IS ACTUALLY
-RUNNING. Only legs 1 and 9 read a deployed artifact. Everything else is green
+And, in the eight legs that read the tree: WHAT PRODUCTION IS ACTUALLY
+RUNNING. Only legs 1, 9 and 11 read a deployed artifact. Everything else is green
 against this checkout, and this checkout has twice not been what was serving —
 the extension at 0.8.4 against an app demanding 0.11.0, and the setup page.
 The READY message says so out loud rather than leaving it in this docstring.
@@ -78,9 +78,11 @@ Run:  python3 overnight/stranger_gate.py
 from __future__ import annotations
 
 import ast
+import hashlib
 import io
 import json
 import os
+import plistlib
 import re
 import subprocess
 import sys
@@ -123,6 +125,17 @@ SETUP_PAGE = "backend/pb_public/setup.html"
 EXT_ONBOARDING = "extension/onboarding.html"
 MANIFEST = "extension/manifest.json"
 REPO_ZIP = "backend/pb_public/" + ZIP_NAME
+
+# The Mac meeting recorder. One committed artifact, served as a static asset
+# by the Worker at /mac/Anticipy-for-Mac.zip, and the one URL the public site
+# hands a stranger who taps Download (issue #37).
+SITE = os.environ.get("ANTICIPY_SITE_URL", "https://www.anticipy.ai")
+MAC_DOWNLOAD_PATH = "/download"
+MAC_ZIP = "backend/pb_public/mac/Anticipy-for-Mac.zip"
+MAC_PLIST = "AnticipyMac.app/Contents/Info.plist"
+# What the zip is built FROM. A commit touching any of these after the zip's
+# own commit means the served app is not this tree's app.
+MAC_SOURCES = ("app/macos/AnticipyMac", "app/macos/Anticipy")
 
 WALKTHROUGH = "research/2026-08-24-cold-stranger-walkthrough.md"
 
@@ -1779,6 +1792,183 @@ def leg_9_guide_names_real_screens(root: str = ROOT, fetch=None,
 
 
 # --------------------------------------------------------------------------
+# LEG 10 — THE COMMITTED MAC APP IS CURRENT
+#
+# The Mac recorder ships as ONE committed zip (MAC_ZIP) that the Worker serves
+# as a static asset. Its build number is the iOS number by design (project.yml:
+# "it moves in lockstep with the app's number"), so a number comparison would
+# read every iOS bump as a stale Mac and every Mac edit under an unbumped
+# number as fresh. What actually decides staleness is ORDER: did the Mac's
+# source move after the zip did. Git answers that exactly, and an empty answer
+# is a red leg, not a pass (app/ios/Tests/run_build_number_tests.sh learned
+# this the hard way).
+#
+# Issue #37: build 119 was committed on 2026-09-01 from a source that has since
+# been rewired to a different backend. This leg is the expiry on that gap — it
+# stays red until the lab Mac runs app/macos/Tools/build_release.sh and the
+# result is committed over MAC_ZIP.
+# --------------------------------------------------------------------------
+def mac_zip_facts(blob: bytes, where: str) -> dict:
+    """What a Mac release zip says about itself: version, build, sha256.
+
+    Raises LegFailed when the bytes are not a zip or carry no app plist —
+    an HTML error page and a 2.5 GB disk image both fail here, by shape,
+    which is how leg 1 catches the same thing for the extension."""
+    if not blob.startswith(b"PK"):
+        raise LegFailed(
+            f"{where} is not a zip: {len(blob)} bytes starting "
+            f"{blob[:8]!r}. The Mac recorder ships as Anticipy-for-Mac.zip "
+            "from app/macos/Tools/build_release.sh; whatever this is, a "
+            "stranger cannot open it as that app.")
+    try:
+        with zipfile.ZipFile(io.BytesIO(blob)) as z:
+            names = z.namelist()
+            plist_name = next((n for n in names if n.endswith(MAC_PLIST)), None)
+            if plist_name is None:
+                raise LegFailed(
+                    f"{where} is a zip with no {MAC_PLIST} inside "
+                    f"({len(names)} entries). It is not the Mac app.")
+            info = plistlib.loads(z.read(plist_name))
+    except LegFailed:
+        raise
+    except Exception as e:  # noqa: BLE001
+        raise LegFailed(f"{where} could not be read as the Mac app: {e}")
+    version = str(info.get("CFBundleShortVersionString") or "")
+    build = str(info.get("CFBundleVersion") or "")
+    if not version or not build:
+        raise LegFailed(
+            f"{where} carries an Info.plist with no version or build number "
+            f"(version {version!r}, build {build!r}). A build nobody can name "
+            "is a build nobody can compare.")
+    return {"version": version, "build": build,
+            "sha256": hashlib.sha256(blob).hexdigest(), "bytes": len(blob)}
+
+
+def git_newest_commit(root: str, paths) -> tuple[str, int] | None:
+    """The newest commit touching any of `paths`: (hash, committer epoch).
+    None when history cannot answer — no git, no repository, no commit."""
+    try:
+        out = subprocess.run(
+            ["git", "-C", root, "log", "-1", "--format=%H %ct", "--", *paths],
+            capture_output=True, text=True, timeout=60)
+    except Exception:  # noqa: BLE001
+        return None
+    if out.returncode != 0:
+        return None
+    parts = out.stdout.strip().split()
+    if len(parts) != 2 or not parts[1].isdigit():
+        return None
+    return parts[0], int(parts[1])
+
+
+def leg_10_mac_app_is_current(root: str = ROOT, newest_commit=None) -> str:
+    newest_commit = newest_commit or git_newest_commit
+    facts = mac_zip_facts(read_bytes(root, MAC_ZIP), MAC_ZIP)
+    zip_at = newest_commit(root, [MAC_ZIP])
+    src_at = newest_commit(root, list(MAC_SOURCES))
+    if zip_at is None or src_at is None:
+        raise LegFailed(
+            f"this tree's history cannot say when {MAC_ZIP} and "
+            f"{', '.join(MAC_SOURCES)} last moved, so this leg cannot be "
+            "tested — a shallow clone, no git, or a tree that never committed "
+            "one of them. An empty search is not a pass.")
+    note(f"{MAC_ZIP} is {facts['version']} ({facts['build']}), committed "
+         f"{zip_at[0][:8]}; Mac source last moved {src_at[0][:8]}")
+    if src_at[1] > zip_at[1]:
+        raise LegFailed(
+            f"{MAC_ZIP} is build {facts['build']} from {zip_at[0][:8]}, and "
+            f"the Mac source moved AFTER it in {src_at[0][:8]}. The app a "
+            "stranger downloads is not the app in this tree — as of #37 the "
+            "committed build still posts to the retired Railway backend. Run "
+            "app/macos/Tools/build_release.sh on the lab Mac (Xcode, the "
+            "Developer ID identity and the notary key live there), commit the "
+            "zip it prints over this path, deploy the Worker, then re-run "
+            "leg 11.")
+    return (f"{MAC_ZIP} is {facts['version']} ({facts['build']}), "
+            f"{facts['bytes']} bytes, and no Mac source has moved since it "
+            "was committed")
+
+
+# --------------------------------------------------------------------------
+# LEG 11 — THE MAC IS DOWNLOADABLE
+#         *** LIVE — this leg reads production, not the tree ***
+#
+# What a stranger gets when they tap Download on the public site. Measured
+# 2026-09-06 (issue #37): `curl -I` said 200 because the site's route answers
+# HEAD with a hand-written 200; GET redirected twice to a 2.5 GB disk image
+# from May — a different product at version 1.0.0 — while build 119 of the
+# recorder sat at api.anticipy.ai/mac/Anticipy-for-Mac.zip, reachable and
+# linked from nowhere a stranger looks.
+#
+# So this leg does what a stranger does — GET, follow the redirects — and
+# reads the first bytes before it commits to the rest: a zip or nothing. It
+# then holds the served bytes against MAC_ZIP, because a version that matches
+# while the bytes do not is the exact failure leg 1 was written for.
+# --------------------------------------------------------------------------
+def http_probe(url: str, timeout: int = 30) -> dict:
+    """GET with a four-byte range, following redirects. Returns where the
+    bytes came from and what they start with, without downloading a disk
+    image to find out that it is one."""
+    req = urllib.request.Request(url, headers={"Range": "bytes=0-3"})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        head = r.read(4)
+        total = r.headers.get("Content-Range", "")
+        total = total.rsplit("/", 1)[-1] if "/" in total else r.headers.get("Content-Length", "?")
+        return {"url": r.geturl(), "status": r.status,
+                "type": r.headers.get("Content-Type", ""),
+                "total": total, "head": head}
+
+
+def leg_11_mac_downloadable(root: str = ROOT, fetch=None, probe=None,
+                            site: str = "") -> str:
+    fetch = fetch or http_get
+    probe = probe or http_probe
+    site = (site or SITE).rstrip("/")
+    committed = mac_zip_facts(read_bytes(root, MAC_ZIP), MAC_ZIP)
+    url = f"{site}{MAC_DOWNLOAD_PATH}"
+
+    try:
+        seen = probe(url)
+    except Exception as e:  # noqa: BLE001
+        raise LegFailed(
+            f"cannot verify the download: {url} did not answer "
+            f"({str(e)[:80]}). A stranger who taps Download gets this, so "
+            "the leg fails rather than settling for the tree.")
+    if not seen["head"].startswith(b"PK"):
+        raise LegFailed(
+            f"{url} hands a stranger {seen['total']} bytes of "
+            f"{seen['type'] or 'unknown type'} from {seen['url']}, which is "
+            f"not a zip and so not the Mac app. The tree's Mac app is "
+            f"{MAC_ZIP}: {committed['version']} ({committed['build']}), "
+            f"{committed['bytes']} bytes, served at "
+            f"{BASE}/mac/Anticipy-for-Mac.zip. Point the site's "
+            f"{MAC_DOWNLOAD_PATH} at those bytes.")
+
+    try:
+        blob = fetch(url)
+    except Exception as e:  # noqa: BLE001
+        raise LegFailed(
+            f"{url} answered the first bytes and then failed "
+            f"({str(e)[:80]}); a stranger's download would too.")
+    served = mac_zip_facts(blob, url)
+    note(f"served {served['version']} ({served['build']}) {served['bytes']} "
+         f"bytes from {seen['url']}; tree holds {committed['version']} "
+         f"({committed['build']}) {committed['bytes']} bytes")
+    if served["sha256"] != committed["sha256"]:
+        raise LegFailed(
+            f"{url} serves build {served['build']} ({served['version']}, "
+            f"{served['bytes']} bytes) and the tree holds build "
+            f"{committed['build']} ({committed['version']}, "
+            f"{committed['bytes']} bytes); the bytes differ. A stranger "
+            "installs something this repository did not commit. Deploy the "
+            f"Worker so /mac/Anticipy-for-Mac.zip is {MAC_ZIP}, and keep "
+            f"{MAC_DOWNLOAD_PATH} pointed at it.")
+    return (f"{url} hands over {MAC_ZIP} byte for byte: "
+            f"{served['version']} ({served['build']}), {served['bytes']} "
+            f"bytes, via {seen['url']}")
+
+
+# --------------------------------------------------------------------------
 
 LEGS = [
     (1, "THE HANDS ARE DOWNLOADABLE", "LIVE", leg_1_hands_downloadable),
@@ -1795,6 +1985,8 @@ LEGS = [
      leg_8_done_text_can_carry_the_photo),
     (9, "THE GUIDE NAMES SCREENS THAT EXIST", "LIVE",
      leg_9_guide_names_real_screens),
+    (10, "THE COMMITTED MAC APP IS CURRENT", "tree", leg_10_mac_app_is_current),
+    (11, "THE MAC IS DOWNLOADABLE", "LIVE", leg_11_mac_downloadable),
 ]
 
 
@@ -1828,8 +2020,11 @@ def main() -> int:
         print("  READY — every prerequisite a machine can check is standing.")
         print(f"  READ THAT NARROWLY: {len(tree_legs)} of these {len(LEGS)} "
               f"legs (legs {', '.join(str(n) for n in tree_legs)}) read THIS")
+        live_names = [str(n) for n in live_legs]
+        live_said = (" and ".join([", ".join(live_names[:-1]), live_names[-1]])
+                     if len(live_names) > 1 else live_names[0])
         print("  TREE, not production. They prove the repo. Only legs "
-              f"{' and '.join(str(n) for n in live_legs)} survive a")
+              f"{live_said} survive a")
         print("  bad deploy, and production has served stale code twice — the")
         print("  extension at 0.8.4 against an app demanding 0.11.0, and the")
         print("  setup page. A green here is a green against code that may not")

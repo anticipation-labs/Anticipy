@@ -21,6 +21,7 @@ on:
       - 'research/2026-09-05-composio-connections.md'
       - 'app/ios/Tests/ResetMessageTests.swift'
       - 'app/ios/Anticipy/Backend/ConnectedAppsClient.swift'
+      - 'app/macos/**'
       - '.github/workflows/system-invariants.yml'
   pull_request:
     paths:
@@ -35,6 +36,7 @@ on:
       - 'research/2026-09-05-composio-connections.md'
       - 'app/ios/Tests/ResetMessageTests.swift'
       - 'app/ios/Anticipy/Backend/ConnectedAppsClient.swift'
+      - 'app/macos/**'
       - '.github/workflows/system-invariants.yml'
 
 jobs:
@@ -75,3 +77,24 @@ jobs:
           node-version: '24'
       - name: Prove Worker invariants and types
         run: cd migration/workers && npm ci && npm test && npx tsc --noEmit
+
+  # The Mac recorder's suites (app/macos/Tests/run_all.sh: capture core,
+  # meeting archive, transcript wire). Every one compiles the real production
+  # sources with swiftc and needs no Xcode project, signing or device — but
+  # MeetingArchive targets macOS 26, so the runner selects Xcode 26 exactly as
+  # ios-testflight.yml does. Until this job existed the Mac suites ran only
+  # when a person ran them; the brief on #37 counted five suites written in
+  # one week with no runner, and a suite nobody runs is a comment.
+  mac:
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Xcode 26 (the meeting archive targets the macOS 26 SDK)
+        run: |
+          X26=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
+          test -n "$X26" || { echo "::error::no Xcode 26 on this runner"; exit 1; }
+          sudo xcode-select -s "$X26"
+          xcrun --show-sdk-version
+      - name: Prove Mac recorder invariants
+        run: sh app/macos/Tests/run_all.sh

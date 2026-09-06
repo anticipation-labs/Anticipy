@@ -113,6 +113,21 @@ SERVER_DEVICE = "anticipy-brain"
 PROBE_DEVICE = "e2e-"
 NOT_A_PROBE = f'device_id !~ "{PROBE_DEVICE}"'
 
+# WHICH EAR. `events.source` names the microphone that heard a line: the phone
+# stamps "phone_mic" and "pendant" (app/ios CaptureSourcePolicy), the Mac
+# meeting recorder stamps "mac" (app/macos TranscriptWire.swift). The verdict
+# above never looks at this — one line from any ear proves the ears — but a
+# total that is all phone hides a Mac that has been mute since it shipped,
+# which is exactly what build 119 was: it posted every meeting to a backend
+# nothing read, and no count anywhere could have said so. Provenance, never
+# content; the words are still never requested.
+MAC_SOURCE = "mac"
+EARS = (
+    ("phone", "phone_mic"),
+    ("pendant", "pendant"),
+    ("Mac", MAC_SOURCE),
+)
+
 # How much server-originated work counts as "the machine was demonstrably
 # working". DERIVED, not invented: on the recorded days where the ears were
 # genuinely deaf the server wrote 16 and 63 rows; on 2026-08-09, a day nobody
@@ -302,6 +317,10 @@ def main() -> int:
                       f'&& {NOT_A_PROBE}')
         probes = count(f'kind="transcript" && created >= "{since_s}" '
                        f'&& device_id ~ "{PROBE_DEVICE}"')
+        by_ear = [
+            (name, count(f'kind="transcript" && created >= "{since_s}" '
+                         f'&& {NOT_A_PROBE} && source="{value}"'))
+            for name, value in EARS]
         server_writes = count(f'device_id="{SERVER_DEVICE}" && created >= "{since_s}"')
     except Exception as e:
         print(f"\n  ARE THE EARS LIVE?   {PB}")
@@ -315,6 +334,12 @@ def main() -> int:
 
     rows.append((INFO, f"speech heard in the last {args.hours:g}h",
                  f"{heard} (from real devices)"))
+    # One line per ear, so a Mac that records all day and delivers nothing
+    # is visible as a zero beside a phone that delivered — rather than
+    # absorbed into a total the phone alone can keep green.
+    for name, n in by_ear:
+        rows.append((INFO, f"heard by the {name} in the last {args.hours:g}h",
+                     f"{n}"))
     # Say what was thrown away, so the exclusion is visible on the screen
     # rather than being a silent difference between two runs.
     if probes:
