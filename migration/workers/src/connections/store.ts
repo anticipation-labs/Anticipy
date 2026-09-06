@@ -122,7 +122,7 @@ export const SIGNAL_SOURCES: readonly SignalSource[] =
 export const CONNECTION_STATUSES: readonly ConnectionStatus[] =
   ["connected", "needs_reconnect", "disconnected"];
 export const NUDGE_STATES: readonly NudgeState[] =
-  ["never_asked", "asked", "declined", "connected", "needs_reconnect"];
+  ["never_asked", "asked", "declined_soft", "declined", "connected", "needs_reconnect"];
 export const NUDGE_TRIGGERS: readonly NudgeTrigger[] =
   ["in_task", "repeated_use", "laptop_closed", "user_named_it", "onboarding"];
 export const NUDGE_CHANNELS: readonly NudgeChannel[] = ["sms", "ios"];
@@ -363,9 +363,36 @@ export interface ConnectionsStore {
   putNudge(row: StoredNudge): Promise<void>;
 
   // -- connect_links --------------------------------------------------------
-  /** Insert. MUST reject a handle that already exists rather than overwrite:
-   *  an overwrite would silently re-bind a live link to a different owner. */
+  /** Insert ONE link. MUST reject a handle that already exists rather than
+   *  overwrite: an overwrite would silently re-bind a live link to a different
+   *  owner. It is `putAll` with one row and nothing else — see below. */
   put(row: StoredLink): Promise<void>;
+  /**
+   * INSERT A WHOLE CONNECT PAGE, ALL OF IT OR NONE OF IT.
+   *
+   * The spec's onboarding step is "one Connect button opens a multi-app connect
+   * page" (page 25), and routes/connect.ts builds such a page out of ONE row per
+   * app — the same `connect_links` row shape, at handles derived from the one
+   * token (`connectPageRows`). A page is therefore a set of rows, and it has to
+   * arrive as a set: written one at a time, a failure halfway through leaves a
+   * person looking at a page missing the apps they ticked, with no error
+   * anywhere, and the fix would be "mint another link" for a link that already
+   * half exists. D1's batch is one transaction, which is exactly the guarantee
+   * this needs and the reason this is a method rather than a loop at the call
+   * site.
+   *
+   * REFUSES A BATCH THAT IS NOT ONE OWNER'S. A connect page is bound to one
+   * person — that is the whole reason the token is not enough on its own — and a
+   * caller assembling one out of two owners' rows has confused two people. It is
+   * refused before anything is written rather than filtered, for the same reason
+   * `refuseMixedOwners` refuses a read: filtering hides the bug that produced it.
+   *
+   * REFUSES A DUPLICATE HANDLE INSIDE THE BATCH, before the database sees it.
+   * Two rows at one handle is a page silently one app short, and the UNIQUE
+   * primary key would report it as "this token was minted twice", which is a
+   * different and much more alarming fact.
+   */
+  putAll(rows: readonly StoredLink[]): Promise<void>;
   read(handle: string): Promise<StoredLink | null>;
   /** THE SINGLE-USE GATE. One statement, no read-then-write:
    *    UPDATE connect_links SET used_at = ?1
@@ -576,6 +603,56 @@ function checkedLink(row: unknown): StoredLink {
     used_at: checkedNullableTime(r.used_at, "used_at"),
     completed_at: checkedNullableTime(r.completed_at, "completed_at"),
   };
+}
+
+/**
+ * A WHOLE CONNECT PAGE, CHECKED AS A SET rather than a row at a time.
+ *
+ * routes/connect.ts builds a multi-app page as one `connect_links` row per app,
+ * at handles derived from a single token. Three things are true of such a set
+ * and of no single row, so they are checked here and nowhere else:
+ *
+ *   IT IS NOT EMPTY. A page of no apps is a token that resolves to a screen
+ *   with nothing on it; the caller meant something and lost it on the way.
+ *
+ *   IT IS ONE OWNER'S. The whole reason a connect link is not enough on its own
+ *   is that it binds to a person, and a set assembled out of two people's rows
+ *   is the wrong-person failure arriving through a loop variable. Refused whole,
+ *   never filtered — filtering hides the code that produced it.
+ *
+ *   NO HANDLE APPEARS TWICE. Two rows at one handle is a page one app short,
+ *   and the database would report it as "this token was minted twice", which is
+ *   a different and far more alarming fact than the one that happened.
+ *
+ * A ONE-ROW CALL CANNOT TRIP ANY OF THEM, which is why `put` can go through this
+ * without changing by a byte.
+ */
+function checkedPage(rows: unknown): StoredLink[] {
+  if (!Array.isArray(rows) || rows.length === 0) {
+    throw new Error(
+      "a connect page needs at least one link row; got "
+        + `${JSON.stringify(Array.isArray(rows) ? rows.length : rows)}`,
+    );
+  }
+  const checked = rows.map(checkedLink);
+  const owner = checked[0]!.user_id;
+  const seen = new Set<string>();
+  for (const row of checked) {
+    if (row.user_id !== owner) {
+      throw new Error(
+        "a connect page binds to ONE owner: this batch names both "
+          + `${JSON.stringify(owner)} and ${JSON.stringify(row.user_id)}, so nothing was written`,
+      );
+    }
+    if (seen.has(row.token_handle)) {
+      throw new Error(
+        `connect page: two rows share the handle ${row.token_handle.slice(0, 12)} — one of the `
+          + "apps on this page would silently not exist",
+      );
+    }
+    seen.add(row.token_handle);
+  }
+  return checked;
 }
 
 /**
@@ -881,6 +958,47 @@ export function createD1Store(env: StoreEnv): ConnectionsStore {
   }
 
   /**
+   * EVERY `connect_links` INSERT IN THIS FILE, and there is one because there
+   * has to be one: `put` is `putAll` with a single row, so the plain-INSERT rule
+   * below cannot be edited on one path and left on the other.
+   *
+   * A named local rather than a method on the returned object for the same
+   * reason `readSignalImpl` is one — a `this.` here breaks the first time a
+   * caller writes `const { put } = store`.
+   *
+   * ONE BATCH, WHICH ON D1 IS ONE TRANSACTION. A multi-app connect page is a set
+   * of rows and must land as a set: a page written row by row can end up missing
+   * the apps somebody ticked, with nothing in a log to say which ones. A batch
+   * of one is exactly the single statement `put` used to run.
+   */
+  async function putAllImpl(rows: readonly StoredLink[]): Promise<void> {
+    const page = checkedPage(rows);
+    const live = await requireColumns(env, "connect_links");
+    const statements = page.map((link) => {
+      refuseUnstorableAlias("connect_links", live, link.alias);
+      const body = project(live, {
+        token_handle: link.token_handle,
+        user_id: link.user_id,
+        toolkit: link.toolkit,
+        alias: aliasOut(link.alias),
+        expires_at: link.expires_at,
+        used_at: link.used_at,
+        completed_at: link.completed_at,
+      });
+      // A PLAIN INSERT, with no ON CONFLICT of any kind. 256 bits do not
+      // collide; a duplicate handle means the same token was minted twice, and
+      // an upsert would re-bind a link somebody is already holding to a
+      // different owner or a different app. The UNIQUE primary key raising is
+      // the correct outcome.
+      return env.DB.prepare(
+        `INSERT INTO "connect_links" (${body.cols.map(q).join(", ")}) `
+          + `VALUES (${body.vals.map((_, i) => `?${i + 1}`).join(", ")})`,
+      ).bind(...body.vals);
+    });
+    await env.DB.batch(statements);
+  }
+
+  /**
    * One signal row by its full key. A named local rather than a method on the
    * returned object, because `recordSignal` below re-reads through it and a
    * `this.` there breaks the first time a caller writes
@@ -1110,29 +1228,9 @@ export function createD1Store(env: StoreEnv): ConnectionsStore {
     },
 
     // -- connect_links ------------------------------------------------------
-    async put(row) {
-      const link = checkedLink(row);
-      const live = await requireColumns(env, "connect_links");
-      refuseUnstorableAlias("connect_links", live, link.alias);
-      const body = project(live, {
-        token_handle: link.token_handle,
-        user_id: link.user_id,
-        toolkit: link.toolkit,
-        alias: aliasOut(link.alias),
-        expires_at: link.expires_at,
-        used_at: link.used_at,
-        completed_at: link.completed_at,
-      });
-      // A PLAIN INSERT, with no ON CONFLICT of any kind. 256 bits do not
-      // collide; a duplicate handle means the same token was minted twice, and
-      // an upsert would re-bind a link somebody is already holding to a
-      // different owner or a different app. The UNIQUE primary key raising is
-      // the correct outcome.
-      await env.DB.prepare(
-        `INSERT INTO "connect_links" (${body.cols.map(q).join(", ")}) `
-          + `VALUES (${body.vals.map((_, i) => `?${i + 1}`).join(", ")})`,
-      ).bind(...body.vals).run();
-    },
+    put: (row) => putAllImpl([row]),
+
+    putAll: (rows) => putAllImpl(rows),
 
     async read(handle) {
       const h = checkedHandle(handle);
@@ -1209,6 +1307,24 @@ export function createMemoryStore(): ConnectionsStore {
   // A NUL joiner, because a slug containing the separator would otherwise
   // merge two apps into one row.
   const key = (...parts: (string | null)[]) => parts.map((p) => p ?? "").join("\u0000");
+
+  /** ALL OF IT OR NONE OF IT, which off a database means: every handle is
+   *  checked before the first one is written, and there is no `await` between
+   *  the checking and the writing — so nothing can observe half a page, which is
+   *  the property D1's batch gives for real. A named local, not a method, for
+   *  the same reason the D1 store's is: `put` is `putAll` with one row, and a
+   *  `this.` would break the first time somebody destructured the store. */
+  async function putAllImpl(rows: readonly StoredLink[]): Promise<void> {
+    const page = checkedPage(rows);
+    for (const link of page) {
+      if (links.has(link.token_handle)) {
+        // 256 bits do not collide; a duplicate handle means the same token was
+        // minted twice, and overwriting would re-bind a link somebody holds.
+        throw new Error(`connect link already exists: ${link.token_handle.slice(0, 12)}`);
+      }
+    }
+    for (const link of page) links.set(link.token_handle, { ...link });
+  }
 
   return {
     async signalsForOwner(user) {
@@ -1341,15 +1457,9 @@ export function createMemoryStore(): ConnectionsStore {
       nudges.set(key(nudge.user_id, nudge.toolkit), { ...nudge });
     },
 
-    async put(row) {
-      const link = checkedLink(row);
-      if (links.has(link.token_handle)) {
-        // 256 bits do not collide; a duplicate handle means the same token was
-        // minted twice, and overwriting would re-bind a link somebody holds.
-        throw new Error(`connect link already exists: ${link.token_handle.slice(0, 12)}`);
-      }
-      links.set(link.token_handle, { ...link });
-    },
+    put: (row) => putAllImpl([row]),
+
+    putAll: (rows) => putAllImpl(rows),
 
     async read(handle) {
       const row = links.get(checkedHandle(handle));

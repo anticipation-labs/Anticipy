@@ -65,6 +65,23 @@
 // A search row carries NO auth_config_details, so `scopes` is always empty on
 // one — see `readToolkitMeta`.
 //
+// WHAT THE CATALOG DOES NOT CARRY, measured the same day and the same way — by
+// taking the union of every key path on twelve detail rows and fifty listing
+// rows, rather than probing for a name we had guessed, which is the mistake
+// that hid the scopes for a week. There is NO mail-host, mx, exchanger, domain
+// or dns field on a toolkit row, on either endpoint; the legacy rows that might
+// have carried one are gone (/api/v1/apps and /api/v2/apps both answer 410,
+// "Please upgrade to v3 APIs"), and /api/v3 returns the identical row to
+// /api/v3.1. Every host the vendor DOES publish — meta.app_url, base_url,
+// get_current_user_endpoint, the two oauth urls, the scope urls, the logo cdn —
+// names the app's own service or site, and not one of them sits at or above the
+// exchangers a hosted domain really resolves to, for either mail provider the
+// spec names. So `mailHosts` below ships EMPTY on every row: that is the
+// measurement and not a gap in the read. The full receipt, key-path union and
+// `dig MX` output included, is in test/connections-provider.test.ts under
+// "WHERE THE MAIL HOSTS ARE NOT" — read it before filling this in, and never
+// fill it from a name of ours.
+//
 // WHAT THIS FILE MAY NOT DO. It contains no app names, no permission copy and
 // no phrasing. Which toolkit a person meant is a model's question (contract's
 // `ToolkitJudge`); what the connect page says is generated from the metadata
@@ -111,6 +128,32 @@ import type {
   Toolkit,
   ToolkitMeta,
 } from "../../../../spike/two-hands/src/connections/contract.ts";
+
+/**
+ * THE CATALOG ROW THIS ADAPTER BUILDS: the contract's `ToolkitMeta`, plus the
+ * one column the spec's medium-weight signal needs and the contract does not
+ * declare yet.
+ *
+ * WHY IT IS A COLUMN AND NOT A LOOKUP. Spec page 42: a DNS MX lookup at sign-up
+ * says whose mail this is, and the match runs against "the toolkit's own
+ * metadata. No domain list of our own." `signUpDomainSignals` and the phone's
+ * `ConnectOnboardingPolicy.seeds(fromMailExchanger:)` both do that matching
+ * already; the row is where the thing being matched against has to live.
+ *
+ * IT IS EMPTY AGAINST THE LIVE VENDOR, on every row, and the header says why
+ * and what was measured. Present-and-empty is deliberate: "the catalog names
+ * none" is a fact the phone can draw, and it is not the same fact as "this
+ * server is too old to have the column".
+ */
+export interface CatalogToolkit extends ToolkitMeta {
+  readonly mailHosts: readonly string[];
+}
+
+/** One frozen empty, shared by every row. Frozen because the only way this
+ *  column gets filled is by a read of something the vendor published — never by
+ *  a caller pushing a name into it downstream, which is the same hardcode one
+ *  file further from the review. */
+const NO_MAIL_HOSTS: readonly string[] = Object.freeze([]);
 
 /** Pinned in the path, not floating. A silent bump to a version that renames
  *  `tool_router_tools` would make the guard below unable to see the connection
@@ -662,7 +705,7 @@ function readScopes(root: Record<string, unknown>): string[] {
 function readToolkitMeta(
   root: Record<string, unknown>,
   fallbackSlug: string | null,
-): ToolkitMeta | null {
+): CatalogToolkit | null {
   const meta = asRecord(root.meta);
   const name = asString(root.name) ?? asString(meta?.name);
   // The vendor's own spelling when it gives one: `connections()` returns
@@ -705,6 +748,20 @@ function readToolkitMeta(
     // rather than the bug: an app whose permissions we cannot name is an app we
     // cannot honestly ask about.
     scopes: readScopes(root),
+    // NOTHING TO READ, and that is the measurement rather than a missing line.
+    // The vendor publishes no mail-host field on either catalog endpoint, and
+    // no host it does publish is at or above a real exchanger — the header has
+    // the key-path union, the test has the `dig MX` output beside it. The
+    // column is here anyway, because the seam is what was missing: without it
+    // the phone's MX seeding has nothing to compare against and pre-ticks
+    // nothing, which is exactly what onboarding step 2 did.
+    //
+    // WHEN THIS IS FILLED IT IS FILLED FROM `root`, from a field the vendor
+    // publishes and somebody has measured. Two names in a map here — the mail
+    // app to its parent's domain — would be the law-1 violation this feature
+    // has avoided three times, and it would be invisible: it would look like
+    // the signal working right up until an app arrived that was not in the map.
+    mailHosts: NO_MAIL_HOSTS,
   };
 }
 
@@ -1286,11 +1343,13 @@ export class ComposioConnections implements ConnectionProvider {
   // -------------------------------------------------------------------------
   // toolkit
   // -------------------------------------------------------------------------
-  /** Name, logo, description, app URL and scopes — everything the connect page
-   *  renders. NO APP IS HARDCODED anywhere in this product: a new toolkit in
+  /** Name, logo, description, app URL, scopes and the mail-host column —
+   *  everything the connect page renders, plus the one field the sign-up MX
+   *  signal matches against (empty against the live vendor; see the header).
+   *  NO APP IS HARDCODED anywhere in this product: a new toolkit in
    *  the catalog is a new app in Anticipy with zero code, and the only way that
    *  is true is if the page is built from this. */
-  async toolkit(slug: Toolkit): Promise<ToolkitMeta> {
+  async toolkit(slug: Toolkit): Promise<CatalogToolkit> {
     const asked = requireToolkit("toolkit", slug);
     // NOT among the endpoints measured on 2026-09-05. Every field below is read
     // defensively for that reason, and a missing name refuses rather than
@@ -1368,7 +1427,7 @@ export class ComposioConnections implements ConnectionProvider {
    * still read defensively, because a shape that held on one afternoon is not a
    * contract.
    */
-  async search(query: string, opts?: { limit?: number }): Promise<ToolkitMeta[]> {
+  async search(query: string, opts?: { limit?: number }): Promise<CatalogToolkit[]> {
     const wanted = Number(opts?.limit ?? MAX_SEARCH_RESULTS);
     // A CEILING, not a default: `MAX_SEARCH_RESULTS` is the most any caller can
     // ask for, and an unusable number falls back to it rather than reaching the
@@ -1395,7 +1454,7 @@ export class ComposioConnections implements ConnectionProvider {
       throw new ConnectionsResponseShape("catalog search", "no items array in the response");
     }
 
-    const out: ToolkitMeta[] = [];
+    const out: CatalogToolkit[] = [];
     let unreadable = 0;
     for (const entry of items) {
       const row = asRecord(entry);

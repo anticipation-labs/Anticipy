@@ -81,6 +81,36 @@ export interface Connection {
 export type NudgeState =
   | "never_asked"
   | "asked"
+  /**
+   * THE SETUP CARD SHRUG, and it is a sixth state because the spec asks for one
+   * by name — twice. Page 21: "Skip records `declined_soft` with a 7-day
+   * snooze, not a real decline." Page 25: "Skipping in onboarding is a 7-day
+   * snooze, not a decline."
+   *
+   * WHY IT CANNOT BE `declined` WITH A SHORTER CLOCK, which is what shipped
+   * until 2026-09-06. `recordDecline` advanced the ladder to level 1 on an
+   * onboarding skip, and `LEVEL_THRESHOLD[1]` is 0.80 against a STRICT
+   * comparison — so in_task (0.80), onboarding (0.70) and repeated_use (0.60)
+   * never clear it again. The three triggers that can name a task which
+   * already cost this person real time were silenced for good by one tap on a
+   * card during setup. That is the opposite of "not a real decline".
+   *
+   * WHY IT CANNOT BE `declined` AT LEVEL 0 EITHER. `whatIsMissing` refuses
+   * that row by name ("the ladder was not advanced, so the decline cannot be
+   * honoured"), which turns every future verdict about that app into
+   * `no-verdict` — worse than level 1, because nothing ever re-opens it.
+   *
+   * WHY IT CANNOT BE `never_asked` WITH A SNOOZE. It would read as a lie: the
+   * person WAS asked, on the glass, and `acted_at` on the row says so. A state
+   * that disagrees with a stamped `acted_at` is how the next reader concludes
+   * the column is unreliable.
+   *
+   * SO: its own state, LEVEL 0, snoozed `ONBOARDING_SKIP_SNOOZE_DAYS`. The
+   * snooze is honoured like any other (policy step 5 checks every state), and
+   * when it runs out the owner is back at threshold 0.5 — askable by anything.
+   * A shrug costs seven days of quiet and nothing else.
+   */
+  | "declined_soft"
   | "declined"
   | "connected"
   | "needs_reconnect";

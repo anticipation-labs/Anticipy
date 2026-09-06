@@ -142,13 +142,17 @@ not a defect.
    builds a single dependency, so an anonymous caller gets 401 and never sees
    the port behind it.
 
-   **What the source says will happen, which is not the same as a measurement:**
-   `ConnectionsApiDeps.search` is a declared port and `connectionsApiDeps()`
-   (connections_api.ts:299) does not fill it, so `searchCatalog` takes the
-   `typeof deps.search !== "function"` branch and answers
-   `refuse(503, "I couldn't look that up just now. Nothing has changed.")`. If
-   that is what production does, **Add an app is broken for everybody** and leg 3
-   is RED with that sentence quoted. Somebody has to point the gate at it:
+   **And the source moved under this note while it was being written, which is
+   exactly why an unmeasured leg is not a pass.** At 06:17 `connectionsApiDeps()`
+   did not fill `ConnectionsApiDeps.search` at all, so `searchCatalog` took the
+   `typeof deps.search !== "function"` branch and every `?q=` answered
+   `refuse(503, "I couldn't look that up just now. Nothing has changed.")`. By
+   07:25 the working tree carried `search: (query) => provider.search(query)`
+   (connections_api.ts:400) and a `search()` on the provider — somebody else's
+   change, landing in parallel. **Whether the DEPLOYED build carries it is not
+   known**, and neither reading of the source is a measurement. If production
+   still 503s, Add an app is broken for everybody and leg 3 is RED with that
+   sentence quoted. Somebody has to point the gate at it:
 
        export ANTICIPY_CONNECT_PROBE_CREDENTIAL='<an owner auth token>'
        python3 overnight/is_connect_live.py --read-only
@@ -193,10 +197,10 @@ not a defect.
    app's name and three sentences on it. This is the next thing to do and it is
    the largest unmeasured stretch of the chain. *Proof:* a human, or a `proof/`
    script; the gate will not POST that route.
-3. **Fill `ConnectionsApiDeps.search`, or Add an app stays a 503.** Composio
-   v3.1 exposes `GET /toolkits`; add a catalog search to
-   `src/connections/provider.ts`, hand it through, and the search box works with
-   no other change. *Proof:* gate leg 3 green, with a credential exported.
+3. **Prove the catalog search on production.** A `provider.search` and the
+   `ConnectionsApiDeps.search` filler both landed in the tree today; nothing has
+   asked the deployed build whether it carries them. Repo-green is not done.
+   *Proof:* gate leg 3 green, with a credential exported.
 4. **Give the gate an owner credential in whatever runs it**, or leg 3 is
    permanently UNPROVEN and the gate can never exit 0.
 5. **Then a real person taps and completes one connection.** *Proof:* gate leg 9

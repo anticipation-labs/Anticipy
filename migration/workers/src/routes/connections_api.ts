@@ -19,6 +19,8 @@
  *   POST /me/connections/link              -> { "url": "https://…/c/{token}" }
  *   POST /me/connections/skip              -> { "ok": true, "state", "level",
  *                                               "snooze_until" }
+ *   GET  /me/connections/signals           -> { "items": [ranked app row, …],
+ *                                               "state" }
  *
  * ── AND THE SEVENTH IS THE ONE NOBODY COULD REACH ───────────────────────────
  *
@@ -34,6 +36,24 @@
  * routes/connect.ts rather than repeated, so the browser's "Skip for now" and
  * the phone's Skip walk one ladder. Two writers would be two ladders, and the
  * one nobody was looking at would be the wrong one.
+ *
+ * ── AND THE EIGHTH IS THE ONE THE PHONE HAD NO WAY TO ASK ───────────────────
+ *
+ * `/signals` is new on 2026-09-06. Spec page 45, onboarding step 2: "Which apps
+ * do you live in?" with "detected apps pre-selected from the email domain
+ * signal". `app_usage_signals` has held that evidence since the sweep landed
+ * and `rankedApps` (src/connections/signals.ts) has ranked it; there was no
+ * door between the two and the phone, so `OnboardingConnectStep` passed literal
+ * empty arrays and pre-selected nothing. The screen whose whole job is "we
+ * already know what you use" said nothing to anybody.
+ *
+ * IT ANSWERS THE QUESTION IN ONE ROUND TRIP. Each line carries the ranked
+ * evidence AND the catalog row for that app, in the same field names `?slugs=`
+ * uses, so the phone draws a name, a logo and a checkbox with one decoder and
+ * one request.
+ *
+ * AND IT IS HONEST ABOUT THREE DIFFERENT EMPTIES, because the screen draws them
+ * three ways. See `handleSignals`.
  *
  * ── THE OWNER COMES FROM THE TOKEN. ALWAYS. ─────────────────────────────────
  *
@@ -92,8 +112,9 @@
  *    (The search itself is wired: `connectionsApiDeps` fills
  *    `ConnectionsApiDeps.search` from the provider's own catalog search.)
  * 2. `/link` MINTS ON A HOST THE PHONE REFUSES. See `handleLink`.
- * 3. `?slugs=` AND `/sentences` ARE STILL UNBUDGETED. A signed-in caller can
- *    drive `?slugs=` (up to `MAX_CATALOG_SLUGS` vendor round trips a request)
+ * 3. `?slugs=`, `/sentences` AND `/signals` ARE STILL UNBUDGETED. A signed-in
+ *    caller can drive `?slugs=` (up to `MAX_CATALOG_SLUGS` vendor round trips a
+ *    request), `/signals` (up to `MAX_SIGNAL_APPS` of them, plus one D1 read)
  *    and `/sentences` (one MODEL call a request, which costs money) as fast as
  *    they like. Both are authenticated and attributable and neither writes
  *    anything; the budget shape to copy is `spendSearch` below, and the durable
@@ -121,12 +142,18 @@ import {
   type ConnectionsStore,
   type StoredConnection,
   type StoredLink,
+  type StoredSignal,
 } from "../connections/store.ts";
 import {
   connectionsFromEnv,
   MAX_SEARCH_RESULTS,
   type ConnectionsEnv,
 } from "../connections/provider.ts";
+import {
+  rankedApps,
+  type RankedApp,
+  type SignalStore,
+} from "../connections/signals.ts";
 import { makePermissionWords } from "../connections/words.ts";
 import { makeSentenceWriter } from "../connections/wiring.ts";
 import {
@@ -181,6 +208,7 @@ export const CONNECTIONS_API_ROUTES = {
   sentences: "/me/connections/sentences",
   link: "/me/connections/link",
   skip: "/me/connections/skip",
+  signals: "/me/connections/signals",
 } as const;
 
 export type ConnectionsApiLeg = keyof typeof CONNECTIONS_API_ROUTES;
@@ -204,6 +232,10 @@ const METHOD: Record<ConnectionsApiLeg, "GET" | "POST"> = {
   // decline nobody made, and a decline is the one write whose failure mode is
   // SILENCE — an app quietly snoozed for a fortnight and nobody to notice.
   skip: "POST",
+  // A read of this owner's own evidence. It writes nothing, which is asserted
+  // rather than promised: the reader handed to `rankedApps` below cannot
+  // record a signal at all.
+  signals: "GET",
 };
 
 /** Anchored exactly, so `/me/connectionsX` and `/me/connections/link/extra` are
@@ -243,6 +275,29 @@ export const LINK_WINDOW_MS = 60 * 60 * 1000;
  *  here because each slug is a separate vendor round trip and the query string
  *  is caller-controlled. */
 export const MAX_CATALOG_SLUGS = 25;
+
+/**
+ * HOW MANY APPS `/signals` MAY HAND BACK, and it is two ceilings in one number.
+ *
+ * IT IS A SCREEN. Onboarding step 2 draws these rows PRE-TICKED under a single
+ * Connect button. A pre-ticked list longer than one screen is consent by
+ * fatigue: somebody reads the first four and taps the button that connects all
+ * fourteen. Eight is about a phone screen's worth above the button, and the
+ * ranked order means the ones that fall off the end are the ones with the least
+ * behind them.
+ *
+ * IT IS ALSO A COST CEILING. Each line costs one vendor round trip to name, and
+ * this route has no budget of its own (see item 3 at the top of the file), so
+ * the cap is the only thing bounding what one call spends. It is deliberately
+ * at or under `MAX_CATALOG_SLUGS`, which is what `?slugs=` — the other route
+ * that fans out to the catalog — is already allowed; a check pins that
+ * relationship so raising this one cannot quietly outgrow it.
+ *
+ * IT CUTS THE RANKED ORDER, and never chooses within it. Which app matters most
+ * is signals.ts's question and it has already answered; this number only says
+ * where the list stops.
+ */
+export const MAX_SIGNAL_APPS = 8;
 
 /** How many rows one write batch may carry. `ConnectionsPolicy.writesTransition`
  *  produces one row per connection the screen just moved. */
@@ -336,6 +391,10 @@ function spendSearch(owner: string, now: number): boolean {
  *  too and a reviewer looking at either sees the whole of it.
  *  `createD1Store(env)` satisfies all of this structurally. */
 export interface ConnectionsApiStore extends DeclineStore {
+  /** READ ONLY, and the narrowing is enforced rather than promised: the reader
+   *  `handleSignals` builds from this refuses `recordSignal` by name, so a
+   *  route that answers a question about somebody's evidence cannot add to it. */
+  signalsForOwner(user: OwnerId | string): Promise<StoredSignal[]>;
   connectionsForOwner(user: OwnerId | string): Promise<StoredConnection[]>;
   readConnection(user: OwnerId | string, accountId: string): Promise<StoredConnection | null>;
   putConnection(row: StoredConnection): Promise<void>;
@@ -485,8 +544,17 @@ const NO_SENTENCES = "I couldn't get that ready just now. Nothing has changed.";
 const TOO_MANY_LINKS = "That's a lot of tries in one go. Give it an hour and ask me again.";
 const TOO_MANY_LOOKUPS = "That's a lot of looking in one go. Give it an hour and ask me again.";
 
-const refuse = (status: number, message: string): Response =>
-  json(status, { ok: false, message });
+/**
+ * A failure, and optionally WHICH failure.
+ *
+ * `state` exists because two of this file's outages are both 503 and the phone
+ * draws them differently — "I could not read your evidence" and "I know your
+ * apps and could not name any of them" are the same status code and a different
+ * screen. The message is for a log and a curl; the state is the field a client
+ * may branch on, so the copy can be rewritten without breaking a phone.
+ */
+const refuse = (status: number, message: string, state?: string): Response =>
+  json(status, state === undefined ? { ok: false, message } : { ok: false, state, message });
 
 // ---------------------------------------------------------------------------
 // WHO IS ASKING
@@ -602,8 +670,35 @@ function connectionRow(c: StoredConnection): Record<string, unknown> {
  * `row["app_url"]` (ConnectedAppsClient.swift:368) while the provider's
  * `ToolkitMeta` spells it `appUrl` — this is the boundary where that is
  * translated, and it is the only place it may be.
+ *
+ * `mail_hosts` is the same translation for the column the adapter builds beside
+ * the contract's fields (`CatalogToolkit` in src/connections/provider.ts). The
+ * phone matches a resolved mail exchanger against it — spec page 42's
+ * medium-weight signal, matched against the catalog's own entry and never a
+ * domain list of ours — and it is the seam that made onboarding step 2 pre-tick
+ * nothing while it was missing. AGAINST THE LIVE VENDOR IT IS EMPTY ON EVERY
+ * ROW, measured 2026-09-06; the receipt is in the adapter's header. This route
+ * carries what the catalog says and decides nothing about it.
+ *
+ * THE COLUMN IS ALWAYS PRESENT, empty included: a row with no mail hosts and a
+ * server too old to know about them are different facts, and a missing key
+ * makes the phone guess which one it is holding.
  */
 function catalogRow(meta: ToolkitMeta): Record<string, unknown> {
+  // Typed as the contract's `ToolkitMeta`, which does not declare this column,
+  // and read at run time the way every other field crossing this boundary is —
+  // types are stripped before any of this executes, so the only thing standing
+  // between a malformed row and the phone is the check below. A blank is not a
+  // host and neither is a number: both would reach the phone's `hostLabels()`
+  // as a line that can never match, and the second would not even decode.
+  const mail = (meta as { mailHosts?: unknown }).mailHosts;
+  const mail_hosts: string[] = [];
+  if (Array.isArray(mail)) {
+    for (const raw of mail) {
+      const host = typeof raw === "string" ? raw.trim() : "";
+      if (host !== "") mail_hosts.push(host);
+    }
+  }
   return {
     slug: meta.slug,
     name: meta.name,
@@ -611,6 +706,7 @@ function catalogRow(meta: ToolkitMeta): Record<string, unknown> {
     description: meta.description ?? null,
     app_url: meta.appUrl ?? null,
     scopes: Array.isArray(meta.scopes) ? meta.scopes : [],
+    mail_hosts,
   };
 }
 
@@ -1205,6 +1301,153 @@ async function handleSkip(
   });
 }
 
+// ===========================================================================
+// 8. GET /me/connections/signals
+// ===========================================================================
+
+/**
+ * THE FOUR THINGS THIS ROUTE CAN SAY, named once so the phone branches on a
+ * field and never on our copy.
+ *
+ *   ranked              here is the evidence, best first.
+ *   none                we looked, and this owner has none yet.
+ *   unreadable          we could not look.
+ *   catalog-unreadable  we looked, found apps, and could not name one of them.
+ *
+ * THREE OF THEM COME BACK EMPTY AND THE SCREEN DRAWS THEM THREE WAYS: nothing
+ * pre-ticked and a search box; "ask me again in a moment"; and "I know what you
+ * use and cannot describe it right now". Collapsing any two would be the
+ * confident empty this file's header refuses — a person with months of evidence
+ * shown a clean blank list on the one screen that then asks them to connect
+ * what they already live in.
+ */
+export const SIGNALS_ANSWER = {
+  ranked: "ranked",
+  none: "none",
+  unreadable: "unreadable",
+  catalogUnreadable: "catalog-unreadable",
+} as const;
+
+/**
+ * What `rankedApps` is handed: THIS OWNER'S EVIDENCE, READ AND NOT WRITTEN.
+ *
+ * `SignalStore` is `recordSignal` and `signalsForOwner` together, because the
+ * six ingest doors in signals.ts need both. This route needs one of them, and
+ * the other is supplied as a REFUSAL rather than passed through — the same
+ * shape `linkOnlyDeps` uses below, for the same reason. A read route that could
+ * also record evidence would let anybody with a session weight their own table,
+ * and weight is what eventually licenses interrupting somebody.
+ */
+function signalReaderFor(deps: ConnectionsApiDeps): SignalStore {
+  return {
+    signalsForOwner: (user) => deps.store.signalsForOwner(user),
+    recordSignal: (): never => {
+      throw new Error(
+        "me/connections/signals asked to RECORD a signal: this route answers a question "
+          + "about an owner's evidence and must never be able to add to it",
+      );
+    },
+  };
+}
+
+/**
+ * One line of the answer: the ranked evidence, with the catalog's own row on it.
+ *
+ * THE CATALOG HALF IS `catalogRow` ITSELF, not a second spelling of it, so a
+ * line here and a line from `?slugs=` are the same six fields in the same names
+ * and the phone reads both with one decoder. The evidence half is three facts
+ * and no verdict:
+ *
+ *   alias         which of this owner's accounts the strongest evidence was
+ *                 about, or null when it did not say.
+ *   last_seen_at  when, so a screen can say "seen last Tuesday".
+ *   sources       which kinds of evidence fed the line, sorted.
+ *
+ * AND THE WEIGHT IS DELIBERATELY NOT ON THE WIRE. It is an ordering with no
+ * unit — it decays between two calls, so the same evidence is a different
+ * number this afternoon — and the ORDER is already the answer to every question
+ * a client can honestly ask of it. A number on the wire is an invitation to
+ * `if weight > 0.5` on the phone, which is a second policy about who gets asked
+ * to connect what, written where nobody reviewing this feature would look.
+ */
+function signalRow(line: RankedApp, meta: ToolkitMeta): Record<string, unknown> {
+  return {
+    ...catalogRow(meta),
+    alias: line.alias ?? null,
+    last_seen_at: line.lastSeenAt,
+    sources: line.sources,
+  };
+}
+
+/**
+ * THIS OWNER'S APPS, MOST-LIVED-IN FIRST, READY TO DRAW.
+ *
+ * The ranking is `rankedApps` and nothing here re-sorts it: two definitions of
+ * which app is first would be a list that reorders itself between the screen
+ * and the message about it (src/connections/signals.ts `compareRankedApps`).
+ * This route does exactly three things to that list — one line per app, cut to
+ * `MAX_SIGNAL_APPS`, name each one from the catalog.
+ *
+ * ONE LINE PER APP. The ranked table is keyed by (toolkit, account), so an
+ * owner with two accounts on one app has two lines. A screen drawing them both
+ * shows the same name, the same logo and two checkboxes. The STRONGEST line
+ * represents the app — which is a cut of the existing order and not a merge:
+ * summing two lines' weights here would be this file inventing ranking
+ * arithmetic that signals.ts owns.
+ *
+ * A SLUG THE CATALOG CANNOT NAME IS DROPPED, exactly as `?slugs=` drops one:
+ * a row with no name renders as a blank line with a checkbox on it. Every slug
+ * failing is a different claim — that is the catalog being unreachable, not an
+ * owner with unnameable apps — and it is answered as an outage that says so.
+ */
+async function handleSignals(
+  owner: string, deps: ConnectionsApiDeps, now: number,
+): Promise<Response> {
+  let ranked: RankedApp[];
+  try {
+    // SCOPED BY THE TOKEN'S OWNER, and checked against the rows that come back:
+    // `rankedApps` re-reads the id it was given against every row and raises on
+    // a mixed or swapped table rather than ranking somebody else's apps.
+    ranked = await rankedApps(signalReaderFor(deps), owner, now);
+  } catch (err) {
+    // NEVER `{ items: [] }`. "You have no apps" and "I could not look" are
+    // different sentences, and only one of them is true here.
+    console.log(`me/connections/signals: could not read this owner's evidence — ${named(err)}`);
+    return refuse(503, COULD_NOT_READ, SIGNALS_ANSWER.unreadable);
+  }
+
+  const wanted: RankedApp[] = [];
+  const seen = new Set<string>();
+  for (const line of ranked) {
+    if (seen.has(line.toolkit)) continue;
+    seen.add(line.toolkit);
+    wanted.push(line);
+    // CUT BEFORE THE LOOKUPS, not after: the apps past the cut must cost no
+    // vendor round trip, or the ceiling bounds the payload and not the spend.
+    if (wanted.length >= MAX_SIGNAL_APPS) break;
+  }
+
+  // THE HONEST EMPTY, and the only one in this route that is an answer rather
+  // than a failure: we read the table, and this owner has nothing in it yet.
+  // The catalog is not asked, because there is nothing to name.
+  if (wanted.length === 0) return json(200, { items: [], state: SIGNALS_ANSWER.none });
+
+  const items: Record<string, unknown>[] = [];
+  let failures = 0;
+  for (const line of wanted) {
+    try {
+      items.push(signalRow(line, await deps.provider.toolkit(line.toolkit)));
+    } catch {
+      failures++;
+    }
+  }
+  if (items.length === 0 && failures > 0) {
+    console.log(`me/connections/signals: ${failures} of ${wanted.length} apps unnameable`);
+    return refuse(503, CATALOG_UNREACHABLE, SIGNALS_ANSWER.catalogUnreadable);
+  }
+  return json(200, { items, state: SIGNALS_ANSWER.ranked });
+}
+
 /**
  * What `mintConnectLink` is handed.
  *
@@ -1300,5 +1543,6 @@ export async function connectionsApiRoute(
     case "sentences": return await handleSentences(request, wired);
     case "link": return await handleLink(request, env, owner, wired, now);
     case "skip": return await handleSkip(request, owner, wired, now);
+    case "signals": return await handleSignals(owner, wired, now);
   }
 }

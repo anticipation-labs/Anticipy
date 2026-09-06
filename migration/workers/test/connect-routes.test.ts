@@ -97,9 +97,10 @@ import { dirname, join } from "node:path";
 import { FakeD1, asD1 } from "./fake-d1.ts";
 import { issueToken } from "../src/pb/auth.ts";
 import {
-  connectRoute, tokenHandle, callbackUrl, connectWiringInstalled,
-  installConnectSessionReader, promiseTermIn, whoIsSignedIn,
-  CALLBACK_WINDOW_MS, CONNECT_METHOD, LINK_TTL_MS, REGISTER_TERMS, SESSION_COOKIE,
+  connectRoute, tokenHandle, callbackUrl, connectWiringInstalled, connectPageGo,
+  installConnectSessionReader, pageHandle, promiseTermIn, whoIsSignedIn,
+  CALLBACK_WINDOW_MS, CONNECT_METHOD, LINK_TTL_MS, MAX_PAGE_APPS, REGISTER_TERMS,
+  SESSION_COOKIE,
   type ClaimOutcome, type ConnectDeps, type ConnectEnv, type ConnectLinkStore,
   type Connection, type StoredLink, type ToolkitMeta,
 } from "../src/routes/connect.ts";
@@ -245,6 +246,17 @@ const APPS: Record<string, ToolkitMeta> = {
     slug: "quandle_mail", name: "Quandle Mail", logo: null,
     description: null, appUrl: null, scopes: ["mail.read"],
   },
+  // Two more, so a PAGE of apps can be four invented ones. Same point as the two
+  // above and it matters more here: a page is where a file that had learned any
+  // app's name would show it, because it would have to decide an order.
+  torvex_boards: {
+    slug: "torvex_boards", name: "Torvex Boards", logo: "https://cdn.example.invalid/t.png",
+    description: "Where your team tracks work.", appUrl: null, scopes: ["boards.read"],
+  },
+  pindle_desk: {
+    slug: "pindle_desk", name: "Pindle Desk", logo: null,
+    description: null, appUrl: null, scopes: ["desk.read", "desk.write"],
+  },
 };
 
 /**
@@ -311,7 +323,13 @@ APPS.rapid_capital = {
 
 /** The apps that have a name this product may print. Every one of them must
  *  render the whole consent page from catalog metadata alone. */
-const RENDERABLE: readonly string[] = ["zellibrix", "quandle_mail", "rapid_capital"];
+const RENDERABLE: readonly string[] = [
+  "zellibrix", "quandle_mail", "rapid_capital", "torvex_boards", "pindle_desk",
+];
+
+/** The four a person ticked on the onboarding card, in the order they were
+ *  minted. All four invented; the page has to come out of the catalog. */
+const PAGE: readonly string[] = ["zellibrix", "quandle_mail", "torvex_boards", "pindle_desk"];
 
 interface ProviderLog {
   authorize: { user: string; toolkit: string; callbackUrl: string; alias: unknown }[];
@@ -1800,6 +1818,643 @@ await check("the way back into the app is offered only when the app started it",
 });
 
 // ===========================================================================
+// A PAGE OF APPS — spec page 25, "One Connect button opens a multi-app connect
+// page", and the four gaps three audits named, closed here.
+//
+// WHAT A PAGE IS, structurally, so these checks are readable: N ordinary
+// `connect_links` rows at handles derived from ONE token (`pageHandle`), which
+// is why "four ticked apps become ONE link" is a claim about the store as much
+// as about the page. Row 0 sits where a one-app link's row has always sat, and
+// that is the whole backward-compatibility story — the CONTROL at the end of
+// this section is the thing that proves it rather than asserting it.
+//
+// THE FAILURES THIS SECTION EXISTS TO CATCH:
+//   the page drawing one app out of four (the render never read `apps`);
+//   a card's button spending row 0 whatever it said (the form's index never
+//     reached `/go`, so tapping the third app connected the first);
+//   the vendor's callback finishing row 0 whatever it carried (same, on `/done`);
+//   the background poll watching row 0 while row 3 was in flight;
+//   one bad catalog row costing somebody the other three;
+//   a browser that died mid-walk starting again from the beginning.
+// ===========================================================================
+
+/** A page of N apps on ONE token: row 0 where a one-app link's row has always
+ *  been, the rest at derived handles. The vendor is made to vouch for every one
+ *  of them, since a page walks them one at a time and each callback is checked
+ *  against the vendor's own list. */
+async function pageRig(
+  slugs: readonly string[], opts: RigOpts = {},
+): Promise<Rig & { slugs: readonly string[] }> {
+  const r = await rig({
+    ...opts,
+    toolkit: slugs[0],
+    vendorHolds: opts.vendorHolds ?? ((owner: string): Connection[] =>
+      slugs.map((slug, i) => ({
+        user_id: owner, toolkit: slug, connected_account_id: `ca_VENDOR_${i}`,
+        alias: null, status: "connected" as const, writes_enabled: false, last_used_at: null,
+      }))),
+  });
+  for (let i = 1; i < slugs.length; i++) {
+    r.store.put({
+      token_handle: await pageHandle(r.token, i),
+      user_id: OWNER,
+      toolkit: slugs[i]!,
+      alias: null,
+      expires_at: opts.expiresAt ?? NOW + LINK_TTL_MS,
+      used_at: null,
+      completed_at: null,
+    });
+  }
+  return { ...r, slugs };
+}
+
+/** Tap one card. The hidden field the page rendered is the only thing that says
+ *  which app this is. */
+const goReq = (token: string, who: Who, app: number | string | null, state?: string): Request =>
+  postReq(`/c/${token}/go`, who, {
+    form: {
+      ...(app === null ? {} : { app: String(app) }),
+      ...(state === undefined ? {} : { state }),
+    },
+  });
+
+/** The vendor coming back for one card. */
+const doneFor = (token: string, app: number | string | null, account: string): string =>
+  doneUrl(token, `status=success&connected_account_id=${account}`
+    + (app === null ? "" : `&app=${app}`));
+
+/** Connect one card end to end, the way a person does: tap, vendor, callback. */
+async function connectCard(r: Rig, app: number, account: string): Promise<Response> {
+  const go = await connectRoute(goReq(r.token, asHeader(r.ownerToken), app), r.env, r.deps);
+  await bodyOf(go, `page go ${app}`);
+  assert.equal(go.status, 303, `card ${app} did not redirect`);
+  return await connectRoute(
+    getReq(doneFor(r.token, app, account), asHeader(r.ownerToken)), r.env, r.deps);
+}
+
+await check("FOUR ticked apps are ONE link, and the page draws all four", async () => {
+  const r = await pageRig(PAGE);
+
+  // ONE TOKEN. Four rows, every one of them reachable only by hashing the token
+  // the person is holding — which is what makes this one link and not four.
+  assert.equal(r.store.rows.size, 4, "a page of four is four rows");
+  for (let i = 0; i < PAGE.length; i++) {
+    assert.ok(r.store.rows.has(await pageHandle(r.token, i)), `row ${i} is not on this token`);
+  }
+
+  const res = await connectRoute(getReq(`/c/${r.token}`, asHeader(r.ownerToken)), r.env, r.deps);
+  assert.equal(res.status, 200);
+  const html = await bodyOf(res, "page view four");
+
+  for (const [i, slug] of PAGE.entries()) {
+    const name = APPS[slug]!.name;
+    assert.ok(html.includes(`<h2>Connect your ${name}</h2>`), `${slug} is not on the page`);
+    assert.ok(html.includes(`>Connect ${name}</button>`), `${slug} has no button of its own`);
+    assert.ok(html.includes(`read your ${name}`),
+      `${slug}'s own three sentences are not on the page`);
+    assert.ok(html.includes(`<input type="hidden" name="app" value="${i}">`),
+      `${slug}'s button does not say which row it is, so it would spend row 0`);
+  }
+
+  // FOUR CONNECTS, ONE SKIP. "Skip still applies to the whole page."
+  assert.equal((html.match(/<button class="go"/g) ?? []).length, 4, "one button per app");
+  assert.equal((html.match(/<button class="later"/g) ?? []).length, 1,
+    "the page is one decision, so it declines once");
+  assert.equal((html.match(new RegExp(`action="/c/${r.token}/skip"`, "g")) ?? []).length, 1);
+  assert.match(html, /This is optional/, "the optional sentence is per page, and still there");
+  assert.equal(r.log.toolkit.length, 4, "the catalog was asked once per app and no more");
+});
+
+await check("each card connects its OWN app — the third button is not the first", async () => {
+  const r = await pageRig(PAGE);
+  const res = await connectRoute(
+    goReq(r.token, asHeader(r.ownerToken), 2, "ATTEMPT-7"), r.env, r.deps);
+  assert.equal(res.status, 303);
+  await bodyOf(res, "page go card 2");
+
+  assert.equal(r.log.authorize.length, 1);
+  const call = r.log.authorize[0]!;
+  assert.equal(call.toolkit, PAGE[2],
+    "the vendor was asked to connect a different app than the one tapped");
+  assert.equal(call.callbackUrl,
+    callbackUrl(r.token, "https://api.anticipy.ai/c", "ATTEMPT-7", 2),
+    "the callback does not say which row it is finishing");
+  assert.ok(call.callbackUrl.includes("app=2"), "the index does not ride out to the vendor");
+  assert.ok(!call.callbackUrl.includes(PAGE[2]!),
+    "the app's SLUG is on a URL another company reads — an index is what rides, "
+    + "because \"2\" tells whoever reads it nothing");
+
+  // ONLY THAT ROW IS SPENT.
+  for (let i = 0; i < PAGE.length; i++) {
+    const row = r.store.rows.get(await pageHandle(r.token, i))!;
+    assert.equal(row.used_at, i === 2 ? NOW : null, `row ${i} has the wrong used bit`);
+  }
+});
+
+await check("the callback finishes the row it names, and writes THAT app", async () => {
+  const r = await pageRig(PAGE);
+  const done = await connectCard(r, 2, "ca_VENDOR_2");
+  assert.equal(done.status, 200);
+  await bodyOf(done, "page done card 2");
+  assert.equal(r.written.length, 1);
+  assert.equal(r.written[0]!.toolkit, PAGE[2],
+    "the connection was filed under a different app than the one that was connected");
+  assert.equal(r.written[0]!.connected_account_id, "ca_VENDOR_2");
+  assert.equal(r.written[0]!.writes_enabled, false, "a page must not arrive write-enabled either");
+  assert.equal(r.store.rows.get(await pageHandle(r.token, 2))!.completed_at, NOW);
+  assert.equal(r.store.rows.get(await tokenHandle(r.token))!.completed_at, null,
+    "the lease was taken on row 0 for a callback about row 2");
+});
+
+await check("the background poll watches the row that was SPENT, not row 0", async () => {
+  // The poll cannot be started in this suite — no ExecutionContext is passed, on
+  // purpose, because a real timer nobody can join held this file open for eleven
+  // minutes per redirect. So the handle it would be started with is checked
+  // where it is decided, and the call site is pinned by its own literal below.
+  const r = await pageRig(PAGE);
+  const go = await connectPageGo(r.token, {
+    signedInAs: OWNER, store: r.store, provider: r.deps.provider,
+    baseUrl: "https://api.anticipy.ai/c", state: null, now: NOW, app: 3,
+  });
+  assert.equal(go.state, "ok");
+  assert.equal(go.state === "ok" && go.handle, await pageHandle(r.token, 3),
+    "the poll would watch a row nobody is connecting");
+  assert.notEqual(await pageHandle(r.token, 3), await tokenHandle(r.token));
+
+  const anchor = "startWaiting(env, deps, go.handle, go.owner, go.toolkit, now, ctx);";
+  assert.equal(occurrences(SOURCE, anchor), 1,
+    "the redirect starts the backup on something other than the row it just spent");
+});
+
+await check("one app whose sentences cannot be written is DROPPED, the other three connect",
+  async () => {
+    const broken = PAGE[1]!;
+    const r = await pageRig(PAGE, {
+      // The catalog answers; the writer has nothing to say about this one. That
+      // is a 503 for a one-app link and must be one missing card on a page.
+      sentences: async (meta: ToolkitMeta) => (meta.slug === broken ? [] : [
+        `Anticipy can read your ${meta.name} for the things you ask about.`,
+        `It can add to your ${meta.name} when you ask it to.`,
+        "You can turn this off any time in Settings.",
+      ]),
+    });
+
+    const res = await connectRoute(getReq(`/c/${r.token}`, asHeader(r.ownerToken)), r.env, r.deps);
+    assert.equal(res.status, 200,
+      "one bad catalog row refused the whole page — the other three were connectable");
+    const html = await bodyOf(res, "page view with a drop");
+    assert.ok(!html.includes(APPS[broken]!.name), "the app that cannot be described is on the page");
+    assert.equal((html.match(/<button class="go"/g) ?? []).length, 3, "three apps, three buttons");
+    for (const i of [0, 2, 3]) {
+      assert.ok(html.includes(`<h2>Connect your ${APPS[PAGE[i]!]!.name}</h2>`),
+        `${PAGE[i]} went missing with the broken one`);
+    }
+
+    // AND THEY REALLY CONNECT — a card drawn is a card that works.
+    for (const i of [0, 2, 3]) {
+      const done = await connectCard(r, i, `ca_VENDOR_${i}`);
+      await bodyOf(done, `drop-page done ${i}`);
+      assert.equal(done.status, 200, `card ${i} did not connect`);
+    }
+    assert.deepEqual(r.written.map((c) => c.toolkit), [PAGE[0], PAGE[2], PAGE[3]]);
+
+    // THE DROPPED ROW IS UNTOUCHED. Nothing spent, nothing written: fix the
+    // catalog row and the same link offers it again.
+    assert.equal(r.store.rows.get(await pageHandle(r.token, 1))!.used_at, null,
+      "the dropped app's link was spent by a page that never offered it");
+  });
+
+await check("a page whose apps are ALL undrawable is the same 409 a one-app link gets",
+  async () => {
+    const r = await pageRig([VENDOR_NAMED[0]!.slug, NAMELESS[0]!.slug]);
+    const res = await connectRoute(getReq(`/c/${r.token}`, asHeader(r.ownerToken)), r.env, r.deps);
+    assert.equal(res.status, 409);
+    const html = await bodyOf(res, "page all undrawable");
+    assert.ok(!html.includes("<form"), "a Connect button over a page with nothing on it");
+    assert.equal(r.store.rows.get(await tokenHandle(r.token))!.used_at, null,
+      "the refusal spent the owner's link");
+  });
+
+await check("A BROWSER THAT DIES AFTER THE SECOND comes back to apps three and four",
+  async () => {
+    const r = await pageRig(PAGE);
+    await bodyOf(await connectCard(r, 0, "ca_VENDOR_0"), "walk done 0");
+    await bodyOf(await connectCard(r, 1, "ca_VENDOR_1"), "walk done 1");
+
+    // The browser dies here. The person opens the SAME link again — the one in
+    // the text, the one on the card — and the page is what is left of it.
+    const res = await connectRoute(getReq(`/c/${r.token}`, asHeader(r.ownerToken)), r.env, r.deps);
+    assert.equal(res.status, 200, "coming back to a half-walked page is a dead end");
+    const html = await bodyOf(res, "page after two");
+
+    for (const i of [0, 1]) {
+      assert.ok(!html.includes(`>Connect ${APPS[PAGE[i]!]!.name}</button>`),
+        `${PAGE[i]} is offered again after it was connected`);
+    }
+    for (const i of [2, 3]) {
+      assert.ok(html.includes(`<h2>Connect your ${APPS[PAGE[i]!]!.name}</h2>`),
+        `${PAGE[i]} was lost when the browser died`);
+      assert.ok(html.includes(`<input type="hidden" name="app" value="${i}">`),
+        `${PAGE[i]}'s place on the page moved — the indices are the rows, not the cards`);
+    }
+    assert.equal((html.match(/<button class="go"/g) ?? []).length, 2,
+      "the walk restarted from the beginning");
+
+    // And the rest of the walk still finishes.
+    await bodyOf(await connectCard(r, 2, "ca_VENDOR_2"), "walk done 2");
+    await bodyOf(await connectCard(r, 3, "ca_VENDOR_3"), "walk done 3");
+    assert.deepEqual(r.written.map((c) => c.toolkit), [...PAGE]);
+
+    // Now there is nothing left, and the page says so rather than drawing an
+    // empty consent screen.
+    const empty = await connectRoute(getReq(`/c/${r.token}`, asHeader(r.ownerToken)),
+      r.env, r.deps);
+    assert.equal(empty.status, 410);
+    assert.match(await bodyOf(empty, "page all used"), /has been used/i);
+  });
+
+await check("the done page hands back the rest of the page, and counts them honestly",
+  async () => {
+    const r = await pageRig(PAGE);
+    const first = await connectCard(r, 0, "ca_VENDOR_0");
+    const html = await bodyOf(first, "page done with rest");
+    assert.ok(html.includes(`href="/c/${r.token}"`),
+      "the walk ends here — there is no way back to the three they have not done");
+    assert.ok(html.includes("Set up the others"));
+    assert.ok(html.includes("anticipy://connected/"), "the way back into the app went missing");
+
+    // Down to one, and "the others" stops being true.
+    await bodyOf(await connectCard(r, 1, "ca_VENDOR_1"), "rest 1");
+    const last = await connectCard(r, 2, "ca_VENDOR_2");
+    const lastHtml = await bodyOf(last, "page done with one left");
+    assert.ok(lastHtml.includes("Set up the last one"), "one app left was called \"the others\"");
+
+    // And when there is nothing left, nothing is offered.
+    const end = await connectCard(r, 3, "ca_VENDOR_3");
+    const endHtml = await bodyOf(end, "page done with none left");
+    assert.ok(!endHtml.includes("Set up the"),
+      "a walk with nothing left still offered a way back to an empty page");
+  });
+
+await check("the phone's attempt id survives the walk back to the page", async () => {
+  const r = await pageRig(PAGE);
+  const go = await connectRoute(
+    goReq(r.token, asHeader(r.ownerToken), 0, "ATTEMPT-42"), r.env, r.deps);
+  await bodyOf(go, "walk go with state");
+  const done = await connectRoute(getReq(
+    `${doneFor(r.token, 0, "ca_VENDOR_0")}&state=ATTEMPT-42`, asHeader(r.ownerToken)),
+    r.env, r.deps);
+  const html = await bodyOf(done, "walk done with state");
+  assert.ok(html.includes(`href="/c/${r.token}?state=ATTEMPT-42"`),
+    "the way back drops the attempt id, so the app stops being able to match the walk");
+});
+
+await check("Skip applies to the WHOLE page — four apps, four declines, one tap", async () => {
+  const r = await pageRig(PAGE);
+  const res = await connectRoute(
+    skipReq(r.token, asHeader(r.ownerToken)), r.env, r.deps);
+  assert.equal(res.status, 200);
+  // The apostrophe is escaped on its way to the page, so the assertion reads the
+  // bytes a person's browser gets rather than the constant in the source.
+  const skipHtml = await bodyOf(res, "page skip");
+  assert.match(skipHtml, /bring these up again/i,
+    "four apps were turned down and the page said \"this one\", which reads as if the "
+    + "other three are still coming");
+  assert.ok(!skipHtml.includes("bring this one up again"),
+    "the one-app sentence was shown over a page of four");
+
+  assert.equal(r.store.nudges.size, 4,
+    "somebody who ticked four apps and said not now had one of them recorded");
+  for (const slug of PAGE) {
+    const row = r.store.nudges.get(`${OWNER}::${slug}`)!;
+    assert.equal(row.state, "declined", `${slug} was not declined`);
+    assert.equal(row.level, 1, `${slug} landed on the wrong rung`);
+  }
+  // NOT SPENT. Changing your mind inside the ten minutes still works, on every
+  // card, exactly as it does for a one-app link.
+  for (let i = 0; i < PAGE.length; i++) {
+    assert.equal(r.store.rows.get(await pageHandle(r.token, i))!.used_at, null);
+  }
+});
+
+await check("a page half connected and then skipped declines only what was left", async () => {
+  const r = await pageRig(PAGE);
+  await bodyOf(await connectCard(r, 0, "ca_VENDOR_0"), "half done 0");
+  // The connection flips the nudge row through `onConnected` in production; the
+  // suite's fake writes connections only, so the row is seeded here to be the
+  // thing `recordSkip` must refuse to overwrite.
+  await r.store.putNudge({
+    user_id: OWNER as never, toolkit: PAGE[0]! as never, state: "connected", level: 0,
+    snooze_until: null, trigger: null, sent_at: NOW - 1000, acted_at: NOW - 500, channel: "app",
+  });
+
+  const res = await connectRoute(skipReq(r.token, asHeader(r.ownerToken)), r.env, r.deps);
+  assert.equal(res.status, 200);
+  await bodyOf(res, "page skip after one");
+  assert.equal(r.store.nudges.get(`${OWNER}::${PAGE[0]}`)!.state, "connected",
+    "a live connection was replaced by a decline because the page was skipped");
+  for (const slug of PAGE.slice(1)) {
+    assert.equal(r.store.nudges.get(`${OWNER}::${slug}`)!.state, "declined", slug);
+  }
+});
+
+await check("single use is per app, and the whole page still expires in ten minutes", async () => {
+  const r = await pageRig(PAGE);
+  await bodyOf(await connectRoute(goReq(r.token, asHeader(r.ownerToken), 1), r.env, r.deps),
+    "reuse first");
+  const second = await connectRoute(goReq(r.token, asHeader(r.ownerToken), 1), r.env, r.deps);
+  assert.equal(second.status, 410, "the same card was spendable twice");
+  assert.match(await bodyOf(second, "reuse second"), /has been used/i);
+  assert.equal(r.log.authorize.length, 1, "the vendor was asked twice for one card");
+
+  // Another card on the same page is untouched by that.
+  const other = await connectRoute(goReq(r.token, asHeader(r.ownerToken), 2), r.env, r.deps);
+  assert.equal(other.status, 303, "one spent card killed the rest of the page");
+  await bodyOf(other, "reuse other card");
+
+  // TEN MINUTES, for the page and every card on it.
+  const old = await pageRig(PAGE, { expiresAt: NOW - 1 });
+  const view = await connectRoute(getReq(`/c/${old.token}`, asHeader(old.ownerToken)),
+    old.env, old.deps);
+  assert.equal(view.status, 410);
+  assert.match(await bodyOf(view, "page expired view"), /expired/i);
+  for (const app of [0, 2, 3]) {
+    const tap = await connectRoute(goReq(old.token, asHeader(old.ownerToken), app),
+      old.env, old.deps);
+    assert.equal(tap.status, 410, `card ${app} outlived the link`);
+    await bodyOf(tap, `page expired go ${app}`);
+  }
+  assert.equal(old.log.authorize.length, 0, "an expired page still opened a vendor flow");
+});
+
+await check("a STRANGER cannot redeem a card, and cannot measure the page either", async () => {
+  const r = await pageRig(PAGE);
+  const view = await connectRoute(getReq(`/c/${r.token}`, asHeader(r.strangerToken)),
+    r.env, r.deps);
+  assert.equal(view.status, 403);
+  const html = await bodyOf(view, "page stranger view");
+  for (const slug of PAGE) {
+    assert.ok(!html.includes(APPS[slug]!.name), `${slug} was named to a signed-in stranger`);
+  }
+  assert.equal(r.store.reads, 1,
+    "the page was WALKED for a stranger — how many apps somebody is connecting is a fact "
+    + "about them, and the size of the walk is readable off a stopwatch");
+
+  for (const app of [0, 1, 2, 3]) {
+    const tap = await connectRoute(goReq(r.token, asHeader(r.strangerToken), app), r.env, r.deps);
+    assert.equal(tap.status, 403, `a stranger spent card ${app}`);
+    await bodyOf(tap, `page stranger go ${app}`);
+    assert.equal(r.store.rows.get(await pageHandle(r.token, app))!.used_at, null);
+  }
+  assert.equal(r.log.authorize.length, 0);
+  assert.equal(r.store.nudges.size, 0);
+
+  // And signed out, nothing at all: not one store read, on any card.
+  const anon = await pageRig(PAGE);
+  for (const app of [0, 3]) {
+    const tap = await connectRoute(goReq(anon.token, null, app), anon.env, anon.deps);
+    assert.equal(tap.status, 401);
+    await bodyOf(tap, `page anon go ${app}`);
+  }
+  assert.equal(anon.store.reads, 0, "a caller who proved nothing reached the store");
+});
+
+await check("a row at this token's OWN handle bound to somebody else is not on the page",
+  async () => {
+    // THE WRONG-PERSON FAILURE, ARRIVING THROUGH A LOOP VARIABLE. The minter
+    // refuses a mixed batch (`ConnectionsStore.putAll`), so this cannot come out
+    // of the shipped path — but if a store ever hands one back, drawing it would
+    // put a stranger's app on the owner's consent screen and let the owner
+    // connect it. The page ends at that row rather than skipping over it: a hole
+    // in the middle would make every index after it mean one thing to the reader
+    // and another to the writer.
+    const r = await pageRig(PAGE);
+    r.store.rows.set(await pageHandle(r.token, 2), {
+      token_handle: await pageHandle(r.token, 2), user_id: STRANGER, toolkit: PAGE[2]!,
+      alias: null, expires_at: NOW + LINK_TTL_MS, used_at: null, completed_at: null,
+    });
+
+    const res = await connectRoute(getReq(`/c/${r.token}`, asHeader(r.ownerToken)), r.env, r.deps);
+    assert.equal(res.status, 200);
+    const html = await bodyOf(res, "page with a stranger's row");
+    assert.equal((html.match(/<button class="go"/g) ?? []).length, 2,
+      "the page did not stop at the row that is not this owner's");
+    assert.ok(!html.includes(`<input type="hidden" name="app" value="3">`),
+      "the page carried on past the foreign row, so index 3 means two different rows");
+
+    // And it cannot be connected either — `locate` compares the session to that
+    // row's own owner, and the owner is not it.
+    const tap = await connectRoute(goReq(r.token, asHeader(r.ownerToken), 2), r.env, r.deps);
+    assert.equal(tap.status, 403, "the owner connected a row bound to somebody else");
+    await bodyOf(tap, "page stranger row go");
+    assert.equal(r.log.authorize.length, 0);
+
+    // A skip must not walk that row's ladder either.
+    const skip = await connectRoute(skipReq(r.token, asHeader(r.ownerToken)), r.env, r.deps);
+    assert.equal(skip.status, 200);
+    await bodyOf(skip, "page stranger row skip");
+    assert.equal(r.store.nudges.size, 2,
+      "a decline was recorded against a row this owner does not own");
+  });
+
+await check("an index that is not one of the page's is refused, never rounded to app 0",
+  async () => {
+    // ROUNDING IS THE ONLY WAY THIS PARAMETER COULD HURT ANYBODY: it would open
+    // a vendor flow for an app nobody tapped, and file the credential that comes
+    // back under the wrong name.
+    for (const bad of ["two", "1e0", "0x2", "-1", "1.0", "+3", String(MAX_PAGE_APPS), "999"]) {
+      const r = await pageRig(PAGE);
+      const tap = await connectRoute(goReq(r.token, asHeader(r.ownerToken), bad), r.env, r.deps);
+      assert.equal(tap.status, 410, `${JSON.stringify(bad)} was accepted as an index`);
+      await bodyOf(tap, `page bad index ${bad}`);
+      assert.equal(r.log.authorize.length, 0, `${JSON.stringify(bad)} opened a vendor flow`);
+      for (let i = 0; i < PAGE.length; i++) {
+        assert.equal(r.store.rows.get(await pageHandle(r.token, i))!.used_at, null,
+          `${JSON.stringify(bad)} spent row ${i}`);
+      }
+    }
+
+    // THE CONTROL, and the line the refusals are drawn against: surrounding
+    // whitespace is transport and is trimmed, because it cannot change WHICH row
+    // is selected — only the digits can, and they are read whole or not at all.
+    // A field that is nothing but spaces reads as absent, which is a one-app
+    // link and row 0.
+    const spaced = await pageRig(PAGE);
+    const ok = await connectRoute(
+      goReq(spaced.token, asHeader(spaced.ownerToken), " 1 "), spaced.env, spaced.deps);
+    assert.equal(ok.status, 303, "a padded index was refused, which is an outage, not a guard");
+    await bodyOf(ok, "page padded index");
+    assert.equal(spaced.log.authorize[0]!.toolkit, PAGE[1],
+      "a padded index selected a different row than its digits name");
+
+    // The same on the callback, where rounding would file one app's credential
+    // under another app's name.
+    const r = await pageRig(PAGE);
+    await bodyOf(await connectRoute(goReq(r.token, asHeader(r.ownerToken), 2), r.env, r.deps),
+      "bad callback go");
+    for (const bad of ["two", "-1", "999"]) {
+      const done = await connectRoute(
+        getReq(doneFor(r.token, bad, "ca_VENDOR_2"), asHeader(r.ownerToken)), r.env, r.deps);
+      assert.equal(done.status, 410, `${JSON.stringify(bad)} was accepted on the callback`);
+      await bodyOf(done, `page bad done ${bad}`);
+      assert.equal(r.written.length, 0, `${JSON.stringify(bad)} wrote a connection`);
+    }
+
+    // AND THE SAME AGAIN WITH ROW 0 LIVE, because the loop above passes for the
+    // wrong reason on its own: a callback rounded to app 0 lands on a row that
+    // was never tapped, which `callbackDeadline` calls dead anyway. Measured —
+    // the rounding mutation SURVIVED that loop. So here row 0 IS spent and is
+    // waiting for its own callback, and the unreadable index carries row 0's own
+    // account id: rounding writes that connection, refusing writes nothing.
+    const live = await pageRig(PAGE);
+    await bodyOf(await connectRoute(goReq(live.token, asHeader(live.ownerToken), 0),
+      live.env, live.deps), "rounding go 0");
+    await bodyOf(await connectRoute(goReq(live.token, asHeader(live.ownerToken), 2),
+      live.env, live.deps), "rounding go 2");
+    for (const bad of ["two", "-1", "999"]) {
+      const done = await connectRoute(
+        getReq(doneFor(live.token, bad, "ca_VENDOR_0"), asHeader(live.ownerToken)),
+        live.env, live.deps);
+      assert.equal(done.status, 410,
+        `${JSON.stringify(bad)} was rounded to app 0, which had a real connect in flight`);
+      await bodyOf(done, `page rounded done ${bad}`);
+      assert.equal(live.written.length, 0,
+        `${JSON.stringify(bad)} finished a row the vendor's callback did not name`);
+      assert.equal(live.store.rows.get(await tokenHandle(live.token))!.completed_at, null,
+        `${JSON.stringify(bad)} burned row 0's exactly-once lease`);
+    }
+  });
+
+await check("a callback naming ANOTHER card's row binds nothing", async () => {
+  // The index is on a query string a browser can edit. It selects a row — and
+  // the row's own toolkit then has to be vouched for by the vendor's list before
+  // a byte is written, which is what makes an edited index worthless.
+  const r = await pageRig(PAGE);
+  await bodyOf(await connectRoute(goReq(r.token, asHeader(r.ownerToken), 2), r.env, r.deps),
+    "cross-card go");
+  // Card 3's account id, pointed at card 2's row.
+  const done = await connectRoute(
+    getReq(doneFor(r.token, 2, "ca_VENDOR_3"), asHeader(r.ownerToken)), r.env, r.deps);
+  assert.equal(done.status, 200);
+  assert.match(await bodyOf(done, "cross-card done"), /didn&#39;t finish/i);
+  assert.equal(r.written.length, 0,
+    "an account the vendor holds on ANOTHER app was filed under this row");
+  assert.equal(r.store.rows.get(await pageHandle(r.token, 2))!.completed_at, null,
+    "the exactly-once lease was burned on a callback that wrote nothing");
+});
+
+await check("a callback for a card that never went through /go is dead", async () => {
+  const r = await pageRig(PAGE);
+  const done = await connectRoute(
+    getReq(doneFor(r.token, 3, "ca_VENDOR_3"), asHeader(r.ownerToken)), r.env, r.deps);
+  assert.equal(done.status, 410, "a callback arrived for a card nobody tapped");
+  await bodyOf(done, "page untapped done");
+  assert.equal(r.written.length, 0);
+});
+
+// ---------------------------------------------------------------------------
+// THE CONTROL — a one-app link is what it was, byte for byte.
+// ---------------------------------------------------------------------------
+
+/**
+ * The body a one-app link's page rendered BEFORE any of the above existed,
+ * recorded from the committed renderer (`git show HEAD:...connect.ts`) driven
+ * over the same fixture, 2026-09-06. The shell around it — doctype, title,
+ * stylesheet — is shared with every other page in this file and is not what
+ * pages touched; this is.
+ *
+ * IT IS A GOLDEN AND THAT IS THE POINT. Multi-app is allowed to add an intro, an
+ * `<h2>`, a hidden index and a link back to the rest — and NONE of them may
+ * appear here, because every link in the wild today is one of these and the
+ * phone mints them by the thousand. If a deliberate copy change ever lands on
+ * this page, this string is updated in the same diff, by hand, and whoever does
+ * it has said out loud that every one-app link in every message thread changed.
+ */
+const ONE_APP_BODY = `<body>
+<img class="logo" src="https://cdn.example.invalid/z.png" alt="">
+<h1>Connect your Zellibrix</h1>
+<p>Where your team keeps its notes.</p>
+<p>Here's what Anticipy would be able to do:</p>
+<ul>
+  <li>Anticipy can read your Zellibrix for the things you ask about.</li>
+  <li>It can add to your Zellibrix when you ask it to.</li>
+  <li>You can turn this off any time in Settings.</li>
+</ul>
+<form method="post" action="/c/{TOKEN}/go">
+  <button class="go" type="submit">Connect Zellibrix</button>
+</form>
+<form class="later" method="post" action="/c/{TOKEN}/skip">
+  <button class="later" type="submit">Skip for now</button>
+</form>
+<p class="fine">This is optional — Anticipy works fine without it. You can turn it off any time in Settings. This link works for ten minutes and only for you.</p>
+</body>`;
+
+await check("CONTROL: a ONE-APP link is byte-identical to what it was before pages existed",
+  async () => {
+    const r = await rig();
+    const res = await connectRoute(getReq(`/c/${r.token}`, asHeader(r.ownerToken)), r.env, r.deps);
+    assert.equal(res.status, 200);
+    const html = await bodyOf(res, "control one-app view");
+    const end = html.indexOf("</body>") + "</body>".length;
+    const body = normalise(html.slice(html.indexOf("<body>"), end), r.token);
+    assert.equal(body, ONE_APP_BODY,
+      "the one-app connect page changed; every link already in somebody's message thread "
+      + "renders this");
+    assert.ok(!html.includes('name="app"'),
+      "a one-app link's button carries a page index, so its callback would carry one back");
+
+    // THE TAP. No index posted, none on the callback: the URL the vendor is
+    // handed is the URL it has always been handed.
+    const go = await connectRoute(
+      postReq(`/c/${r.token}/go`, asHeader(r.ownerToken), { form: { state: "ATTEMPT-1" } }),
+      r.env, r.deps);
+    assert.equal(go.status, 303);
+    await bodyOf(go, "control one-app go");
+    const call = r.log.authorize[0]!;
+    assert.equal(call.callbackUrl,
+      callbackUrl(r.token, "https://api.anticipy.ai/c", "ATTEMPT-1"));
+    assert.ok(!call.callbackUrl.includes("app="), "an index reached a one-app callback");
+
+    // THE CALLBACK. Nothing is walked, nothing is counted, and the page offers
+    // no rest of a page that does not exist.
+    const readsBefore = r.store.reads;
+    const done = await connectRoute(
+      getReq(doneUrl(r.token, "status=success&connected_account_id=ca_VENDOR_1&state=ATTEMPT-1"),
+        asHeader(r.ownerToken)), r.env, r.deps);
+    assert.equal(done.status, 200);
+    const doneHtml = await bodyOf(done, "control one-app done");
+    assert.ok(!doneHtml.includes("Set up the"),
+      "a one-app callback offered a walk back to a page with one app on it");
+    assert.ok(doneHtml.includes("anticipy://connected/zellibrix"));
+    assert.equal(r.store.reads - readsBefore, 2,
+      "a one-app callback paid for a page walk it can never have — it is one `locate` read "
+      + "and one exactly-once lease, and a walk would be up to twelve more");
+    assert.equal(r.written.length, 1);
+
+    // AND THE DECLINE. One row read, one row written, one answer.
+    const s = await rig();
+    const skip = await connectRoute(skipReq(s.token, asHeader(s.ownerToken)), s.env, s.deps);
+    assert.equal(skip.status, 200);
+    assert.match(await bodyOf(skip, "control one-app skip"), /bring this one up again/i);
+    assert.equal(s.store.nudges.size, 1);
+  });
+
+await check("CONTROL: a one-app link's row is where it has always been", async () => {
+  // The derivation, stated as the property the whole backward-compatibility
+  // story rests on: app 0 of a page IS `tokenHandle`, and no other index is.
+  const token = await b64urlToken();
+  assert.equal(await pageHandle(token, 0), await tokenHandle(token),
+    "row 0 moved, so every link already minted resolves to nothing");
+  assert.equal(await pageHandle(token), await tokenHandle(token), "the default is not row 0");
+  const seen = new Set<string>();
+  for (let i = 0; i < MAX_PAGE_APPS; i++) seen.add(await pageHandle(token, i));
+  assert.equal(seen.size, MAX_PAGE_APPS, "two cards of one page share a row");
+  // A page handle cannot be some OTHER token's plain handle: the separator is
+  // outside the token alphabet.
+  assert.notEqual(await pageHandle(token, 1), await tokenHandle(`${token}1`));
+});
+
+// ===========================================================================
 // WIRING
 // ===========================================================================
 
@@ -1930,6 +2585,65 @@ await check("the source itself never says the vendor's name to a person", () => 
 //       third-party-name exemption in place — the check that the exemption is
 //       narrow rather than a hole in the register scan
 //       -> the whole-suite register scan
+// ===========================================================================
+
+// ===========================================================================
+// MUTATION REPORT — A PAGE OF APPS, 2026-09-06.
+//
+// SEVENTEEN mutations over src/routes/connect.ts, each anchored on a literal
+// asserted to occur EXACTLY ONCE (the harness refuses to patch otherwise: a
+// regex that silently fails to match reads as a pass, and did so three times in
+// one day on this feature). SIXTEEN went red on the first run; the seventeenth
+// is the interesting one and is written up below.
+//
+//   M1  the render draws only `apps[0]` — the page before this round existed
+//       -> "FOUR ticked apps are ONE link, and the page draws all four"
+//   M2  the tapped index never reaches /go (`app = null`), so every card spends
+//       row 0 — tapping the third app connects the first
+//       -> "each card connects its OWN app — the third button is not the first"
+//   M3  the same on the callback, so every /done finishes row 0
+//       -> "the callback finishes the row it names, and writes THAT app"
+//   M4  the hidden index is never rendered, so no button says which row it is
+//       -> "FOUR ticked apps are ONE link, and the page draws all four"
+//   M5  the background poll started on `tokenHandle(token)` again — row 0 while
+//       row 3 is in flight, which is the one signal that survives a browser
+//       dying on the way back from the vendor, pointed at the wrong app
+//       -> "the background poll watches the row that was SPENT, not row 0"
+//   M6  `single` forced false: an index on every link already in the wild
+//       -> "CONTROL: a ONE-APP link is byte-identical ..."
+//   M7  one undrawable app refuses the whole page again
+//       -> "one app whose sentences cannot be written is DROPPED ..."
+//   M8  /skip records only the first app on the page
+//       -> "Skip applies to the WHOLE page — four apps, four declines, one tap"
+//   M9  the done page never offers the rest of the page
+//   M10 `remaining` hard-coded to 0
+//       -> both: "the done page hands back the rest of the page, and counts
+//          them honestly"
+//   M11 the `unsayable` state unhandled — the LIVE RED this part was handed:
+//       `refusalPage` has no case for it, returns undefined, and the leg throws
+//       -> "a toolkit named after the vendor cannot put that word on the page"
+//          and three more
+//   M12 `pageHandle(token, 0)` stops being `tokenHandle(token)` — every link
+//       already minted resolves to nothing
+//       -> "the owner's own live link renders the app the catalog named"
+//   M13 the page walk stops checking whose row it just read
+//       -> "a row at this token's OWN handle bound to somebody else ..."
+//   M14 an already-spent card is offered again
+//       -> "expired, used and wrong-user each get their own page for the OWNER"
+//   M15 a bad index rounded to app 0 on the tap
+//       -> "an index that is not one of the page's is refused, never rounded"
+//   M16 a bad index rounded to app 0 on the CALLBACK.
+//       **SURVIVED THE FIRST RUN, and the test that should have killed it was
+//       passing for the wrong reason.** The refusal cases all pointed at rows
+//       that had never been through /go, and `callbackDeadline` calls an
+//       unclaimed row dead anyway — so the 410 the check asserted arrived
+//       whether the index was refused or rounded. The check now spends row 0
+//       first and hands the bad index row 0's own account id, so rounding writes
+//       a connection and refusing writes nothing. Re-run: RED.
+//   M17 the skip page saying "this one" over a page of four
+//       -> "Skip applies to the WHOLE page"
+//
+// AND FIVE MORE over src/connections/store.ts, reported in that suite.
 // ===========================================================================
 
 console.log(`connect-routes: ${passes} checks passed, ${failures} failed`);

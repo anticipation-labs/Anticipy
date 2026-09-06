@@ -508,6 +508,91 @@ export async function tokenFingerprint(token: string): Promise<string> {
   return `link:${(await tokenHandle(token)).slice(0, 12)}`;
 }
 
+// ---------------------------------------------------------------------------
+// A PAGE OF APPS, ON ONE TOKEN
+// ---------------------------------------------------------------------------
+
+/**
+ * HOW MANY APPS ONE CONNECT PAGE MAY CARRY, and it is a real ceiling rather
+ * than a shrug.
+ *
+ * Every app on the page costs one catalog read and one trip to the model that
+ * writes its three sentences, all before a single byte is drawn — so a page of
+ * forty is a request that times out in front of somebody who ticked forty
+ * boxes. Twelve is comfortably past the onboarding list the catalog actually
+ * serves and small enough that the page still reads as one decision.
+ *
+ * IT IS ALSO THE PROBE BOUND. The reader below walks handles 0, 1, 2 … until
+ * one is missing, and a bound is what makes that a loop rather than a scan of
+ * every integer. The minter refuses more than this for the same number, so the
+ * two cannot disagree about how long a page may be.
+ */
+export const MAX_PAGE_APPS = 12;
+
+/**
+ * WHERE APP `n` OF A PAGE IS STORED, and why it is derived rather than listed.
+ *
+ * A multi-app page is N ordinary `connect_links` rows — same table, same
+ * columns, same single-use gate, same exactly-once lease — sitting at handles
+ * derived from the ONE token the person is holding:
+ *
+ *   app 0  ->  sha256(token)              exactly what a one-app link is today
+ *   app n  ->  sha256(token \0 n)
+ *
+ * SO A ONE-APP LINK DOES NOT CHANGE BY A BYTE. Its row is at `tokenHandle`,
+ * where it has always been, and a page of one is indistinguishable from the link
+ * the phone mints today — which is the whole backward-compatibility story, made
+ * structural instead of promised.
+ *
+ * WHY DERIVED AND NOT A COLUMN. `connect_links` has no column to hold a list and
+ * a schema change is not this file's to make; a group id in a spare column would
+ * also need an index and a second read to follow. Derivation needs neither: the
+ * token the caller already presented IS the key to every row of their page, and
+ * nothing but that token can compute one. A database reader holding every handle
+ * in the table can no more walk from one to the next than they can redeem one —
+ * both directions are the same sha256.
+ *
+ * THE SEPARATOR IS OUTSIDE THE TOKEN ALPHABET (`\0`; tokens are base64url), so
+ * no page handle can collide with the plain handle of some other token, and the
+ * index is written in decimal so `10` and `1`+`0` are not the same preimage.
+ */
+export async function pageHandle(token: string, app = 0): Promise<string> {
+  return app === 0 ? tokenHandle(token) : tokenHandle(`${token}\u0000${app}`);
+}
+
+/**
+ * WHICH APP ON THE PAGE THIS REQUEST IS ABOUT — three states, because absent
+ * and unreadable are different facts and a number can carry neither.
+ *
+ *   `null`  the request named no app at all. That is the ONE-APP LINK: the page
+ *           the phone mints today posts no such field and the vendor callback
+ *           carries no such parameter, so its absence is what says "this token
+ *           is one app" and nothing further needs to be read to know it.
+ *   number  a place on the page, 0-based, inside the ceiling.
+ *   "bad"   something was there and it was not one of those. Never rounded, and
+ *           never defaulted to 0 — defaulting would connect a DIFFERENT app to
+ *           the one the person tapped, which is the only way this parameter
+ *           could hurt anybody.
+ *
+ * HARNESS-LAWS LAW 1: this parses an integer out of transport. It decides
+ * nothing about what anybody meant.
+ */
+export function appIndexOf(raw: unknown): number | null | "bad" {
+  if (raw === null || raw === undefined) return null;
+  const text = String(raw).trim();
+  if (text === "") return null;
+  // Digits only: no sign, no decimal point, no exponent, no radix prefix.
+  // `Number` alone would take "1e0", "0x2" and "+3", which are three ways of
+  // writing an index nobody's page ever rendered.
+  //
+  // Surrounding whitespace is trimmed above and nothing else is — that is
+  // transport, and it cannot change WHICH app is selected, only whether a field
+  // that is all spaces reads as absent (it does, which is the one-app link).
+  if (!/^[0-9]{1,3}$/.test(text)) return "bad";
+  const n = Number(text);
+  return n < MAX_PAGE_APPS ? n : "bad";
+}
+
 /**
  * Constant-time equality for two ASCII strings, byte-wise over the longer of
  * the two so the answer does not depend on WHERE the first difference is. The
@@ -550,12 +635,35 @@ export function connectUrl(token: string, base: string = CONNECT_URL_BASE): stri
  * rides out and back so the app can bind the callback to the one attempt it
  * started; it is never the owner id, an email or an alias, because another
  * company's server reads this URL.
+ *
+ * `app` IS A PLACE ON THE PAGE, NOT AN APP'S NAME. A multi-app page walks the
+ * vendor one account at a time, so the callback has to say which of the page's
+ * rows it is finishing. An INDEX is what rides out — never the slug — because
+ * another company's server, its logs and a `Referer` header all read this URL,
+ * and "2" tells whoever reads it nothing at all about what somebody connected.
+ *
+ * IT IS OMITTED FOR A ONE-APP LINK, and that absence is load-bearing rather than
+ * tidy: `/done` reads a callback with no `app` on it as the link the phone mints
+ * today, answers it exactly as it always has, and never goes looking for
+ * siblings that do not exist. The URL a one-app link produces is byte-identical
+ * to the one it produced before this parameter existed.
+ *
+ * A caller may pass `0` deliberately — the first app OF A PAGE — and get
+ * `?app=0`. That is the difference between "the first of several" and "the only
+ * one", and it is a difference the callback needs.
  */
 export function callbackUrl(
   token: string, base: string = CONNECT_URL_BASE, state?: string | null,
+  app?: number | null,
 ): string {
   const url = `${connectUrl(token, base)}/done`;
-  return state ? `${url}?state=${encodeURIComponent(state)}` : url;
+  const parts: string[] = [];
+  if (state) parts.push(`state=${encodeURIComponent(state)}`);
+  // Built by hand rather than with URLSearchParams, which form-encodes `~` to
+  // `%7E` — the phone's state alphabet allows a `~`, and a state that comes back
+  // spelled differently than it went out is an attempt the app cannot match.
+  if (typeof app === "number" && Number.isInteger(app) && app >= 0) parts.push(`app=${app}`);
+  return parts.length > 0 ? `${url}?${parts.join("&")}` : url;
 }
 
 export type ConnectLeg = "view" | "go" | "skip" | "done";
@@ -670,6 +778,14 @@ const WRONG_USER: Located = Object.freeze({ kind: "wrong-user" });
  * revocable account rather than to nobody — and the page has to be able to say
  * "you're signed in as someone else" or a household sharing a laptop can never
  * be told why the link failed.
+ *
+ * AND THE APP INDEX CHANGES WHICH ROW IS LOOKED UP, AND NOTHING ELSE. A page of
+ * apps is N rows at derived handles (`pageHandle`), so "app 3 of this page" is
+ * the same question as "this token", asked of a different key — and all four
+ * rules above apply to it unchanged: an index past the end of the page, a
+ * malformed one and an invented token all answer `dead`, and none of them is
+ * reachable at all without a session. The default is 0, which is the row a
+ * one-app link has always had.
  */
 async function locate(
   token: unknown,
@@ -677,11 +793,15 @@ async function locate(
   now: number,
   store: ConnectLinkStore,
   deadline: (row: StoredLink) => number,
+  app = 0,
 ): Promise<Located> {
   if (!isOwnerRowId(signedInAs)) return SIGNED_OUT;
 
   if (!isWellFormedToken(token)) return DEAD;
-  const handle = await tokenHandle(token);
+  // Before the hash, so an index nobody's page ever drew costs no store read and
+  // is answered identically to a token nobody ever minted.
+  if (!Number.isInteger(app) || app < 0 || app >= MAX_PAGE_APPS) return DEAD;
+  const handle = await pageHandle(token, app);
   const row = await store.read(handle);
   if (!row) return DEAD;
   if (!constantTimeEqual(handle, row.token_handle)) return DEAD;
@@ -690,6 +810,88 @@ async function locate(
   if (!constantTimeEqual(signedInAs, row.user_id)) return WRONG_USER;
 
   return { kind: "row", row };
+}
+
+/**
+ * THE REST OF THE PAGE, and it is read AFTER the owner has been proved, never
+ * before.
+ *
+ * `locate` above settles who is asking off app 0 alone. Only once it has
+ * answered `row` — session present, token real, link live, owner matching — does
+ * this walk 1, 2, 3 … for the other apps. That order is the privacy model
+ * holding: a signed-out caller reaches no store read at all, and a signed-in
+ * stranger is refused after exactly one, so the SIZE of somebody's page is not
+ * something a stranger can measure off a round trip either.
+ *
+ * IT STOPS AT THE FIRST GAP, which is what makes a half-written page safe rather
+ * than corrupt: rows are minted in one batch (`ConnectionsStore.putAll`), but if
+ * a future minter ever wrote them one at a time and stopped, the page is SHORTER
+ * than intended and never scrambled. An app the reader cannot see is an app
+ * nobody is offered, which is the failure that costs a tap rather than a
+ * connection.
+ *
+ * A ROW BOUND TO ANOTHER OWNER ENDS THE PAGE AND IS NOT INCLUDED. It cannot
+ * happen through the minter, which refuses a mixed batch; if a store ever hands
+ * one back it is a fault, and adding it to this page would draw a stranger's app
+ * on somebody's consent screen and let them connect it. Dropped, and the page
+ * ends there rather than skipping over it — a page with a hole in the middle
+ * would make every index after the hole mean something different to the reader
+ * than it does to the writer.
+ */
+async function walkPage(
+  token: string,
+  owner: OwnerId,
+  store: ConnectLinkStore,
+  from: number,
+): Promise<StoredLink[]> {
+  const rows: StoredLink[] = [];
+  for (let app = from; app < MAX_PAGE_APPS; app++) {
+    const handle = await pageHandle(token, app);
+    let row: StoredLink | null;
+    try {
+      row = await store.read(handle);
+    } catch {
+      // A store blip is not evidence that the page ends here — but it is not
+      // evidence that it continues either, and the honest short page is the one
+      // that offers fewer apps rather than the wrong ones.
+      break;
+    }
+    if (!row) break;
+    if (!constantTimeEqual(handle, row.token_handle)) break;
+    if (!constantTimeEqual(owner, row.user_id)) break;
+    rows.push(row);
+  }
+  return rows;
+}
+
+/** The page, given the row `locate` already verified as app 0. One store read
+ *  per app plus one for the gap; a one-app link pays exactly one. */
+async function pageRows(
+  token: string,
+  first: StoredLink,
+  store: ConnectLinkStore,
+): Promise<StoredLink[]> {
+  return [first, ...await walkPage(token, first.user_id, store, 1)];
+}
+
+/**
+ * HOW MANY APPS ON THIS PAGE HAVE STILL NEVER BEEN TAPPED — what the done page
+ * needs to know to decide whether there is anywhere to go back to.
+ *
+ * It counts ROWS, not drawable cards: counting cards would mean a catalog read
+ * and a trip to the sentence writer for every app on the page, on the callback
+ * path, to decide the wording of one link. The cost of the cheap count is that
+ * "set up the others" can lead to a page whose others all turned out to be
+ * undrawable — and that page then says so, plainly, which is the same answer
+ * they would have got by opening the link themselves.
+ */
+async function remainingApps(
+  token: string,
+  like: StoredLink,
+  store: ConnectLinkStore,
+): Promise<number> {
+  const rows = await walkPage(token, like.user_id, store, 0);
+  return rows.filter((row) => row.used_at === null).length;
 }
 
 /**
@@ -725,6 +927,14 @@ export interface ConnectLink {
   alias: AccountAlias | null;
   expires_at: number;
   used_at: number | null;
+  /** WHICH ROW WAS ACTUALLY SPENT, so the caller does not have to hash the token
+   *  a second time and cannot hash it for the wrong app. `/go` starts a
+   *  background poll against exactly this handle, and a poll pointed at app 0
+   *  while app 3 is in flight would watch a row nobody is connecting. */
+  handle: string;
+  /** Its place on the page. 0 for the one-app link, which is every link in the
+   *  wild today. */
+  app: number;
 }
 
 /**
@@ -754,6 +964,14 @@ const WRONG_USER_RESULT: RedeemResult = Object.freeze({ outcome: "wrong-user" })
  * unauthenticated request never reaches the compare-and-set, so it cannot burn
  * a link somebody else is about to tap.
  *
+ * SINGLE USE IS PER APP, WHICH FOR EVERY LINK IN THE WILD IS PER LINK. A page
+ * of four apps is four rows, each with its own `used_at`, and each spendable
+ * exactly once — so a person who connects two of them and comes back finds the
+ * other two live and those two dead, which is what "each link works once" has
+ * always meant, said about the thing the vendor actually authorises: one
+ * account. A one-app link has one row and this sentence says nothing new about
+ * it.
+ *
  * THE USED BIT IS NOT READ. Not once. The row `locate` returned is advisory
  * about it: on D1 that read may be served by a replica seconds behind, and a
  * redeem trusting a stale `used_at: null` would hand out a second "ok" for a
@@ -763,9 +981,11 @@ const WRONG_USER_RESULT: RedeemResult = Object.freeze({ outcome: "wrong-user" })
  */
 export async function redeem(
   token: string,
-  opts: { signedInAs: unknown; store: ConnectLinkStore; now: number },
+  opts: { signedInAs: unknown; store: ConnectLinkStore; now: number; app?: number },
 ): Promise<RedeemResult> {
-  const found = await locate(token, opts.signedInAs, opts.now, opts.store, ttlDeadline);
+  const found = await locate(
+    token, opts.signedInAs, opts.now, opts.store, ttlDeadline, opts.app ?? 0,
+  );
   if (found.kind === "dead") return EXPIRED;
   if (found.kind === "signed-out") return WRONG_USER_RESULT;
   if (found.kind === "wrong-user") return WRONG_USER_RESULT;
@@ -798,8 +1018,28 @@ export async function redeem(
       alias: found.row.alias,
       expires_at: found.row.expires_at,
       used_at: claim.row?.used_at ?? opts.now,
+      handle: found.row.token_handle,
+      app: opts.app ?? 0,
     },
   };
+}
+
+/** One app as the page will draw it: its catalog row, the name already screened
+ *  against the words this product promised nobody would read, its three
+ *  sentences, and the place on the page its own Connect button posts back. */
+export interface ConnectPageApp {
+  /** 0-based. The value the form posts as `app` and the callback carries back —
+   *  never the slug, which another company's logs would then be holding. */
+  index: number;
+  toolkit: ToolkitMeta;
+  /** The display name exactly as the page prints it: trimmed, and screened. */
+  name: string;
+  sentences: string[];
+  /** WHICH OF THE OWNER'S ACCOUNTS THIS ROW IS ABOUT, off the row and not off
+   *  the page. Two Google accounts is the spec's common case (page 22), and a
+   *  page that printed one row's alias over another's would offer to connect the
+   *  work mailbox and connect the personal one. */
+  alias: AccountAlias | null;
 }
 
 /** GET /c/{token}. NOTHING here consumes the token: a person who opens the page
@@ -808,9 +1048,33 @@ export async function redeem(
 export type ConnectPageView =
   | {
       state: "ok";
+      /**
+       * EVERY APP THIS PAGE CAN OFFER, in the order they were minted, and only
+       * the ones it can actually describe. Spec page 25: "One Connect button
+       * opens a multi-app connect page." One for a one-app link.
+       */
+      apps: ConnectPageApp[];
+      /**
+       * IS THIS TOKEN ONE ROW? — the difference between "the only app" and "the
+       * first of several", and the render cannot work it out from `apps`.
+       *
+       * `apps` holds what can be DRAWN, and a page of four whose other three
+       * were spent or dropped has one card on it while still being a page. The
+       * distinction decides two bytes of behaviour: whether each Connect button
+       * carries its index, and therefore whether the vendor's callback carries
+       * one back. A one-row link must carry neither — that is the whole
+       * backward-compatibility story, and computing it from `apps.length` would
+       * quietly break it the day somebody connected the first of four and came
+       * back for the rest.
+       */
+      single: boolean;
+      /** `apps[0]`, spelled out. The one-app link is the whole population today
+       *  and every caller of this function reads these two; a page of four is
+       *  read through `apps`. Dropping them would be a rename dressed as a
+       *  feature. */
       toolkit: ToolkitMeta;
-      alias: AccountAlias | null;
       sentences: string[];
+      alias: AccountAlias | null;
       expires_at: number;
     }
   /** Carries NOTHING. Before a session exists we cannot tell the owner from
@@ -820,7 +1084,79 @@ export type ConnectPageView =
   | { state: "sign-in-required" }
   | { state: "expired" }
   | { state: "already-used" }
-  | { state: "wrong-user" };
+  | { state: "wrong-user" }
+  /**
+   * NOTHING ON THIS PAGE CAN BE DRAWN, and every reason was a name this product
+   * may not print. `slug` and `term` are for the LOG and for the one person who
+   * can fix it — the fix is a display name on the catalog row — and never for a
+   * page. `term` is null when the row had no display name at all.
+   */
+  | { state: "unsayable"; slug: string; term: string | null };
+
+/**
+ * DRAW WHAT CAN BE DRAWN, AND DROP WHAT CANNOT — one app at a time, because on
+ * a page of four the alternative is that one bad catalog row costs somebody the
+ * other three.
+ *
+ * The spec's rule for this leg, verbatim from the task that built it: "An app
+ * whose sentences cannot be written is DROPPED FROM THE PAGE with the others
+ * still connectable — never a page that refuses everything because one app
+ * failed."
+ *
+ * WHAT SURVIVES A DROP AND WHAT DOES NOT. The dropped app's ROW is untouched:
+ * nothing is consumed, nothing is written, and the moment its catalog row is
+ * fixed the same link offers it again. What it costs is one app on one page.
+ *
+ * AND WHEN EVERYTHING DROPS, THE FIRST FAILURE IS THE ANSWER. A one-app link
+ * whose sentences cannot be written must behave exactly as it did before this
+ * function existed — a 503 and a log line naming the catalog's own error — so
+ * the first failure is kept and re-thrown rather than collapsed into a state
+ * that reads the same for every cause. A page that fails entirely on names
+ * answers `unsayable`, which is that same 409.
+ */
+type DroppedApp = {
+  slug: string;
+  /** The promised-away word in the app's own name, or null for a row with no
+   *  display name. Absent when the drop was not about the name at all. */
+  term?: string | null;
+  /** Present when the CATALOG or the sentence writer failed. Its presence is
+   *  what makes this a retry (503) rather than a state (409). */
+  error?: unknown;
+};
+
+async function drawableApp(
+  row: StoredLink,
+  index: number,
+  opts: { provider: Pick<CatalogProvider, "toolkit">; words: PermissionWords },
+): Promise<ConnectPageApp | DroppedApp> {
+  let meta: ToolkitMeta;
+  let sentences: string[];
+  try {
+    meta = await opts.provider.toolkit(row.toolkit);
+    sentences = checkedSentences(await opts.words.sentences(meta), row.toolkit);
+  } catch (error) {
+    return { slug: row.toolkit, error };
+  }
+
+  // NO NAME, NO CARD — and no fallback to the slug either. A slug is a vendor
+  // primary key, not a display name, and "Connect your crm_manage_connections"
+  // over a button that hands somebody a key to their own account is not a page
+  // anybody should be shown.
+  const name = typeof meta.name === "string" ? meta.name.trim() : "";
+  if (name === "") return { slug: row.toolkit, term: null };
+  // THE NAME IS SCREENED, AND NOT AGAINST THE SAME LIST THE DESCRIPTION IS: only
+  // the PROMISE half — the words a person was told they would never read. See
+  // `REGISTER_TERMS`; an app whose own maker put "API" in its name is this
+  // product quoting a proper noun, not this product talking in permissions
+  // language, and refusing it made three live catalog rows unconnectable.
+  const term = promiseTermIn(name);
+  if (term !== null) return { slug: row.toolkit, term };
+
+  return { index, toolkit: meta, name, sentences, alias: row.alias };
+}
+
+const isDrawable = (a: ConnectPageApp | DroppedApp): a is ConnectPageApp =>
+  (a as ConnectPageApp).index !== undefined;
 
 export async function connectPageView(
   token: string,
@@ -831,22 +1167,48 @@ export async function connectPageView(
   if (found.kind === "dead") return { state: "expired" };
   if (found.kind === "signed-out") return { state: "sign-in-required" };
   if (found.kind === "wrong-user") return { state: "wrong-user" };
+
+  // THE REST OF THE PAGE, read only now that the owner is proved.
+  const rows = await pageRows(token, found.row, opts.store);
   // Read-only, so the used bit may be believed here: the worst a stale replica
   // can do is draw the wrong page for the owner, and the tap that follows still
-  // goes through the compare-and-set in `redeem`.
-  if (found.row.used_at !== null) return { state: "already-used" };
+  // goes through the compare-and-set in `redeem`. An app already spent is simply
+  // not offered again; a page with nothing left to offer is the used link.
+  const pending = rows
+    .map((row, index) => ({ row, index }))
+    .filter(({ row }) => row.used_at === null);
+  if (pending.length === 0) return { state: "already-used" };
 
-  // Deliberately NOT caught. Nothing has been consumed yet, so a catalog blip
-  // is a retry — and swallowing it into a "state" would teach the page to
-  // render an app with no name.
-  const meta = await opts.provider.toolkit(found.row.toolkit);
-  const sentences = await opts.words.sentences(meta);
+  const drawn: ConnectPageApp[] = [];
+  let firstDrop: DroppedApp | null = null;
+  for (const { row, index } of pending) {
+    const card = await drawableApp(row, index, opts);
+    if (isDrawable(card)) drawn.push(card);
+    else if (firstDrop === null) firstDrop = card;
+  }
+
+  if (drawn.length === 0) {
+    // Deliberately NOT swallowed. Nothing has been consumed, so a catalog blip
+    // is a retry — and turning it into a "state" would teach the page to render
+    // an app with no name.
+    if (firstDrop?.error !== undefined) throw firstDrop.error;
+    return {
+      state: "unsayable",
+      slug: firstDrop?.slug ?? found.row.toolkit,
+      term: firstDrop?.term ?? null,
+    };
+  }
 
   return {
     state: "ok",
-    toolkit: meta,
+    apps: drawn,
+    // OFF THE ROWS, NOT OFF THE CARDS. See `single` on the type: a page whose
+    // other apps were spent or dropped is still a page, and its buttons still
+    // have to say which row they are.
+    single: rows.length === 1,
+    toolkit: drawn[0]!.toolkit,
+    sentences: drawn[0]!.sentences,
     alias: found.row.alias,
-    sentences: checkedSentences(sentences, found.row.toolkit),
     expires_at: found.row.expires_at,
   };
 }
@@ -893,7 +1255,15 @@ export type ConnectPageGo =
    * `handleGo` because a second read is a second answer, and a link the poll
    * was started for must be the link that was actually spent.
    */
-  | { state: "ok"; redirectUrl: string; owner: OwnerId; toolkit: string }
+  | {
+      state: "ok"; redirectUrl: string; owner: OwnerId; toolkit: string;
+      /** The row that was actually spent, so the background poll watches the app
+       *  in flight rather than app 0 of the page. */
+      handle: string;
+      /** Its place on the page, echoed onto the vendor's callback so `/done`
+       *  finishes the row `/go` started. */
+      app: number;
+    }
   | { state: "sign-in-required" }
   | { state: "expired" }
   | { state: "already-used" }
@@ -922,15 +1292,26 @@ export type ConnectPageGo =
 export async function connectPageGo(
   token: string,
   opts: { signedInAs: unknown; store: ConnectLinkStore; provider: Pick<CatalogProvider, "authorize">;
-          baseUrl: string; state: string | null; now: number },
+          baseUrl: string; state: string | null; now: number;
+          /**
+           * WHICH APP ON THE PAGE THE FINGER LANDED ON. `null` is the one-app
+           * link: no such field was posted, none goes onto the callback, and
+           * everything here behaves exactly as it did before pages existed.
+           * `"bad"` is a field that was there and unreadable, which is answered
+           * as `expired` — never rounded to app 0, because rounding it would
+           * open a vendor flow for an app nobody tapped.
+           */
+          app?: number | null | "bad" },
 ): Promise<ConnectPageGo> {
   // Before the compare-and-set, so an unauthenticated request cannot spend a
   // link. Otherwise anyone holding an intercepted token could burn it from a
   // signed-out browser and the owner's own tap would find it used.
   if (!isOwnerRowId(opts.signedInAs)) return { state: "sign-in-required" };
+  if (opts.app === "bad") return { state: "expired" };
+  const app = opts.app ?? null;
 
   const spent = await redeem(token, {
-    signedInAs: opts.signedInAs, store: opts.store, now: opts.now,
+    signedInAs: opts.signedInAs, store: opts.store, now: opts.now, app: app ?? 0,
   });
   if (spent.outcome !== "ok") return { state: spent.outcome };
 
@@ -938,7 +1319,7 @@ export async function connectPageGo(
   let redirectUrl: unknown;
   try {
     const authorized = await opts.provider.authorize(link.user_id, link.toolkit, {
-      callbackUrl: callbackUrl(token, opts.baseUrl, opts.state),
+      callbackUrl: callbackUrl(token, opts.baseUrl, opts.state, app),
       alias: link.alias,
     });
     redirectUrl = authorized?.redirectUrl;
@@ -956,7 +1337,10 @@ export async function connectPageGo(
     return { state: "provider-unavailable" };
   }
 
-  return { state: "ok", redirectUrl, owner: link.user_id, toolkit: link.toolkit };
+  return {
+    state: "ok", redirectUrl, owner: link.user_id, toolkit: link.toolkit,
+    handle: link.handle, app: link.app,
+  };
 }
 
 /**
@@ -1113,7 +1497,20 @@ export async function recordSkip(
  * matters is on the LADDER, not on the token.
  */
 export type ConnectPageSkip =
-  | { state: "noted"; toolkit: string; outcome: DeclineOutcome }
+  | {
+      state: "noted";
+      /**
+       * ONE ANSWER PER APP ON THE PAGE, because the page is one decision and
+       * the ladder is per app: "Skip still applies to the whole page." Somebody
+       * who ticked four boxes and then said "not now" said it about four apps,
+       * and recording one of them would leave three asks live that they just
+       * turned down.
+       */
+      apps: { toolkit: string; outcome: DeclineOutcome }[];
+      /** `apps[0]`, spelled out — the one-app link is every link in the wild. */
+      toolkit: string;
+      outcome: DeclineOutcome;
+    }
   | { state: "sign-in-required" }
   | { state: "expired" }
   | { state: "wrong-user" };
@@ -1127,19 +1524,42 @@ export async function connectPageSkip(
   if (found.kind === "signed-out") return { state: "sign-in-required" };
   if (found.kind === "wrong-user") return { state: "wrong-user" };
 
-  // THE OWNER AND THE APP COME OFF THE STORED ROW. There is no parameter on
+  // THE OWNER AND THE APPS COME OFF THE STORED ROWS. There is no parameter on
   // this function through which a caller could name either.
+  //
+  // EVERY APP ON THE PAGE, INCLUDING THE ONES ALREADY SPENT. A person who
+  // connected two and skipped the rest has answered about all four, and the two
+  // they connected cost nothing to include: `recordSkip` answers
+  // `nothing-to-decline` for an app whose nudge row is already `connected` and
+  // writes nothing, which is the guard that keeps a live connection from being
+  // replaced by a decline.
+  //
   // NOT THE SETUP CARD, and this page can never claim to be one: onboarding's
   // own Skip is a card in the app and posts to its own route. A link minted FOR
   // an onboarding ask still gets the seven-day soft snooze — but because the
   // nudge row the ask engine wrote carries `trigger: onboarding`, not because
   // anything here said so. The row is the record of the moment; this is a page.
-  const outcome = await recordSkip(
-    opts.store,
-    { user_id: found.row.user_id, toolkit: found.row.toolkit, at: opts.now },
-    { onboarding: false },
-  );
-  return { state: "noted", toolkit: found.row.toolkit, outcome };
+  const rows = await pageRows(token, found.row, opts.store);
+  const apps: { toolkit: string; outcome: DeclineOutcome }[] = [];
+  const done = new Set<string>();
+  for (const row of rows) {
+    // A slug twice on one page cannot come out of the minter, and if it ever did
+    // the second pass would walk the ladder a rung further than the person did.
+    if (done.has(row.toolkit)) continue;
+    done.add(row.toolkit);
+    apps.push({
+      toolkit: row.toolkit,
+      outcome: await recordSkip(
+        opts.store,
+        { user_id: row.user_id, toolkit: row.toolkit, at: opts.now },
+        { onboarding: false },
+      ),
+    });
+  }
+  return {
+    state: "noted", apps,
+    toolkit: apps[0]!.toolkit, outcome: apps[0]!.outcome,
+  };
 }
 
 /** GET /c/{token}/done — the vendor's callback, and the ONLY moment we ever
@@ -1152,6 +1572,14 @@ export type ConnectPageDone =
        *  `connected` with `recorded: false`, so the person sees the right page
        *  and the connection is written once. */
       recorded: boolean;
+      /**
+       * HOW MANY APPS ON THIS PAGE ARE STILL WAITING — the number that decides
+       * whether the done page offers a way back to the page or is the end of the
+       * road. Zero for a one-app link, always, and the callback that carries no
+       * `app` at all never even counts: it IS a one-app link, and looking for
+       * siblings it cannot have would be a store read spent on nothing.
+       */
+      remaining: number;
     }
   /** The vendor came back without a success, or the account it named is not one
    *  the vendor holds for this owner on this toolkit. Say the connection did
@@ -1175,6 +1603,21 @@ export interface DoneParams {
   status: string | null;
   /** The vendor's id for the account that was just connected. */
   connectedAccountId: string | null;
+  /**
+   * WHICH ROW OF THE PAGE THIS CALLBACK IS FINISHING — the index `/go` put on
+   * the callback URL it handed the vendor, echoed back. Absent (`null`) is the
+   * one-app link, and it is answered exactly as it always has been.
+   *
+   * IT IS ON A QUERY STRING A BROWSER CAN EDIT, and it is not trusted for
+   * anything: it selects a row, and the row's own toolkit then has to be
+   * vouched for by the vendor's list for the row's own owner before a byte is
+   * written. Naming a different index connects nothing — the account the vendor
+   * vouches for is on the wrong app for that row, `vendorVouchesFor` says no,
+   * and the answer is `not-connected` with nothing written and nothing
+   * consumed. What it CANNOT do is bind an account to a row it does not belong
+   * to, which is the failure this whole function is shaped around.
+   */
+  app?: number | null | "bad";
 }
 
 /**
@@ -1227,7 +1670,14 @@ export async function connectPageDone(
           onConnected: (c: Connection) => Promise<void>;
           successStatus?: string; now: number },
 ): Promise<ConnectPageDone> {
-  const found = await locate(token, opts.signedInAs, opts.now, opts.store, callbackDeadline);
+  // An unreadable index is not rounded to app 0: finishing the wrong row would
+  // file one app's credential under another app's name. It collapses into the
+  // same `expired` every unknown token gets, so it is not an oracle either.
+  if (params?.app === "bad") return { state: "expired" };
+  const app = params?.app ?? null;
+  const found = await locate(
+    token, opts.signedInAs, opts.now, opts.store, callbackDeadline, app ?? 0,
+  );
   if (found.kind === "dead") return { state: "expired" };
   if (found.kind === "signed-out") return { state: "sign-in-required" };
   if (found.kind === "wrong-user") return { state: "wrong-user" };
@@ -1288,8 +1738,13 @@ export async function connectPageDone(
   // is a promise to write, not proof the write happened. Reading it as proof is
   // what turned one failed `onConnected` into a page that said "connected"
   // forever with no row anywhere.
+  // COUNTED BEFORE THE LEASE, and off rows this row's own owner owns. A
+  // callback with no `app` on it is the one-app link and cannot have siblings,
+  // so it pays nothing for a question that has one answer.
+  const remaining = app === null ? 0 : await remainingApps(token, found.row, opts.store);
+
   const lease = await opts.store.complete(found.row.token_handle, opts.now);
-  if (!lease.won) return { state: "connected", connection, recorded: false };
+  if (!lease.won) return { state: "connected", connection, recorded: false, remaining };
 
   try {
     await opts.onConnected(connection);
@@ -1309,7 +1764,7 @@ export async function connectPageDone(
     }
     return { state: "not-recorded" };
   }
-  return { state: "connected", connection, recorded: true };
+  return { state: "connected", connection, recorded: true, remaining };
 }
 
 /**
@@ -1708,40 +2163,42 @@ export function promiseTermIn(text: string): string | null {
 }
 
 /**
- * The one page that matters.
+ * THE RENDER FLOOR, ASKED ONCE PER CARD — the last thing between a catalog row
+ * and somebody's consent screen.
  *
- * Everything visible comes from the catalog row and the injected sentences:
- * there is no app name, no logo and no scope word typed into this file. The
- * optional line is not decoration — "connecting is always optional and every
- * ask says so in one sentence" is a product rule, and this is the sentence.
+ * NO NAME, NO CARD — and no fallback to the slug either. A slug is a vendor
+ * primary key, not a display name, and a consent screen headed "Connect your
+ * crm_manage_connections" over a button that hands somebody a key to their own
+ * account is not a page anybody should be shown.
+ *
+ * This is a FLOOR on this file's own render contract and nothing more: it is
+ * not reachable through the shipped wiring, and saying so is the point. Both
+ * injected ports refuse a nameless row before this line runs, and between them
+ * they cover both shapes of one: connections/provider.ts `readToolkitMeta`
+ * returns null when `name` is absent or empty ("no name, or no slug ... fatal to
+ * a row rather than cosmetic") so `toolkit()` throws and this leg answers 503,
+ * and connections/words.ts `metaProblem` refuses to write permission sentences
+ * for a name that is only whitespace, which the provider's own `asString` lets
+ * through. `drawableApp` in the pure core runs the same two questions a layer
+ * up, which is where a dropped app stops being offered. What this guard buys is
+ * that a THIRD port, wired tomorrow, cannot make the renderer draw a blank
+ * heading. It replaced a slug fallthrough whose comment claimed behaviour no
+ * caller could reach (round-2 finding 2, 2026-09-06).
+ *
+ * A CARD, NOT A PAGE, which is the multi-app correction. One unsayable app out
+ * of four costs its own card and nothing else; the caller answers 409 only when
+ * this has refused every card it was given, which for a one-app link is the same
+ * page it always was.
  */
-function viewPage(token: string, v: Extract<ConnectPageView, { state: "ok" }>,
-                  state: string | null): Response {
-  // NO NAME, NO PAGE — and no fallback to the slug either. A slug is a vendor
-  // primary key, not a display name, and a consent screen headed "Connect your
-  // crm_manage_connections" over a button that hands somebody a key to their own
-  // account is not a page anybody should be shown.
-  //
-  // This is a FLOOR on this file's own render contract and nothing more: it is
-  // not reachable through the shipped wiring, and saying so is the point.
-  // Both injected ports refuse a nameless row before this line runs, and
-  // between them they cover both shapes of one: connections/provider.ts
-  // `readToolkitMeta` returns null when `name` is absent or empty ("no name, or
-  // no slug ... fatal to a row rather than cosmetic") so `toolkit()` throws and
-  // this leg answers 503, and connections/words.ts `metaProblem` refuses to
-  // write permission sentences for a name that is only whitespace, which the
-  // provider's own `asString` lets through. What this guard buys is that a
-  // THIRD port, wired tomorrow, cannot make this function draw a blank heading.
-  // It replaced a slug fallthrough whose comment claimed behaviour no caller
-  // could reach (round-2 finding 2, 2026-09-06).
-  const name = typeof v.toolkit.name === "string" ? v.toolkit.name.trim() : "";
+function sayableCard(app: ConnectPageApp): ConnectPageApp | null {
+  const name = typeof app.name === "string" ? app.name.trim() : "";
   if (name === "") {
     console.log(
-      `connect view: the catalog row for ${JSON.stringify(v.toolkit.slug)} has no display `
-        + "name, so there is nothing to head the page with. No page was drawn and the link "
-        + "was not spent.",
+      `connect view: the catalog row for ${JSON.stringify(app.toolkit.slug)} has no display `
+        + "name, so there is nothing to head a card with. It is not on the page and nothing "
+        + "was spent.",
     );
-    return plainPage(409, UNSAYABLE_HEADING, UNSAYABLE_LINE);
+    return null;
   }
 
   // THE NAME IS SCREENED, AND NOT AGAINST THE SAME LIST THE DESCRIPTION IS.
@@ -1756,34 +2213,116 @@ function viewPage(token: string, v: Extract<ConnectPageView, { state: "ok" }>,
     // a display name on the CATALOG ROW. A name typed into this file would be
     // the thing this file's header forbids.
     console.log(
-      `connect view: the catalog draws ${JSON.stringify(v.toolkit.slug)} as `
+      `connect view: the catalog draws ${JSON.stringify(app.toolkit.slug)} as `
         + `${JSON.stringify(name)}, which carries ${JSON.stringify(unsayable)} — a word this `
-        + "screen may not print. No page was drawn and the link was not spent. Give that "
+        + "screen may not print. It is not on the page and nothing was spent. Give that "
         + "toolkit a display name in the catalog.",
     );
+    return null;
+  }
+
+  return { ...app, name };
+}
+
+/**
+ * ONE APP, DRAWN. Everything visible comes from the catalog row and the injected
+ * sentences: there is no app name, no logo and no scope word typed into this
+ * file.
+ *
+ * `only` is whether this card IS the page — a heading level, nothing more.
+ *
+ * `index` is whether the button says WHICH ROW it is, and it is the whole
+ * backward-compatibility story in one boolean. A one-row link posts no such
+ * field, so `/go` reads `null`, mints a callback with no `app` on it, and the
+ * vendor sees the URL it has always seen. A page posts one on every card,
+ * including the first, because "the first of several" and "the only one" are
+ * different facts and the callback needs the difference to find its way back.
+ */
+function cardHtml(token: string, app: ConnectPageApp,
+                  opts: { state: string | null; index: boolean; only: boolean }): string {
+  const name = app.name;
+  const logo = httpsOnly(app.toolkit.logo);
+  const which = app.alias ? ` (your ${esc(app.alias)} account)` : "";
+  // Written out twice rather than interpolated, so the two headings this page
+  // can carry are both greppable in the source — the suite pins the render site
+  // by the literal, and a `<h${level}>` would make that pin unwritable.
+  const heading = opts.only
+    ? `<h1>Connect your ${esc(name)}${which}</h1>`
+    : `<h2>Connect your ${esc(name)}${which}</h2>`;
+  const stateField = opts.state
+    ? `  <input type="hidden" name="state" value="${esc(opts.state)}">\n` : "";
+  const indexField = opts.index
+    ? `  <input type="hidden" name="app" value="${app.index}">\n` : "";
+  return `${logo ? `<img class="logo" src="${esc(logo)}" alt="">` : ""}
+${heading}
+${describable(app.toolkit.description) ? `<p>${esc(describable(app.toolkit.description))}</p>` : ""}
+<p>Here's what Anticipy would be able to do:</p>
+<ul>
+${app.sentences.map((s) => `  <li>${esc(s)}</li>`).join("\n")}
+</ul>
+<form method="post" action="/c/${esc(token)}/go">
+${stateField}${indexField}  <button class="go" type="submit">Connect ${esc(name)}</button>
+</form>`;
+}
+
+/**
+ * The one page that matters, and since 2026-09-06 it may carry more than one
+ * app.
+ *
+ * THE SPEC'S SENTENCE IS "One Connect button opens a multi-app connect page"
+ * (page 25), and this is the page it opens. Each app gets its own card, its own
+ * three sentences and its own button, because the vendor authorises ONE account
+ * at a time: there is no request that connects four apps, so a page that drew
+ * one button over four apps would be a button that quietly did a quarter of what
+ * it said. What the person is spared is four round trips through a text — they
+ * make one decision, on one screen, and walk it.
+ *
+ * ONE SKIP, FOR THE WHOLE PAGE. "Skip still applies to the whole page": the
+ * decline leg reads every row on the token and records a no against each, so the
+ * quiet twin of the Connect button stays a single control however many apps are
+ * above it.
+ *
+ * A ONE-APP LINK IS BYTE-IDENTICAL TO WHAT IT WAS. `single` false is the only
+ * thing that adds an intro, an `<h2>` or a hidden index; with it true the
+ * template below collapses to exactly the string this function returned before
+ * pages existed, which is the property the suite compares character by character
+ * rather than trusting this paragraph.
+ */
+function viewPage(token: string, v: Extract<ConnectPageView, { state: "ok" }>,
+                  state: string | null): Response {
+  const cards = v.apps.map(sayableCard).filter((a): a is ConnectPageApp => a !== null);
+  if (cards.length === 0) {
+    // Every app on it was refused by the floor above, so there is no page to
+    // draw. Same answer, same status, same words as a one-app link whose only
+    // app was refused — which is what it is.
     return plainPage(409, UNSAYABLE_HEADING, UNSAYABLE_LINE);
   }
 
-  const logo = httpsOnly(v.toolkit.logo);
-  const which = v.alias ? ` (your ${esc(v.alias)} account)` : "";
+  const only = cards.length === 1;
+  const drawn = cards
+    .map((app) => cardHtml(token, app, { state, index: !v.single, only }))
+    .join("\n");
+  // The intro exists to say that the buttons below are one decision taken a card
+  // at a time. A page of one needs no such sentence and does not get one — nor
+  // the newline it would sit on.
+  const intro = only ? "" : `<h1>${esc(PAGE_HEADING)}</h1>\n<p>${esc(PAGE_LINE)}</p>\n`;
   const body = `<body>
-${logo ? `<img class="logo" src="${esc(logo)}" alt="">` : ""}
-<h1>Connect your ${esc(name)}${which}</h1>
-${describable(v.toolkit.description) ? `<p>${esc(describable(v.toolkit.description))}</p>` : ""}
-<p>Here's what Anticipy would be able to do:</p>
-<ul>
-${v.sentences.map((s) => `  <li>${esc(s)}</li>`).join("\n")}
-</ul>
-<form method="post" action="/c/${esc(token)}/go">
-${state ? `  <input type="hidden" name="state" value="${esc(state)}">\n` : ""}  <button class="go" type="submit">Connect ${esc(name)}</button>
-</form>
+${intro}${drawn}
 <form class="later" method="post" action="/c/${esc(token)}/skip">
 ${state ? `  <input type="hidden" name="state" value="${esc(state)}">\n` : ""}  <button class="later" type="submit">Skip for now</button>
 </form>
 <p class="fine">This is optional — Anticipy works fine without it. You can turn it off any time in Settings. This link works for ten minutes and only for you.</p>
 </body>`;
-  return page(200, `Connect your ${name}`, body);
+  return page(200, only ? `Connect your ${cards[0]!.name}` : PAGE_HEADING, body);
 }
+
+/** What a page of several apps is called, and the one sentence that says how it
+ *  works. Named constants because the register scan reads every word this
+ *  product prints and these are two of them. */
+const PAGE_HEADING = "Connect your apps";
+const PAGE_LINE =
+  "Anticipy sets these up one at a time. Start with whichever you like — you'll come back "
+  + "here for the rest.";
 
 /** A page with no app on it: one heading, one sentence, nothing that names
  *  anything. Used for every state where telling the caller more would be
@@ -1917,6 +2456,19 @@ const SKIPPED_HEADING = "Noted.";
 const SKIPPED_LINE =
   "I won't bring this one up again for a while. You can set it up whenever you like — "
   + "just ask me, or find it in Settings.";
+/**
+ * THE SAME PROMISE, SAID ABOUT A PAGE. Somebody who ticked four apps and then
+ * said not now turned down four, and "I won't bring THIS ONE up again" is a
+ * sentence about one of them — which reads as if the other three are still
+ * coming, when the ladder has just recorded that they are not.
+ *
+ * A whole second sentence rather than a plural built out of the first: a page
+ * that assembled "this one"/"these" out of fragments is a page whose copy is
+ * decided by a string join, and the register rule is about what a person reads.
+ */
+const SKIPPED_LINE_PAGE =
+  "I won't bring these up again for a while. You can set them up whenever you like — "
+  + "just ask me, or find them in Settings.";
 /** The app is already connected, so there was no ask to refuse. Said plainly
  *  rather than as a decline, because nothing was written and claiming otherwise
  *  would be a lie about their own account. */
@@ -1924,6 +2476,12 @@ const NOTHING_HEADING = "That one's already set up";
 const NOTHING_LINE =
   "This app is connected already, so there's nothing to turn down. You can switch it off "
   + "any time in Settings.";
+/** And its page twin, shown only when EVERY app on the page was already
+ *  connected — which is the only time the aggregate reaches it. */
+const NOTHING_HEADING_PAGE = "Those are already set up";
+const NOTHING_LINE_PAGE =
+  "These apps are connected already, so there's nothing to turn down. You can switch them "
+  + "off any time in Settings.";
 /** THE HONEST FAILURE. The person said no and we could not write it down; they
  *  are owed that fact, because the consequence lands on them the next time
  *  Anticipy opens its mouth. */
@@ -1952,6 +2510,29 @@ const NOT_NOTED_LINE =
 function codeOfferUrl(token: string, state: string | null): string {
   return `/c/${token}/code${state ? `?state=${encodeURIComponent(state)}` : ""}`;
 }
+
+/**
+ * BACK TO THE PAGE ITSELF, carrying the phone's attempt id if there was one.
+ *
+ * The same token, so the page it lands on is the page they were on, minus the
+ * apps already spent — the person picks up where they left off rather than at
+ * the beginning, and nothing about the page has to be remembered anywhere.
+ *
+ * Root-relative for the reason `codeOfferUrl` is: these routes live on whatever
+ * host is serving them, and an absolute URL built from a constant would send a
+ * preview deployment's visitors to production. The state is encoded here and
+ * read back with `searchParams.get`, which is what "carried verbatim" means on
+ * a wire.
+ */
+function pageUrl(token: string, state: string | null): string {
+  return `/c/${token}${state ? `?state=${encodeURIComponent(state)}` : ""}`;
+}
+
+/** The label on that link. Two of them because "the others" is a lie when there
+ *  is one left, and a count in the sentence would be a number this page has to
+ *  keep true. */
+const REST_ONE = "Set up the last one";
+const REST_MANY = "Set up the others";
 
 /**
  * The four states that must look the same to a stranger, drawn in one place so
@@ -2074,6 +2655,23 @@ async function handleView(
     return plainPage(503, "One moment",
       "Anticipy couldn't load this just now. Refresh in a moment — nothing has changed.");
   }
+  if (view.state === "unsayable") {
+    // NOT A REFUSAL ABOUT THE LINK, so it does not go through `refusalPage`:
+    // every app this token carries was dropped because of what the CATALOG
+    // calls it, and the fix is a display name on the catalog row. The slug and
+    // the term are for the one person who can make that fix and never for the
+    // page — the person reads one plain sentence that names nothing.
+    //
+    // NOTHING WAS CONSUMED. The view leg never spends a token, so the same link
+    // draws the app the minute its catalog row is fixed.
+    console.log(
+      `connect view: ${await tokenFingerprint(token)} had nothing this screen may print — `
+        + `the catalog row ${JSON.stringify(view.slug)} is drawn as a name carrying `
+        + `${JSON.stringify(view.term)}. No page was drawn and the link was not spent. `
+        + "Give that toolkit a display name in the catalog.",
+    );
+    return plainPage(409, UNSAYABLE_HEADING, UNSAYABLE_LINE);
+  }
   if (view.state !== "ok") return refusalPage(view.state, token, state);
   return viewPage(token, view, state);
 }
@@ -2089,16 +2687,23 @@ async function handleView(
  * moment to start it: the vendor link has just been minted, so a connect is in
  * flight for exactly this owner on exactly this toolkit.
  *
- * NOTHING HERE IS AWAITED. `tokenHandle` is a hash and would cost microseconds,
- * but it is inside the task rather than in front of it so that the redirect is
- * built from values this function already holds and the request path touches
- * the poll's promise exactly once — to hand it to `waitUntil`.
+ * NOTHING HERE IS AWAITED. The redirect is built from values this function
+ * already holds, and the request path touches the poll's promise exactly once —
+ * to hand it to `waitUntil`.
  *
- * THE OWNER AND THE TOOLKIT COME OFF THE SPENT LINK, which came off the stored
- * row: `connectPageGo` reads them from the row `redeem` verified, never from
- * the session and never from anything on the request. wait.ts checks them
- * against the row again anyway, which is the difference between "should never"
- * and "cannot".
+ * THE OWNER, THE TOOLKIT AND THE HANDLE ALL COME OFF THE SPENT LINK, which came
+ * off the stored row: `connectPageGo` reads them from the row `redeem` verified,
+ * never from the session and never from anything on the request. wait.ts checks
+ * them against the row again anyway, which is the difference between "should
+ * never" and "cannot".
+ *
+ * THE HANDLE IS PASSED, NOT RE-DERIVED, and on a page of apps that is the whole
+ * difference between a backup and a decoration. This used to hash the token
+ * itself, which is app 0's handle and only app 0's: a person tapping the third
+ * card would have had a poll watching a row nobody was connecting, so the one
+ * signal that survives a browser dying on the way back from the vendor would
+ * have been pointed at the wrong app. `ConnectLink.handle` is the row that was
+ * actually spent, and it is the only thing this may watch.
  *
  * NO CONTEXT, NO POLL, and the log line names the one change that fixes it.
  * A Worker cancels background work when the response is returned unless
@@ -2111,7 +2716,7 @@ async function handleView(
 function startWaiting(
   env: ConnectEnv & WaitEnv,
   deps: ConnectDeps,
-  token: string,
+  handle: string,
   owner: OwnerId,
   toolkit: string,
   now: number,
@@ -2139,7 +2744,7 @@ function startWaiting(
     await waitForConnection(env, {
       owner,
       toolkit,
-      handle: await tokenHandle(token),
+      handle,
       deadline: now + budget,
       store: deps.store,
       provider: deps.provider,
@@ -2175,13 +2780,21 @@ async function handleGo(
   }
 
   const who = await whoIsAsking(request, env, token);
+  // ONE READ OF THE BODY, TWO FIELDS OFF IT. See `formOf`.
+  const form = await formOf(request);
   // The hidden field the page rendered, carrying the phone's attempt id. Read
   // from the body rather than the query so it survives the form post; anything
   // that is not the phone's opaque-token shape is dropped rather than reflected.
-  const state = checkedState(await formField(request, "state"));
+  const state = checkedState(field(form, "state"));
+  // WHICH CARD THE FINGER LANDED ON, and it is the button's own hidden field
+  // rather than anything about the app: an index, not a slug, so the value that
+  // rides on to the vendor's callback says nothing about what is being
+  // connected. A one-app page renders no such field at all, which is the `null`
+  // that keeps every link in the wild behaving exactly as it did.
+  const app = appIndexOf(field(form, "app"));
 
   const go = await connectPageGo(token, {
-    signedInAs: who, store: deps.store, provider: deps.provider, baseUrl, state, now,
+    signedInAs: who, store: deps.store, provider: deps.provider, baseUrl, state, now, app,
   });
 
   if (go.state === "ok") {
@@ -2193,7 +2806,7 @@ async function handleGo(
     // THE BACKUP, started at the one moment we know a connect is in flight and
     // AWAITED NOWHERE — see startWaiting. The redirect below is built and
     // returned without touching this promise.
-    startWaiting(env, deps, token, go.owner, go.toolkit, now, ctx);
+    startWaiting(env, deps, go.handle, go.owner, go.toolkit, now, ctx);
     return new Response(null, {
       status: 303,
       headers: {
@@ -2241,31 +2854,73 @@ async function handleSkip(
   const who = await whoIsAsking(request, env, token);
   // From the BODY, like /go's, so it survives the form post: the state is the
   // phone's attempt id and it is how the app knows this attempt is over.
-  const state = checkedState(await formField(request, "state"));
+  const state = checkedState(field(await formOf(request), "state"));
 
   const skipped = await connectPageSkip(token, {
     signedInAs: who, store: deps.store, now,
   });
   if (skipped.state !== "noted") return refusalPage(skipped.state, token, state);
 
-  const outcome = skipped.outcome;
+  const outcome = pageOutcome(skipped.apps);
   const back = state
     ? { href: appLink(skipped.toolkit, APP_STATUS_CANCELLED, { state }), label: "Back to Anticipy" }
     : undefined;
 
+  const fp = await tokenFingerprint(token);
+  // ONE LINE PER APP when there is more than one, because the aggregate below
+  // deliberately loses which app was which, and the operator chasing "why is
+  // this person still being asked about Notion" needs the row and not the page.
+  if (skipped.apps.length > 1) {
+    console.log(`connect skip: ${fp} is a page of ${skipped.apps.length} — `
+      + skipped.apps.map((a) => `${a.toolkit}=${a.outcome.state}`).join(", "));
+  }
+
   if (outcome.state === "not-recorded") {
     // LOUD, because this is a wiring failure and the person just paid for it
     // with an answer nobody kept.
-    console.log(`connect skip: ${await tokenFingerprint(token)} NOT recorded — ${outcome.why}`);
+    console.log(`connect skip: ${fp} NOT recorded — ${outcome.why}`);
     return plainPage(500, NOT_NOTED_HEADING, NOT_NOTED_LINE, back);
   }
+  // ONE APP OR SEVERAL — a fact about how many rows this token has, which is the
+  // only thing the wording turns on. Never a reading of anything anybody said.
+  const many = skipped.apps.length > 1;
   if (outcome.state === "nothing-to-decline") {
-    console.log(`connect skip: ${await tokenFingerprint(token)} had nothing to decline`);
-    return plainPage(200, NOTHING_HEADING, NOTHING_LINE, back);
+    console.log(`connect skip: ${fp} had nothing to decline`);
+    return plainPage(200, many ? NOTHING_HEADING_PAGE : NOTHING_HEADING,
+      many ? NOTHING_LINE_PAGE : NOTHING_LINE, back);
   }
-  console.log(`connect skip: ${await tokenFingerprint(token)} ${outcome.state} at level `
-    + `${outcome.level}`);
-  return plainPage(200, SKIPPED_HEADING, SKIPPED_LINE, back);
+  console.log(`connect skip: ${fp} ${outcome.state} at level ${outcome.level}`);
+  return plainPage(200, SKIPPED_HEADING, many ? SKIPPED_LINE_PAGE : SKIPPED_LINE, back);
+}
+
+/**
+ * ONE PAGE, ONE SENTENCE — which of the page's answers the person reads.
+ *
+ * A page of four can come back with four different outcomes, and there is one
+ * screen. The order below is a claim about who is owed what, not a tidy-up:
+ *
+ *   ANY UNWRITTEN ANSWER WINS, and it wins over three that were written. The
+ *   whole defect this leg exists to close is a Skip that LOOKED recorded and was
+ *   not, and the consequence lands on the person the next time Anticipy opens
+ *   its mouth about the app that failed. "Your answer didn't save just now, so I
+ *   might ask again" is true when one of four did not save; "I won't bring this
+ *   up again" is not.
+ *
+ *   THEN A REAL DECLINE, over "there was nothing to decline". Somebody who
+ *   ticked four apps, connected two and skipped the page has said no about two
+ *   of them, and the page they read should be the one about the no they made.
+ *
+ *   NOTHING-TO-DECLINE IS LAST, so it is only shown when it is the whole truth:
+ *   every app on this page was already connected and there was no ask to refuse.
+ *
+ * A ONE-APP PAGE HAS ONE OUTCOME AND THIS RETURNS IT UNCHANGED, which is every
+ * link in the wild today.
+ */
+function pageOutcome(apps: { toolkit: string; outcome: DeclineOutcome }[]): DeclineOutcome {
+  const outcomes = apps.map((a) => a.outcome);
+  return outcomes.find((o) => o.state === "not-recorded")
+    ?? outcomes.find((o) => o.state === "recorded" || o.state === "already-declined")
+    ?? outcomes[0]!;
 }
 
 async function handleDone(
@@ -2276,6 +2931,13 @@ async function handleDone(
   const done = await connectPageDone(token, {
     status: url.searchParams.get("status"),
     connectedAccountId: url.searchParams.get("connected_account_id"),
+    // WHICH ROW OF THE PAGE THE VENDOR IS FINISHING — the index `/go` put on the
+    // callback URL, echoed back. Absent is the one-app link and is answered
+    // exactly as it always has been; unreadable is refused rather than rounded
+    // to 0, because rounding it would file one app's credential under another
+    // app's name. Neither is trusted: it selects a row, and the vendor still has
+    // to vouch for the account on THAT row's toolkit before a byte is written.
+    app: appIndexOf(url.searchParams.get("app")),
   }, {
     signedInAs: who, store: deps.store, provider: deps.provider,
     onConnected: deps.onConnected, successStatus: deps.successStatus, now,
@@ -2287,11 +2949,23 @@ async function handleDone(
       const href = appLink(c.toolkit, APP_STATUS_CONNECTED,
         { state, accountId: c.connected_account_id });
       console.log(`connect done: ${await tokenFingerprint(token)} connected `
-        + `(recorded=${done.recorded})`);
+        + `(recorded=${done.recorded}, ${done.remaining} still to do)`);
+      // THE WAY BACK TO THE REST OF THE PAGE, and it is what makes a page of
+      // apps survive a browser that dies in the middle. The vendor authorises
+      // one account at a time, so a person ticking four apps makes four round
+      // trips through this screen; the link below is the thread between them,
+      // and because it is the SAME token they hold, coming back lands on
+      // whatever is still unspent rather than at the beginning. It is drawn only
+      // when there is something left, so a one-app link — which can never have
+      // siblings and never even counts — renders the page it always did.
+      const rest = done.remaining > 0
+        ? `<p><a href="${esc(pageUrl(token, state))}">`
+          + `${esc(done.remaining === 1 ? REST_ONE : REST_MANY)}</a></p>\n`
+        : "";
       const body = `<body>
 <h1>Connected.</h1>
 <p>Anticipy can use it from now on. You can turn it off any time in Settings.</p>
-<p><a href="${esc(href)}">Back to Anticipy</a></p>
+${rest}<p><a href="${esc(href)}">Back to Anticipy</a></p>
 </body>`;
       return page(200, "Connected", body);
     }
@@ -2309,19 +2983,34 @@ async function handleDone(
   }
 }
 
-/** One field out of a form post. Never throws: a body that is not a form is
- *  simply no field, and a `/go` with no state is a `/go` with a weaker binding,
- *  not a 500. */
-async function formField(request: Request, name: string): Promise<string | null> {
+/**
+ * The form post, parsed ONCE.
+ *
+ * A `Request` body may be read exactly once, and since a page of apps posts
+ * which card was tapped alongside the phone's attempt id, `/go` needs two
+ * fields off one body. Two `formData()` calls would throw on the second and turn
+ * the second field into a permanent null — which for `app` is not a missing
+ * field but the WRONG app, quietly connected. So the body is read here and the
+ * fields are taken off the result.
+ *
+ * Never throws: a body that is not a form is simply no fields, and a `/go` with
+ * no state is a `/go` with a weaker binding, not a 500.
+ */
+async function formOf(request: Request): Promise<FormData | null> {
   const ct = request.headers.get("content-type") ?? "";
   if (!ct.includes("application/x-www-form-urlencoded") && !ct.includes("multipart/form-data")) {
     return null;
   }
   try {
-    const form = await request.formData();
-    const v = form.get(name);
-    return typeof v === "string" ? v : null;
+    return await request.formData();
   } catch {
     return null;
   }
+}
+
+/** One field off a parsed form. A file upload is not a string and is not a
+ *  field. */
+function field(form: FormData | null, name: string): string | null {
+  const v = form?.get(name);
+  return typeof v === "string" ? v : null;
 }

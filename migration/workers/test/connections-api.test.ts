@@ -96,6 +96,7 @@ import {
   MAX_LINKS_PER_OWNER,
   LINK_WINDOW_MS,
   MAX_CATALOG_SLUGS,
+  MAX_SIGNAL_APPS,
   MAX_WRITE_ROWS,
   MAX_SEARCHES_PER_OWNER,
   SEARCH_WINDOW_MS,
@@ -153,6 +154,10 @@ const APPS: Record<string, ToolkitLike> = {
     slug: "zellibrix", name: "Zellibrix", logo: "https://cdn.example.invalid/z.png",
     description: "Where your team keeps its notes.", appUrl: "https://zellibrix.example.invalid",
     scopes: ["notes.read", "notes.write"],
+    // A host the CATALOG declares, not one this file knows: the whole point of
+    // running the mail-host column over an app nobody has heard of is that
+    // neither half of the pipe can be passing because it recognised a name.
+    mailHosts: ["mx.zellibrix.example.invalid"],
   },
   quandle_mail: {
     slug: "quandle_mail", name: "Quandle Mail", logo: null,
@@ -163,6 +168,12 @@ const APPS: Record<string, ToolkitLike> = {
 interface ToolkitLike {
   slug: string; name: string; logo: string | null; description: string | null;
   appUrl: string | null; scopes: string[];
+  /** OPTIONAL HERE ON PURPOSE. `src/connections/provider.ts` builds this column
+   *  on every row it reads, and against the live vendor it is EMPTY on every
+   *  one of them (measured 2026-09-06; the receipt is in
+   *  test/connections-provider.test.ts). A fake that omits it is therefore the
+   *  ordinary case, and the route has to answer with a column either way. */
+  mailHosts?: string[];
 }
 
 interface VendorLog {
@@ -328,26 +339,33 @@ function writesFlag(db: FakeD1, account: string): number {
 // ===========================================================================
 
 /**
- * THE CENSUS, AND THE ONE DECLARED GAP IN IT.
+ * THE CENSUS, AND THE GAP LIST THAT IS NOW EMPTY.
  *
  * ConnectedAppsClient.Route. The phone builds every URL from these literals and
  * nothing else; a route renamed on either side must be red here rather than a
  * 404 on somebody's phone.
  *
- * `/me/connections/skip` is served and is NOT yet on the phone, and that gap is
- * written down rather than papered over: the Worker half of the onboarding Skip
- * landed on 2026-09-06 and the Swift half is another change's. The day
- * `ConnectedAppsClient.Route` declares it, THIS CHECK GOES RED and the
- * exception below is deleted — which is the only kind of exception worth
- * having, one that expires by going off.
+ * `/me/connections/skip` and `/me/connections/signals` each sat on this list
+ * while the Worker half had landed and the Swift half had not. Both halves are
+ * in as of 2026-09-06, so the list is EMPTY and the census is exact in BOTH
+ * directions — which is the strongest form it can take, and the form that makes
+ * a route added on either side alone go red here. An exception may be added
+ * back when a change genuinely lands in two halves, and it expires by going
+ * off: the day the phone declares it, this check is red until the line is
+ * deleted.
  */
-const NOT_YET_ON_THE_PHONE: readonly string[] = ["/me/connections/skip"];
+const NOT_YET_ON_THE_PHONE: readonly string[] = [];
 
 await check("every path the phone's client declares is a path this Worker serves", () => {
-  const declared = [...CLIENT_SWIFT.matchAll(/static let \w+ = "(me\/connections[^"]*)"/g)]
-    .map((m) => "/" + (m[1] as string));
-  assert.equal(declared.length, 6,
-    "ConnectedAppsClient.Route no longer declares six routes; this file's census is stale");
+  const declared = [...new Set(
+    [...CLIENT_SWIFT.matchAll(/static let \w+ = "(me\/connections[^"]*)"/g)]
+      .map((m) => "/" + (m[1] as string)),
+  )].sort();
+  // A regex that quietly matched nothing would make every assertion below
+  // vacuous in the direction that matters most.
+  assert.ok(declared.length > 0,
+    "the census read no routes at all out of ConnectedAppsClient.swift; the Route enum "
+      + "moved and this scan is now measuring nothing");
   const served = Object.values(R).slice().sort();
   for (const path of declared) {
     assert.ok(served.includes(path),
@@ -451,6 +469,7 @@ await check("no credential is 401 on every leg, and nothing is touched", async (
     postReq(R.disconnect, null, { connected_account_id: OWNER_ACCOUNT }),
     postReq(R.sentences, null, { toolkit: "zellibrix" }),
     postReq(R.link, null, { toolkit: "zellibrix" }),
+    getReq(R.signals),
   ];
   for (const req of calls) {
     const res = await connectionsApiRoute(req, r.env, r.deps);
@@ -603,6 +622,48 @@ await check("?slugs= describes the toolkits it was given", async () => {
   const q = items.find((i) => i.slug === "quandle_mail")!;
   assert.equal(q.logo, null);
   assert.equal(q.app_url, null);
+});
+
+await check("?slugs= carries the catalog's own mail hosts, and a column even when it has none",
+  async () => {
+    const r = await rig();
+    const res = await connectionsApiRoute(
+      getReq(`${R.catalog}?${QUERY_SLUGS}=zellibrix,quandle_mail`, r.ownerToken), r.env, r.deps);
+    assert.equal(res.status, 200);
+    const items = (await jsonOf(res, "catalog mail hosts")).items as Record<string, unknown>[];
+
+    // THE SEAM, END TO END. `ConnectOnboardingPolicy.seeds(fromMailExchanger:)`
+    // matches a resolved exchanger against `entry.mailHosts` and can seed
+    // nothing at all unless the column reaches the phone. snake_case beside
+    // `app_url`, because this is the same boundary and one decoder reads both.
+    const z = items.find((i) => i.slug === "zellibrix")!;
+    assert.deepEqual(z.mail_hosts, ["mx.zellibrix.example.invalid"],
+      "the catalog's own mail hosts did not reach the phone, so the MX signal "
+        + "has nothing to match against and onboarding pre-ticks nothing");
+
+    // ALWAYS PRESENT, EVEN EMPTY. "The catalog names none" and "this server is
+    // too old to have the column" are different facts, and only one of them is
+    // true; a missing key makes the phone guess which.
+    const q = items.find((i) => i.slug === "quandle_mail")!;
+    assert.ok(Object.prototype.hasOwnProperty.call(q, "mail_hosts"),
+      "a row with no mail hosts dropped the column instead of carrying an empty one");
+    assert.deepEqual(q.mail_hosts, []);
+  });
+
+await check("nothing but a real host reaches the wire as a mail host", async () => {
+  // The same discipline readScopes keeps: a blank is not a host, and a
+  // non-string is not one either. Both would arrive at hostLabels() on the
+  // phone as a line that matches nothing and cannot be read.
+  const r = await rig({
+    toolkit: async (slug: string): Promise<ToolkitLike> => ({
+      ...APPS.zellibrix!, slug,
+      mailHosts: [null, 42, "", "   ", "  mx.example.invalid  "] as never,
+    }),
+  });
+  const res = await connectionsApiRoute(
+    getReq(`${R.catalog}?${QUERY_SLUGS}=zellibrix`, r.ownerToken), r.env, r.deps);
+  const items = (await jsonOf(res, "catalog mail junk")).items as Record<string, unknown>[];
+  assert.deepEqual(items[0]!.mail_hosts, ["mx.example.invalid"]);
 });
 
 await check("one unreadable slug does not cost the others their names", async () => {
@@ -1537,6 +1598,296 @@ await check("a database that cannot write the decline says so — never { ok: tr
     "a phone told its skip landed will not send it again, and the server never heard it");
   r.db.failOn = undefined;
   assert.equal(storedNudges(r.db).length, 0);
+});
+
+// ===========================================================================
+// 8. GET /me/connections/signals — WHAT TO PRE-TICK, AND THE THREE EMPTIES
+//
+// THE DEFECT THIS SECTION REPRODUCES, measured on 2026-09-06 before the route
+// existed. Spec page 45, onboarding step 2: "Which apps do you live in?" with
+// "detected apps pre-selected from the email domain signal". The evidence
+// table and the ranker both existed and were tested; there was no door between
+// them and the phone, so `OnboardingConnectStep` passed literal empty arrays
+// and pre-selected nothing. Step 2 was a heading over a search box, and the
+// one screen whose whole job is "we already know what you use" said nothing.
+//
+// THE THREE EMPTIES ARE THE POINT, and they are three because the screen
+// draws them three ways:
+//
+//   we looked, and you have no evidence yet   200  { items: [], state: none }
+//   we could not look                         503  { state: unreadable }
+//   the catalog could not name any of them    503  { state: catalog-unreadable }
+//
+// Collapsing the last two into the first is the confident-empty failure this
+// whole file exists to prevent, wearing a new hat: a person with months of
+// evidence told they have none, on the screen that then asks them to connect
+// what they already live in.
+// ===========================================================================
+
+/** `app_usage_signals` as SQLite holds it, read outside the code under test. */
+function storedSignals(db: FakeD1): Record<string, unknown>[] {
+  return db.rows(`SELECT * FROM "app_usage_signals" ORDER BY "toolkit", "alias"`);
+}
+
+/** One piece of evidence, written through the REAL store the way signals.ts's
+ *  six doors write it — the same table, the same CHECKs, the same key. The
+ *  weight is handed in rather than taken from a band, because these checks are
+ *  about the ORDER the route hands back and an explicit weight is the only way
+ *  to state the order that is expected. */
+async function seedSignal(
+  env: ConnectionsApiEnv,
+  row: {
+    user?: string; toolkit: string; source?: string; weight: number;
+    at?: number; alias?: "work" | "personal" | null;
+  },
+): Promise<void> {
+  const store = createD1Store(env as never);
+  await store.recordSignal(
+    {
+      user_id: (row.user ?? OWNER) as never,
+      toolkit: row.toolkit,
+      source: (row.source ?? "mx") as never,
+      alias: row.alias ?? null,
+    },
+    () => ({ weight: row.weight, last_seen_at: row.at ?? NOW }),
+  );
+}
+
+/** A catalog that can name any slug it is handed. The names are built from the
+ *  slug so nothing in this file has to hold a list of apps either. */
+const namesAnything = async (slug: string): Promise<ToolkitLike> => ({
+  slug, name: `The ${slug} app`, logo: null, description: null,
+  appUrl: `https://${slug}.example.invalid`, scopes: ["things.read"],
+});
+
+interface SignalItem {
+  slug: string; name: string; app_url: string | null; scopes: string[];
+  mail_hosts: string[];
+  alias: string | null; last_seen_at: number; sources: string[];
+}
+
+await check("THE CONTROL: this owner's ranked apps come back in weight order, named",
+  async () => {
+    const r = await rig({ toolkit: namesAnything });
+    // Deliberately seeded out of order, and one of them is the weakest thing
+    // in the table — so an answer that echoed the insert order, or the table's
+    // own row order, would be a different list from this one.
+    await seedSignal(r.env, { toolkit: "orrery_02", weight: 0.4, source: "mx" });
+    await seedSignal(r.env, { toolkit: "orrery_01", weight: 0.9, source: "observer" });
+    await seedSignal(r.env, { toolkit: "orrery_03", weight: 0.1, source: "link" });
+
+    const res = await connectionsApiRoute(getReq(R.signals, r.ownerToken), r.env, r.deps);
+    assert.equal(res.status, 200);
+    const body = await jsonOf(res, "signals control") as unknown as
+      { items: SignalItem[]; state: string };
+    assert.equal(body.state, "ranked");
+    assert.deepEqual(body.items.map((i) => i.slug), ["orrery_01", "orrery_02", "orrery_03"],
+      "the ranked order is not the order that reached the phone");
+
+    // THE CATALOG ROW RIDES ALONG, so the phone draws a row with a name and a
+    // logo without a second round trip — and it is the SAME shape ?slugs=
+    // answers with, so one decoder on the phone reads both.
+    const top = body.items[0]!;
+    assert.equal(top.name, "The orrery_01 app");
+    assert.equal(top.app_url, "https://orrery_01.example.invalid");
+    assert.deepEqual(top.scopes, ["things.read"]);
+    assert.deepEqual(top.sources, ["observer"]);
+    assert.equal(top.last_seen_at, NOW);
+    assert.equal(top.alias, null);
+  });
+
+await check("a ranked row carries the catalog's mail hosts, the same column ?slugs= carries",
+  async () => {
+    // Both doors feed the same screen: onboarding pre-ticks what /signals
+    // ranked and offers the rest through catalog search, and the phone decodes
+    // one row shape. A column on one door and not the other is a seed that
+    // works or not depending on which way the person got to the app.
+    const r = await rig({
+      toolkit: async (slug: string): Promise<ToolkitLike> => ({
+        ...(await namesAnything(slug)), mailHosts: [`mx.${slug}.example.invalid`],
+      }),
+    });
+    await seedSignal(r.env, { toolkit: "orrery_01", weight: 0.9 });
+    const res = await connectionsApiRoute(getReq(R.signals, r.ownerToken), r.env, r.deps);
+    assert.equal(res.status, 200);
+    const body = await jsonOf(res, "signals mail hosts") as unknown as { items: SignalItem[] };
+    assert.deepEqual(body.items[0]!.mail_hosts, ["mx.orrery_01.example.invalid"]);
+  });
+
+await check("an owner with no evidence is told so — 200, empty, and honest", async () => {
+  const r = await rig({ toolkit: namesAnything });
+  const res = await connectionsApiRoute(getReq(R.signals, r.ownerToken), r.env, r.deps);
+  assert.equal(res.status, 200);
+  const body = await jsonOf(res, "signals none");
+  assert.deepEqual(body.items, []);
+  assert.equal(body.state, "none");
+  // Nothing was asked of the catalog: there was nothing to name.
+  assert.deepEqual(r.log.toolkit, []);
+});
+
+await check("evidence we cannot READ is an outage, never an empty list", async () => {
+  const r = await rig({ toolkit: namesAnything });
+  await seedSignal(r.env, { toolkit: "orrery_01", weight: 0.9 });
+  r.db.failOn = (sql) => sql.includes("app_usage_signals");
+  const res = await connectionsApiRoute(getReq(R.signals, r.ownerToken), r.env, r.deps);
+  r.db.failOn = null;
+  assert.equal(res.status, 503);
+  const body = await jsonOf(res, "signals unreadable");
+  assert.equal(body.state, "unreadable");
+  assert.equal(body.items, undefined,
+    "a database that could not be read answered with a list; the screen will paint a "
+      + "clean empty state over this person's evidence");
+  assert.notEqual(body.ok, true);
+});
+
+await check("a catalog that can name NOTHING is a DIFFERENT outage, and says which", async () => {
+  const r = await rig({ toolkit: async (): Promise<ToolkitLike> => { throw new Error("no catalog"); } });
+  await seedSignal(r.env, { toolkit: "orrery_01", weight: 0.9 });
+  const res = await connectionsApiRoute(getReq(R.signals, r.ownerToken), r.env, r.deps);
+  assert.equal(res.status, 503);
+  const body = await jsonOf(res, "signals catalog down");
+  // THE POINT OF THE FIELD. Both failures are 503 and the phone draws them
+  // differently — one is "ask me again", the other is "we know your apps and
+  // cannot name them". A single shape makes that distinction unreachable.
+  assert.equal(body.state, "catalog-unreadable");
+  assert.equal(body.items, undefined);
+  assert.notEqual(body.ok, true);
+});
+
+await check("the three empty answers are three, not one", async () => {
+  // Written as its own check because the property is about the SET: any two of
+  // them collapsing is the defect, and each check above can only see its own.
+  const named = await rig({ toolkit: namesAnything });
+  const none = await connectionsApiRoute(getReq(R.signals, named.ownerToken), named.env, named.deps);
+  const noneBody = await jsonOf(none, "three empties: none");
+
+  const unread = await rig({ toolkit: namesAnything });
+  await seedSignal(unread.env, { toolkit: "orrery_01", weight: 0.9 });
+  unread.db.failOn = (sql) => sql.includes("app_usage_signals");
+  const down = await connectionsApiRoute(getReq(R.signals, unread.ownerToken), unread.env, unread.deps);
+  unread.db.failOn = null;
+  const downBody = await jsonOf(down, "three empties: unreadable");
+
+  const blind = await rig({ toolkit: async (): Promise<ToolkitLike> => { throw new Error("no catalog"); } });
+  await seedSignal(blind.env, { toolkit: "orrery_01", weight: 0.9 });
+  const dark = await connectionsApiRoute(getReq(R.signals, blind.ownerToken), blind.env, blind.deps);
+  const darkBody = await jsonOf(dark, "three empties: catalog");
+
+  const answers = [
+    `${none.status}/${noneBody.state}`,
+    `${down.status}/${downBody.state}`,
+    `${dark.status}/${darkBody.state}`,
+  ];
+  assert.equal(new Set(answers).size, 3,
+    `two of the three empty answers are the same shape: ${answers.join(" , ")}`);
+});
+
+await check("one app the catalog cannot name does not cost the others theirs", async () => {
+  const r = await rig({
+    toolkit: async (slug: string): Promise<ToolkitLike> => {
+      if (slug === "orrery_02") throw new Error("no catalog row");
+      return await namesAnything(slug);
+    },
+  });
+  await seedSignal(r.env, { toolkit: "orrery_01", weight: 0.9 });
+  await seedSignal(r.env, { toolkit: "orrery_02", weight: 0.5 });
+  await seedSignal(r.env, { toolkit: "orrery_03", weight: 0.1 });
+
+  const res = await connectionsApiRoute(getReq(R.signals, r.ownerToken), r.env, r.deps);
+  assert.equal(res.status, 200);
+  const body = await jsonOf(res, "signals partial") as unknown as
+    { items: SignalItem[]; state: string };
+  assert.deepEqual(body.items.map((i) => i.slug), ["orrery_01", "orrery_03"]);
+  assert.equal(body.state, "ranked");
+});
+
+await check("the cap holds: at most MAX_SIGNAL_APPS, cut from the TOP of the order", async () => {
+  const r = await rig({ toolkit: namesAnything });
+  // One more app than the cap, each worth strictly less than the one before,
+  // so which ones survive is a fact about the cut and not about a tie.
+  const wanted: string[] = [];
+  for (let i = 0; i < MAX_SIGNAL_APPS + 4; i++) {
+    const slug = `orrery_${String(i).padStart(2, "0")}`;
+    await seedSignal(r.env, { toolkit: slug, weight: 1 - i / 100 });
+    if (i < MAX_SIGNAL_APPS) wanted.push(slug);
+  }
+  const res = await connectionsApiRoute(getReq(R.signals, r.ownerToken), r.env, r.deps);
+  assert.equal(res.status, 200);
+  const body = await jsonOf(res, "signals cap") as unknown as { items: SignalItem[] };
+  assert.equal(body.items.length, MAX_SIGNAL_APPS);
+  assert.deepEqual(body.items.map((i) => i.slug), wanted,
+    "the cap did not cut the ranked order; it chose within it");
+  // AND IT IS A COST CEILING TOO: the apps past the cut cost no vendor round
+  // trip. A cap applied after the lookups would be four requests nobody reads.
+  assert.equal(r.log.toolkit.length, MAX_SIGNAL_APPS,
+    `the catalog was asked ${r.log.toolkit.length} times for ${MAX_SIGNAL_APPS} rows`);
+});
+
+await check("one row per app, however many of this owner's accounts the evidence names",
+  async () => {
+    const r = await rig({ toolkit: namesAnything });
+    await seedSignal(r.env, { toolkit: "orrery_01", weight: 0.2, alias: "personal", source: "link" });
+    await seedSignal(r.env, { toolkit: "orrery_01", weight: 0.9, alias: "work", source: "observer" });
+    await seedSignal(r.env, { toolkit: "orrery_02", weight: 0.5 });
+
+    const res = await connectionsApiRoute(getReq(R.signals, r.ownerToken), r.env, r.deps);
+    const body = await jsonOf(res, "signals aliases") as unknown as { items: SignalItem[] };
+    assert.deepEqual(body.items.map((i) => i.slug), ["orrery_01", "orrery_02"],
+      "one app arrived twice; the screen draws the same name, logo and checkbox twice");
+    // The STRONGEST line represents the app, so the account named beside it is
+    // the one the evidence is actually about.
+    assert.equal(body.items[0]!.alias, "work");
+    assert.equal(r.log.toolkit.length, 2, "the same app was looked up twice");
+  });
+
+await check("a stranger's evidence is never in this owner's answer", async () => {
+  const r = await rig({ toolkit: namesAnything });
+  await seedSignal(r.env, { toolkit: "orrery_mine", weight: 0.5 });
+  await seedSignal(r.env, { user: STRANGER, toolkit: "orrery_theirs", weight: 0.99 });
+
+  const mine = await connectionsApiRoute(getReq(R.signals, r.ownerToken), r.env, r.deps);
+  const mineBody = await jsonOf(mine, "signals mine") as unknown as { items: SignalItem[] };
+  assert.deepEqual(mineBody.items.map((i) => i.slug), ["orrery_mine"],
+    "somebody else's apps reached this owner — and they would be pre-ticked");
+
+  // THE CONTROL, so the check above cannot pass because the route returns
+  // nothing to anybody: the stranger's own token gets the stranger's own row.
+  const theirs = await connectionsApiRoute(getReq(R.signals, r.strangerToken), r.env, r.deps);
+  const theirsBody = await jsonOf(theirs, "signals theirs") as unknown as { items: SignalItem[] };
+  assert.deepEqual(theirsBody.items.map((i) => i.slug), ["orrery_theirs"]);
+});
+
+await check("a POST on /signals is 405", async () => {
+  const r = await rig({ toolkit: namesAnything });
+  const res = await connectionsApiRoute(postReq(R.signals, r.ownerToken, {}), r.env, r.deps);
+  assert.equal(res.status, 405);
+  assert.equal(res.headers.get("allow"), "GET");
+  await bodyOf(res, "405 signals");
+});
+
+await check("reading the evidence never writes any", async () => {
+  const r = await rig({ toolkit: namesAnything });
+  await seedSignal(r.env, { toolkit: "orrery_01", weight: 0.9, source: "observer" });
+  const before = storedSignals(r.db);
+  const res = await connectionsApiRoute(getReq(R.signals, r.ownerToken), r.env, r.deps);
+  assert.equal(res.status, 200);
+  await bodyOf(res, "signals read-only");
+  // A route that could record evidence while answering a question about it
+  // would let anybody with a session weight their own table — and the weight
+  // is what eventually licenses interrupting somebody.
+  assert.deepEqual(storedSignals(r.db), before);
+});
+
+await check("MAX_SIGNAL_APPS is 8 — the number, not just the name", () => {
+  // Every loop above counts to this constant, so only its NAME was pinned. It
+  // is two things at once: the length of a pre-ticked list a person will read
+  // before tapping Connect, and the number of vendor round trips one request
+  // may cost. Both get worse quietly if it drifts.
+  assert.equal(MAX_SIGNAL_APPS, 8,
+    `MAX_SIGNAL_APPS is now ${MAX_SIGNAL_APPS}. If that is deliberate, say why here and `
+      + "change this line; a pre-ticked list longer than a screen is consent by fatigue.");
+  assert.ok(MAX_SIGNAL_APPS <= MAX_CATALOG_SLUGS,
+    "one /signals call may now cost more vendor round trips than ?slugs= is allowed to");
 });
 
 // ===========================================================================

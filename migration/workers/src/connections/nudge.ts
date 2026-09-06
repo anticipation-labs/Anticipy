@@ -180,6 +180,9 @@ export const ONBOARDING_SKIP_SNOOZE_DAYS = 7;
 const NUDGE_STATES: readonly string[] = [
   "never_asked",
   "asked",
+  // The setup-card shrug. Level 0, snoozed seven days, and NOT a rung on the
+  // ladder — see contract.ts's own note on it and `recordDecline` below.
+  "declined_soft",
   "declined",
   "connected",
   "needs_reconnect",
@@ -591,8 +594,20 @@ function whatIsMissing(
   if (nudge.state === "declined" && nudge.level === 0) {
     // Read as level 0 it re-asks at the next trigger, ignoring a "no" this
     // system was told and recorded.
+    //
+    // `declined_soft` IS THE LEGITIMATE LEVEL-0 REFUSAL and is deliberately not
+    // caught here: it is not a rung, it is seven days of quiet, and the whole
+    // point of it is that the ladder did NOT advance. The two are kept apart by
+    // state and not by level, which is why the state had to exist.
     return "row says declined but level is 0: the ladder was not advanced, so the decline "
       + "cannot be honoured";
+  }
+  if (nudge.state === "declined_soft" && nudge.level !== 0) {
+    // The mirror of the rule above, and it points the same way: a soft snooze
+    // that has somehow acquired a rung is a row two writers disagree about, and
+    // reading it either way silences or re-asks somebody on a guess.
+    return `row says declined_soft but level is ${JSON.stringify(nudge.level)}: a soft snooze `
+      + "is not a rung on the ladder, so this row was written by two different rules";
   }
   if (nudge.trigger !== null && !Object.hasOwn(TRIGGER_SCORE, nudge.trigger as unknown as string)) {
     return `unreadable trigger on the row: ${JSON.stringify(nudge.trigger)}`;
@@ -638,23 +653,64 @@ function whatIsMissing(
  * different facts about a person; they are the difference between `acted_at`
  * set and `acted_at` null, and the spec's timers get tuned from that log. A
  * silent decline that stamps `acted_at` claims an action nobody took.
+ *
+ * THE SETUP CARD IS THE ONE MOMENT THAT DOES NOT ADVANCE THE LADDER, and until
+ * 2026-09-06 it did. What shipped was `level + 1` with a shorter clock, which
+ * the spec twice says it must not be ("declined_soft with a 7-day snooze, not a
+ * real decline", page 21; "a 7-day snooze, not a decline", page 25). The cost
+ * of the old reading was measured rather than guessed at: level 1 raises
+ * `LEVEL_THRESHOLD` from 0.50 to 0.80 against a STRICT `score > threshold`, and
+ * `TRIGGER_SCORE` gives in_task 0.80, onboarding 0.70 and repeated_use 0.60 —
+ * so one tap on a card during setup permanently silenced the three triggers
+ * that can name a task which already cost this person real time. Only
+ * laptop_closed (1.0) and user_named_it (0.9) survived it.
+ *
+ * `soft` is TRUE for exactly one shape and every clause of it is load-bearing:
+ *
+ *   `how === "said_no"`      Silence is NOT soft. Page 24 is explicit — "a link
+ *                            nobody tapped for 72 hours is treated as declined
+ *                            L1" — and `maturedBySilence` is the caller that
+ *                            passes "silence". Somebody who read the card and
+ *                            walked past it said something; somebody who never
+ *                            opened the text said something else.
+ *   `nudge.trigger === "onboarding"`
+ *                            THE MOMENT ON THE STORED ROW, never a claim on a
+ *                            request. `recordSkip` can only seed this trigger
+ *                            on a row that does not exist yet; a row the ask
+ *                            engine already wrote keeps its own trigger, so a
+ *                            client cannot soften an in-task decline by sending
+ *                            a flag.
+ *   `nudge.level === 0`      Once. Somebody who has already been down the
+ *                            ladder and is skipping a card is on the ladder;
+ *                            the soft path would walk them back UP it.
+ *
+ * Anything else is the ordinary ladder, unchanged to the byte.
  */
 export function recordDecline(
   nudge: ConnectNudge,
   at: number,
   how: "said_no" | "silence",
 ): ConnectNudge {
+  const soft = how === "said_no" && nudge.trigger === "onboarding" && nudge.level === 0;
+  if (soft) {
+    return {
+      ...nudge,
+      state: "declined_soft",
+      // NOT `level`, and not `level + 1`. The ladder is where it was.
+      level: 0,
+      snooze_until: at + ONBOARDING_SKIP_SNOOZE_DAYS * DAY_MS,
+      // They touched the glass, so this is stamped exactly as a real decline
+      // stamps it. It is the only thing on the row that records that the card
+      // was actually answered rather than never drawn.
+      acted_at: at,
+    };
+  }
   const level = Math.min(nudge.level + 1, 3) as 1 | 2 | 3;
-  // The onboarding exception, from the spec's own constant: somebody skipping a
-  // card during setup has refused a form, not an app. It applies once, at level
-  // 1 — a second decline is a second decline whatever the first one was.
-  const days =
-    level === 1 && nudge.trigger === "onboarding" ? ONBOARDING_SKIP_SNOOZE_DAYS : SNOOZE_DAYS[level];
   return {
     ...nudge,
     state: "declined",
     level,
-    snooze_until: at + days * DAY_MS,
+    snooze_until: at + SNOOZE_DAYS[level] * DAY_MS,
     acted_at: how === "said_no" ? at : null,
   };
 }
@@ -786,6 +842,20 @@ export function shouldAsk(
   // ---- 5. The snooze, and the one override --------------------------------
   // Checked for EVERY state, including needs_reconnect: a snooze is a promise
   // about a date, and the reconnect path skipping it was a real hole.
+  //
+  // THIS IS THE WHOLE OF WHAT `declined_soft` COSTS, and it needs no clause of
+  // its own here — which is the point of giving the setup-card shrug a state
+  // instead of a rung. It arrives at level 0, so step 3 does not stop it, step 7
+  // does not stop it, and step 8 measures it against LEVEL_THRESHOLD[0] = 0.50,
+  // which every trigger clears. The only thing standing between that owner and
+  // the next ask is the date on the line below, and when it passes they are
+  // exactly where they were before they tapped Skip.
+  //
+  // The laptop_closed override deliberately does NOT apply to it: the override
+  // is written for `record.level === 1`, and a soft snooze is not level 1. So a
+  // shut laptop waits the seven days out rather than spending an override that
+  // was never taken. That over-refuses in one shape, which is the direction a
+  // floor is allowed to be wrong in.
   if (record.snooze_until !== null && ctx.now < record.snooze_until) {
     // THE LEVEL-1 OVERRIDE, ONCE. A closed laptop is the one moment where the
     // pitch is not a pitch: the task cannot run in the browser at all. "Once"

@@ -2013,6 +2013,194 @@ await check("a malformed managed-auth block cannot throw or smuggle a non-string
 });
 
 // ===========================================================================
+// WHERE THE MAIL HOSTS ARE NOT
+// ===========================================================================
+//
+// Spec page 42's medium-weight signal is "DNS MX lookup at sign-up:
+// Google-hosted or Microsoft-hosted mail ... Seeds the onboarding list before
+// we know anything else." `signUpDomainSignals` already takes the resolved
+// exchangers and matches them THE WAY AN OBSERVED HOST IS MATCHED — against the
+// catalog's own entry, "no domain list of our own" — so the one part missing
+// was a host on the catalog row for an exchanger to match against.
+//
+// IT IS MISSING BECAUSE THE VENDOR DOES NOT PUBLISH ONE. Measured 2026-09-06
+// with production's own key, and measured the way the scopes defect taught:
+// by taking the UNION OF EVERY KEY PATH on every row rather than probing for a
+// name we had guessed. Twelve detail rows (`GET /api/v3.1/toolkits/{slug}`, all
+// twelve toolkits this account uses) and fifty listing rows
+// (`GET /api/v3.1/toolkits?limit=50`, of 1,505). The COMPLETE set of fields
+// carrying a host of any kind:
+//
+//   meta.app_url                      the product's own site
+//   base_url                          the API root
+//   get_current_user_endpoint         one API path under base_url
+//   auth_config_details[].deprecated_auth_provider_details.token_url
+//   auth_config_details[].deprecated_auth_provider_details.authorization_url
+//   auth_config_details[].fields.…default    the vendor's own redirect uri
+//   composio_managed_auth[].scopes.available[]   scope urls
+//   meta.logo                         the vendor's logo cdn
+//   auth_config_details[].auth_hint_url, auth_guide_url   null on all twelve
+//
+// No mail, mx, exchanger, domain or dns field on either endpoint. The legacy
+// rows that might have carried one are gone: /api/v1/apps/{slug} and
+// /api/v2/apps/{slug} both answer 410 with "Please upgrade to v3 APIs", and
+// /api/v3 returns the identical row to /api/v3.1.
+//
+// AND THE HOSTS IT DOES PUBLISH ARE NOT THE EXCHANGERS. The other half of the
+// measurement, same day, `dig MX`:
+//
+//   consumer Google mail        alt1.gmail-smtp-in.l.google.com
+//   Google-hosted domains       aspmx.l.google.com, alt1.aspmx.l.google.com,
+//                               aspmx2.googlemail.com
+//   Microsoft-hosted domains    <name>-com.mail.protection.outlook.com,
+//                               <name>-com.olc.protection.outlook.com
+//
+// Not one of those sits at, or under, any host on the list above. The mail
+// toolkit's own site is a SIBLING of the Google exchangers rather than a parent
+// of them, and telling siblings apart needs the registrable name — which means
+// a public-suffix list, which src/connections/signals.ts refuses to carry for
+// the reason it states: a suffix list here is a list of names of ours. The
+// Microsoft half is worse and simpler: the row never publishes the name its
+// exchangers live under at all; its `app_url` is a marketing page on the
+// parent company's site.
+//
+// SO THE COLUMN SHIPS EMPTY, AND EMPTY IS THE MEASUREMENT — not a gap in the
+// read, and not something the next agent should "fix" by writing the two names
+// in. That is the exact law-1 violation this feature has dodged three times.
+// The law-shaped fix is the one hostToToolkit's own header already names: a
+// shortlist put to the judge, which has the owner's context and a catalog to
+// pick from. These checks stand where the temptation is.
+
+/** The live gmail row's HOST-bearing half, copied from that run. Trimmed to the
+ *  fields above; nothing here is invented and nothing is renamed. */
+const LIVE_GMAIL_HOSTS = {
+  base_url: "https://www.googleapis.com",
+  get_current_user_endpoint: "https://www.googleapis.com/gmail/v1/users/me/profile",
+  auth_config_details: [{
+    name: "gmail_oauth",
+    mode: "OAUTH2",
+    required_scopes: [],
+    deprecated_auth_provider_details: {
+      token_url: "https://oauth2.googleapis.com/token",
+      authorization_url: "https://accounts.google.com/o/oauth2/v2/auth",
+    },
+    auth_hint_url: null,
+  }],
+  auth_guide_url: null,
+  meta: {
+    description: "Gmail is Google’s email service",
+    logo: "https://logos.composio.dev/api/gmail",
+    app_url: "https://mail.google.com",
+    categories: [{ name: "Email", slug: "email" }],
+  },
+};
+
+/** And the other half of the spec's medium signal, same run. */
+const LIVE_OUTLOOK_HOSTS = {
+  base_url: "https://graph.microsoft.com",
+  get_current_user_endpoint: "https://graph.microsoft.com/v1.0/me",
+  auth_config_details: [{
+    mode: "OAUTH2",
+    required_scopes: ["Mail.Read"],
+    deprecated_auth_provider_details: {
+      token_url: "https://login.microsoftonline.com/common/oauth2/v2.0/token",
+      authorization_url: "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
+    },
+  }],
+  meta: {
+    logo: "https://logos.composio.dev/api/outlook",
+    app_url:
+      "https://www.microsoft.com/en-in/microsoft-365/outlook/email-and-calendar-software-microsoft-outlook",
+  },
+};
+
+await check("every catalog row carries a mail-host column, and the live vendor fills none of it",
+  async () => {
+    const meta = await provider(async () => new Response(JSON.stringify({
+      slug: "gmail", name: "Gmail", ...LIVE_GMAIL_AUTH, ...LIVE_GMAIL_HOSTS,
+    }), { status: 200, headers: { "content-type": "application/json" } })).toolkit("gmail");
+
+    // THE COLUMN EXISTS. Without it `ConnectOnboardingPolicy.seeds(fromMail-
+    // Exchanger:)` has nothing to compare an exchanger against and can only
+    // ever seed nothing, which is what onboarding step 2 did.
+    assert.ok(Object.prototype.hasOwnProperty.call(meta, "mailHosts"),
+      "the catalog row has no mail-host column at all, so the MX signal has no seam to reach");
+
+    // AND IT IS EMPTY, because the vendor publishes no such field. If this
+    // goes red: re-run the measurement above before changing the expectation,
+    // and never fill this from a name of ours.
+    assert.deepEqual((meta as { mailHosts?: unknown }).mailHosts, [],
+      "a mail host appeared for an app whose live row publishes none — if the vendor started "
+        + "publishing them, re-measure and change this deliberately; if it came from a list of "
+        + "ours, that is the law-1 violation this check exists to catch");
+
+    // THE CONTROL, and the whole reason the emptiness above means anything:
+    // the SAME read of the SAME row filled every other field. So the empty
+    // column is the vendor's silence and not a read that failed.
+    assert.equal(meta.name, "Gmail");
+    assert.equal(meta.appUrl, "https://mail.google.com");
+    assert.equal(meta.logo, "https://logos.composio.dev/api/gmail");
+    assert.equal(meta.scopes.length, 3, "the scopes half of this row still reads");
+  });
+
+await check("the mail-host column is never derived from the hosts the row DOES publish", async () => {
+  const meta = await provider(async () => new Response(JSON.stringify({
+    slug: "outlook", name: "Outlook", ...LIVE_OUTLOOK_HOSTS,
+    composio_managed_auth: [{ mode: "OAUTH2", scopes: { available: ["Mail.Read"] } }],
+  }), { status: 200, headers: { "content-type": "application/json" } })).toolkit("outlook");
+
+  const hosts = (meta as { mailHosts?: unknown }).mailHosts as string[];
+  assert.deepEqual(hosts, [], "the row's own api, auth and marketing hosts were copied into the "
+    + "mail column; measured, no real exchanger sits under any of them, so this would be a "
+    + "column that looks like the signal working and can never match");
+  // Named one at a time, so the failure says WHICH host leaked.
+  for (const leaked of [
+    "graph.microsoft.com", "login.microsoftonline.com", "www.microsoft.com",
+    "logos.composio.dev",
+  ]) {
+    assert.ok(!hosts.some((h) => String(h).includes(leaked)), `${leaked} became a mail host`);
+  }
+});
+
+await check("a search row carries the column too, so both catalog doors answer the same shape",
+  async () => {
+    // Onboarding pre-ticks from /signals and offers everything else through
+    // search. A column on one door only is a seed that works or not depending
+    // on how the person got to the app.
+    const rows = await provider(async () => new Response(JSON.stringify({
+      items: [{ slug: "gmail", name: "Gmail", ...LIVE_GMAIL_HOSTS }],
+    }), { status: 200, headers: { "content-type": "application/json" } })).search("mail");
+    assert.equal(rows.length, 1);
+    assert.ok(Object.prototype.hasOwnProperty.call(rows[0]!, "mailHosts"),
+      "a search row has no mail-host column, so an app found by typing its name can never seed");
+    assert.deepEqual((rows[0] as { mailHosts?: unknown }).mailHosts, []);
+  });
+
+/** The two names a hardcoded mail map would have to write down. Both are hosts,
+ *  not app names, so the APP_NAMES scan above cannot see them. */
+const MAIL_HOSTS_OF_OURS = [
+  "google.com", "googlemail.com", "outlook.com", "microsoft.com", "microsoftonline.com",
+  "aspmx", "protection.outlook", "gmail-smtp-in",
+];
+
+function mailHostsIn(code: string): string[] {
+  return MAIL_HOSTS_OF_OURS.filter((h) => code.toLowerCase().includes(h));
+}
+
+await check("NO MAIL HOST OF OURS is in the adapter's executable source", () => {
+  // CONTROL first: the scan finds one when one is planted, or every result
+  // below is measuring nothing.
+  assert.deepEqual(mailHostsIn('if (host.endsWith("google.com")) return ["gmail"];'),
+    ["google.com"]);
+  const found = mailHostsIn(codeOnly(PROVIDER_SOURCE));
+  assert.deepEqual(found, [],
+    `src/connections/provider.ts names ${found.join(", ")} in code. A mail host written into `
+      + "this file is the spec's own rule broken — the match is meant to run against the "
+      + "catalog's entry, never a domain list of ours — and it would be invisible to the "
+      + "app-name scan above.");
+});
+
+// ===========================================================================
 
 if (failures) {
   console.error(`connections-provider: ${failures} failing, ${passes} passing`);

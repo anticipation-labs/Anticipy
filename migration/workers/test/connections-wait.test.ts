@@ -1048,8 +1048,15 @@ await check("with no ExecutionContext the redirect still works and NO poll is st
 // ===========================================================================
 
 await check("the /go path is the only thing that starts the poll", () => {
+  // `go.handle`, NOT the token. A connect page may carry several apps, each of
+  // them an ordinary `connect_links` row at a handle derived from the one token
+  // (routes/connect.ts `pageHandle`), and hashing the token here would give app
+  // 0's handle whatever the person tapped — a poll watching a row nobody is
+  // connecting, which is the one signal that survives a browser dying on the way
+  // back from the vendor. `ConnectLink.handle` is the row `redeem` actually
+  // spent. Updated 2026-09-06 with that fix; the anchor is otherwise unchanged.
   anchoredOnce(CONNECT_SRC,
-    "    startWaiting(env, deps, token, go.owner, go.toolkit, now, ctx);",
+    "    startWaiting(env, deps, go.handle, go.owner, go.toolkit, now, ctx);",
     "routes/connect.ts");
   anchoredOnce(CONNECT_SRC, "ctx.waitUntil(task);", "routes/connect.ts");
   anchoredOnce(CONNECT_SRC, "waitForConnection(env, {", "routes/connect.ts");
@@ -1059,9 +1066,14 @@ await check("the /go path is the only thing that starts the poll", () => {
 });
 
 await check("the poll's owner and toolkit come off the redeemed link, not the request", () => {
+  // The same property, on a `connectPageGo` return that now also carries the row
+  // that was spent and its place on the page — so the anchor is the LINE that
+  // reads the owner and the toolkit off `link`, which is the stored row `redeem`
+  // verified. Nothing here may be read off the session or the request.
   anchoredOnce(CONNECT_SRC,
-    "return { state: \"ok\", redirectUrl, owner: link.user_id, toolkit: link.toolkit };",
+    "    state: \"ok\", redirectUrl, owner: link.user_id, toolkit: link.toolkit,",
     "routes/connect.ts");
+  anchoredOnce(CONNECT_SRC, "    handle: link.handle, app: link.app,", "routes/connect.ts");
   assert.equal(occurrences(CONNECT_SRC, "go.owner"), 1);
   assert.equal(occurrences(CONNECT_SRC, "signedInAs, toolkit"), 0,
     "nothing may hand the poll an owner read off the session or the request");

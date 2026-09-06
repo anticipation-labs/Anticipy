@@ -50,6 +50,28 @@
  *   - the compare-and-set predicate dropped from the signal merge
  *   - `project()` ignoring the live column set
  *   - a column added to schema.sql that the contract does not declare
+ *
+ * AND FIVE MORE for `putAll`, 2026-09-06 — the store half of "one Connect
+ * button opens a multi-app connect page" (spec page 25). A page is N
+ * `connect_links` rows on ONE token, and what makes it one link rather than four
+ * is that they arrive together or not at all. Each anchored on a literal
+ * occurring exactly once; ALL FIVE went red:
+ *   - the D1 page written a row at a time instead of in one `batch`
+ *       -> [d1] "ALL OR NONE: a page colliding with a link already minted
+ *          writes none of it"
+ *   - the mixed-owner refusal removed (the wrong-person failure arriving
+ *     through a loop variable)
+ *       -> [memory] "a page naming TWO owners is refused whole"
+ *   - the duplicate-handle refusal removed (a page silently one app short,
+ *     reported by the database as "this token was minted twice")
+ *       -> [memory] "a page with one handle on it twice is refused"
+ *   - an empty page accepted — a token that resolves to a screen with nothing
+ *     on it. This one SURVIVED its first run: the guard's removal makes the
+ *     next line throw a TypeError, and `assert.rejects` with a bare STRING
+ *     takes it as the assertion's own message, so any throw passed. Every
+ *     rejection in this section now matches the refusal's own words. Re-run: RED.
+ *   - the memory store writing half a page (a loop, not a transaction)
+ *       -> [memory] "a token that was minted twice is refused, never overwritten"
  */
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -490,6 +512,120 @@ async function conformance(kind: string, make: () => { store: ConnectionsStore; 
     close();
   });
 
+  // -------------------------------------------------------------------------
+  // A WHOLE CONNECT PAGE, WRITTEN AS ONE SET.
+  //
+  // Spec page 25: "One Connect button opens a multi-app connect page."
+  // routes/connect.ts builds that page out of one ordinary `connect_links` row
+  // per app, at handles derived from a single token — so "four ticked apps
+  // become ONE link" is a claim about THIS method as much as about the page, and
+  // the property that makes it one link rather than four is that the rows arrive
+  // together or not at all. Written one at a time, a failure halfway leaves
+  // somebody looking at a page missing the apps they ticked, with nothing in a
+  // log to say which ones.
+  // -------------------------------------------------------------------------
+
+  await check(label("a page of four apps lands as one set, every row readable"), async () => {
+    const { store, close } = make();
+    const page = ["notion", "slack", "gmail", "linear"].map((toolkit, i) =>
+      link({ token_handle: handle(`page-${i}`), user_id: A, toolkit }));
+    await store.putAll(page);
+    for (const row of page) {
+      const back = await store.read(row.token_handle);
+      assert.equal(back?.toolkit, row.toolkit, `${row.toolkit} is not on this token`);
+      assert.equal(back?.user_id, A);
+      assert.equal(back?.used_at, null, "a freshly minted page arrives already spent");
+    }
+    close();
+  });
+
+  await check(label("a page naming TWO owners is refused whole — nothing written"), async () => {
+    const { store, close } = make();
+    // The wrong-person failure arriving through a loop variable. Refused rather
+    // than filtered: filtering hides the code that produced it, and the row that
+    // survived would be one person's app on another person's page.
+    await assert.rejects(
+      () => store.putAll([
+        link({ token_handle: handle("mixed-0"), user_id: A }),
+        link({ token_handle: handle("mixed-1"), user_id: B, toolkit: "slack" }),
+      ]),
+      // MATCHED, NOT JUST AWAITED. `assert.rejects` with a bare string takes it
+      // as the assertion's own message, so any throw at all passes — including
+      // the TypeError a deleted guard produces one line later. Measured: that is
+      // exactly how the empty-page mutation SURVIVED its first run.
+      /binds to ONE owner/,
+      "a connect page was assembled out of two people's rows",
+    );
+    assert.equal(await store.read(handle("mixed-0")), null,
+      "the first row of a refused page was written anyway");
+    assert.equal(await store.read(handle("mixed-1")), null);
+    close();
+  });
+
+  await check(label("a page with one handle on it twice is refused before the database sees it"),
+    async () => {
+      const { store, close } = make();
+      // Two rows at one handle is a page silently one app short, and the UNIQUE
+      // primary key would report it as "this token was minted twice" — a
+      // different and much more alarming fact than the one that happened.
+      await assert.rejects(
+        () => store.putAll([
+          link({ token_handle: handle("twice"), toolkit: "notion" }),
+          link({ token_handle: handle("twice"), toolkit: "slack" }),
+        ]),
+        /two rows share the handle/,
+        "a page silently one app short was accepted",
+      );
+      assert.equal(await store.read(handle("twice")), null);
+      close();
+    });
+
+  await check(label("a page of no apps is refused: a token that resolves to an empty screen"),
+    async () => {
+      const { store, close } = make();
+      await assert.rejects(() => store.putAll([]), /needs at least one link row/,
+        "an empty page was accepted, or was refused by an accident one line later "
+        + "rather than by the rule that says so");
+      close();
+    });
+
+  await check(label("ALL OR NONE: a page colliding with a link already minted writes none of it"),
+    async () => {
+      const { store, close } = make();
+      // THE PROPERTY THAT SEPARATES A BATCH FROM A LOOP. The first two rows are
+      // fine; the third lands on a handle that already exists. A loop would have
+      // written the first two and left a half page nobody can tell from a whole
+      // one.
+      await store.put(link({ token_handle: handle("taken"), toolkit: "gmail" }));
+      await assert.rejects(() => store.putAll([
+        link({ token_handle: handle("atomic-0"), toolkit: "notion" }),
+        link({ token_handle: handle("atomic-1"), toolkit: "slack" }),
+        link({ token_handle: handle("taken"), toolkit: "linear" }),
+      ]));
+      assert.equal(await store.read(handle("atomic-0")), null,
+        "half a page was written — a loop, not a transaction");
+      assert.equal(await store.read(handle("atomic-1")), null);
+      const survivor = await store.read(handle("taken"));
+      assert.equal(survivor?.toolkit, "gmail",
+        "the existing link was re-bound to a different app by a page that failed");
+      close();
+    });
+
+  await check(label("CONTROL: `put` is `putAll` with one row — one-row pages are ordinary links"),
+    async () => {
+      const { store, close } = make();
+      await store.putAll([link({ token_handle: handle("solo") })]);
+      const back = await store.read(handle("solo"));
+      assert.equal(back?.toolkit, "notion");
+      // And it inherits the same refusal `put` has always had.
+      await assert.rejects(
+        () => store.putAll([link({ token_handle: handle("solo"), user_id: B, toolkit: "slack" })]),
+        /already exists|UNIQUE|constraint/i,
+        "a one-row page could overwrite a link somebody is already holding");
+      assert.equal((await store.read(handle("solo")))?.user_id, A);
+      close();
+    });
+
   await check(label("claim and complete on a handle that does not exist lose quietly"), async () => {
     const { store, close } = make();
     const missing = await store.claim(handle("ghost"), NOW);
@@ -708,7 +844,23 @@ function slowD1(db: D1Database): D1Database {
     async all() { await tick(); const r = await s.all(); await tick(); return r; },
     async run() { await tick(); const r = await s.run(); await tick(); return r; },
   });
-  return { prepare: (sql: string) => wrap((db as unknown as { prepare(s: string): Stmt }).prepare(sql)) } as unknown as D1Database;
+  const real = db as unknown as {
+    prepare(s: string): Stmt;
+    batch(statements: unknown[]): Promise<unknown>;
+  };
+  return {
+    prepare: (sql: string) => wrap(real.prepare(sql)),
+    // FORWARDED, NOT DROPPED. `put` is `putAll` with one row and `putAll` is one
+    // D1 batch, so a wrapper without this makes every seeding write in this
+    // section throw "env.DB.batch is not a function" — a red test about the
+    // wrapper rather than about the store.
+    async batch(statements: unknown[]) {
+      await tick();
+      const r = await real.batch(statements);
+      await tick();
+      return r;
+    },
+  } as unknown as D1Database;
 }
 
 await check("25 simultaneous redeems of one link: exactly ONE wins", async () => {
