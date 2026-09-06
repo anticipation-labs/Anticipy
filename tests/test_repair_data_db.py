@@ -80,6 +80,11 @@ AGENTS_ROWS = 600
 #: mistake the page arithmetic made.
 DAMAGE_LADDER = ((2048, 32), (2048, 128), (1024, 256), (8, 64), (8, 256))
 
+#: How many (page, shape) attempts the search will make before giving up.
+#: Enough to walk the ladder over several pages; small enough that a build
+#: where nothing qualifies says so in seconds rather than minutes.
+MAX_DAMAGE_ATTEMPTS = 15
+
 
 def _reads_whole(db: pathlib.Path, table: str, rows: int) -> bool:
     """Can every row of `table` still be read out of `db`'s OWN PAGES?
@@ -127,9 +132,21 @@ def _punch_holes_in_agents_only(db: pathlib.Path, root: int, pages: int) -> None
     """
     original = db.read_bytes()
     kept = 0
+    tried = 0
     for page in _candidate_pages(db, root, pages):
         before = db.read_bytes()
         for offset, length in DAMAGE_LADDER:
+            # A BOUND ON THE SEARCH, because the search is not cheap. Each
+            # attempt runs `PRAGMA integrity_check`, two counts and a `.recover`
+            # that emits ~2MB of SQL, and there are 5 shapes x 30 pages of them.
+            # On a SQLite where nothing qualifies, the unbounded loop turned a
+            # 1m22s CI job into 6m21s across five tests, all of it spent
+            # confirming the same answer twice a minute. On 3.51 the first
+            # page's first shape already works, so the bound costs nothing
+            # where the search succeeds.
+            if tried >= MAX_DAMAGE_ATTEMPTS:
+                break
+            tried += 1
             with open(db, "r+b") as f:
                 f.seek((page - 1) * 4096 + offset)
                 f.write(os.urandom(length))
@@ -143,6 +160,8 @@ def _punch_holes_in_agents_only(db: pathlib.Path, root: int, pages: int) -> None
             db.write_bytes(before)          # too hard, or not agents-only; undo it
         if kept >= HOLES_WANTED:
             return
+        if tried >= MAX_DAMAGE_ATTEMPTS:
+            break
     # ONE damaged page is enough to make the file malformed and orphan rows,
     # and it is the whole scenario on a build where `.recover` survives less.
     # Reporting "3 were wanted" as a failure when 1 was found would be the
@@ -181,7 +200,7 @@ def _punch_holes_in_agents_only(db: pathlib.Path, root: int, pages: int) -> None
     _pytest.skip(
         f"sqlite3 {sqlite3.sqlite_version}'s `.recover` loses `owners` and `events` "
         f"at the first damaged page of `agents`, on every one of "
-        f"{len(DAMAGE_LADDER)} damage shapes across "
+        f"{MAX_DAMAGE_ATTEMPTS} attempts over {len(DAMAGE_LADDER)} damage shapes across "
         f"{len(_candidate_pages(db, root, pages))} pages, so the file this test is "
         f"about cannot be built here. NOT a verdict on repair_data_db.sh — see the "
         f"comment at this line. 3.51 builds it fine.",
@@ -190,7 +209,8 @@ def _punch_holes_in_agents_only(db: pathlib.Path, root: int, pages: int) -> None
     raise AssertionError(
         f"could not damage a single page of `agents` in a way that costs it rows "
         f"while leaving `owners` and `events` both readable AND still visible "
-        f"to `.recover`, having tried {len(DAMAGE_LADDER)} damage shape(s) per page, "
+        f"to `.recover`, having made {MAX_DAMAGE_ATTEMPTS} attempts over "
+        f"{len(DAMAGE_LADDER)} damage shape(s) per page, "
         f"having tried {len(_candidate_pages(db, root, pages))} page(s) "
         f"(dbstat named {len(_agents_pages(db))} of them) with sqlite3 "
         f"{sqlite3.sqlite_version}. The fixture has not built the file this "
