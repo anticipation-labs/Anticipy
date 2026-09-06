@@ -214,21 +214,47 @@ struct CaptureControls: View {
 /// conversation on this phone sets the reader's own words.
 struct OwnerTurn: View {
     var text: String
+    /// The tagger's verdict: "owner", "other", or nil when the phone could not
+    /// say. Every line used to render on the right in the owner's own bubble
+    /// regardless of who spoke it, so a meeting with three people read back as
+    /// one person's monologue with everybody else's words in their mouth.
+    var speaker: String? = nil
+
+    /// Only an explicit "other" moves a line across. nil is NOT other — it is
+    /// the phone saying it could not tell, and guessing in either direction
+    /// would put words in somebody's mouth. An untagged line stays where the
+    /// app has always drawn it, and says nothing about who spoke.
+    private var isSomebodyElse: Bool { speaker == "other" }
 
     var body: some View {
         HStack {
-            Spacer(minLength: 48)
-            Text(text)
-                .font(.system(size: 16))
-                .foregroundStyle(OnboardTheme.ink)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 11)
-                .background(RoundedRectangle(cornerRadius: DashMetric.bubbleRadius, style: .continuous)
-                    .fill(OnboardTheme.field))
+            if !isSomebodyElse { Spacer(minLength: 48) }
+            VStack(alignment: isSomebodyElse ? .leading : .trailing, spacing: 3) {
+                if isSomebodyElse {
+                    // NOT A NAME. The tagger says "owner" or "other" and the
+                    // roster holds no names, so this says exactly what is
+                    // known and no more. Claiming a name the product does not
+                    // have would be worse than saying nothing.
+                    Text("Someone else")
+                        .font(.system(size: 11, weight: .semibold))
+                        .tracking(0.6)
+                        .foregroundStyle(OnboardTheme.muted)
+                }
+                Text(text)
+                    .font(.system(size: 16))
+                    .foregroundStyle(OnboardTheme.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 11)
+                    .background(RoundedRectangle(cornerRadius: DashMetric.bubbleRadius,
+                                                 style: .continuous)
+                        .fill(isSomebodyElse ? OnboardTheme.card : OnboardTheme.field))
+            }
+            if isSomebodyElse { Spacer(minLength: 48) }
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("You said: \(text)")
+        .accessibilityLabel(isSomebodyElse ? "Someone else said: \(text)"
+                                           : "You said: \(text)")
     }
 }
 

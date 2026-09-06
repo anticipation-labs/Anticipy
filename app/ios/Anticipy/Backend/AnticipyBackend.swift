@@ -142,6 +142,17 @@ struct BrainEvent: Decodable, Identifiable, Equatable {
     /// segmenting is switched off — in which case the feed groups nothing and
     /// renders exactly as it does today.
     let segment: String?
+    /// WHO SAID IT: "owner", "other", or absent when the phone could not say.
+    ///
+    /// `SpeakerTagger` has stamped this on every pushed line since the field
+    /// existed, and the column is in the wire map — but nothing ever DECODED it,
+    /// so every line in the app arrived anonymous and the feed drew one
+    /// continuous bubble as though a single person had said all of it. In a
+    /// room with two people that is not a transcript, it is a fabrication.
+    ///
+    /// "unknown" never travels: the tagger sends nothing rather than claim
+    /// somebody, and a missing field means the same thing here.
+    let speaker: String?
     /// WHICH EARS heard this line: "phone_mic", "pendant" or "typed".
     ///
     /// The phone has stamped this on every event it pushes since the field was

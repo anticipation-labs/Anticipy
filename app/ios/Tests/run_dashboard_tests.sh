@@ -17,6 +17,7 @@ view="$app/Views/ConversationDashboard.swift"
 kit="$app/Views/DashboardKit.swift"
 home="$app/Views/ContentView.swift"
 dash="$app/Views/ConversationDashboard.swift"
+app_backend="$app/Backend/AnticipyBackend.swift"
 for f in "$policy" "$view" "$kit" "$home"; do
     [ -f "$f" ] || { echo "missing $f"; exit 2; }
 done
@@ -130,6 +131,38 @@ if code "$dash" | grep -q 'Haptics.engage()$' && \
 fi
 if ! code "$dash" | grep -q 'ListenControlPolicy.face('; then
     echo "The dashboard no longer asks ListenControlPolicy what the control is."
+    exit 2
+fi
+
+# ========================= TWO PEOPLE ARE NOT ONE PERSON
+# The tagger has stamped `speaker` on every pushed line since the field existed
+# and the column is in the wire map — but nothing DECODED it, so every line
+# arrived anonymous and drew in the owner's own bubble. A meeting with three
+# people read back as one person's monologue with everybody else's words put in
+# their mouth.
+if ! code "$app_backend" | grep -q 'let speaker: String?'; then
+    echo "BrainEvent no longer decodes who said the line."
+    exit 2
+fi
+if ! code "$policy" | grep -q 'speaker: String? = nil'; then
+    echo "The turn no longer carries who said it."
+    exit 2
+fi
+# nil is NOT "somebody else". The phone saying it could not tell is a real
+# answer, and guessing either way puts words in somebody's mouth.
+if ! code "$kit" | grep -q 'speaker == "other"'; then
+    echo "The bubble no longer distinguishes an explicit 'other' from an"
+    echo "unknown speaker."
+    echo
+    echo "Only an explicit verdict may move a line across. Treating nil as"
+    echo "'someone else' would attribute the owner's own words to a stranger."
+    exit 2
+fi
+# And it must not invent a name it does not have.
+if code "$kit" | grep -qE 'speaker == "owner" \? "[A-Z]|Text\(speaker'; then
+    echo "The transcript prints a speaker NAME."
+    echo "The roster holds no names — only 'owner' and 'other'. Printing a name"
+    echo "the product does not have is worse than saying nothing."
     exit 2
 fi
 

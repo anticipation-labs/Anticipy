@@ -163,8 +163,8 @@ struct ConversationDashboard<Notices: View, Approval: View, Deck: View, Settings
 
     @ViewBuilder private func view(for turn: DashboardPolicy.Turn) -> some View {
         switch turn {
-        case .owner(_, let text, _):
-            OwnerTurn(text: text)
+        case .owner(_, let text, _, let speaker):
+            OwnerTurn(text: text, speaker: speaker)
         case .working(_, let text, _):
             WorkingTurn(text: text)
         case .said(_, let text, _, let done):
@@ -420,7 +420,7 @@ struct ConversationDashboard<Notices: View, Approval: View, Deck: View, Settings
         case .working(_, let text, _): return text
         case .said(_, let text, _, _): return text
         case .question(_, let text, _): return text
-        case .owner(_, let text, _): return text
+        case .owner(_, let text, _, _): return text
         }
     }
 

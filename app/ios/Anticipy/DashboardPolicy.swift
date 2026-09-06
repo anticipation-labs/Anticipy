@@ -122,8 +122,14 @@ enum DashboardPolicy {
     /// One turn in the conversation. Every case carries a verdict somebody
     /// else made; none of them is inferred from the text.
     enum Turn: Equatable {
-        /// Something the owner said or typed.
-        case owner(id: String, text: String, at: String)
+        /// Something SOMEBODY said or typed — not necessarily the owner.
+        ///
+        /// `speaker` is the tagger's verdict: "owner", "other", or nil when the
+        /// phone could not tell. It was absent until 2026-09-06 and every line
+        /// rendered as one continuous bubble on one side, which in a room with
+        /// two people is not a transcript of a conversation — it is one
+        /// person's monologue with everybody else's words put in their mouth.
+        case owner(id: String, text: String, at: String, speaker: String? = nil)
         /// She is working on it. The sentence is the brain's, not ours.
         case working(id: String, text: String, at: String)
         /// Something she found, did, or wants to say back.
@@ -135,7 +141,7 @@ enum DashboardPolicy {
 
         var at: String {
             switch self {
-            case .owner(_, _, let at), .working(_, _, let at),
+            case .owner(_, _, let at, _), .working(_, _, let at),
                  .said(_, _, let at, _), .approval(_, _, _, let at),
                  .question(_, _, let at):
                 return at
@@ -144,7 +150,7 @@ enum DashboardPolicy {
 
         var id: String {
             switch self {
-            case .owner(let id, _, _), .working(let id, _, _),
+            case .owner(let id, _, _, _), .working(let id, _, _),
                  .said(let id, _, _, _), .approval(let id, _, _, _),
                  .question(let id, _, _):
                 return id
@@ -210,6 +216,9 @@ enum DashboardPolicy {
         /// the decision is `ignore` — that pairing is the difference between
         /// "left alone" and "looking into it".
         var goal: String? = nil
+        /// Who said it, as the tagger judged. nil means the phone could not say
+        /// — which is a real answer and must never be rendered as "the owner".
+        var speaker: String? = nil
     }
 
     /// Assemble the thread. Oldest first, because a conversation is read
@@ -240,7 +249,8 @@ enum DashboardPolicy {
                !goal.isEmpty {
                 turns.append(.working(id: row.id, text: goal, at: row.at))
             } else {
-                turns.append(.owner(id: row.id, text: row.text, at: row.at))
+                turns.append(.owner(id: row.id, text: row.text, at: row.at,
+                                    speaker: row.speaker))
             }
         }
         for row in said where !row.text.isEmpty {

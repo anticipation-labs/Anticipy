@@ -816,7 +816,20 @@ settings:
     #
     #      Not a Law 1 change: `decision` and `goal` are columns a MODEL wrote,
     #      read back. The phone still cannot judge a line and must never try.
-    CURRENT_PROJECT_VERSION: "155"
+    # 156: TWO OR MORE PEOPLE ARE NOT ONE PERSON. `SpeakerTagger` has stamped
+    #      `speaker` on every pushed line since the field existed and the
+    #      column is in the wire map — but NOTHING EVER DECODED IT. Every line
+    #      arrived anonymous and drew in the owner's own bubble on the right,
+    #      so a meeting with three people read back as one person's monologue
+    #      with everybody else's words put in their mouth. BrainEvent decodes
+    #      it now, TranscriptLine and the turn carry it, and an explicit
+    #      "other" draws on the opposite side under "Someone else".
+    #
+    #      nil is NOT "somebody else" — it is the phone saying it could not
+    #      tell, and guessing either way attributes words to the wrong person.
+    #      And it prints no NAME: the roster holds none, so the label says
+    #      exactly what is known and no more.
+    CURRENT_PROJECT_VERSION: "156"
     DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: NO
@@ -868,7 +881,7 @@ targets:
         # literal from a Mac one, and two products answering "which build
         # are you holding" with different numbers is the exact disease this
         # gate exists to prevent.
-        CURRENT_PROJECT_VERSION: "155"
+        CURRENT_PROJECT_VERSION: "156"
         DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_ENTITLEMENTS: ../macos/AnticipyMac/AnticipyMac.entitlements

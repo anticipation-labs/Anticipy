@@ -1055,8 +1055,13 @@ final class AnticipySession: ObservableObject {
         // for the ~3s until the server echoes it, and a badge that appears a
         // poll late looks like a glitch in exactly the moment someone is
         // watching to see which ear caught the line.
+        // The local echo carries the tagger's verdict too. A typed line is the
+        // owner by construction; a heard one is whatever the tagger said, which
+        // is nil when it could not tell.
         transcript.append(TranscriptLine(id: "local-\(UUID().uuidString)", text: line,
-                                         decision: nil, source: source.wireName))
+                                         decision: nil,
+                                         speaker: source == .typed ? "owner" : speaker,
+                                         source: source.wireName))
         // No owner, no capture. A forced sign-out (an expired token 401s and
         // calls signOut) used to leave the microphone running and every line
         // pushed, 403'd, and queued — the room transcribed behind a sign-in
@@ -1341,6 +1346,10 @@ final class AnticipySession: ObservableObject {
                 .map { TranscriptLine(id: $0.id, text: $0.text ?? "",
                                       decision: ($0.decision?.isEmpty == false) ? $0.decision : nil,
                                       goal: ($0.goal?.isEmpty == false) ? $0.goal : nil,
+                                      // Same empty-is-nothing rule: the column
+                                      // defaults to "" and "" means the phone
+                                      // could not say, never a person named "".
+                                      speaker: ($0.speaker?.isEmpty == false) ? $0.speaker : nil,
                                       // Same empty-string-is-nothing normalisation the
                                       // two fields above already use: PocketBase sends
                                       // "" for an unset text column, and "" must mean
@@ -3329,6 +3338,11 @@ final class AnticipySession: ObservableObject {
         /// Appended AFTER `goal`, with a default, so the synthesized
         /// memberwise init keeps every existing call site compiling and every
         /// local line keeps behaving as it does today.
+        /// WHO SAID IT — "owner", "other", or nil when the phone could not say.
+        /// Decoded off the row the tagger stamped. A room with two people in it
+        /// is not one person's monologue, and rendering it as one is the app
+        /// inventing a speaker.
+        var speaker: String? = nil
         var segmentID: String? = nil
         /// PocketBase `created`, carried through so a card can show a clock
         /// time. Empty on local lines and on anything we could not read a date
