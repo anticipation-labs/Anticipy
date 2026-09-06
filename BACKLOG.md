@@ -15,3 +15,11 @@
 ## From the iOS-complete round
 - mail_hosts is empty on every catalog row (measured: the vendor publishes no MX-shaped field; Google/Microsoft exchangers cannot be derived without a public-suffix list). MX seeding pre-ticks nothing until an honest path exists.
 - ConnectOnboardingPolicy.serverRecordsTheSoftSnooze is false because nudge.ts recordSkip still reaches recordDecline (real level-1 decline) on an onboarding skip; the migration is applied, the WRITE is not. Week B — frozen.
+
+## From the grip verifier, 2026-09-06 (planner + claim floor + CI job)
+- hands_api_tools.ts: the planner's catalog route was MISSING on the Worker (HIGH) — built and deployed 7c302a49 the same hour; leg to watch: GET /hands/api/tools -> 401 no-token, 200 with token.
+- api-lane-claim.test.ts was not in `npm test` — added before the end-to-end leg, same deploy.
+- system-invariants.yml `worker` job has no in-repo pin; deleting it is silent (Law 4).
+- test_api_lane.py:361 pins the OLD BROWSER_LANE literal by design and is red in CI; either flip it or mark it expired.
+- research_lane.ts:162 claim leg keys on the claimant NAME; a browser that types `worker-api` passes. Pre-existing, pinned, not fixed.
+- hands.py:696 a hint-less vendor row keeps the model's declared effect; a hint-less write declared "read" runs as a read. Measured: none of the 3 toolkits probed have hint-less write tools.

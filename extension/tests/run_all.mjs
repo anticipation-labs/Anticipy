@@ -99,6 +99,7 @@ const suites = [
   "test_commit_beats_reversible_prefix.mjs",
   "test_name_completeness_is_not_a_word_list.mjs",
   "test_completion_shape_is_a_model_verdict.mjs",
+  "test_api_lane_is_not_browser_work.mjs",
 ];
 // A suite listed TWICE runs twice and inflates the number in the pass line —
 // and that number is exactly what a person reads to decide whether coverage

@@ -22,7 +22,9 @@ const map = readFileSync(join(here, "../page_map.js"), "utf8");
 // which broke the first time the function grew — the filter was still right
 // and the test could simply no longer see it. One definition, and both
 // callers named against it.
-assert.ok(/const BROWSER_LANE = 'workflow_id!="" && lane!="research"';/.test(bg),
+// lane!="api" joined 2026-09-06: the API hand's rows are the worker's, and a
+// browser that listed them claimed them (test_api_lane_is_not_browser_work.mjs).
+assert.ok(/const BROWSER_LANE = 'workflow_id!="" && lane!="research" && lane!="api"';/.test(bg),
   "one definition of the lanes this browser may take work from");
 for (const [what, fn] of [["sweep", "requeueStaleJobs"], ["claim", "claimJob"]]) {
   const body = bg.match(new RegExp(`async function ${fn}\\(\\)[\\s\\S]*?\\n\\}`))[0];

@@ -41,7 +41,21 @@ const DEVICE_LANE = "device_calendar";
 const DEVICE_CONSEQUENCE = "consequential";
 const DEVICE_ACT_TYPES = ["calendar_write", "calendar_undo"];
 const LIVE = ["queued", "running"];
-const EXCLUDED_LANES = ["research", SUPERVISED_LANE, DEVICE_LANE];
+/**
+ * brain/hands.py LANE_API — the lane an `api` verdict lands on, claimed by
+ * brain/worker.py run_api_jobs and run on src/routes/hands_api.ts. Exported
+ * so test/api-lane-claim.test.ts can hold the route and the brain to it.
+ *
+ * WHY IT IS HERE (2026-09-06): until this line the extension's poll listed
+ * api-lane rows (its filter names `lane` and excluded only research, so leg 1
+ * appended nothing) and leg 5 had no api rule, so a browser that polled before
+ * the brain CLAIMED the row and ran an api errand through the browser
+ * vocabulary. The api hand was bypassed every time a browser was awake. The
+ * extension's filter now mirrors this list (extension/background.js
+ * BROWSER_LANE), but that is the courtesy; this file is the floor.
+ */
+export const API_LANE = "api";
+const EXCLUDED_LANES = ["research", SUPERVISED_LANE, DEVICE_LANE, API_LANE];
 
 export const researchLane: Policy = async (ctx: Ctx): Promise<Response | null> => {
   const { path, method } = ctx;
@@ -132,6 +146,19 @@ export const researchLane: Policy = async (ctx: Ctx): Promise<Response | null> =
   // ---- LEG 5: the claim legs. research_lane.pb.js:587-612 ----------------
   const claims = "claimed_by" in b || b.status === "running";
   if (claims && !ctx.worker.fromWorker) {
+    // THE API LANE HAS ONE CLAIMANT, and it is identified by the worker
+    // marker above — never by what the body calls itself. The research leg
+    // below lets a claimant through for NAMING the worker, and that shape is
+    // deliberately not copied here: a browser can type "worker-api" as easily
+    // as anything else. The sweep's requeue (`claimed_by: ""`) is a claim-
+    // shaped write too, and it is refused alike; brain/worker.py
+    // release_stranded_api does that job under the marker.
+    if (lane === API_LANE) {
+      return refuse(403,
+        "api errands run on the api hand in the worker, never in a browser",
+        "the lane says which hand may run this errand; a browser that claimed "
+        + "it would run the wrong hand, and the api hand would never see it");
+    }
     if (lane === "research" && b.claimed_by !== WORKER_CLAIMANT) {
       return refuse(403, "research jobs run in the worker, never in a browser");
     }

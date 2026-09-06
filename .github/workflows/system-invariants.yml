@@ -9,6 +9,18 @@ on:
       - 'extension/**'
       - 'tests/**'
       - 'overnight/**'
+      # Everything the `worker` job reads that the globs above do not cover.
+      # The list is the fs trace of a full `npm test` (2026-09-06), not a
+      # guess. Without `migration/workers/**` a Worker-only commit produced
+      # no run at all: seven of the twelve most recent commits touching
+      # migration/workers on cloudflare-backend (ba47293a, 03a3049f, f30064c2,
+      # d7d4cd7c, 53b811e5, 25bc67e4, 97ccb749) have no run.
+      - 'migration/workers/**'
+      - 'migration/d1/**'
+      - 'spike/two-hands/**'
+      - 'research/2026-09-05-composio-connections.md'
+      - 'app/ios/Tests/ResetMessageTests.swift'
+      - 'app/ios/Anticipy/Backend/ConnectedAppsClient.swift'
       - '.github/workflows/system-invariants.yml'
   pull_request:
     paths:
@@ -17,6 +29,12 @@ on:
       - 'extension/**'
       - 'tests/**'
       - 'overnight/**'
+      - 'migration/workers/**'
+      - 'migration/d1/**'
+      - 'spike/two-hands/**'
+      - 'research/2026-09-05-composio-connections.md'
+      - 'app/ios/Tests/ResetMessageTests.swift'
+      - 'app/ios/Anticipy/Backend/ConnectedAppsClient.swift'
       - '.github/workflows/system-invariants.yml'
 
 jobs:
@@ -37,3 +55,23 @@ jobs:
         run: pytest -q
       - name: Prove browser invariants
         run: node extension/tests/run_all.mjs
+
+  # The API Worker's own suite (migration/workers/test, 28 files, 1091 counted
+  # checks as of 2026-09-06) and its typecheck. Until this job existed the
+  # suite ran only when a person ran it: the `test` job above never invokes
+  # npm, and its last green run on cloudflare-backend (14083c38, run
+  # 34054134797) executed pip, pytest and the extension runner and nothing
+  # else. The single &&-chain is deliberate: `npm ci` refuses a lockfile that
+  # has drifted from package.json, a red suite exits non-zero before tsc runs,
+  # and a type error in src/ exits non-zero after a green suite. Any of the
+  # three fails the workflow. No continue-on-error, no `|| true`.
+  worker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Prove Worker invariants and types
+        run: cd migration/workers && npm ci && npm test && npx tsc --noEmit

@@ -79,7 +79,19 @@ const MAX_ATTEMPTS = 3;
 // workflow_id!="" keeps unplanned rows out; lane!="research" keeps out work
 // that belongs to the server (roadmap §6: read-only goals run in the worker,
 // and the backend's research_lane hook refuses a browser claim anyway).
-const BROWSER_LANE = 'workflow_id!="" && lane!="research"';
+//
+// Excluding lane "api" (2026-09-06) keeps out the API hand's rows: brain/hands.py puts
+// an `api` verdict on lane "api", brain/worker.py run_api_jobs claims it and
+// the Worker's /hands/api/run executes it. Until this clause the poll NAMED
+// lane — so the server's leg-1 rewrite appended nothing — and excluded only
+// research, and the server had no api claim rule: a browser that polled
+// before the brain claimed the row and ran an api errand through the browser
+// vocabulary. The FLOOR is the server (migration/workers/src/policy/
+// research_lane.ts refuses a non-worker claim on lane api whatever this
+// filter says); this clause is the courtesy that stops a browser from even
+// listing — and, through the sweep below, from trying to requeue — a row
+// that was never its own. Proof: tests/test_api_lane_is_not_browser_work.mjs.
+const BROWSER_LANE = 'workflow_id!="" && lane!="research" && lane!="api"';
 const ownerLaneFilter = (status, ownerRef) =>
   `status="${status}" && owner_ref="${ownerRef}" && ${BROWSER_LANE}`;
 
