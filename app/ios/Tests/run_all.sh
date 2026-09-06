@@ -149,6 +149,13 @@ sh "$HERE/run_dashboard_tests.sh"
 # went deaf for thirty hours and nothing noticed, so a streak would break on
 # this app's own outage and bill it to the person.
 sh "$HERE/run_insights_tests.sh"
+# The lock screen — the most privileged surface this product has, since it sits
+# on a locked phone in front of whoever picks it up. Its two hard legs are the
+# two rules that follow from that: the state crossing to the widget process has
+# no field that can carry a sentence, and there is no action that COMMITS
+# anything. A one-tap yes on a locked screen is a yes given without the
+# consequence in front of you, by somebody who may not be the owner.
+sh "$HERE/run_live_activity_tests.sh"
 # What Home SAYS once it has placed a job — the same screen one step later. Four
 # of its sentences carry a number the phone counted: how many things are waiting
 # on a browser, how many interview answers she already holds, how long the

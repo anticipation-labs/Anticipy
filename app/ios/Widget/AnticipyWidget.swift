@@ -98,5 +98,12 @@ struct AnticipyListenWidget: Widget {
 struct AnticipyWidgetBundle: WidgetBundle {
     var body: some Widget {
         AnticipyListenWidget()
+        // The lock-screen capsule. Availability is checked HERE rather than
+        // inside the widget, because a `WidgetBundle` body is not a place an
+        // `if #available` can wrap a member on iOS 16.0 — the deployment
+        // target this app still supports.
+        if #available(iOS 16.1, *) {
+            AnticipyLiveActivity()
+        }
     }
 }

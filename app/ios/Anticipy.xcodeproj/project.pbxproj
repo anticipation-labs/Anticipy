@@ -100,6 +100,12 @@
 		E8695DF2F83BC3C7B287D383 /* LaunchIntro.swift in Sources */ = {isa = PBXBuildFile; fileRef = CBACE3464713E6166EC9C761 /* LaunchIntro.swift */; };
 		AE0D804E3CF0AC25739F4009 /* DashboardPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E8C5BC69A7A026AE4BFD4B0 /* DashboardPolicy.swift */; };
 		B4D963845EC6236FDE5D93A4 /* InsightsPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B465DF96D2E645792543F28 /* InsightsPolicy.swift */; };
+		EDDCB55F315B63EAF452B38B /* LiveActivityPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71D63D93FE46E3122AE67699 /* LiveActivityPolicy.swift */; };
+		EE3820C503950BAABDCB3CE6 /* LiveActivityPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71D63D93FE46E3122AE67699 /* LiveActivityPolicy.swift */; };
+		3F7695082DABCDB75CD88573 /* ListeningActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B19EFA86D37EC78A3650620 /* ListeningActivity.swift */; };
+		204FEF46CFC63ABEE27AB19F /* ListeningActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B19EFA86D37EC78A3650620 /* ListeningActivity.swift */; };
+		A78AAA75DBF0FE1EC9030F7D /* LiveActivityController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C351E862978EAAB94B6CAB86 /* LiveActivityController.swift */; };
+		B60F51A7D053C08AA44FD33E /* AnticipyLiveActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA0F828832FD7F19DDEE5DCF /* AnticipyLiveActivity.swift */; };
 		21E3605B1D5254EE10F90AC6 /* PendantOnboardingPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 682B60E56CFEB3A199C57969 /* PendantOnboardingPolicy.swift */; };
 		DF7FA9230D7805FDA8A970B1 /* Notifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F02D4F43DF4322168E31300 /* Notifier.swift */; };
 		DF8C10BD07631FC01BED8AD6 /* AppPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DFD99DBD9A73BB9651B95DA /* AppPreferences.swift */; };
@@ -198,6 +204,10 @@
 		CBACE3464713E6166EC9C761 /* LaunchIntro.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchIntro.swift; sourceTree = "<group>"; };
 		3E8C5BC69A7A026AE4BFD4B0 /* DashboardPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardPolicy.swift; sourceTree = "<group>"; };
 		7B465DF96D2E645792543F28 /* InsightsPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InsightsPolicy.swift; sourceTree = "<group>"; };
+		71D63D93FE46E3122AE67699 /* LiveActivityPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveActivityPolicy.swift; sourceTree = "<group>"; };
+		4B19EFA86D37EC78A3650620 /* ListeningActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListeningActivity.swift; sourceTree = "<group>"; };
+		C351E862978EAAB94B6CAB86 /* LiveActivityController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveActivityController.swift; sourceTree = "<group>"; };
+		CA0F828832FD7F19DDEE5DCF /* AnticipyLiveActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnticipyLiveActivity.swift; sourceTree = "<group>"; };
 		682B60E56CFEB3A199C57969 /* PendantOnboardingPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PendantOnboardingPolicy.swift; sourceTree = "<group>"; };
 		6A2CBAF0AE6E4BC42A27288C /* DeveloperDiagnosticsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeveloperDiagnosticsView.swift; sourceTree = "<group>"; };
 		6AAA7B7566A7DC53CBE0E558 /* EnrollmentOfferPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnrollmentOfferPolicy.swift; sourceTree = "<group>"; };
@@ -299,6 +309,9 @@
 				CBACE3464713E6166EC9C761 /* LaunchIntro.swift */,
 				3E8C5BC69A7A026AE4BFD4B0 /* DashboardPolicy.swift */,
 				7B465DF96D2E645792543F28 /* InsightsPolicy.swift */,
+				71D63D93FE46E3122AE67699 /* LiveActivityPolicy.swift */,
+				4B19EFA86D37EC78A3650620 /* ListeningActivity.swift */,
+				C351E862978EAAB94B6CAB86 /* LiveActivityController.swift */,
 				682B60E56CFEB3A199C57969 /* PendantOnboardingPolicy.swift */,
 				A935B05F51033496D5EF92C9 /* HapticEngine.swift */,
 				46B2C841F09576CCA3A85B50 /* Info.plist */,
@@ -343,6 +356,7 @@
 			isa = PBXGroup;
 			children = (
 				FE83FE536791B38970763A70 /* AnticipyWidget.swift */,
+				CA0F828832FD7F19DDEE5DCF /* AnticipyLiveActivity.swift */,
 				59252C40FF8234A2A9835A93 /* Info.plist */,
 			);
 			path = Widget;
@@ -644,6 +658,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				EDDCB55F315B63EAF452B38B /* LiveActivityPolicy.swift in Sources */,
+				3F7695082DABCDB75CD88573 /* ListeningActivity.swift in Sources */,
+				A78AAA75DBF0FE1EC9030F7D /* LiveActivityController.swift in Sources */,
 				8EBF95ED1C7E5C562D44A86A /* AnswerRoutePolicy.swift in Sources */,
 				EBC9A4252F4BEC04ED026BC9 /* ConnectedAppsClient.swift in Sources */,
 				1CAE6BB6547D40C497480CCD /* RetryReconciliationPolicy.swift in Sources */,
@@ -744,6 +761,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				EE3820C503950BAABDCB3CE6 /* LiveActivityPolicy.swift in Sources */,
+				204FEF46CFC63ABEE27AB19F /* ListeningActivity.swift in Sources */,
+				B60F51A7D053C08AA44FD33E /* AnticipyLiveActivity.swift in Sources */,
 				7503B1784CE72A192DDCFCC9 /* AnticipyWidget.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -806,7 +826,7 @@
 				CODE_SIGN_INJECT_BASE_ENTITLEMENTS = NO;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 143;
+				CURRENT_PROJECT_VERSION = 144;
 				DEVELOPMENT_TEAM = "$(DEVELOPMENT_TEAM)";
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -878,7 +898,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 143;
+				CURRENT_PROJECT_VERSION = 144;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = "$(DEVELOPMENT_TEAM)";
 				ENABLE_NS_ASSERTIONS = NO;
@@ -913,7 +933,7 @@
 				CODE_SIGN_INJECT_BASE_ENTITLEMENTS = NO;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 143;
+				CURRENT_PROJECT_VERSION = 144;
 				DEVELOPMENT_TEAM = "$(DEVELOPMENT_TEAM)";
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -984,7 +1004,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 143;
+				CURRENT_PROJECT_VERSION = 144;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = "$(DEVELOPMENT_TEAM)";
 				ENABLE_STRICT_OBJC_MSGSEND = YES;

@@ -248,6 +248,12 @@ struct AnticipyApp: App {
             .onChange(of: scenePhase) { phase in
                 if phase != .active { connect.appMovedToBackground() }
             }
+            // THE LOCK SCREEN. Attached at the root and nowhere else: the
+            // capsule has to survive the app being backgrounded, which is the
+            // only moment it is worth anything, so it cannot be driven from a
+            // screen that goes away. `LiveActivityController` decides when it
+            // appears; `LiveActivityPolicy` decides what it is allowed to say.
+            .drivesLiveActivity(session: session, listener: session.listener)
             .environmentObject(pendant)
             .environmentObject(session)
             .environmentObject(connect)

@@ -664,7 +664,31 @@ settings:
     #      split like that reads as "two different apps call themselves 142",
     #      which is exactly what it is there to catch. Bump and source belong in
     #      one commit; this one is.
-    CURRENT_PROJECT_VERSION: "143"
+    # 144: the setup card is FED, and Skip has somewhere to go. 143 shipped the
+    #      step with `detected(from: [], catalog: [], ...)` -- two literal empty
+    #      arrays -- so "detected apps pre-selected" pre-selected nothing, for
+    #      every person alive, while the ranking beside it passed 154 checks
+    #      proving it would have ordered them correctly if anything had ever
+    #      handed it a row (gap A). The rows now come off me/connections/signals
+    #      through the one client: already ranked at the far end, already named
+    #      by the catalog, translated into closed enums here. THREE EMPTY
+    #      ANSWERS ARE THREE SENTENCES -- we looked and there is nothing; we
+    #      could not look; the catalog could name none of it -- and only the
+    #      first is a claim about the person. Nothing is ever ticked out of our
+    #      own ignorance: a line carrying a source or an alias this build cannot
+    #      read is shown and left unticked.
+    #      Gap C is HALF closed on purpose and the half is the honest one. The
+    #      skip route exists at both ends and the phone's call site is written,
+    #      gated by ConnectOnboardingPolicy.serverRecordsTheSoftSnooze, and
+    #      sends nothing: the Worker's recordSkip -> recordDecline still stamps
+    #      `declined` at level 1 on what page 41 calls a seven-day soft snooze,
+    #      and level 1 raises the ask threshold to 0.8 against a STRICT
+    #      comparison -- silencing in_task (0.8), onboarding (0.7) and
+    #      repeated_use (0.6) for good. An unsent skip costs one repeated ask;
+    #      a recorded level-1 decline cannot be walked back by this phone. The
+    #      step runner reads the Worker's own source and goes red the day the
+    #      two stop agreeing, in either direction.
+    CURRENT_PROJECT_VERSION: "144"
     DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: NO
@@ -716,7 +740,7 @@ targets:
         # literal from a Mac one, and two products answering "which build
         # are you holding" with different numbers is the exact disease this
         # gate exists to prevent.
-        CURRENT_PROJECT_VERSION: "143"
+        CURRENT_PROJECT_VERSION: "144"
         DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_ENTITLEMENTS: ../macos/AnticipyMac/AnticipyMac.entitlements
@@ -747,6 +771,21 @@ targets:
     platform: iOS
     sources:
       - Widget
+      # THE TWO FILES THE APP AND THE WIDGET SHARE, and the only two.
+      #
+      # `ListeningActivity.swift` is the wire shape — an `ActivityAttributes`
+      # is decoded by the widget process out of what the app encoded, so a
+      # second copy of it that drifted would be a lock screen drawing a
+      # different struct than the app pushed. `LiveActivityPolicy.swift` is
+      # what the capsule is allowed to say, and it is compiled into both so
+      # the rule about never quoting anybody has ONE definition.
+      #
+      # Note what is NOT here: no app group, no shared container, no AppIntent
+      # extension point. Two source files in two targets is the whole
+      # arrangement — see the dependency note on the Anticipy target for why
+      # this extension stays that poor.
+      - path: Anticipy/ListeningActivity.swift
+      - path: Anticipy/LiveActivityPolicy.swift
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: ai.anticipy.app.widget
