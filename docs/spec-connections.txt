@@ -1,0 +1,1830 @@
+ANTICIPY: TWO HANDS AND CONNECTIONS
+===================================
+
+The spec of record, decoded from the owner's PDF
+(~/Downloads/Anticipy-Two-Hands-and-Connections.pdf, 494KB, 31 numbered pages
+across 51 PDF pages, prepared by Omar Ebrahim, September 5 2026).
+
+WHY THIS FILE EXISTS. An audit on 2026-09-06 recorded, as its lowest-severity
+finding and its most consequential one: "The spec of record is a PDF outside
+the repo, so the eight rules, the surface table and the signal weights cannot
+be diffed against the implementation by anyone." Every claim about what this
+product is supposed to do was being made from memory, from prose summaries in
+research notes, or from constants that had drifted. HARNESS-LAWS law 4 says
+state lives in repo files.
+
+HOW IT WAS DECODED, so the next person can check it rather than trust it. The
+PDF has no extractable text layer: its 51 content streams carry subset fonts
+addressed by glyph id (`<0024> Tj`), not characters. The 19 /ToUnicode CMaps
+were decompressed and merged into one glyph->unicode table (91 glyphs, ZERO
+disagreements between the fonts, which is what makes the merge safe). Spaces
+are real glyphs here (<0003> -> U+0020), so nothing is inferred from
+positioning — the first attempt inferred spaces from x-advance and rendered
+every heading as "A N T I C I P Y". Only the y coordinate is read, and only to
+end a line. Result: 63,035 characters, ZERO unmapped glyphs.
+
+Tables lose their column structure in this decoding — a row's cells arrive
+concatenated. The words are exact; the alignment is not. Where a table matters
+(page 21's surface table, page 22's signal weights), read it as
+SURFACE / TRIGGER / WHAT THE USER SEES / WHAT HAPPENS UNDERNEATH in that order.
+
+Page markers below are PDF page numbers. The document's own numbering appears
+at the foot of each page as "Anticipy: Two Hands and Connections N / 31".
+
+
+==============================================================================
+PDF PAGE 1
+==============================================================================
+
+ANTICIPATION LABS INC. · ENGINEERING AND PRODUCT
+Anticipy: Two Hands
+and Connections
+The API hand, the Overwatch router that picks a hand per step, and the
+way Anticipy asks people to connect their apps. Two memos and two
+specs, September 5, 2026.
+CONTENTS
+1. Memo: Second hand for the agent, spike this week (to Jose)
+2. Spec: Two Hands, the Overwatch layer and the API hand
+3. Memo: How Anticipy asks people to connect their apps (to Jose)
+4. Spec: Connections, how Anticipy asks, learns, and never says "Composio"
+Prepared by Omar Ebrahim with ClaudeVendor and policy facts checked Sept 5, 2026
+Anticipy: Two Hands and Connections1 / 31
+
+==============================================================================
+PDF PAGE 2
+==============================================================================
+
+MEMO 1 OF 2
+Second hand for the agent:
+API layer, spike this week
+TO jose@anticipy.ai
+SUBJECT Second hand for the agent: API layer, spike this week
+Jose,
+Quick one on where the agent goes next. Right now every task runs through the extension. That is
+fine for sites with no API (Uber, DoorDash, airlines) and it stays as our fallback forever, but it is the
+slow, expensive way to send an email or drop a page in Notion. I want a second hand: when the app
+has an official API and the user has connected it, we call the API and skip the browser. Under a
+second instead of minutes, close to free, and it works while the laptop is shut. Everything below is
+already decided, so you can just build.
+Spec with the diagram, interfaces and data tables: https://claude.ai/code/artifact/98209a2d-4134-4fdf-
+b71f-14f7564d0bfe (if it asks for access, ping me).
+The vendor is Composio. I went through Arcade, Pipedream, Nango, Zapier and a few others today
+and Composio is the only one with all three things we need at a price that works: 1,400+ apps,
+accounts connected per user, and search-at-runtime meta tools so we never keep a list of tools in
+code or in context. Sign up with your anticipy.ai email on the Pro plan, $29 a month. Put it on the
+company card, or tell me and I will get you one. Use their managed OAuth apps for now, which means
+"Composio" shows on the Google consent screen for a while. I am filing our own Google app on my
+side. Not your problem.
+How it fits with what we have. The planner already breaks a task into steps. Each step gets a small
+hand-agnostic description: verb, object, inputs, the effect we expect, read or write. The router takes
+that, asks Composio's search "is there a tool for this?", checks whether this user connected the app,
+checks our ledger for how this exact step has gone before, and picks a hand. Per step, not per task,
+so "book the table and email Sam" is a browser step and then an API step. The extension keeps
+running exactly as it does now. The only addition on that side is a small observer that reports which
+host it was on and whether it did a write. Hosts and status codes only, never bodies. That is how the
+brain learns "there was an API for that" and texts the user a one-tap connect link. Next time it is an API
+call.
+Trust rules are the same ones we use for the intent model. Browser stays the default until the API
+hand proves itself on that exact step. Reads run on both hands in shadow and get promoted after 3
+matches. Writes go through the API only after the user opts in for that app, and the first 3 writes get
+confirmed over SMS with the exact payload. Anything irreversible always confirms. Any API failure
+falls straight back to the browser inside the same task, and two failures in a row drop the step a rung.
+Nothing in the router names an app, ever.
+This week is a spike, nothing production. Run it beside the Cloudflare migration, not after it. Nothing
+here touches the backend until week 2.
+Anticipy: Two Hands and Connections2 / 31
+
+==============================================================================
+PDF PAGE 3
+==============================================================================
+
+1. Composio Pro account. Create one session under my user_id (composio.sessions.create, then
+session.tools() gives you the meta tools). Connect my Google, Notion and Slack through their
+Connect Link. Quickstart: https://docs.composio.dev/docs/quickstart. TS SDK is ESM only and
+wants Node 22+.
+2. Run 10 read-only tasks through the meta tools with the current brain model over OpenRouter.
+Things like "what is on my calendar tomorrow", "find the last email from Alex", "list the Notion pages
+edited this week".
+3. Log per call: latency, cost, right or wrong.
+4. Write the step description (CapabilitySignature in the spec) for 5 of our 50 recipes, so we see the
+shape before we touch the planner.
+5. Send me the 10-row table and a 2 minute screen recording of one task on each hand, side by side.
+Gate is 9 of 10 right and p50 under 3 seconds. If it passes, week 2 is the signature on all recipes plus
+the observer, week 3 is the router with shadow reads, week 4 is writes plus a 5% canary. Each week
+has its own gate in the spec.
+Omar
+Anticipy: Two Hands and Connections3 / 31
+
+==============================================================================
+PDF PAGE 4
+==============================================================================
+
+ANTICIPY ENGINEERING PROPOSAL, V1
+Two Hands: the Overwatch layer and the API hand
+Anticipy acts through a browser today. This adds a second hand that calls
+official APIs whenever one exists for the step at hand, and an Overwatch
+layer that watches every task, learns which hand wins, and never needs a
+hardcoded rule per app.
+The short version
+The pendant hears a commitment and the brain turns it into a task. Right now every
+task goes to one place: the Chrome extension on the user's Mac, which clicks
+through websites like a person would. That works anywhere, but it is slow, it costs
+LLM steps, it breaks when a site changes, and it needs the laptop open.
+Most of what people ask for touches apps that also have an official API: Gmail,
+Google Calendar, Notion, Slack, Linear, HubSpot, Shopify, Stripe, Sheets. An API call
+finishes in under a second, costs a fraction of a cent, does the same thing every time,
+and runs from our cloud while the laptop is closed. We should use it every time it is
+available. The problem is knowing when it is available, for this user, for this step,
+without writing a rule per app.
+That is what Overwatch does. Every task step gets a hand-agnostic description
+called a capability signature. The router searches a live tool catalog for a matching
+API tool, checks whether the user has connected that app, checks what the ledger
+says about past success, and picks a hand. The browser hand stays the default until
+the API hand proves itself on that exact kind of step. The Observer watches browser
+runs, notices which app the agent was clicking in, and asks the user to connect that
+app once so next time it is an API call. No hardcoding: the catalog is data, the
+connections are data, the routing weights are data.
+Anticipy: Two Hands and Connections4 / 31
+
+==============================================================================
+PDF PAGE 5
+==============================================================================
+
+Why a second hand
+HAND 1, FRONT OF THE HAND
+Browser: the Chrome extension in the user's own logged-in Chrome
+Works on any site, including ones with no API: Uber, DoorDash, airlines, banks, school portals.
+Auth is free. The user is already logged in, no consent screens.
+Slow: minutes per task, one LLM step per click. Fragile when a page changes.
+Needs Chrome open on the Mac. Closed laptop means nothing happens.
+Stays the default and the fallback. Nothing here gets removed.
+HAND 2, BACK OF THE HAND
+API: official app APIs through a per-user integration platform
+Sub-second, deterministic, same result every run. A "send email" call is one call.
+Near zero marginal cost: about $0.0003 per call on Composio's paid tier.
+Runs in our cloud. The pendant plus phone can complete tasks with the laptop shut.
+Needs the user to connect each app once through OAuth. Only covers apps that publish an API.
+Used whenever it exists, is connected, and has earned trust for that step.
+The honest limit. None of the integration platforms expose consumer actions for
+Uber, DoorDash, Lyft, Airbnb, airlines, or Canadian banks. We checked Composio,
+Pipedream and Zapier catalogs today. Those stay on the browser hand until sites
+publish WebMCP or UCP manifests (both in early preview from Google, see
+Sources). The API hand is for the "work and life admin" layer, which is most of what
+the pendant hears.
+Who we use
+Pick: Composio as the primary catalog and auth vault, MCP as the wire protocol we
+code against, and a thin internal Provider interface so we can add or swap vendors
+without touching the router. All numbers below were read from vendor pages on Sept
+5, 2026.
+Anticipy: Two Hands and Connections5 / 31
+
+==============================================================================
+PDF PAGE 6
+==============================================================================
+
+VENDORBREADTHPER-USER
+AUTH
+RUNTIME TOOL
+SEARCH
+PRICESTATUS AND
+RISK
+VERDICT
+Composio1,472 toolkits,
+20,000+ tools
+Yes. Sessions
+bound to a
+user_id,
+many accounts
+per user,
+managed or
+bring-your-own
+OAuth apps
+Yes.
+COMPOSIO_SEARC
+H_TOOLS,
+COMPOSIO_MANAG
+E_CONNECTIONS,
+COMPOSIO_MULTI
+_EXECUTE_TOOL,
+plus a per-session
+MCP URL
+Free: 100k
+calls/mo, 20k
+of them via
+managed
+OAuth apps.
+Pro $29/mo,
+$0.0003/call
+overage
+$25M Series
+A, July 2025.
+Hosted only
+below
+Enterprise.
+Browser Use is
+a listed
+customer
+Primary
+Pipedream
+Connect
+3,000+ apps,
+10,000+ tools
+Yes,
+external_u
+ser_id
+App-level discovery
+over MCP, no
+semantic tool search
+found
+Bills per
+unique end
+user plus
+credits; public
+page did not
+render dollar
+figures
+Acquired by
+Workday
+(agreement
+Nov 2025,
+"has joined
+Workday" on
+site).
+Consumer
+roadmap risk
+Breadth
+backup
+Nango900+ APIs, ~6k
+tools
+Yes, per
+connection
+Yes,
+nango_tool_sea
+rch
+$0.29 per
+connection/m
+o, down to
+$0.01 at
+scale. Self-
+host free
+(Elastic
+License)
+$7.5M seed
+Apr 2026,
+cashflow
+positive. More
+"build your
+integration"
+than ready
+actions
+Self-host
+backup
+Arcade.dev~130 toolkits,
+7,500+ tools
+Yes, user-
+scoped OAuth
+at call time
+No named productFree 2k calls.
+Team $25/mo
++ $0.01/call +
+$0.10/auth
+event (about
+30x
+Composio)
+$60M Series A
+June 2026,
+bought
+Smithery Aug
+2026.
+Enterprise
+authz story,
+self-host
+available
+Enterprise
+later
+StackOne510+ connectors,
+31,000+ actions
+YesYes, best semantic
+tool_search we
+found
+OEM Core
+free with
+unlimited end
+customers
+Catalog skews
+HR and
+enterprise
+Watch
+Zapier MCP9,000+ apps,
+30,000+ actions
+No. One server
+per client, tied
+to the
+developer's
+Zapier account
+No2 tasks per
+call on Zapier
+plans
+Biggest
+catalog, wrong
+shape for end
+users bringing
+their own
+accounts
+Ruled out
+Anticipy: Two Hands and Connections6 / 31
+
+==============================================================================
+PDF PAGE 7
+==============================================================================
+
+VENDORBREADTHPER-USER
+AUTH
+RUNTIME TOOL
+SEARCH
+PRICESTATUS AND
+RISK
+VERDICT
+Merge, Paragon,
+Unified.to,
+Apideck
+130 to 840 eachYes, B2B
+tenants
+Partial or none$650+/mo or
+contact sales
+Built for SaaS
+companies
+embedding
+HR, CRM and
+accounting
+integrations
+Wrong market
+Klavis AI (Strata)100+ OSS serversYesYes, progressivePage emptyPivoted to
+agent training
+environments.
+Blog dark
+since Dec
+2025
+Do not build
+on
+Anon"100s" of no-API
+sites
+Delegated
+browser
+sessions
+NoNot publicRepositioned
+to enterprise
+web agents.
+New USV
+round May
+2026
+Revisit for
+consumer
+sites
+Why Composio wins for us
+It is the only one that checks every box at consumer
+prices: widest ready-made catalog, per-end-user
+connected accounts with managed OAuth apps so we can
+start today, and runtime search meta-tools that are exactly
+the no-hardcoding shape.
+The router asks Composio "is there a tool for this?"
+at run time. We never keep a list.
+Why MCP as the protocol
+Composio hands each user session an MCP URL. Notion,
+Stripe, Linear and others run official remote MCP servers
+with OAuth. Chrome's WebMCP preview lets websites
+expose tools to browser agents. Coding to MCP means all
+three plug into the same catalog adapter.
+Why a Provider interface anyway
+Pipedream got bought, Klavis pivoted, Browser Use retired
+"Skills" with a 410 in under a year. The router only ever
+sees search, connections, connectLink,
+execute. Swapping Composio for Nango is a new
+adapter, not a rewrite.
+Note on names: "Arcads" in the original ask is read as Arcade.dev. Arcads.ai is an AI
+ad video tool and is unrelated.
+Architecture
+Everything new sits between the planner and the hands. The planner, the extension,
+the verifier and the multi-agent vote already exist. Overwatch is the router, the ledger,
+the catalog adapter, and the observer summary coming back from the extension.
+Anticipy: Two Hands and Connections7 / 31
+
+==============================================================================
+PDF PAGE 8
+==============================================================================
+
+intent layer, task record
+
+==============================================================================
+PDF PAGE 9
+==============================================================================
+
+connect once, confirm writes
+
+==============================================================================
+PDF PAGE 10
+==============================================================================
+
+steps with signatures
+
+==============================================================================
+PDF PAGE 11
+==============================================================================
+
+Composio, official MCP, WebMCP later
+
+==============================================================================
+PDF PAGE 12
+==============================================================================
+
+match, connected?, ledger prior,
+
+==============================================================================
+PDF PAGE 13
+==============================================================================
+
+side-effect class, device online?
+
+==============================================================================
+PDF PAGE 14
+==============================================================================
+
+success, latency, cost per signature
+
+==============================================================================
+PDF PAGE 15
+==============================================================================
+
+Composio session per user, MCP
+
+==============================================================================
+PDF PAGE 16
+==============================================================================
+
+runs in our cloud, laptop shut
+
+==============================================================================
+PDF PAGE 17
+==============================================================================
+
+extension in the user's own Chrome
+
+==============================================================================
+PDF PAGE 18
+==============================================================================
+
+host, method, status only
+
+==============================================================================
+PDF PAGE 19
+==============================================================================
+
+did the effect happen?
+
+==============================================================================
+PDF PAGE 20
+==============================================================================
+
+task
+
+==============================================================================
+PDF PAGE 21
+==============================================================================
+
+steps
+
+==============================================================================
+PDF PAGE 22
+==============================================================================
+
+search
+
+==============================================================================
+PDF PAGE 23
+==============================================================================
+
+prior, update
+
+==============================================================================
+PDF PAGE 24
+==============================================================================
+
+result
+
+==============================================================================
+PDF PAGE 25
+==============================================================================
+
+result + trace
+
+==============================================================================
+PDF PAGE 26
+==============================================================================
+
+outcome, parity, cost
+
+==============================================================================
+PDF PAGE 27
+==============================================================================
+
+connect nudge
+
+==============================================================================
+PDF PAGE 28
+==============================================================================
+
+Pendant + phone
+Phone: SMS / iOS
+Planner
+Tool catalog
+Overwatch router
+Routing ledger
+Hand 2: API
+Hand 1: Browser
+Observer
+Verifier
+API step
+browser step
+One task, two possible hands. The router decides per step, not per task. The ledger is the
+only thing that changes over time, and it changes from outcomes, not from code.
+Hybrid tasks are normal. "Book the table and email Sam the confirmation" is a
+browser step (OpenTable) followed by an API step (Gmail). Routing is per step.
+The catalog adapter has three inputs. Composio search today, official vendor MCP
+servers as we meet them, WebMCP and UCP manifests read by the extension when
+sites start publishing them. All three answer the same question: "is there a structured
+tool for this signature?"
+The vote stays. Multi-agent voting still decides the plan. Overwatch decides how each
+agreed step gets executed.
+Capability signature
+This is the one abstraction that makes no-hardcoding real. Every recipe step is
+written in terms of what it does, never how. Hands are compilers from signature to
+action. The planner emits it, the router searches with it, the ledger is keyed by a hash
+of its stable fields.
+{
+ "app_hint": "gmail", // planner's guess, may be null. Not a routing key.
+ "verb": "send", // read | create | update | send | delete | pay | book
+ "object": "email",
+ "inputs": { "to": "sam@x.com", "subject": "Dinner confirmed", "body": "..." },
+ "expected_effect": "recipient sees one new email in inbox",
+ "side_effect": "write", // read | write | irreversible
+ "account_hint": "work", // work | personal | null, resolved from context
+ "signature_hash": "sha1(verb+object+normalized input keys)"
+}
+Anticipy: Two Hands and Connections8 / 31
+
+==============================================================================
+PDF PAGE 29
+==============================================================================
+
+app_hint is advisory. The router confirms the app from the catalog match and, for
+browser runs, from the Observer's host. If they disagree, the trace wins and the planner
+is told.
+expected_effect is what the verifier checks, the same way for both hands. Parity
+means both hands produce the same verified effect, not the same screenshots.
+side_effect is set by the planner and then tightened by the tool's own metadata. MCP
+tool annotations like readOnlyHint and destructiveHint exist but the spec says to
+treat them as untrusted, so they can only make a step stricter, never looser.
+Router policy
+Five generic rules. There is no rule that names an app. Thresholds live in config and
+are tuned from the ledger, not by hand per app.
+1. Search first. Ask the catalog for tools matching the signature, scoped to the user's
+connected apps first, then the whole catalog. Keep the top 5. If no candidate scores
+above match_threshold (start at 0.75 after LLM rerank), route to browser and stop.
+2. Connected? If the best candidate's app is not connected for this user: browser now,
+and enqueue a connect nudge for that app. One nudge per app, re-ask after 14 days,
+never during a task.
+3. Read steps. Connected and side_effect = read: run per the ladder stage for this
+(signature_hash, app). Shadow stage runs both hands and compares verified results.
+Promoted stage runs API only. If the Mac is offline, API is allowed for reads at any stage
+because reads cannot hurt.
+4. Write steps. Connected and write or irreversible: API only at the "assisted" stage
+or above, and only if the user opted in for writes on that app. Otherwise browser. Never
+shadow a write.
+5. Score, then fall back. Where both hands are eligible, pick the higher score_h =
+LB95(success_h) - 0.15 * log2(1 + p50_latency_h / 5s) - cost_weight * cost_h.
+LB95 is the Wilson lower bound so a hand with 2 lucky runs does not beat a hand with
+40 steady ones. Any API failure (401, 429 after one retry, schema error, verifier
+mismatch) falls back to browser inside the same task if the Mac is online, else queues
+and tells the user.
+Why the browser stays the default. The browser has a track record and the API
+hand has none. The ledger starts every new signature at "browser only" and the API
+hand has to earn each rung with verified outcomes. This is the same gate discipline
+as the intent model: nothing promotes without passing.
+Anticipy: Two Hands and Connections9 / 31
+
+==============================================================================
+PDF PAGE 30
+==============================================================================
+
+Observer
+The Observer lives inside the extension and runs only during agent runs in v1. Its job
+is to answer two questions after a browser task: which app was that, and was it a
+write. That is enough for the router to ask the catalog "is there an API for what just
+happened?"
+What it reads
+chrome.tabs and chrome.webNavigation for the
+host and SPA route changes
+(onHistoryStateUpdated catches Gmail and Notion
+navigation).
+chrome.webRequest observational events
+(onCompleted) for method, host, path shape and
+status. A 
+POST
+ that returns 200 during a "send" step is
+the write signal.
+What it never reads
+No requestBody, no response bodies, no cookies, no
+page text for this purpose. Response bodies would
+need chrome.debugger and we do not want the
+endpoint data anyway.
+No page titles leave the device. Only eTLD+1 host,
+method counts, status counts, and duration.
+What it emits
+{ run_id, step_id,
+ hosts: ["mail.google.com"],
+ writes: 1, reads: 14,
+ status: {"2xx": 15},
+ duration_ms: 184000 }
+The brain joins this with the signature and asks the catalog
+for candidates. The result is an api_candidate row,
+never an automatic switch.
+Disclosure is required, not optional. Chrome Web Store's Limited Use policy counts
+domains and URLs as browsing activity and requires prominent in-UI disclosure with a
+specific user action. We do that even while sideloaded. One screen, plain words, on by
+default for agent runs, a pause switch.
+Watching the user's own browsing to suggest automations is a real product idea and
+a Phase 3 item. Off by default, separate opt-in, processed on device, same summary
+shape.
+Promotion ladder
+Each 
+(signature_hash, app)
+ pair climbs on its own. Gates are counted from verified
+outcomes in the ledger. Demotion is automatic: two consecutive API failures or one
+verifier mismatch on a write drops the pair one rung and reopens shadow.
+Anticipy: Two Hands and Connections10 / 31
+
+==============================================================================
+PDF PAGE 31
+==============================================================================
+
+Safety, both hands
+One policy layer, two hands. Side-effect class, confirmation rules, per-user daily
+budgets and a scope allowlist are evaluated before either hand runs. The API hand is
+faster at being wrong, so it gets no looser treatment.
+Irreversible always confirms. Payments, deletions, sends to more than N recipients,
+anything with irreversible. Both hands. Confirm shows the exact payload, not a
+summary.
+Premium tools off. Composio bills some tools at provider cost plus 5% (browser
+automation at about $0.70 per run). Block the premium class by default so the API hand
+cannot quietly cost more than the browser hand.
+Scopes are the minimum. Request the narrowest OAuth scopes the matched tools
+need, and add scopes on demand through a re-auth nudge rather than asking for
+everything at connect time.
+Multiple accounts. Work and personal Gmail both connected is normal. account_hint
+comes from context (who was on the call, which calendar). If ambiguous, ask once and
+remember.
+Audit. Every execution logs hand, tool slug, payload hash, latency, cost, verifier result
+and the router's stated reason. The reason is a sentence: "API, connected, rung 2,
+LB95 0.94 over 27 runs."
+Rung 0
+Browser only
+No API candidate, or app
+not connected. Connect
+nudge may be pending.
+Gate to 1: candidate
+above threshold and
+app connected
+Rung 1
+Shadow
+Reads run on both
+hands, results compared
+by the verifier. User sees
+the browser result.
+Gate to 2: 3
+consecutive parity
+matches, 0 mismatches
+Rung 2
+API for reads
+Reads go API-only.
+Writes on this app still
+browser.
+Gate to 3: user opts in
+to writes on this app, 10
+clean reads
+Rung 3
+Assisted writes
+API executes the write
+after an SMS or iOS
+confirm showing the
+exact payload.
+Gate to 4: 3 confirmed
+writes with verified
+effect
+Rung 4
+Auto writes
+API writes run without confirm, except irreversible which always confirms.
+Stays here until a demotion trigger fires
+Anticipy: Two Hands and Connections11 / 31
+
+==============================================================================
+PDF PAGE 32
+==============================================================================
+
+Data model
+Four tables next to the existing task and recipe tables. PocketBase or whatever the
+migration lands on, this is plain relational data.
+TABLEKEYCOLUMNSWRITTEN BY
+capability_s
+tats
+(user_id,
+signature_hash, app,
+hand, tool_slug)
+n, successes, p50_ms, p95_ms, cost_usd_total,
+rung, last_fail_reason, last_run_at
+Verifier after
+every step
+api_candidat
+es
+(user_id,
+signature_hash, app)
+tool_slug, match_score, connected,
+first_seen_at, source (composio, mcp, webmcp)
+Resolver after
+browser runs and
+on plan
+connect_nudg
+es
+(user_id, app)state (queued, sent, connected, declined), sent_at,
+channel, tasks_that_would_have_used_it
+Router, phone
+client
+shadow_runsrun_idstep_id, api_result_hash, browser_result_hash,
+parity, verifier_notes, api_ms, browser_ms,
+api_cost, browser_cost
+Verifier
+Global stats are derived by aggregating across users per (signature_hash, app). A
+new user inherits the global rung as a prior but still needs their own connection, and
+writes still start at rung 3 for them.
+Interfaces
+TypeScript shape shown; Composio ships TS and Python SDKs and the same shape
+works in either. The router only talks to these.
+Anticipy: Two Hands and Connections12 / 31
+
+==============================================================================
+PDF PAGE 33
+==============================================================================
+
+interface Provider {
+ name: "composio" | "mcp" | "webmcp";
+ search(sig: CapabilitySignature, userId: string, opts: { connectedOnly: boolean; limit: number })
+ : Promise<ToolCandidate[]>; // { toolSlug, app, score, sideEffectHint, schema }
+ connections(userId: string): Promise<ConnectedApp[]>; // { app, accountId, label, scopes, status }
+ connectLink(userId: string, app: string, scopes?: string[]): Promise<{ url: string }>;
+ execute(userId: string, toolSlug: string, args: object, accountId?: string)
+ : Promise<ExecResult>; // { ok, data, error: { kind: 
+"auth"|"rate"|"schema"|"other" }, ms }
+}
+interface Router {
+ decide(step: Step, ctx: UserCtx): Promise<Decision>; // { hand: "api"|"browser"|"shadow", tool?, rung, 
+score, reason }
+}
+interface Observer { // runs in the extension
+ summarize(runId: string, stepId: string): TraceSummary; // hosts, writes, reads, status, duration_ms
+}
+interface Ledger {
+ prior(userId: string, sigHash: string, app: string): Promise<CapabilityStats[]>;
+ record(outcome: Outcome): Promise<void>; // hand, tool, ok, ms, cost, verifierResult, parity?
+ candidates(userId: string, sigHash: string): Promise<ApiCandidate[]>;
+}
+Composio adapter. Create one session per user with their user_id, hand the model
+the meta-tools or the session MCP URL, and let 
+COMPOSIO_SEARCH_TOOLS
+ do search.
+COMPOSIO_MANAGE_CONNECTIONS produces the Connect Link we send by SMS.
+Model-agnostic. The meta-tools are plain function tools, so they work with any tool-
+calling model over OpenRouter. If we later move to Claude direct, Anthropic's Tool
+Search Tool with defer_loading handles up to 10,000 deferred tools and is a drop-in
+for the search half.
+Hot set small. Keep 3 to 5 non-deferred tools in context (search, execute, manage
+connections, verifier) and load everything else on demand. Model tool choice degrades
+past 30 to 50 loaded tools.
+Failure modes and what we do about each
+WHAT BREAKSWHY IT MATTERSWHAT WE DO
+Connect frictionThe browser hand has free auth.
+Every OAuth screen is a chance to
+lose the user.
+Nudge right after a slow browser run: "that took 3 minutes, connect Gmail and
+next time it is 2 seconds." One tap, SMS or iOS. Never mid-task.
+Anticipy: Two Hands and Connections13 / 31
+
+==============================================================================
+PDF PAGE 34
+==============================================================================
+
+WHAT BREAKSWHY IT MATTERSWHAT WE DO
+Consent screen says
+"Composio"
+Managed OAuth apps are fast to start
+but show Composio's brand, and the
+free tier caps them at 20k calls a
+month.
+Start managed. File our own Google OAuth app in parallel. Gmail read scopes
+are restricted: Google requires verification and an annual CASA security
+assessment when data flows through a server, and says it can take weeks. Start
+that clock now.
+API does not equal
+UI
+The Gmail API does not append the
+web signature. A Notion API page may
+lack the template the UI applies.
+Parity is judged on expected_effect by the verifier, not on identical output.
+Known deltas get folded into the recipe as inputs, still no per-app code.
+Catalog gapUber, DoorDash, airlines and banks
+have no consumer API.
+Browser hand, and we say so in the router reason. Ingest WebMCP and UCP
+manifests the moment sites publish them.
+Wrong tool retrievedOff-the-shelf retrieval underperforms
+on tool catalogs (ToolRet benchmark).
+Connected-apps-first search, LLM rerank of the top 5, ledger prior, and a
+threshold that sends low-confidence steps to the browser.
+Fast irreversible
+writes
+An API mistake finishes before
+anyone can stop it.
+Ladder rungs 3 and 4, payload-level confirm, irreversible always confirms, never
+shadow a write.
+Vendor riskPipedream got acquired, Klavis
+pivoted, Browser Use Skills went 410
+in under a year.
+Provider interface, MCP wire protocol, our own OAuth apps so tokens can be re-
+issued elsewhere. Nango self-host is the exit.
+Token expiry, rate
+limits
+401s and 429s look like task failures
+to the user.
+Provider refreshes tokens. 401 triggers a re-auth nudge and browser fallback.
+429 retries once then falls back. Both recorded as last_fail_reason, not
+as demotions.
+Laptop closedToday this means the task waits.Reads go API at any rung when the Mac is offline. Writes queue for the browser
+or, if the user opted in, run assisted over API with a phone confirm.
+Flaky browser
+baseline poisons
+parity
+If the browser run was wrong,
+matching it is wrong too.
+Parity is against the verifier's ground truth (the effect), not against the other
+hand's output.
+Context bloat20,000 tool definitions cannot be
+loaded.
+Search-then-load meta-tools, 3 to 5 hot tools, everything else deferred.
+Observer privacyHost-level data is still browsing activity
+under Chrome's policy.
+Hosts and counts only, no bodies, no titles, in-UI disclosure, pause switch, agent
+runs only in v1.
+Build plan
+Four weeks, each with a gate that is watched, not just tested. Videos of runs plus
+logs, per the standing rule: test like a human.
+Anticipy: Two Hands and Connections14 / 31
+
+==============================================================================
+PDF PAGE 35
+==============================================================================
+
+WEEK 1: SPIKE
+Composio account, Pro tier, one session for Omar's
+user_id.
+Connect Google (Gmail, Calendar), Notion, Slack via
+Connect Link.
+Run 10 read tasks through the meta-tools with the
+current brain model over OpenRouter. Log latency, cost,
+correctness.
+Gate: 9 of 10 reads correct, p50 under 3 seconds,
+cost logged per call.
+WEEK 2: SIGNATURES AND OBSERVER
+Add CapabilitySignature to recipe steps. Backfill
+the 50 recipes.
+Ledger tables. Observer v0 in the extension emitting
+trace summaries.
+Resolver: for the last 50 browser runs, produce
+api_candidates
+ or a stated "no API" reason.
+Gate: 60% or more of recent browser steps have a
+candidate or an explicit no-API reason.
+WEEK 3: ROUTER AND SHADOW
+Router v0 with rules 1 to 5. Shadow reads on
+connected apps.
+Verifier compares effects and writes shadow_runs.
+Connect nudges over SMS and iOS. Router reasons
+visible in the internal dashboard.
+Gate: parity 95% or better over 20+ shadow reads
+across 3+ apps. Zero API writes.
+WEEK 4: WRITES AND CANARY
+Rungs 3 and 4 for the top 3 apps by usage. Demotion
+triggers live.
+Canary 5% of users, then 100%.
+Videos: same task, both hands, side by side.
+Gate: 0 unintended writes. 50%+ of eligible steps
+on API. p50 latency on those steps down 5x or
+more.
+Gates and metrics
+API share of eligible steps
+Steps with a connected candidate that actually ran over
+API. Target 50% by end of week 4, rising as nudges land.
+Parity rate
+Shadow reads where both hands produced the verified
+effect. Floor 95%. Below it, the pair stays at rung 1.
+Latency and cost by hand
+p50 and p95 per signature, per hand. Cost per task per
+hand. This is the number we show investors.
+Unintended writes
+Must be zero. One incident freezes rung 4 globally until
+reviewed.
+Nudge acceptance
+Connect nudges sent versus apps connected within 7
+days. Tells us if the timing and wording work.
+Laptop-closed completions
+Tasks completed with no extension online. This did not
+exist before. It is the product story.
+Decisions for Omar
+Five structural calls. Options laid out, a lean stated, none locked.
+Anticipy: Two Hands and Connections15 / 31
+
+==============================================================================
+PDF PAGE 36
+==============================================================================
+
+1
+OAuth apps: managed by Composio, or ours?
+Managed: start today, consent screen shows Composio, 20k free calls a month through them.
+Ours: "Anticipy wants access," no cap, but Google verification plus a CASA assessment for Gmail
+read scopes takes weeks and recurs yearly.
+Lean: managed for the spike, file ours in parallel this week so the clock runs during the build.
+2
+Observer scope
+Agent runs only: smallest privacy footprint, enough for routing.
+Also the user's own browsing: lets us suggest "I can do that for you" proactively, needs a separate
+opt-in and on-device processing.
+Lean: agent runs only in v1, design the summary shape so option two is a flag flip later.
+3
+How fast writes go automatic
+Conservative: confirm every write until 3 confirmed with verified effect, then auto (the ladder as
+written).
+Aggressive: auto writes as soon as reads reach parity.
+Lean: conservative. Trust was the thing that broke in August. Earn it back in public.
+4
+Backup provider now or later
+Now: stand up Nango self-host beside Composio from day one. More work, real exit.
+Later: Provider interface only, revisit at 1,000 users or the first Composio pricing change.
+Lean: later. The interface is the insurance; a second vendor before we have users is weight.
+5
+Budget
+Free tier: 100k calls a month, 3 seats, no overage billing set up.
+Pro at $29 a month: unlimited seats, $29 credit, overage at $0.0003 a call so a spike does not stop
+the product.
+Lean: Pro. It sits inside the compute line.
+Anticipy: Two Hands and Connections16 / 31
+
+==============================================================================
+PDF PAGE 37
+==============================================================================
+
+Legal note, one caveat
+The API hand uses official APIs under each vendor's developer terms, which is
+contractual permission. The browser hand runs on the user's own device, the
+architecture the Ninth Circuit treated as the user doing the accessing in Amazon v.
+Perplexity (Aug 4, 2026). What we do not do is replay a website's private endpoints
+from our servers, the way Unbrowse markets. That path has neither cover and the
+court flagged server-to-server contact as the riskier shape. Official APIs or the user's
+browser, nothing in between.
+Sources
+Composio pricing
+Composio toolkits catalog
+Composio: how sessions and meta-tools work
+Composio: COMPOSIO_SEARCH_TOOLS
+Pipedream Connect
+Workday to acquire Pipedream
+Nango pricing
+Nango seed round
+Arcade pricing
+Arcade Series A
+Smithery joins Arcade
+StackOne tool search
+Zapier MCP usage limits
+Klavis AI (current positioning)
+USV on Anon
+Browser Use Skills retired
+Anthropic Tool Search Tool
+Anthropic: advanced tool use
+OpenAI tool search
+OpenAI: connected app preferred over cloud browser
+Manus: masking tools with a state machine
+MCP tools spec (annotations untrusted)
+Chrome WebMCP early preview
+Google UCP
+chrome.webRequest (MV3)
+chrome.webNavigation
+Chrome Web Store Limited Use policy
+Google restricted scope verification and CASA
+ToolRet: tool retrieval benchmark
+LQM-ContextRoute: bandit routing across equivalent tools
+Shadow mode for agents
+Unbrowse paper: internal APIs vs browser (what we avoid)
+Amazon v. Perplexity, Ninth Circuit opinion
+Ropes and Gray on Amazon v. Perplexity
+Anticipy: Two Hands and Connections17 / 31
+
+==============================================================================
+PDF PAGE 38
+==============================================================================
+
+MEMO 2 OF 2
+How Anticipy asks people to connect their apps
+TO jose@anticipy.ai
+SUBJECT How Anticipy asks people to connect their apps
+Jose,
+Follow-on to the two hands email. That one is about which hand runs a step. This one is the only part
+the user ever sees: how we ask someone to connect an app, when, in what words, and how the text
+thread and the app stay in lockstep while it happens. Full spec, with every surface, the copy, the state
+machine, the connect page and the compliance list: https://claude.ai/code/artifact/8414124b-cce2-
+444c-9ffc-f5fe67bd5ebd (ping me if it asks for access).
+The rules are short. The user never hears the word Composio, it is "connect your Notion." Connecting
+is always optional and every ask says so in one sentence, because the browser can do the same
+thing. Every ask is tied to a real moment: right after a slow browser run on that app, when the laptop is
+shut and a task is waiting, when the user names the app, or in onboarding. One link, one tap, done. A
+no is a snooze, not a never. And nothing is hardcoded per app: names, logos, permission words and
+the ask itself all come from the catalog entry at run time.
+How it knows what someone uses: signals, not a questionnaire. What they say ("my Outlook"), what
+the extension saw during a run, an MX lookup on their sign-up email, links that show up in
+conversations, and what is already connected. Each adds weight to a per-user table, weights decay,
+and the LLM turns the top of that table into a natural ask. Two Google accounts is the normal case, so
+aliases are "work" and "personal" and the agent asks once which one applies to which context, then
+remembers.
+We own the ask. Create sessions with manage_connections off so the model can never paste a raw
+Composio link into a text. Every link is anticipy.ai/c/{token}: single use, 10 minutes, bound to the user,
+needs a signed-in session or a one-tap phone code to finish. That page reads the app's name and
+logo from the toolkit metadata, shows three plain permission sentences generated from the scopes,
+and one Connect button that calls session.authorize with our callback URL. Composio's own link also
+expires in 10 minutes, so generate it when they tap, not when we send the text. There is no
+"connected" webhook on their side, only "expired," so completion comes from the callback plus a
+background wait_for_connection. Disconnect calls revoke first, then delete, because delete alone
+leaves the token alive at the provider.
+Text and app stay in sync because a nudge is one record with a state, and both channels render from
+it. Act in either, the other flips. When the callback lands, both get "Notion connected. Next time it's
+instant."
+Snooze table is config: decline once, 14 days; twice, 45; three times, stop unless they bring it up. One
+ask per user per week across all apps, never mid-step, never before the task result. A laptop-closed
+moment can override a level-1 snooze once. Silence for 72 hours counts as a soft no. Log every ask
+with its trigger and result so we can tune the timers from what converts.
+Anticipy: Two Hands and Connections18 / 31
+
+==============================================================================
+PDF PAGE 39
+==============================================================================
+
+Onboarding gets one new step: "Which apps do you live in?" with the detected ones pre-selected, a
+search box for anything else, one Connect button, Skip always visible. The first text carries the same
+link the same minute. Skip there is a 7-day soft snooze.
+Settings gets Connected apps: list with status, Disconnect, Add an app (searches the whole catalog),
+and a per-app "let Anticipy make changes" toggle that is off by default. That toggle is the write opt-in
+the router needs. Everything in Settings has a text twin: "what's connected," "connect linear,"
+"disconnect slack."
+Compliance, the parts that touch code. OAuth opens in Safari or ASWebAuthenticationSession only,
+never a web view, or Google refuses it. A short in-app disclosure with a real tap right before each
+connect flow. SMS consent recorded at sign-up and any "stop" honoured. Composio Pro, DPA
+accepted on the billing page, and the "Don't store data" log switch on from day one. Everything else
+on the list is mine: our own Google OAuth app and verification (filing this week), Microsoft publisher
+verification when Outlook shows up, 10DLC in the US and a verified toll-free number in Canada for
+texting, privacy policy wording, the Quebec bits if we ever sell there.
+Build order, two weeks after the spike passes. Week A: the Composio adapter, four tables, the
+connect page, the Settings screen. Gate: I connect Google, Notion and Slack from a text link and from
+the app, disconnect one by text, both channels update, recorded. Week B: the signals, the policy state
+machine, nudge rendering in both channels, the onboarding step, text commands. Gate: one week of
+my real use where every ask maps to a moment in the log, nothing repeats inside its snooze, and zero
+raw Composio links ever reach a text.
+Omar
+Anticipy: Two Hands and Connections19 / 31
+
+==============================================================================
+PDF PAGE 40
+==============================================================================
+
+ANTICIPY PRODUCT AND ENGINEERING SPEC, V1
+Connections: how Anticipy asks,
+learns, and never says "Composio"
+Companion to the Two Hands spec. That one decides which hand runs a
+step. This one covers the only thing the user ever sees: a person-sounding
+ask to connect an app, at the right moment, in the text thread and the app at
+the same time, always optional, and smart about asking again.
+The rules
+The user never hears "Composio"
+It is "connect your Notion." No "authorize," no "OAuth," no
+"API," no "integration." Our name on the consent screen,
+our domain on the link.
+Connecting is always optional and we
+say so
+Every ask carries one plain sentence: the browser can do
+this too, connecting just makes it instant and works when
+the laptop is shut.
+Every ask is tied to a real moment
+Right after a slow browser run on that app, when the
+laptop is closed and a task is waiting, when the user
+names the app, or in onboarding. Never out of nowhere.
+One link, one tap, done
+The link opens our page, the page opens the app's own
+sign-in, the user comes back to "Connected." Nothing to
+type, no account to create.
+Text and app show the same thing at the
+same time
+One event, two renderings. Act in either, the other
+updates. The link is the same in both.
+A no is a snooze, not a never
+Decline once, we wait two weeks. Twice, six weeks. Three
+times, we stop unless the user brings it up or a strong
+moment happens.
+It learns what you use
+Which apps, which account for which context (work versus
+personal), and stops asking about apps you clearly do not
+use.
+No app is hardcoded
+Names, logos, permissions and the ask itself all come
+from the catalog entry at run time. A new app in the
+catalog is a new app in Anticipy with zero code.
+Anticipy: Two Hands and Connections20 / 31
+
+==============================================================================
+PDF PAGE 41
+==============================================================================
+
+Every surface
+SURFACETRIGGERWHAT THE USER SEESWHAT HAPPENS UNDERNEATH
+Onboarding,
+app
+Last step of setup, after
+phone and pendant pairing
+"Which apps do you live in?" with detected
+apps pre-selected, a search box for anything
+else, one Connect button, a visible Skip
+Signals from sign-up email domain seed the
+list. Each app connects through the connect
+page. Skip records 
+declined_soft
+ with a
+7-day snooze, not a real decline.
+Onboarding,
+text
+First text after the app step,
+same minute
+One message: the same connect page link
+plus "optional, I can do everything in your
+browser too"
+Same nudge event as the app step, rendered
+for SMS. Whichever gets acted on wins.
+In-task askA step routed to browser
+where the catalog has a
+match and the app is not
+connected
+"On it, doing this in your browser. Connect
+[app] and next time it is instant, even with
+your laptop shut. Optional." plus link
+Router rule 2 from Two Hands. The task runs in
+the browser regardless. Nudge fires once per
+app, then obeys the snooze table.
+Repeated-use
+ask
+Third browser run on the
+same app inside 14 days
+"Third time this week I've done this in [app]
+through the browser. Want me to connect it?
+No pressure."
+Counts come from app_usage_signals.
+Suppressed if a decline snooze is active.
+Laptop-closed
+ask
+A task needs the browser,
+the Mac is offline, the app
+has an API
+"Your laptop is shut so I've queued this.
+Connect [app] and I can do it right now from
+here, or I'll run it when your Mac wakes."
+Strongest trigger. Overrides a level-1 snooze
+once. Task queues either way.
+Text commandsUser texts "connect notion",
+"what's connected",
+"disconnect slack", "use my
+work Gmail for this"
+Plain replies. Disconnect confirms and says
+access was revoked
+LLM maps the phrase to a catalog toolkit; no
+keyword list. Disconnect calls revoke then
+delete.
+Settings,
+Connected apps
+iOS app and webList with logos and status, Disconnect, Add
+an app (searches the whole catalog), per-
+app "let Anticipy make changes" toggle,
+account chooser when there are two
+Mirrors Composio's connected accounts for
+this user. Toggle is the write opt-in the router
+needs for rung 3.
+Connect pageAny link aboveLogo, app name, three plain sentences on
+what Anticipy will do, Connect button, "Skip
+for now"
+anticipy.ai/c/{token}. Generic page
+rendered from catalog metadata. Token is
+single-use, 10 minutes, bound to the user.
+Connected
+confirmation
+Callback returns successPage says "Connected. Back to Anticipy."
+Text and app both say "[App] connected.
+Next time it's instant."
+Callback carries status and
+connected_account_id. We store it, flip
+the nudge to connected, and tell both
+channels.
+Needs
+reconnect
+Composio fires
+connected_account.
+expired or a call returns
+auth failure
+"Your [app] connection needs a quick
+refresh, tap when convenient. Until then I'll
+use the browser."
+Router falls back to browser automatically.
+Refresh link is a normal connect link with the
+same account alias.
+DisconnectSettings or text"Done. [App] disconnected and access
+revoked."
+Revoke endpoint first (best effort at the
+provider), then delete. Router drops the pair to
+rung 0.
+Anticipy: Two Hands and Connections21 / 31
+
+==============================================================================
+PDF PAGE 42
+==============================================================================
+
+How it knows what you use
+Signals, not a questionnaire. Each one adds weight to app_usage_signals(user,
+toolkit). The LLM turns the top entries into a natural ask. Signals decay so an app
+you stopped using stops coming up.
+SIGNALHOW WE GET ITWEIG
+HT
+NOTES
+The user says it"put it in my Notion", "my Outlook", "our Slack" in
+transcripts or texts
+HighAlso resolves work versus personal when they say
+"work calendar".
+The browser hand
+saw it
+Observer reports the host after an agent runHighHost matched to a catalog toolkit through the toolkit's
+meta.app_url. No domain list of our own.
+Sign-up email
+domain
+DNS MX lookup at sign-up: Google-hosted or Microsoft-
+hosted mail
+Medi
+um
+Seeds the onboarding list before we know anything
+else. Consumer domains map directly.
+Links in
+conversations
+Meeting and doc links the pendant hears or the user
+texts (meet, zoom, teams, notion, linear, hubspot)
+Medi
+um
+Same host-to-toolkit match as above.
+Already connected
+apps
+Composio connected accounts for this userCert
+ain
+Also tells us which account to use by default.
+AskingOnboarding question, or in conversation when two
+candidates tie
+Cert
+ain
+Ask once, remember the answer.
+Two Google accounts is the common case. The first time a step is ambiguous, the
+agent asks once ("work or personal for this?") and stores the answer against the
+context that caused it (a client call, a school thing). Composio supports multiple
+accounts per app with aliases, so "work" and "personal" are real names on real
+connections.
+The conversation
+The policy engine decides if and when. The LLM writes the words, from three inputs:
+the moment, the app's catalog entry, and the user's own phrasing history. These are
+examples of the register, not templates to hardcode. Different apps on purpose.
+ONBOARDING, TEXT
+Last thing. Which apps do you live in? Looks like
+you're on Google for mail. Connect the ones you want
+here and I'll skip the browser for those:
+anticipy.ai/c/3hq9. Totally optional. I can do all of it in
+your browser, connecting just makes it instant and
+works when your laptop's shut.
+IN-TASK, NOTION
+On it, adding the call notes to Notion through your
+browser now. If you connect Notion I can do this in a
+second next time, laptop open or not:
+anticipy.ai/c/8fk2. Skip it if you'd rather.
+Anticipy: Two Hands and Connections22 / 31
+
+==============================================================================
+PDF PAGE 43
+==============================================================================
+
+REPEATED USE, SLACK
+That's the third Slack message I've posted for you this
+week through the browser. Want me to connect Slack
+so it's instant? anticipy.ai/c/k2m4. Browser works fine
+too, no pressure.
+LAPTOP CLOSED, OUTLOOK
+You told Priya you'd send the deck. Your laptop's shut
+so it's queued. Connect Outlook and I'll send it right
+now from here: anticipy.ai/c/p7z1. Otherwise it goes
+the moment your Mac wakes up.
+DECLINE
+nah not now
+No problem, browser it is. I won't bring it up for a
+while.
+Records 
+declined
+, level 1, 14-day snooze. Tone
+stays light. No "are you sure."
+CONNECTED
+Linear connected. Next time it's instant.
+Sent to text and app within seconds of the callback.
+The card in the app flips to Connected.
+TWO ACCOUNTS
+You've got two Google accounts connected. For
+invites that come out of client calls, work or personal?
+I'll remember.
+work
+Got it. Work for client stuff.
+NEEDS RECONNECT, HUBSPOT
+HubSpot needs a quick re-connect, tap when
+convenient: anticipy.ai/c/v4d8. Until then I'll do
+HubSpot things in your browser.
+TEXT COMMAND
+disconnect shopify
+Done. Shopify disconnected and access revoked. I'll
+use the browser if you need anything there.
+Voice rules for the generator. One sentence on why, one link, one sentence that it is
+optional. Under 320 characters for SMS so it stays one segment. Contractions. No
+exclamation marks. Never "authorize," "grant access," "permissions," "integration,"
+"API."
+The ask comes after the result, never instead of it. "On it" first, task runs, ask
+attached. The user is never blocked on connecting.
+Permission words on the connect page are generated from the scopes, in plain
+language: "read and send email as you," "see and create calendar events," "read and
+Anticipy: Two Hands and Connections23 / 31
+
+==============================================================================
+PDF PAGE 44
+==============================================================================
+
+write pages." Same generator for every app.
+When to ask again
+One state per (user, toolkit). Timers are config, not code, and get tuned from
+acceptance rates. Global cap: one connect ask per user per 7 days across all apps,
+never mid-step, never before the task result is reported.
+never_asked
+No nudge yet.
+Any trigger moves it to
+asked
+asked
+Link sent in both
+channels. Waiting.
+Connected: connected.
+Tapped Skip or said no:
+declined L1. 72h
+silence: declined L1
+declined L1
+Snooze 14 days.
+Laptop-closed trigger
+may override once.
+Otherwise wait, then
+ask on the next real
+moment
+declined L2
+Snooze 45 days.
+Only in-task or laptop-
+closed moments. Never
+repeated-use
+declined L3
+Stop asking.
+User must bring it up ("connect
+notion") or Settings
+connected
+Live. Router may use it.
+Expired event: needs_reconnect.
+Disconnect: never_asked with a
+30-day snooze
+needs_reconnect
+One gentle ask, then weekly max.
+Reconnected: connected. 30 days
+idle: connected account disabled,
+state to declined L1
+Right-time score. Each candidate moment gets a score: laptop-closed with a waiting
+task (1.0), in-task after a browser run over 90 seconds (0.8), repeated use (0.6), user
+mentioned the app (0.9), onboarding (0.7). Ask only if score is above the snooze level's
+threshold (L0 0.5, L1 0.8, L2 0.95).
+Learn from outcomes. Log every ask with its trigger and result. Monthly, shift
+thresholds toward the triggers that convert. Same bandit idea as the router, smaller.
+Silence counts as a soft no. A link nobody tapped for 72 hours is treated as declined
+L1, so we do not re-send into a void.
+Anticipy: Two Hands and Connections24 / 31
+
+==============================================================================
+PDF PAGE 45
+==============================================================================
+
+Onboarding
+STEP 1, ALREADY EXISTS
+Phone, pendant, first hello
+Phone number verified, SMS opt-in recorded (we need
+this for texting anyway).
+Pendant paired.
+STEP 2, NEW
+"Which apps do you live in?"
+Detected apps pre-selected from the email domain
+signal. Search box for anything else, powered by
+catalog search.
+One Connect button opens a multi-app connect page.
+Skip is always visible and never buried.
+Copy under the button: "Optional. Anticipy can do these
+in your browser too. Connecting makes them instant
+and works with your laptop shut."
+STEP 3, NEW
+Same ask by text, same minute
+The first text from Anticipy carries the same link.
+Establishes that the text thread is a real place to act.
+Whichever channel the user acts in, the other shows
+Connected.
+STEP 4, ONGOING
+Learn, then ask at real moments
+Signals accumulate from day one. The first in-task ask
+usually arrives within the first week.
+Skipping in onboarding is a 7-day snooze, not a decline.
+SMS and app in sync
+BrainText threadiOS / web appanticipy.ai/c/tokenComposio
+nudge event as text + link
+same event as a card with Connect
+user taps (either channel), signed-in check
+Connect Link, 10 min, callback = our page
+status=success, connected_account_id
+mark connected, store account, flip nudge state
+"Connected. Next time it's instant."
+card flips to Connected, settings list updates
+deep link back if opened from the app
+One event, two renderings, one link. The brain is the only writer of state; both channels
+read from it, so they cannot drift.
+Nudge is an event with a state, stored once. SMS and app are views. The Twilio
+worker and the iOS client both subscribe to the same record.
+Anticipy: Two Hands and Connections25 / 31
+
+==============================================================================
+PDF PAGE 46
+==============================================================================
+
+The link is the same in both channels, so tapping in SMS and then opening the app
+shows the card already flipped.
+Completion is learned two ways: the callback to our page, and a short poll
+(wait_for_connection) started when the link is generated. Composio has no
+"connected" webhook, only an "expired" one, so we do not wait for one.
+The connect page
+One page for every app at anticipy.ai/c/{token}. It reads the toolkit's name, logo
+and description from the catalog, generates three plain permission sentences from
+the scopes, and shows one button. It is also where we own the ask, so the meta tool
+that would post Composio's raw link into the chat stays off.
+GET anticipy.ai/c/{token}
+ token: 32 bytes random, single use, expires 10 min, bound to user_id and toolkit
+ requires: signed-in app session OR one-tap phone code (so a stolen text alone cannot bind an account)
+ renders: toolkit.name, toolkit.meta.logo, three permission sentences, Connect, Skip for now
+POST /c/{token}/go
+ composio.sessions.create(user_id).authorize(toolkit, callback_url="https://anticipy.ai/c/{token}/done", 
+alias=chosen_alias)
+ redirect to connection_request.redirect_url // Composio Connect Link, 10 min
+ start wait_for_connection(600000) in the background
+GET /c/{token}/done?status=success&connected_account_id=ca_...
+ store connected account, flip nudge to connected, emit "connected" to SMS + app
+ show "Connected. Back to Anticipy." with deep link anticipy://connected/{toolkit}
+Skip for now -> nudge state declined L1 (or 7-day soft snooze during onboarding)
+Link hygiene. HTTPS, our domain, no shorteners (carriers filter them), one segment of
+SMS. Never the raw Composio or Google URL in a text.
+System browser only. On iOS the page opens in Safari or an
+ASWebAuthenticationSession. Google refuses OAuth inside embedded web views.
+Branding. On Composio's managed OAuth apps the consent screen says "Composio
+wants to access your account" and shows a "Secured by Composio" badge. Our own
+OAuth apps fix both. Google first, Microsoft second, the rest as usage shows up.
+Settings
+Connected apps in iOS and web: logo, name, account label (work, personal), status
+(connected, needs reconnect), last used. Same data the router uses, nothing separate.
+Per app: "Let Anticipy make changes." Off by default. This is the write opt-in the Two
+Hands ladder needs for rung 3. Reads never need it.
+Anticipy: Two Hands and Connections26 / 31
+
+==============================================================================
+PDF PAGE 47
+==============================================================================
+
+Add an app. Search box over the full catalog (1,400+). Picking one opens a connect
+page. This is how a user connects something we never asked about.
+Disconnect. Confirms, revokes at the provider where Composio can, deletes the
+connection, tells the text thread too.
+Everything here has a text twin. "what's connected", "connect linear", "let anticipy edit
+notion", "disconnect slack".
+Where it plugs in
+Current system: pendant hears, phone streams audio and runs the first-pass filter,
+the cloud brain (PocketBase plus worker, on Railway today, Cloudflare in progress)
+writes the task, the planner makes steps, the extension acts, Twilio carries text, the
+iOS app and web feed show it. One new module in the brain, four tables, one page,
+one settings screen.
+brain/
+ connections/
+ signals.ts // app_usage_signals: ingest from transcripts, observer, MX lookup, links
+ policy.ts // nudge state machine, right-time score, snooze table (config)
+ nudges.ts // emits nudge events; SMS + app render from the same record
+ composio.ts // Provider adapter: sessions.create(user_id), authorize, wait_for_connection, revoke, 
+delete, toolkits.get
+ connect_page.ts // /c/{token} routes above
+ text_commands.ts // "connect x", "what's connected", "disconnect y" via LLM -> toolkit match
+tables
+ app_usage_signals(user_id, toolkit, source, weight, last_seen_at)
+ connections(user_id, toolkit, connected_account_id, alias, status, writes_enabled, last_used_at)
+ connect_nudges(user_id, toolkit, state, level, snooze_until, trigger, sent_at, acted_at, channel)
+ connect_links(token, user_id, toolkit, expires_at, used_at)
+User identity. Our PocketBase user id is Composio's user_id. One session per user,
+restored by stored session_id.
+The router reads connections to answer "connected?" and writes_enabled to
+answer "may write?". It never calls Composio for that.
+Turn off Composio's in-chat auth. Create sessions with manage_connections=False
+so the model cannot paste a raw Connect Link. All asks go through our policy and our
+page.
+Composio facts we build on
+Verified against Composio's docs on Sept 5, 2026. Each one changes a design
+choice above.
+Anticipy: Two Hands and Connections27 / 31
+
+==============================================================================
+PDF PAGE 48
+==============================================================================
+
+FACTSO WE
+Connect Links expire after 10 minutes. Generated by session.authorize(toolkit)
+or connected_accounts.link(). Single-use is not documented.
+Generate the Composio link only when the user
+taps our page, not when the text is sent. Our own
+token carries the 10-minute clock.
+callback_url returns to us with status and connected_account_id
+appended.
+The done page is the primary completion signal.
+No webhook for a successful connection. Only
+composio.connected_account.expired.
+Poll with wait_for_connection as
+backup. Subscribe to expired for the reconnect
+nudge.
+Multiple accounts per toolkit with aliases; require_explicit_selection forces the
+agent to name the account.
+"work" and "personal" are aliases. Router passes
+the account the context resolved.
+Deleting a connection does not revoke the provider token. A separate revoke endpoint does,
+best effort, and about 5% of connections cannot be revoked programmatically.
+Disconnect calls revoke, then delete, and the
+confirmation text says access was revoked where
+it was.
+Toolkit metadata exposes name, meta.logo, meta.description,
+meta.app_url, required scopes.
+The connect page and the host-to-app matcher
+are generic.
+Managed OAuth apps show "Composio wants to access your account" and a "Secured by
+Composio" badge. Own apps fix it. Managed apps also add $0.0002 per call after 20K a month
+and $0.10 per connection after 1K on paid plans.
+File our own Google and Microsoft OAuth apps
+now; everything else stays managed until usage
+justifies it.
+Log storage has a "Don't store data" switch so request and response payloads are not retained.
+Default is store everything.
+Flip it on day one.
+Composio had a security incident in May 2026 (about 0.3% of active connections leaked,
+mostly GitHub). SOC 2 Type II. Self-serve DPA on Pro.
+Accept the DPA on the billing page. Own OAuth
+apps also mean our tokens are portable if we
+ever leave.
+Google may block sign-in on managed apps when a scope is not approved for that app.Request only the scopes the matched tools need;
+add scopes through a re-connect.
+Canada and US checklist
+Only the items that change what we build or who has to sign something. Each is one
+line, one owner, one deadline. Sources at the bottom.
+DO THISWHY, IN ONE LINEOWNERWHEN
+Create Anticipy's own Google Cloud project and OAuth clients (web +
+iOS), start brand verification
+Consent screen must say Anticipy. Google's
+API ToS bars masking the client's identity, and
+the verification belongs to the client owner
+Omar
+This week
+Scope plan: start with sensitive scopes only (send mail, calendar,
+contacts). Add restricted Gmail read scopes only when a real use
+needs them
+Sensitive verification is about 10 business
+days. Restricted adds a paid CASA lab
+assessment ($540 to $4,500), about 6 weeks,
+repeated yearly
+Both
+Before
+own-app
+launch
+Add the Limited Use sentence to the privacy policy and homepage;
+never train any shared model on Google data
+Required wording for any Google scopes;
+Workspace policy (July 2026) bans training
+beyond a per-user personalized model
+Omar
+Before
+verification
+submit
+Anticipy: Two Hands and Connections28 / 31
+
+==============================================================================
+PDF PAGE 49
+==============================================================================
+
+DO THISWHY, IN ONE LINEOWNERWHEN
+Show a short in-app disclosure right before each connect flow, with a
+real tap
+Google's Workspace policy requires in-context
+consent and confirmation of agentic actions; a
+privacy policy alone does not count
+Jose
+Connect
+page v1
+Open all OAuth in the system browser or
+ASWebAuthenticationSession, never a web view
+Google returns disallowed_useragent
+inside embedded views
+Jose
+Connect
+page v1
+Microsoft: publisher verification (needs a Partner Center account) and
+an admin-consent path
+Corporate tenants block unverified multi-tenant
+apps; some Teams scopes need admin
+consent
+Omar
+When
+Outlook
+usage
+shows up
+US texting: register A2P 10DLC brand and campaign; sample
+messages name Anticipy, include STOP, use only HTTPS links on
+anticipy.ai
+Carriers reject campaigns with public
+shorteners and filter unregistered traffic
+Omar
+Before US
+launch
+texts
+Canada texting: verified toll-free number (or short code later); handle
+STOP and ARRET; identify the sender
+No 10DLC in Canada but strict carrier filtering;
+CASL still needs identification and unsubscribe
+even on service messages
+Omar
+Before
+launch
+texts
+Record SMS consent at sign-up (number, purpose, frequency) and
+honour any reasonable "stop" within 10 business days
+TCPA prior express consent and the 2025
+revocation rule
+Jose
+Onboardin
+g step 1
+Connect links: single-use, 10 minutes, bound to the user, finish
+requires being signed in
+SMS is not phishing-resistant; a link alone
+must not be enough to bind an account
+Jose
+Connect
+page v1
+iOS: privacy policy in-app and in App Store Connect, in-app account
+deletion, explicit consent before sharing data with third-party AI,
+nutrition labels list email and calendar content as collected
+App Review guidelines 5.1.1 and 5.1.2 as
+updated June 2026
+Both
+Next App
+Store build
+Privacy notice states data is processed in the US and may be
+reachable by US authorities; accept Composio's DPA
+PIPEDA cross-border transfer guidance; we
+stay accountable for the processor
+Omar
+Before
+verification
+submit
+If we sell to Quebec: name a privacy officer on the site and do a short
+privacy impact assessment for the US transfer
+Quebec Law 25 sections 3.1 and 17
+Omar
+When
+Quebec
+users exist
+Breach playbook: assess, report to the federal Privacy Commissioner
+and notify users when there is real risk of significant harm, keep a 24-
+month log
+PIPEDA mandatory breach reporting;
+Composio's incident shows the vendor side
+can happen
+Omar
+One page,
+this month
+Net: nothing here blocks the spike or the browser hand. Two items gate the API hand
+at scale: our own Google OAuth app and the SMS registrations. Both start now and
+run beside the build.
+Build order
+Starts the week after the Two Hands spike passes its gate. Two weeks.
+Anticipy: Two Hands and Connections29 / 31
+
+==============================================================================
+PDF PAGE 50
+==============================================================================
+
+WEEK A
+Plumbing and the page
+composio.ts adapter with
+manage_connections=False, callback URL,
+wait_for_connection, revoke, delete, toolkits.get.
+Four tables. connections mirrors Composio for this
+user.
+Connect page: token, signed-in check, generic render
+from catalog metadata, done page, deep link.
+Settings, Connected apps: list, disconnect, add an app,
+writes toggle.
+Gate: Omar connects Google, Notion and Slack
+from a text link and from the app, disconnects one
+by text, sees both channels update. Recorded.
+WEEK B
+The brain that asks
+Signals: transcripts, observer hosts, MX lookup at sign-
+up, links in messages.
+Policy: state machine, snooze table, right-time score,
+global 7-day cap.
+Nudge rendering in SMS and app from one record.
+Onboarding step 2 and 3.
+Text commands through the LLM to a toolkit match.
+Gate: Over one week of Omar's real use, every ask
+is tied to a moment we can name in the log, no ask
+repeats inside its snooze, and zero raw Composio
+links reach a text.
+Decisions made
+We own the ask. Composio's in-chat auth meta tool is off. Every link is ours.
+Onboarding always asks, with a visible Skip. Skip is a 7-day soft snooze.
+Declines snooze 14 days, then 45, then stop. Laptop-closed can override level 1 once.
+One ask per user per week across all apps. Never mid-step. Never before the task
+result.
+Writes are opt-in per app in Settings, off by default. Reads never ask for it.
+Own Google OAuth app filed this week; Microsoft when Outlook shows up in signals;
+the rest stay on managed apps for now.
+Composio Pro, DPA accepted, "Don't store data" on, day one.
+Observer stays agent-runs only. Watching the user's own browsing is a later opt-in.
+Sources
+Composio: session.authorize, callback URL, wait_for_connection
+Composio: connect links expire in 10 minutes
+Composio: webhook events (expired only)
+Composio: multiple accounts and aliases
+Composio: revoke endpoint
+Composio: managed vs own OAuth apps
+Composio: white labeling
+Composio: log storage and retention
+Composio: toolkit metadata
+Composio: May 2026 security incident
+Composio: DPA
+Composio: pricing
+Google: OAuth verification FAQ (timelines, CASA)
+Google: Gmail scope classification
+Google: Workspace user data policy (Limited Use, AI training, in-
+context consent)
+Google: OAuth 2.0 policies (no embedded web views, identity)
+Google APIs Terms of Service
+App Defense Alliance: CASA tiers
+TAC Security: CASA pricing example
+Anticipy: Two Hands and Connections30 / 31
+
+==============================================================================
+PDF PAGE 51
+==============================================================================
+
+Microsoft: publisher verification
+Twilio: A2P 10DLC
+Twilio: error 30892 (URL shorteners)
+Twilio: Canada SMS guidelines
+CASL, section 6
+47 CFR 64.1200 (TCPA rules)
+Apple App Store Review Guidelines
+Apple: ASWebAuthenticationSession
+OPC: cross-border transfers
+OPC: meaningful consent
+Quebec: Law 25 (P-39.1)
+RFC 9700: OAuth 2.0 security best practice
+NIST SP 800-63B-4: SMS out-of-band limits
+Anticipy: Two Hands and Connections31 / 31
