@@ -47,3 +47,14 @@ venv/
 # Xcode per-user window/scheme state. Machine-local, changes on every
 # open, and belongs to whoever opened the project rather than to the app.
 xcuserdata/
+
+# PER-OWNER MEMORY DATABASES — NEVER COMMIT THESE.
+# migration/workers/owners/<owner_ref>/memory.db is one real person's mind:
+# every line they said (episodes, kept forever), their profile facts, their
+# commitments and the graph between them. They appear here because the brain
+# container writes them next to the Worker when it runs locally, and they are
+# untracked rather than ignored, which means one `git add -A` publishes a
+# stranger's private speech to the remote. The durable copy lives in R2
+# (anticipy-owner-state); nothing needs these in git, ever.
+migration/workers/owners/
+**/owners/*/memory.db
