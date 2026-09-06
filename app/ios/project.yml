@@ -600,13 +600,17 @@ settings:
     #      onboarding step asks which apps somebody lives in. None of this
     #      was in any build before now: 127 predates all of it, so the phone
     #      half has never been exercisable.
+    # 135: History was empty over a phone full of conversations — the store
+    #      writes "2026-09-06 11:43:07.000Z" and the parser wanted a T. Also:
+    #      the capture moment shows the lines as they are heard, and History
+    #      reads real segments instead of an empty array.
     # 134: 133 would have refused every link it asked for. ConnectHandoff's
     #      allowlist named only the apex while the Worker mints on
     #      api.anticipy.ai, so ConnectedAppsClient threw .linkNotOurs on a
     #      correctly minted link, every time. Both hosts are ours and both are
     #      allowed now; the three subdomain refusals that were doing the real
     #      work are pinned separately.
-    CURRENT_PROJECT_VERSION: "134"
+    CURRENT_PROJECT_VERSION: "135"
     DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: NO
@@ -658,7 +662,7 @@ targets:
         # literal from a Mac one, and two products answering "which build
         # are you holding" with different numbers is the exact disease this
         # gate exists to prevent.
-        CURRENT_PROJECT_VERSION: "134"
+        CURRENT_PROJECT_VERSION: "135"
         DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_ENTITLEMENTS: ../macos/AnticipyMac/AnticipyMac.entitlements
