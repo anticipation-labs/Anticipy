@@ -610,6 +610,7 @@ struct HomeView: View {
     /// as a decline. `contextAsk` is already nil by the time onDismiss runs.
     @State private var lastAskedSource: ContextSource?
     @State private var showInterview = false
+    @State private var showingInsights = false
     /// "I'll do this later", remembered. The browser ask below is the one
     /// page first run no longer has, and an offer that returns every time the
     /// feed refreshes is nagging, not offering — so a decline is written down,
@@ -1052,6 +1053,61 @@ struct HomeView: View {
 
     /// Nothing to show at all. WHY there's nothing is a separate question, and
     /// the answer decides which of four very different screens you get.
+    /// WHAT THE INSIGHTS CARD IS ALLOWED TO CLAIM, from what this phone
+    /// actually holds.
+    ///
+    /// Every field here is deliberately conservative, and two of them are
+    /// deliberately ABSENT. `InsightsPolicy.Counts` documents that its numbers
+    /// must come from the server's own count of a filtered set — `totalItems`
+    /// on a `perPage=1` request — and this app does not make those requests
+    /// yet. So the counts that would be a WINDOW over the newest page rather
+    /// than a lifetime are left nil, and the policy omits their rows entirely.
+    ///
+    /// That is the honest shipping state, not an oversight: a lifetime claim
+    /// computed from `items.count` is false the moment somebody has talked more
+    /// than one page's worth, and it is the likeliest way a screen like this
+    /// ships a lie. `research/2026-09-06-insights-retention.md` names the
+    /// endpoint that would make the rest true.
+    ///
+    /// `days` IS honest from what is here: distinct local days over the lines
+    /// this phone holds is a true count of days it can see, and it is the one
+    /// figure that does not depend on the brain having judged anything — which
+    /// matters, because the brain is capped and judges nothing for almost
+    /// everybody today.
+    private var insightCounts: InsightsPolicy.Counts {
+        var c = InsightsPolicy.Counts.nothing
+        let cal = Calendar.current
+        let days = Set(session.transcript.compactMap { line -> Date? in
+            guard !line.created.isEmpty else { return nil }
+            return AnticipySession.parsePBDate(line.created).map { cal.startOfDay(for: $0) }
+        })
+        if !days.isEmpty { c.days = days.count }
+
+        // Counted over what is held, and therefore NOT presented as lifetimes:
+        // these two feed the peek's ratio, which names its own denominator, so
+        // the sentence stays true about the set it actually counted.
+        if !session.transcript.isEmpty { c.lines = session.transcript.count }
+        let picked = session.transcript.filter { ($0.goal ?? "").isEmpty == false }.count
+        if picked > 0 { c.pickedUp = picked }
+        let unjudged = session.transcript.filter { ($0.decision ?? "").isEmpty }.count
+        if unjudged > 0 { c.notYetJudged = unjudged }
+
+        let done = session.jobs.filter { $0.status == "done" }.count
+        if done > 0 { c.errandsFinished = done }
+        let asked = session.anticipySays.filter { $0.decision == "ask" }.count
+        if asked > 0 { c.askedFirst = asked }
+
+        // Which ear. The pendant lane is not listed at all: it has never
+        // shipped, and a row reading 0% reads as a broken pendant.
+        let phone = session.transcript.filter { $0.source == "phone_mic" }.count
+        if phone > 0 { c.heardByPhone = phone }
+        let typed = session.transcript.filter { $0.source == "typed" }.count
+        if typed > 0 { c.typedByYou = typed }
+        let unknown = session.transcript.filter { ($0.source ?? "").isEmpty }.count
+        if unknown > 0 { c.earNotRecorded = unknown }
+        return c
+    }
+
     /// Everything Home says that is not part of the conversation: the
     /// microphone it cannot use, the number it does not have, the extension
     /// running old instructions, and the two offers. They sit at the top of
@@ -1174,7 +1230,13 @@ struct HomeView: View {
                 } doneDeck: {
                     if !finishedShown.isEmpty {
                         VStack(alignment: .leading, spacing: Theme.Space.tight) {
-                            sectionHeader("Done")
+                            // THE PEEK, where the "Done" heading was. It keeps
+                            // the deck's own guard, so an owner with nothing
+                            // finished sees no card rather than an empty one.
+                            InsightsPeekCard(counts: insightCounts) {
+                                Haptics.engage()
+                                showingInsights = true
+                            }
                             DoneDeck(jobs: finishedShown)
                         }
                     }
@@ -1265,6 +1327,10 @@ struct HomeView: View {
             // and the next poll, three seconds later, presented it again. Swipe
             // it away twice and it came back twice. A swipe is a "not now", and
             // it is recorded as one.
+            .sheet(isPresented: $showingInsights) {
+                InsightsView(counts: insightCounts,
+                             finished: finishedShown) { showingInsights = false }
+            }
             .sheet(isPresented: $showInterview) {
                 InterviewView().environmentObject(session)
             }

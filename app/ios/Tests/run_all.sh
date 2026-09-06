@@ -111,6 +111,18 @@ sh "$HERE/run_launch_intro_tests.sh"
 # spike/two-hands/src/connections/contract.ts. Early, for the reachability
 # reason above.
 sh "$HERE/run_connect_onboarding_tests.sh"
+# The same step, one question further on: is it in anybody's first run? The
+# suite above passed 154 checks on 2026-09-05 over a screen with ZERO CALL
+# SITES — written, compiled into the target, and constructed by nothing — so
+# the spec's step 2 existed in the repository and did not exist for one person.
+# This leg reads the FLOW: the step is constructed exactly once, on the beat
+# between the pendant and the microphone; the page list the body draws is the
+# one nextPage walks; Skip goes through skipOutcome and never through
+# recordDecline; the handoff goes through the one object allowed to open a
+# connect link. Its suite compiles ConnectOnboardingPolicy and FirstRunRoute
+# together, which is the only way to see that the snooze the phone stores means
+# what the policy says a snooze means — the two cannot import each other.
+sh "$HERE/run_connect_onboarding_step_tests.sh"
 sh "$HERE/run_job_receipt_tests.sh"
 # The same card from the other end. That one asks what the server proved
 # before it says "done"; this asks which section a job reaches at all — and
@@ -125,6 +137,13 @@ sh "$HERE/run_home_feed_tests.sh"
 # first leg is law 1, because the tempting version of this screen picks your
 # commitments out of your sentences with a word list.
 sh "$HERE/run_dashboard_tests.sh"
+# Insights — the screen whose whole proposition is that its numbers are true.
+# Beside the dashboard because it hangs off it. Its first leg is law 1 (this is
+# the second file that will be tempted to read the words), and its second is the
+# absence of a streak — which is a finding rather than a preference: the ears
+# went deaf for thirty hours and nothing noticed, so a streak would break on
+# this app's own outage and bill it to the person.
+sh "$HERE/run_insights_tests.sh"
 # What Home SAYS once it has placed a job — the same screen one step later. Four
 # of its sentences carry a number the phone counted: how many things are waiting
 # on a browser, how many interview answers she already holds, how long the

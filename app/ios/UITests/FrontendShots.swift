@@ -171,6 +171,12 @@ final class FrontendShots: XCTestCase {
             shot("22b-pendant-wake", settle: 1.8)
             if tap(a, "Look for it", timeout: 5) {
                 shot("22c-pendant-looking", settle: 2.6)
+                // The explainer that opens BEFORE iOS asks.
+                if tap(a, "Why Bluetooth?", timeout: 5) {
+                    shot("22e-why-bluetooth", settle: 1.6)
+                    if !tap(a, "Done", timeout: 3) { a.swipeDown() }
+                    Thread.sleep(forTimeInterval: 1.2)
+                }
             }
             tap(a, "I don't have it with me", timeout: 5)
             Thread.sleep(forTimeInterval: 1.4)
@@ -228,6 +234,14 @@ final class FrontendShots: XCTestCase {
         shot("30-dashboard-thread", settle: 6.0)
         a.swipeUp();  shot("31-dashboard-approval", settle: 1.7)
         a.swipeUp();  shot("32-dashboard-done", settle: 1.7)
+        // The peek card sits where the "Done" heading was; tapping it opens
+        // what it adds up to.
+        if tapContaining(a, "You've talked to Anticipy", timeout: 5) {
+            shot("38-insights", settle: 2.0)
+            a.swipeUp(); shot("39-insights-lower", settle: 1.5)
+            tap(a, "Close", timeout: 4)
+            Thread.sleep(forTimeInterval: 1.2)
+        }
         a.swipeDown(); a.swipeDown(); a.swipeDown()
         Thread.sleep(forTimeInterval: 1.4)
 

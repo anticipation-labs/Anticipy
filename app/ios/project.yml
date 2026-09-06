@@ -610,6 +610,25 @@ settings:
     #      correctly minted link, every time. Both hosts are ours and both are
     #      allowed now; the three subdomain refusals that were doing the real
     #      work are pinned separately.
+    # 140: insights. The "Done" heading becomes a card — days you've talked,
+    #      and the catch ratio with its denominator — opening a page of what it
+    #      adds up to. Three of the metrics originally asked for did not survive
+    #      the research: a streak (it would break on this app's own outage), a
+    #      weekday chart (it profiles the person, not the work) and recurring-
+    #      meeting recaps (law 1: it needs a capitalisation regex).
+    # 139: "Which apps do you live in?" is on somebody's first run. The step —
+    #      OnboardingConnectStep.swift, the Connections spec's page 45 — was
+    #      written, compiled into the target and tested with 154 checks on
+    #      2026-09-05, and had ZERO CALL SITES: the beats were welcome / tour /
+    #      name / computer / pendant / mic and none of them was it, so the
+    #      product asked nobody. It is now FirstRunBeat.connect, between the
+    #      pendant and the microphone — the microphone stays last for the reason
+    #      the route header gives. Skip is a seven-day SOFT SNOOZE and not a
+    #      decline (a decline would raise the server's own threshold to 0.8 and
+    #      silence every trigger that carries evidence), the search box hands
+    #      the typed words to the catalog unread, and the step is not shown to
+    #      somebody who already connected something — while a list that could
+    #      NOT be read shows it, because a failed request is not an answer.
     # 138: the pendant's own light breathes in its microphone hole — the glow is
     #      anchored to the hole's real coordinates in each render, found by blob
     #      analysis rather than by eye. Also "Why Bluetooth?" before iOS asks,
@@ -628,7 +647,7 @@ settings:
     #      pushes saying "substring not found", which reads as a rotted test
     #      rather than a regressed banner; it now finds the banner wherever it
     #      lives, so a move reports as a move.
-    CURRENT_PROJECT_VERSION: "138"
+    CURRENT_PROJECT_VERSION: "140"
     DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: NO
@@ -680,7 +699,7 @@ targets:
         # literal from a Mac one, and two products answering "which build
         # are you holding" with different numbers is the exact disease this
         # gate exists to prevent.
-        CURRENT_PROJECT_VERSION: "138"
+        CURRENT_PROJECT_VERSION: "140"
         DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_ENTITLEMENTS: ../macos/AnticipyMac/AnticipyMac.entitlements
