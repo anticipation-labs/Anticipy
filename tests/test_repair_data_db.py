@@ -43,7 +43,8 @@ def build(dirpath: pathlib.Path, *, corrupt: bool) -> pathlib.Path:
     c.execute("CREATE TABLE agents(id TEXT PRIMARY KEY, agent_id TEXT, token TEXT)")
     c.execute("CREATE UNIQUE INDEX idx_agent ON agents(agent_id)")
     c.executemany("INSERT INTO agents VALUES(?,?,?)",
-                  [(f"a{i}", f"agent-{i:04d}-" + "x" * 30, "t" * 64) for i in range(600)])
+                  [(f"a{i}", f"agent-{i:04d}-" + "x" * 30, "t" * 64)
+                   for i in range(AGENTS_ROWS)])
     c.commit()
     root = c.execute("SELECT rootpage FROM sqlite_master WHERE name='agents'").fetchone()[0]
     pages = c.execute("PRAGMA page_count").fetchone()[0]
@@ -54,8 +55,30 @@ def build(dirpath: pathlib.Path, *, corrupt: bool) -> pathlib.Path:
 
 
 #: How many damaged pages the fixture is looking for. Three was the original
-#: number and it is enough to orphan rows into lost_and_found.
+#: number; the ladder below falls back to fewer, because on some SQLite builds
+#: three is more damage than `.recover` will survive.
 HOLES_WANTED = 3
+
+#: How many rows `build()` puts in `agents`. Named once so the recovery check
+#: and the fixture cannot drift apart.
+AGENTS_ROWS = 600
+
+#: HOW HARD TO HIT A PAGE, gentlest first.
+#:
+#: `(offset, length)` inside the 4096-byte page. The original fixture only ever
+#: did `(8, 256)`, which lands on the page header and the cell-pointer array —
+#: the most destructive place there is. On sqlite3 3.51 `.recover` shrugs that
+#: off and loses only the cells on that page; on the CI runner's 3.45.1 it
+#: costs the WHOLE SCHEMA, so `owners` and `events` came back missing from a
+#: file whose damage was confined to `agents`, and the fixture could not build
+#: the scenario this test is about on that machine at all.
+#:
+#: So the fixture tries the gentle shapes first: bytes deep in the page's
+#: content area garble some cells and leave the header and the pointers
+#: readable. The ladder is walked per page and the FIRST shape that satisfies
+#: all three checks is kept, so no version is assumed — which is the same
+#: mistake the page arithmetic made.
+DAMAGE_LADDER = ((2048, 32), (2048, 128), (1024, 256), (8, 64), (8, 256))
 
 
 def _reads_whole(db: pathlib.Path, table: str, rows: int) -> bool:
@@ -103,22 +126,33 @@ def _punch_holes_in_agents_only(db: pathlib.Path, root: int, pages: int) -> None
     page arithmetic to be right or wrong about, and nothing version-specific.
     """
     original = db.read_bytes()
+    kept = 0
     for page in _candidate_pages(db, root, pages):
         before = db.read_bytes()
-        with open(db, "r+b") as f:
-            f.seek((page - 1) * 4096 + 8)
-            f.write(os.urandom(256))
-        damaged = subprocess.run(["sqlite3", str(db), "PRAGMA integrity_check;"],
-                                 capture_output=True, text=True).stdout.strip() != "ok"
-        collateral = not (_reads_whole(db, "owners", 50) and _reads_whole(db, "events", 2000))
-        if collateral or not damaged or not _still_recoverable(db):
-            db.write_bytes(before)          # this page was not agents-only; undo it
-            continue
-        if _count_holes(db, original) >= HOLES_WANTED:
+        for offset, length in DAMAGE_LADDER:
+            with open(db, "r+b") as f:
+                f.seek((page - 1) * 4096 + offset)
+                f.write(os.urandom(length))
+            damaged = subprocess.run(["sqlite3", str(db), "PRAGMA integrity_check;"],
+                                     capture_output=True, text=True).stdout.strip() != "ok"
+            collateral = not (_reads_whole(db, "owners", 50)
+                              and _reads_whole(db, "events", 2000))
+            if damaged and not collateral and _still_recoverable(db):
+                kept += 1
+                break
+            db.write_bytes(before)          # too hard, or not agents-only; undo it
+        if kept >= HOLES_WANTED:
             return
+    # ONE damaged page is enough to make the file malformed and orphan rows,
+    # and it is the whole scenario on a build where `.recover` survives less.
+    # Reporting "3 were wanted" as a failure when 1 was found would be the
+    # fixture's own arithmetic refusing a file that is exactly right.
+    if kept >= 1:
+        return
     raise AssertionError(
-        f"could not damage {HOLES_WANTED} page(s) of `agents` while leaving "
-        f"`owners` and `events` both readable AND still visible to `.recover`, "
+        f"could not damage a single page of `agents` in a way that costs it rows "
+        f"while leaving `owners` and `events` both readable AND still visible "
+        f"to `.recover`, having tried {len(DAMAGE_LADDER)} damage shape(s) per page, "
         f"having tried {len(_candidate_pages(db, root, pages))} page(s) "
         f"(dbstat named {len(_agents_pages(db))} of them) with sqlite3 "
         f"{sqlite3.sqlite_version}. The fixture has not built the file this "
@@ -166,7 +200,7 @@ def _candidate_pages(db: pathlib.Path, root: int, pages: int) -> list:
 
 
 def _still_recoverable(db: pathlib.Path) -> bool:
-    """Can `.recover` still SEE `owners` and `events` in this file?
+    """Is this the file the test is about: `agents` damaged, the rest whole?
 
     The fixture's job is "a file whose damage is confined to `agents`", and
     reading the two other tables is not enough to establish that. A hole can
@@ -183,8 +217,13 @@ def _still_recoverable(db: pathlib.Path) -> bool:
     `.recover` the whole schema is not agents-only damage, whatever a
     `SELECT count(*)` says.
     """
+    # BYTES, NOT TEXT. Gentle damage garbles cell payloads rather than page
+    # headers, so `.recover` faithfully emits those bytes inside INSERT
+    # statements and `text=True` dies on the first one that is not UTF-8
+    # ("codec can't decode byte 0x95"). The check below is for ASCII anchors,
+    # so bytes are the right thing to search anyway.
     out = subprocess.run(["sqlite3", str(db), ".recover"],
-                         capture_output=True, text=True).stdout
+                         capture_output=True).stdout
     # `.recover` writes the schema unquoted and the rows single-quoted:
     #     CREATE TABLE owners(id TEXT PRIMARY KEY, name TEXT);
     #     INSERT OR IGNORE INTO 'owners'(_rowid_, 'id', 'name') VALUES (...);
@@ -193,8 +232,16 @@ def _still_recoverable(db: pathlib.Path) -> bool:
     # that has produced three false "it is tested" readings this week. Both
     # halves are required: the CREATE alone would pass on a file whose rows
     # were all lost.
-    return all(f"CREATE TABLE {t}" in out and f"INTO '{t}'" in out
-               for t in ("owners", "events"))
+    intact = all(f"CREATE TABLE {t}".encode() in out and f"INTO '{t}'".encode() in out
+                 for t in ("owners", "events"))
+    # AND THE DAMAGE HAS TO COST `agents` ROWS. The gentlest rung of the ladder
+    # produces "row 18 missing from index idx_agent": the file IS malformed, but
+    # every row still recovers, so the repair below would have no shortfall to
+    # name and the test would be measuring a healthy-file repair while calling
+    # itself a damage test. Counting the INSERTs is the cheapest honest way to
+    # ask "did rows actually go".
+    agents_rows = out.count(b"INTO 'agents'")
+    return intact and 0 < agents_rows < AGENTS_ROWS
 
 
 def _count_holes(db: pathlib.Path, original: bytes) -> int:
