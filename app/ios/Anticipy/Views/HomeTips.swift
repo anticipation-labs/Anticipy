@@ -60,7 +60,7 @@ struct HomeTipsOverlay: View {
                 // The dim. Under the tips it swallows every tap; under the
                 // coach mark it lets them through so the switch it points at
                 // is the switch you can press.
-                Color(hex: 0x14100D)
+                OnboardTheme.dim
                     .opacity(phase == .tips ? 0.78 : 0.5)
                     .ignoresSafeArea()
                     .allowsHitTesting(phase == .tips)
@@ -183,7 +183,7 @@ struct HomeTipsOverlay: View {
                     .padding(.horizontal, 16)
                     .padding(.vertical, 12)
                     .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(OnboardTheme.card))
-                    .shadow(color: Color(hex: 0x191512).opacity(0.10), radius: 10, y: 8)
+                    .shadow(color: OnboardTheme.inkFixed.opacity(0.10), radius: 10, y: 8)
                 }
             case 1:
                 VStack(alignment: .leading, spacing: 4) {
@@ -216,7 +216,7 @@ struct HomeTipsOverlay: View {
                 .padding(16)
                 .frame(width: 270)
                 .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(OnboardTheme.card))
-                .shadow(color: Color(hex: 0x191512).opacity(0.14), radius: 14, y: 10)
+                .shadow(color: OnboardTheme.inkFixed.opacity(0.14), radius: 14, y: 10)
             default:
                 VStack(spacing: 10) {
                     HStack(spacing: 10) {
@@ -242,7 +242,7 @@ struct HomeTipsOverlay: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
         .background(Capsule().fill(OnboardTheme.card))
-        .shadow(color: Color(hex: 0x191512).opacity(0.08), radius: 8, y: 6)
+        .shadow(color: OnboardTheme.inkFixed.opacity(0.08), radius: 8, y: 6)
     }
 
     private func finish() {

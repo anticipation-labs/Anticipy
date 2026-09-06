@@ -86,6 +86,13 @@ sh "$HERE/run_retry_reconciliation_tests.sh"
 # reason above.
 sh "$HERE/run_first_run_copy_tests.sh"
 sh "$HERE/run_enrollment_offer_tests.sh"
+# The opening — the four-second dot-to-mark intro in front of first run.
+# Pure timeline, walked frame by frame: the wavefront clears the corners, the
+# seed lands in the mark, the last frame IS the logo, and it never plays over
+# Home. Beside the first-run suites because it is the first thing a stranger
+# sees, and a curve that quietly stopped reaching the corners would be seen by
+# every one of them before anybody here.
+sh "$HERE/run_launch_intro_tests.sh"
 # The other onboarding step that asks for something: "Which apps do you live
 # in?", plus the lockstep that keeps the card and the first text ONE ask. Beside
 # the enrolment offer because it is the same question in a different room — what

@@ -81,6 +81,15 @@ final class WalkTests: XCTestCase {
         app.launchArguments += ["-backendURL", "http://127.0.0.1:8090"]
         app.launch()
 
+        // The opening plays over every cold launch into first run: a seed, a
+        // wavefront, the mark. It is one control to VoiceOver and to this
+        // walk; record it mid-piece, then tap it through so the beats behind
+        // it are reached on their own timings rather than four seconds late.
+        let intro = app.buttons["Anticipy"].firstMatch
+        XCTAssertTrue(intro.waitForExistence(timeout: 6), "Expected the opening")
+        snap("00-intro", settle: 2.2)
+        intro.tap()
+
         // The two explanatory beats intentionally precede account creation:
         // the welcome, then the three-page tour.
         require("Capture conversations, keep track of commitments, and turn them into follow-ups.", in: app)

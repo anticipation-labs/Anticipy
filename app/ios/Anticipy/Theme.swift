@@ -476,6 +476,77 @@ extension Theme {
 /// The Anticipy pendant mark: a pill outline in the page's own letter colour
 /// with an accent dot, exactly the proportions of the anticipy.ai logo SVG.
 /// The outline was `ivory` — an invisible logo the moment the page is paper.
+// MARK: - First run
+
+// The onboarding palette. Declared here, and only here, because the theme
+// contract (run_theme_contract_tests.sh) lets a view read a role and never
+// name a colour; OnboardingKit.swift draws with these and spells no hex.
+enum OnboardTheme {
+    /// The cream page.
+    static let ground = themed(0xF2EEE7, 0x100E0C)
+    /// A soft filled input.
+    static let field = themed(0xF7F4EE, 0x1C1916)
+    /// The white-ish card that sits one step off the ground.
+    static let card = themed(0xFCFBF8, 0x181512)
+    /// A card that carries a warning — iOS has the microphone switched off.
+    static let warnCard = themed(0xF5E9DF, 0x2A211B)
+    /// Progress track, disabled controls, a switch that is off.
+    static let track = themed(0xE4DDD0, 0x2C2723)
+    /// The idle pager dot — one step darker than the track so it reads on cream.
+    static let dotIdle = themed(0xD5CEC1, 0x3A342E)
+    /// Ink: headlines, the mark, the black pill.
+    static let ink = themed(0x191512, 0xF3EEE5)
+    /// What sits on the ink pill.
+    static let onInk = themed(0xFFFFFF, 0x191512)
+    static let text2 = themed(0x5B544C, 0xCFC7BC)
+    static let muted = themed(0x8B8378, 0x9A9186)
+    /// Champagne, deep enough to read on cream: the progress fill, the active
+    /// pager dot, a satisfied helper line, the finale ground.
+    static let champagne = themed(0xB8904F, 0xC8A97E)
+    static let champagneInk = themed(0x8C6A32, 0xD4B98A)
+    /// The mark's own dot, the same in both themes — it is the brand, not a
+    /// surface.
+    static let dot = Color(hex: 0xC8A97E)
+
+    /// Ink that stays ink in both schemes: the word on a white pill over
+    /// imagery, the shadow under a lifted card. A surface's ink flips with
+    /// the scheme; this is the mark's.
+    static let inkFixed = Color(hex: 0x191512)
+    /// The tour's phone shell — a dark object in both schemes.
+    static let phoneShell = Color(hex: 0x2A2725)
+    /// The veil Home wears while the three tips are up.
+    static let dim = Color(hex: 0x14100D)
+
+    /// The welcome atmosphere: a dusk sky with warm pools of light drifting
+    /// through it. Scene art, the same at midnight as at noon.
+    enum Welcome {
+        static let sky = [Color(hex: 0x4A3323), Color(hex: 0x2B1D14), Color(hex: 0x171009)]
+        static let glowWarm = Color(hex: 0xFFCC96)
+        static let glowEmber = Color(hex: 0xD6783E)
+        static let glowPale = Color(hex: 0xFFEECE)
+        static let glowDeep = Color(hex: 0x783C1E)
+        static let poolAmber = Color(hex: 0xFFBE78)
+        static let poolCream = Color(hex: 0xFFDCAA)
+        static let poolEmber = Color(hex: 0xDC783C)
+        static let veil = Color(hex: 0x0A0604)
+    }
+
+    /// The three tour heroes. Scene art: a lit phone inside a picture stays
+    /// a lit phone in dark mode, so its screen and its text are fixed.
+    enum Hero {
+        static let transcriptSky = [Color(hex: 0x4B3627), Color(hex: 0x2A1E16), Color(hex: 0x17110C)]
+        static let wave = Color(hex: 0xFFDCAA)
+        static let chipText = Color(hex: 0xFFF5E6)
+        static let commitmentsSky = [Color(hex: 0xF3E1C8), Color(hex: 0xE6C49B), Color(hex: 0xC89A64)]
+        static let commitmentsShadow = Color(hex: 0x78501E)
+        static let notificationSky = [Color(hex: 0x3B1D2E), Color(hex: 0x7A2E2C), Color(hex: 0xC8642E),
+                                      Color(hex: 0xE0B27A), Color(hex: 0xEFE3CF)]
+        static let phoneBlack = Color(hex: 0x0B0A09)
+        static let phoneScreen = Color(hex: 0xF2EEE7)
+        static let phoneText = Color(hex: 0x5B544C)
+    }
+}
+
 struct LogoMark: View {
     var size: CGFloat = 64
     var lineWidth: CGFloat { size * 0.07 }

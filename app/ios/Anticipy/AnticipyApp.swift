@@ -49,6 +49,11 @@ struct AnticipyApp: App {
     /// replay them; transient `showHomeTips` is what is on screen right now.
     @AppStorage(AppPreferences.homeTipsSeenKey) private var homeTipsSeen = false
     @State private var showHomeTips = false
+    /// The opening plays once per cold launch, and only in front of first
+    /// run — `LaunchIntro.plays(route:)` keeps it off Home. Cleared by the
+    /// intro itself when it ends or is tapped through, and by `onAppear`
+    /// when the launch lands on Home, so a later sign-out does not replay it.
+    @State private var introPlaying = true
 
     var body: some Scene {
         WindowGroup {
@@ -73,44 +78,63 @@ struct AnticipyApp: App {
                 // second person signing in on a handed-on phone — are
                 // walked by run_first_run_route_tests.sh instead of by
                 // somebody with a simulator and a hunch.
-                switch FirstRunRoute.decide(hasSeenIntro: hasSeenIntro,
-                                            isSignedIn: session.isSignedIn,
-                                            hasOnboarded: hasOnboarded) {
-                case .intro:
-                    // Pre-auth. Nothing durable about an ACCOUNT may be
-                    // written from here — there is no account — so this
-                    // closure records the one fact that did happen and
-                    // stops. The route flips to `.door` on the next frame
-                    // because `hasSeenIntro` is what it reads.
-                    OnboardingView(segment: .intro, onFinished: {
-                        hasSeenIntro = true
-                    })
-                    .transition(.opacity)
-                case .door:
-                    AuthView()
+                let route = FirstRunRoute.decide(hasSeenIntro: hasSeenIntro,
+                                                 isSignedIn: session.isSignedIn,
+                                                 hasOnboarded: hasOnboarded)
+                if introPlaying && LaunchIntro.plays(route: route) {
+                    // THE OPENING. Four seconds of ink on cream — a seed, a
+                    // wavefront, the mark — in front of a stranger's first
+                    // run and never in front of Home. It is the only thing
+                    // on screen while it plays: the beat beneath mounts when
+                    // it ends, so the welcome's own reveals happen in front
+                    // of the person rather than behind a curtain.
+                    IntroView { introPlaying = false }
                         .transition(.opacity)
-                case .home:
-                    HomeView()
+                } else {
+                    switch route {
+                    case .intro:
+                        // Pre-auth. Nothing durable about an ACCOUNT may be
+                        // written from here — there is no account — so this
+                        // closure records the one fact that did happen and
+                        // stops. The route flips to `.door` on the next frame
+                        // because `hasSeenIntro` is what it reads.
+                        OnboardingView(segment: .intro, onFinished: {
+                            hasSeenIntro = true
+                        })
                         .transition(.opacity)
-                case .tour(let segment):
-                    OnboardingView(segment: segment, onFinished: {
-                        // Order matters, and it is the whole fix: write the
-                        // durable fact FIRST, then decorate. The old code did
-                        // it the other way round — the flag was the last line
-                        // of a 2.4s animation — so an interrupted animation
-                        // meant doing all five steps again.
-                        //
-                        // Both flags, because `.whole` is a journey through
-                        // the introduction as well as the tour: a person who
-                        // walked all four beats behind the door has been
-                        // introduced, and leaving `hasSeenIntro` false would
-                        // send them back through the two pre-auth beats the
-                        // next time they signed out. Idempotent in `.rest`.
-                        hasSeenIntro = true
-                        hasOnboarded = true
-                        celebrating = true
-                    })
-                    .transition(.opacity)
+                    case .door:
+                        AuthView()
+                            .transition(.opacity)
+                    case .home:
+                        HomeView()
+                            .transition(.opacity)
+                    case .tour(let segment):
+                        OnboardingView(segment: segment, onFinished: {
+                            // Order matters, and it is the whole fix: write the
+                            // durable fact FIRST, then decorate. The old code did
+                            // it the other way round — the flag was the last line
+                            // of a 2.4s animation — so an interrupted animation
+                            // meant doing all five steps again.
+                            //
+                            // Both flags, because `.whole` is a journey through
+                            // the introduction as well as the tour: a person who
+                            // walked all four beats behind the door has been
+                            // introduced, and leaving `hasSeenIntro` false would
+                            // send them back through the two pre-auth beats the
+                            // next time they signed out. Idempotent in `.rest`.
+                            hasSeenIntro = true
+                            hasOnboarded = true
+                            celebrating = true
+                        })
+                        .transition(.opacity)
+                    }
+                }
+            }
+            .onAppear {
+                if !LaunchIntro.plays(route: FirstRunRoute.decide(hasSeenIntro: hasSeenIntro,
+                                                                  isSignedIn: session.isSignedIn,
+                                                                  hasOnboarded: hasOnboarded)) {
+                    introPlaying = false
                 }
             }
             .overlay {
@@ -153,6 +177,8 @@ struct AnticipyApp: App {
                 }
             }
             .animation(Theme.springSlow, value: showHomeTips)
+            // The opening leaves the way the finale does: a breath, not a cut.
+            .animation(Theme.springSlow, value: introPlaying)
             // The finale leaves the way it arrived: a breath, not a cut.
             .animation(Theme.springSlow, value: celebrating)
             // The three biggest state changes in the product used to hard-cut.

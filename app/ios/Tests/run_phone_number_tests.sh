@@ -69,9 +69,9 @@ awk '
         if (depth <= 0 && seen) { exit }
         if (n > 0) seen = 1
     }
-' "$src" > "$out/e164.swift"
+' "$src" > "$out/lifted_e164.swift"
 
-if ! grep -q 'func e164(' "$out/e164.swift"; then
+if ! grep -q 'func e164(' "$out/lifted_e164.swift"; then
     echo "Found no \`func e164\` in AnticipyApp.swift."
     echo "Either normalisation moved or this extraction broke; either way these"
     echo "checks are compiling nothing, which is worse than having none."
@@ -79,18 +79,22 @@ if ! grep -q 'func e164(' "$out/e164.swift"; then
 fi
 # A brace-match that stopped early compiles a fragment; one that ran away
 # swallows the rest of the file. Both are caught by the closing brace count.
-opens=$(tr -cd '{' < "$out/e164.swift" | wc -c | tr -d ' ')
-closes=$(tr -cd '}' < "$out/e164.swift" | wc -c | tr -d ' ')
+opens=$(tr -cd '{' < "$out/lifted_e164.swift" | wc -c | tr -d ' ')
+closes=$(tr -cd '}' < "$out/lifted_e164.swift" | wc -c | tr -d ' ')
 if [ "$opens" != "$closes" ] || [ "$opens" = "0" ]; then
     echo "The extracted e164 has $opens '{' and $closes '}' — the extraction is"
     echo "not bracketing the function. These checks would test a fragment."
     exit 2
 fi
-echo "lifted e164 from AnticipyApp.swift: $(wc -l < "$out/e164.swift" | tr -d ' ') lines"
+echo "lifted e164 from AnticipyApp.swift: $(wc -l < "$out/lifted_e164.swift" | tr -d ' ') lines"
 
+# Named `lifted_e164`, not `e164`: the default Mac disk (APFS) is
+# case-insensitive, so `e164.swift` and `E164.swift` are ONE file there, and
+# `cat e164.swift > E164.swift` read its own output forever — a 250 MB file
+# growing by the second, and a suite that looked like a swiftc hang.
 {
     echo "import Foundation"
-    cat "$out/e164.swift"
+    cat "$out/lifted_e164.swift"
 } > "$out/E164.swift"
 
 # COMPILED AS `main.swift`, and the name is the whole reason this works.

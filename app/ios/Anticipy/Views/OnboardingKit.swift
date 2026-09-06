@@ -14,33 +14,9 @@ import UIKit
 
 // MARK: - Tokens
 
-enum OnboardTheme {
-    /// The cream page.
-    static let ground = themed(0xF2EEE7, 0x100E0C)
-    /// A soft filled input.
-    static let field = themed(0xF7F4EE, 0x1C1916)
-    /// The white-ish card that sits one step off the ground.
-    static let card = themed(0xFCFBF8, 0x181512)
-    /// A card that carries a warning — iOS has the microphone switched off.
-    static let warnCard = themed(0xF5E9DF, 0x2A211B)
-    /// Progress track, disabled controls, a switch that is off.
-    static let track = themed(0xE4DDD0, 0x2C2723)
-    /// The idle pager dot — one step darker than the track so it reads on cream.
-    static let dotIdle = themed(0xD5CEC1, 0x3A342E)
-    /// Ink: headlines, the mark, the black pill.
-    static let ink = themed(0x191512, 0xF3EEE5)
-    /// What sits on the ink pill.
-    static let onInk = themed(0xFFFFFF, 0x191512)
-    static let text2 = themed(0x5B544C, 0xCFC7BC)
-    static let muted = themed(0x8B8378, 0x9A9186)
-    /// Champagne, deep enough to read on cream: the progress fill, the active
-    /// pager dot, a satisfied helper line, the finale ground.
-    static let champagne = themed(0xB8904F, 0xC8A97E)
-    static let champagneInk = themed(0x8C6A32, 0xD4B98A)
-    /// The mark's own dot, the same in both themes — it is the brand, not a
-    /// surface.
-    static let dot = Color(hex: 0xC8A97E)
-}
+// `OnboardTheme` — every colour first run may name — lives in Theme.swift
+// beside the app's other roles, where run_theme_contract_tests.sh allows a
+// literal. Nothing in this file names a hex value.
 
 enum OnboardFont {
     /// The question. Scaled with Dynamic Type off `.title1`.
@@ -123,7 +99,7 @@ struct OnboardPillStyle: ButtonStyle {
     private var foreground: Color {
         switch kind {
         case .black: return OnboardTheme.onInk
-        case .white: return Color(hex: 0x191512)
+        case .white: return OnboardTheme.inkFixed
         case .soft: return OnboardTheme.ink
         }
     }
@@ -192,7 +168,7 @@ struct OnboardFAB: View {
         }
     }
     private var shadow: Color {
-        direction == .forward && enabled ? Color(hex: 0x191512).opacity(0.18) : .clear
+        direction == .forward && enabled ? OnboardTheme.inkFixed.opacity(0.18) : .clear
     }
 }
 
@@ -681,11 +657,11 @@ struct CoachMark: View {
             .frame(maxWidth: .infinity)
             .background(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(Color(hex: 0x2A2725))
+                    .fill(OnboardTheme.phoneShell)
             )
             .overlay(alignment: .bottom) {
                 Rectangle()
-                    .fill(Color(hex: 0x2A2725))
+                    .fill(OnboardTheme.phoneShell)
                     .frame(width: 14, height: 14)
                     .rotationEffect(.degrees(45))
                     .offset(y: 7)
@@ -707,30 +683,30 @@ struct WelcomeAtmosphere: View {
 
     var body: some View {
         ZStack {
-            LinearGradient(colors: [Color(hex: 0x4A3323), Color(hex: 0x2B1D14), Color(hex: 0x171009)],
+            LinearGradient(colors: OnboardTheme.Welcome.sky,
                            startPoint: .top, endPoint: .bottom)
-            RadialGradient(colors: [Color(hex: 0xFFCC96).opacity(0.62), .clear],
+            RadialGradient(colors: [OnboardTheme.Welcome.glowWarm.opacity(0.62), .clear],
                            center: UnitPoint(x: 0.28, y: 0.18), startRadius: 0, endRadius: 280)
-            RadialGradient(colors: [Color(hex: 0xD6783E).opacity(0.50), .clear],
+            RadialGradient(colors: [OnboardTheme.Welcome.glowEmber.opacity(0.50), .clear],
                            center: UnitPoint(x: 0.78, y: 0.62), startRadius: 0, endRadius: 260)
-            RadialGradient(colors: [Color(hex: 0xFFEECE).opacity(0.30), .clear],
+            RadialGradient(colors: [OnboardTheme.Welcome.glowPale.opacity(0.30), .clear],
                            center: UnitPoint(x: 0.58, y: 0.38), startRadius: 0, endRadius: 200)
-            RadialGradient(colors: [Color(hex: 0x783C1E).opacity(0.55), .clear],
+            RadialGradient(colors: [OnboardTheme.Welcome.glowDeep.opacity(0.55), .clear],
                            center: UnitPoint(x: 0.20, y: 0.85), startRadius: 0, endRadius: 280)
             TimelineView(.animation(minimumInterval: 1.0 / 20.0,
                                     paused: reduceMotion || !ambientMotion)) { tick in
                 let t = tick.date.timeIntervalSinceReferenceDate
                 ZStack {
-                    pool(Color(hex: 0xFFBE78).opacity(0.55), size: 180,
+                    pool(OnboardTheme.Welcome.poolAmber.opacity(0.55), size: 180,
                          x: -150 + 18 * drift(t, 0), y: -230 - 22 * drift(t, 0))
-                    pool(Color(hex: 0xFFDCAA).opacity(0.50), size: 120,
+                    pool(OnboardTheme.Welcome.poolCream.opacity(0.50), size: 120,
                          x: 150 + 14 * drift(t, 4), y: -110 - 16 * drift(t, 4))
-                    pool(Color(hex: 0xDC783C).opacity(0.45), size: 220,
+                    pool(OnboardTheme.Welcome.poolEmber.opacity(0.45), size: 220,
                          x: 40 + 18 * drift(t, 8), y: 200 - 22 * drift(t, 8))
                 }
             }
             GrainLayer()
-            LinearGradient(colors: [Color.black.opacity(0.10), .clear, .clear, Color(hex: 0x0A0604).opacity(0.72)],
+            LinearGradient(colors: [Color.black.opacity(0.10), .clear, .clear, OnboardTheme.Welcome.veil.opacity(0.72)],
                            startPoint: .top, endPoint: .bottom)
         }
         .ignoresSafeArea()
@@ -767,12 +743,12 @@ struct FloatingChip: View {
                 .foregroundStyle(OnboardTheme.champagneInk)
             Text(text)
                 .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(Color(hex: 0x191512))
+                .foregroundStyle(OnboardTheme.inkFixed)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 11)
         .background(Capsule().fill(Color.white.opacity(0.94)))
-        .shadow(color: Color(hex: 0x191512).opacity(0.14), radius: 12, y: 8)
+        .shadow(color: OnboardTheme.inkFixed.opacity(0.14), radius: 12, y: 8)
         .accessibilityElement(children: .combine)
     }
 }
@@ -816,7 +792,7 @@ struct HeroFrame<Scene: View>: View {
         scene
             .frame(width: 314, height: 370)
             .clipShape(RoundedRectangle(cornerRadius: OnboardMetric.heroRadius, style: .continuous))
-            .shadow(color: Color(hex: 0x191512).opacity(0.12), radius: 20, y: 20)
+            .shadow(color: OnboardTheme.inkFixed.opacity(0.12), radius: 20, y: 20)
     }
 }
 
@@ -855,10 +831,10 @@ struct TourTranscriptHero: View {
         ZStack {
             HeroFrame {
                 ZStack(alignment: .top) {
-                    LinearGradient(colors: [Color(hex: 0x4B3627), Color(hex: 0x2A1E16), Color(hex: 0x17110C)],
+                    LinearGradient(colors: OnboardTheme.Hero.transcriptSky,
                                    startPoint: .topLeading, endPoint: .bottomTrailing)
                     VStack(spacing: 10) {
-                        HeroWave(color: Color(hex: 0xFFDCAA).opacity(0.9))
+                        HeroWave(color: OnboardTheme.Hero.wave.opacity(0.9))
                             .padding(.top, 44)
                             .padding(.bottom, 20)
                         heardLine("\u{201C}\u{2026}and I'll get you the deck by Friday.\u{201D}", dim: false)
@@ -874,12 +850,12 @@ struct TourTranscriptHero: View {
                                 .foregroundStyle(OnboardTheme.muted)
                             Text("\u{201C}the deck by Friday\u{201D}")
                                 .font(.system(size: 19, weight: .semibold))
-                                .foregroundStyle(Color(hex: 0x191512))
+                                .foregroundStyle(OnboardTheme.inkFixed)
                         }
                         .padding(.vertical, 15)
                         .frame(maxWidth: .infinity)
                         .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(.white))
-                        .shadow(color: Color(hex: 0x191512).opacity(0.18), radius: 14, y: 12)
+                        .shadow(color: OnboardTheme.inkFixed.opacity(0.18), radius: 14, y: 12)
                         .padding(.horizontal, 34)
                         .padding(.bottom, 24)
                     }
@@ -901,7 +877,7 @@ struct TourTranscriptHero: View {
         Text(text)
             .font(.system(size: 14))
             .lineSpacing(2)
-            .foregroundStyle(Color(hex: 0xFFF5E6).opacity(dim ? 0.65 : 0.92))
+            .foregroundStyle(OnboardTheme.Hero.chipText.opacity(dim ? 0.65 : 0.92))
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -924,7 +900,7 @@ struct TourCommitmentsHero: View {
         ZStack {
             HeroFrame {
                 ZStack(alignment: .top) {
-                    LinearGradient(colors: [Color(hex: 0xF3E1C8), Color(hex: 0xE6C49B), Color(hex: 0xC89A64)],
+                    LinearGradient(colors: OnboardTheme.Hero.commitmentsSky,
                                    startPoint: .topLeading, endPoint: .bottomTrailing)
                     RadialGradient(colors: [Color.white.opacity(0.55), .clear],
                                    center: UnitPoint(x: 0.5, y: 0.45), startRadius: 0, endRadius: 170)
@@ -938,7 +914,7 @@ struct TourCommitmentsHero: View {
                                         .frame(width: 22)
                                     Text(rows[i].title)
                                         .font(.system(size: 15, weight: .semibold))
-                                        .foregroundStyle(Color(hex: 0x191512))
+                                        .foregroundStyle(OnboardTheme.inkFixed)
                                         .lineLimit(1)
                                         .minimumScaleFactor(0.85)
                                     Spacer(minLength: 8)
@@ -949,7 +925,7 @@ struct TourCommitmentsHero: View {
                                 .padding(.horizontal, 14)
                                 .padding(.vertical, 12)
                                 .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(.white))
-                                .shadow(color: Color(hex: 0x78501E).opacity(0.12), radius: 8, y: 6)
+                                .shadow(color: OnboardTheme.Hero.commitmentsShadow.opacity(0.12), radius: 8, y: 6)
                             }
                         }
                     }
@@ -980,12 +956,11 @@ struct TourNotificationHero: View {
         ZStack(alignment: .top) {
             VStack(spacing: 0) {
                 RoundedRectangle(cornerRadius: 32, style: .continuous)
-                    .fill(LinearGradient(colors: [Color(hex: 0x3B1D2E), Color(hex: 0x7A2E2C), Color(hex: 0xC8642E),
-                                                  Color(hex: 0xE0B27A), Color(hex: 0xEFE3CF)],
+                    .fill(LinearGradient(colors: OnboardTheme.Hero.notificationSky,
                                          startPoint: .top, endPoint: .bottom))
                     .overlay(alignment: .top) {
                         VStack(spacing: 6) {
-                            Capsule().fill(Color(hex: 0x0B0A09)).frame(width: 74, height: 20).padding(.top, 8)
+                            Capsule().fill(OnboardTheme.Hero.phoneBlack).frame(width: 74, height: 20).padding(.top, 8)
                             Text("Monday, September 16")
                                 .font(.system(size: 12, weight: .semibold))
                                 .foregroundStyle(.white.opacity(0.95))
@@ -998,7 +973,7 @@ struct TourNotificationHero: View {
                     }
                     .padding(9)
                     .background(
-                        UnevenRoundedTop(radius: 40).fill(Color(hex: 0x0B0A09))
+                        UnevenRoundedTop(radius: 40).fill(OnboardTheme.Hero.phoneBlack)
                     )
                     .frame(width: 257, height: 420)
                 Spacer(minLength: 0)
@@ -1017,18 +992,18 @@ struct TourNotificationHero: View {
                 HStack(alignment: .top, spacing: 12) {
                     ZStack {
                         RoundedRectangle(cornerRadius: 11, style: .continuous)
-                            .fill(Color(hex: 0xF2EEE7))
+                            .fill(OnboardTheme.Hero.phoneScreen)
                             .frame(width: 40, height: 40)
-                        OnboardMark(size: 28, stroke: Color(hex: 0x191512), dot: OnboardTheme.dot)
+                        OnboardMark(size: 28, stroke: OnboardTheme.inkFixed, dot: OnboardTheme.dot)
                     }
                     VStack(alignment: .leading, spacing: 2) {
                         Text("The deck for Priya is ready")
                             .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(Color(hex: 0x191512))
+                            .foregroundStyle(OnboardTheme.inkFixed)
                         Text("Anticipy asks before anything is sent. Want me to send it?")
                             .font(.system(size: 14))
                             .lineSpacing(2)
-                            .foregroundStyle(Color(hex: 0x5B544C))
+                            .foregroundStyle(OnboardTheme.Hero.phoneText)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     Spacer(minLength: 4)
@@ -1041,7 +1016,7 @@ struct TourNotificationHero: View {
                 .padding(.vertical, 14)
                 .frame(width: 366)
                 .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(.white))
-                .shadow(color: Color(hex: 0x191512).opacity(0.22), radius: 18, y: 14)
+                .shadow(color: OnboardTheme.inkFixed.opacity(0.22), radius: 18, y: 14)
             }
             .padding(.top, 178)
         }
