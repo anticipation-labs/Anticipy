@@ -283,9 +283,19 @@ enum DashboardPolicy {
         return buckets.map { Day(heading: $0.heading, sessions: $0.rows) }
     }
 
+    /// `now` IS THE REFERENCE, not the device clock, and that is the fix.
+    /// This asked `calendar.isDateInToday(day)`, which compares against
+    /// whatever day the machine is having — so the function took a `now`
+    /// argument and then ignored it. In the app the two agree and nothing
+    /// looked wrong; in a suite pinned to a fixed instant they disagree, and
+    /// on a runner in another timezone they disagree by a whole day. A
+    /// heading that cannot be tested without asking what time it is now is a
+    /// heading nobody can hold to anything.
     static func heading(for day: Date, now: Date, calendar: Calendar = .current) -> String {
-        if calendar.isDateInToday(day) { return "Today" }
-        if calendar.isDateInYesterday(day) { return "Yesterday" }
+        let today = calendar.startOfDay(for: now)
+        if calendar.isDate(day, inSameDayAs: today) { return "Today" }
+        if let yesterday = calendar.date(byAdding: .day, value: -1, to: today),
+           calendar.isDate(day, inSameDayAs: yesterday) { return "Yesterday" }
         let f = DateFormatter()
         // A day inside the last week is named; older than that needs its date.
         if let days = calendar.dateComponents([.day], from: day, to: now).day, days < 7 {

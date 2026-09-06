@@ -119,7 +119,12 @@ check({ if case .approval = P.pendingApproval(in: turns) { return true }; return
       "and the bar only ever shows an approval")
 
 // ----------------------------------------------------------------- history
-let cal = Calendar(identifier: .gregorian)
+// A FIXED CALENDAR IN A FIXED ZONE. `Calendar(identifier:)` carries the
+// machine's own timezone, so the same instant is a different day on a laptop
+// in Vancouver and a runner in UTC — which is exactly how this suite passed
+// here and failed in CI.
+var cal = Calendar(identifier: .gregorian)
+cal.timeZone = TimeZone(identifier: "UTC")!
 // Eight in the evening of a fixed day, and every stamp below is placed
 // against the START of that day rather than against `now`. An earlier version
 // subtracted 2.4 hours from "now" and called the result "also today", which is
