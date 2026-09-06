@@ -2874,6 +2874,22 @@ struct DoneCard: View {
     @State private var showRaw = false
     @AppStorage(AppPreferences.developerModeKey) private var developerMode = false
 
+    // ── THE CEREMONY ────────────────────────────────────────────────────────
+    // An errand coming back done is the most valuable moment this product has,
+    // and until 2026-09-06 it arrived as a haptic and a card that appeared out
+    // of nowhere. `DoneCeremonyPolicy` decides the timings; these three lines
+    // are the only state it needs. Nothing here produces a WORD — the ceremony
+    // is around evidence the card was already going to show, which is what
+    // keeps it compatible with run_insights_tests.sh's "nothing congratulates".
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @AppStorage(AppPreferences.ambientMotionKey) private var ambientMotion = true
+    /// How many evidence lines have landed so far. `nil` means no ceremony is
+    /// running and everything shows at once — which is the state every card is
+    /// in except the one that just arrived.
+    @State private var revealed: Int?
+    /// The card rests for a breath before it settles into the deck.
+    @State private var settling = false
+
     private var succeeded: Bool { job.status == "done" }
     /// Stopped before it finished — from "Don't do it" on the card above, from
     /// Stop on a running one, from an answer that ended the errand, from the
@@ -2887,6 +2903,82 @@ struct DoneCard: View {
     private var calledOff: Bool { HomeFeedPolicy.wasCalledOff(status: job.status) }
     private var retrying: Bool { session.inFlight.contains(job.id) }
     private var retryFailed: Bool { session.failedWrites.contains(job.id) }
+
+    /// Which of the card's three arms this is. The policy refuses a ceremony on
+    /// two of them deliberately: a cancellation is not a failure and neither is
+    /// a success, and a failed errand arriving with a reveal sequence would be
+    /// the product performing delight over bad news.
+    private var outcome: DoneCeremonyPolicy.Outcome {
+        if succeeded { return .succeeded }
+        if calledOff { return .calledOff }
+        return .failed
+    }
+
+    /// How many rows of the proof block actually LAND when this card arrives.
+    ///
+    /// Deliberately not the receipt's raw evidence count. A real browser
+    /// receipt carries five to nine entries, but `ReceiptProof` keeps them
+    /// behind a disclosure — staggering that array would be animating something
+    /// nobody can see. What is visible on arrival is the seal line, the photo
+    /// note when there is one, and the button that opens the rest. Those are
+    /// the beats.
+    private var proofRows: Int {
+        guard let card = doneCard, card.proof != nil else { return 0 }
+        // seal line + optional photo note + the disclosure button
+        return 2 + (card.proof?.photographed == true ? 1 : 0)
+    }
+
+    /// The card's rendered content, computed once. `body` was calling this
+    /// inline; the ceremony needs it too and two calls would be two parses of
+    /// the same JSON on every render.
+    private var doneCard: JobReceiptPolicy.Card? {
+        guard succeeded else { return nil }
+        return JobReceiptPolicy.doneCard(goal: job.humanGoal,
+                                         result: job.result,
+                                         receipt: job.receipt,
+                                         effectKey: job.effect_key)
+    }
+
+    private var ceremony: DoneCeremonyPolicy.Decision {
+        DoneCeremonyPolicy.decide(outcome: outcome,
+                                  evidenceLines: proofRows,
+                                  reduceMotion: reduceMotion,
+                                  ambientMotionOn: ambientMotion,
+                                  alreadyPlayed: session.ceremonyWasSpent(on: job.id),
+                                  ceremonyOnScreen: false)
+    }
+
+    /// Whether an evidence line at `index` is on screen yet. Always true when
+    /// no ceremony is running, which is every card but the one that just landed.
+    func evidenceIsVisible(_ index: Int) -> Bool {
+        guard let revealed else { return true }
+        return index < revealed
+    }
+
+    /// Runs the sequence. Called once, from `.task`, and only for the job the
+    /// session says actually just arrived.
+    @MainActor
+    private func runCeremony() async {
+        guard session.ceremonyPending.contains(job.id),
+              case .play(let plan) = ceremony else { return }
+        session.spendCeremony(on: job.id)
+        settling = true
+        revealed = 0
+        for step in 1...plan.revealSteps {
+            withAnimation(.easeOut(duration: 0.22)) { revealed = step }
+            if step < plan.revealSteps {
+                try? await Task.sleep(nanoseconds: UInt64(plan.stagger * 1_000_000_000))
+                // A cancelled sleep means the card left the screen mid-sequence.
+                // Show everything rather than freezing half a receipt — the
+                // `try?` above swallows the cancellation, so this is the check
+                // that notices it.
+                if Task.isCancelled { revealed = nil; settling = false; return }
+            }
+        }
+        try? await Task.sleep(nanoseconds: UInt64(plan.afterglow * 1_000_000_000))
+        withAnimation(.easeInOut(duration: 0.3)) { settling = false }
+        revealed = nil
+    }
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -2910,10 +3002,9 @@ struct DoneCard: View {
                     // underneath in grey footnote with a three-line clamp - the
                     // one thing the person opened the app for, rendered as the
                     // small print under a restated question.
-                    let card = JobReceiptPolicy.doneCard(goal: job.humanGoal,
-                                                        result: job.result,
-                                                        receipt: job.receipt,
-                                                        effectKey: job.effect_key)
+                    let card = doneCard ?? JobReceiptPolicy.doneCard(
+                        goal: job.humanGoal, result: job.result,
+                        receipt: job.receipt, effectKey: job.effect_key)
                     Text(card.lead)
                         .font(.callout.weight(.medium))
                         .foregroundStyle(card.hasReceipt ? Theme.text : Theme.text2)
@@ -2944,7 +3035,14 @@ struct DoneCard: View {
                     // exist - so the card either shows the proof or says it
                     // hasn't got any.
                     if let proof = card.proof {
-                        ReceiptProof(proof: proof)
+                        // THE ONLY PART OF THIS CARD THE CEREMONY TOUCHES.
+                        // The lead, the context, the surface label and every
+                        // sentence about what happened are already on screen by
+                        // now — the survey of this file lists four lines that
+                        // MUST NEVER BE DELAYED, and none of them is here. This
+                        // is the evidence, and evidence is the thing worth
+                        // arriving one piece at a time.
+                        ReceiptProof(proof: proof, revealed: revealed)
                     }
                     if let unproven = card.unproven {
                         Label(unproven, systemImage: "questionmark.circle")
@@ -3106,6 +3204,16 @@ struct DoneCard: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.vertical, Theme.Space.base)
+        // THE AFTERGLOW. The card rests a breath larger before settling into
+        // the deck. Scale rather than colour, because a card that changes
+        // colour as it lands would be grading the outcome, and this product
+        // does not grade outcomes.
+        .scaleEffect(settling ? 1.012 : 1.0, anchor: .leading)
+        // ONE ceremony per job id, ever, and only for the card the session says
+        // actually just arrived. `.task(id:)` rather than `.onAppear` so that a
+        // card scrolled off and back does not replay it, and so the sequence is
+        // cancelled with the view rather than outliving it.
+        .task(id: job.id) { await runCeremony() }
     }
 }
 
@@ -3125,7 +3233,17 @@ struct DoneCard: View {
 /// them.
 private struct ReceiptProof: View {
     let proof: JobReceiptPolicy.Proof
+    /// How many of this block's rows have landed, during the arrival ceremony.
+    /// `nil` — the normal case for every card already in the deck — means all
+    /// of them, immediately.
+    var revealed: Int? = nil
     @State private var showing = false
+
+    /// Whether row `index` is on screen yet.
+    private func landed(_ index: Int) -> Bool {
+        guard let revealed else { return true }
+        return index < revealed
+    }
 
     /// The site, not the URL. A confirmation URL is a 300-character query
     /// string; the host is the part that answers "where did this happen".
@@ -3156,12 +3274,18 @@ private struct ReceiptProof: View {
                     .foregroundStyle(Theme.text2)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            // OPACITY, NEVER LAYOUT. Each row keeps its space from the first
+            // frame, so the card does not grow under somebody's thumb while
+            // they are reading it — and a person who taps during the sequence
+            // hits what they aimed at.
+            .opacity(landed(0) ? 1 : 0)
             if proof.photographed {
                 // The one entry nothing else in the product can reconstruct.
                 Label("There's a photo of the finished page",
                       systemImage: "photo")
                     .font(.caption2)
                     .foregroundStyle(Theme.muted)
+                    .opacity(landed(1) ? 1 : 0)
             }
             Button {
                 Haptics.tap()
@@ -3171,6 +3295,7 @@ private struct ReceiptProof: View {
                       systemImage: showing ? "chevron.up" : "chevron.down")
             }
             .buttonStyle(.ghost)
+            .opacity(landed(proof.photographed ? 2 : 1) ? 1 : 0)
             if showing {
                 VStack(alignment: .leading, spacing: 4) {
                     ForEach(proof.items, id: \.self) { item in

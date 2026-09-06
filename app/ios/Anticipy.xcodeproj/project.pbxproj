@@ -100,6 +100,14 @@
 		E8695DF2F83BC3C7B287D383 /* LaunchIntro.swift in Sources */ = {isa = PBXBuildFile; fileRef = CBACE3464713E6166EC9C761 /* LaunchIntro.swift */; };
 		AE0D804E3CF0AC25739F4009 /* DashboardPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E8C5BC69A7A026AE4BFD4B0 /* DashboardPolicy.swift */; };
 		B4D963845EC6236FDE5D93A4 /* InsightsPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B465DF96D2E645792543F28 /* InsightsPolicy.swift */; };
+		BB680F715F9F08F778122961 /* SoundPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = E38A59A13F9DB87F2091557E /* SoundPolicy.swift */; };
+		C7D12CBB73B341FC00A9A373 /* SoundEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDFE98A2B1A5702BEC7A76F0 /* SoundEngine.swift */; };
+		E597B00B55C409D6F4440D78 /* DoneCeremonyPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE3EE622D33391C9BD3CD53E /* DoneCeremonyPolicy.swift */; };
+		F5DEFB7C120D20717E577A3A /* listen-open.caf in Resources */ = {isa = PBXBuildFile; fileRef = BBE9A9A3AE9BCFCC99C66CC2 /* listen-open.caf */; };
+		3A2948C4658DE5D6B1825671 /* heard.caf in Resources */ = {isa = PBXBuildFile; fileRef = D606AC733EF19E370AA1F655 /* heard.caf */; };
+		43AB5AC1BF9833E6FAB7AEE0 /* listen-close.caf in Resources */ = {isa = PBXBuildFile; fileRef = 90A73F8680C2E5306F8B4FD2 /* listen-close.caf */; };
+		87DA107B36936F0541C0E733 /* needs-you.caf in Resources */ = {isa = PBXBuildFile; fileRef = 532F79E9460BFF2026DB491D /* needs-you.caf */; };
+		E3175D9698F92762A6060951 /* done.caf in Resources */ = {isa = PBXBuildFile; fileRef = 0E1468BEC93B95AE6975B9DA /* done.caf */; };
 		EDDCB55F315B63EAF452B38B /* LiveActivityPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71D63D93FE46E3122AE67699 /* LiveActivityPolicy.swift */; };
 		EE3820C503950BAABDCB3CE6 /* LiveActivityPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71D63D93FE46E3122AE67699 /* LiveActivityPolicy.swift */; };
 		3F7695082DABCDB75CD88573 /* ListeningActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B19EFA86D37EC78A3650620 /* ListeningActivity.swift */; };
@@ -204,6 +212,14 @@
 		CBACE3464713E6166EC9C761 /* LaunchIntro.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchIntro.swift; sourceTree = "<group>"; };
 		3E8C5BC69A7A026AE4BFD4B0 /* DashboardPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardPolicy.swift; sourceTree = "<group>"; };
 		7B465DF96D2E645792543F28 /* InsightsPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InsightsPolicy.swift; sourceTree = "<group>"; };
+		E38A59A13F9DB87F2091557E /* SoundPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SoundPolicy.swift; sourceTree = "<group>"; };
+		DDFE98A2B1A5702BEC7A76F0 /* SoundEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SoundEngine.swift; sourceTree = "<group>"; };
+		CE3EE622D33391C9BD3CD53E /* DoneCeremonyPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DoneCeremonyPolicy.swift; sourceTree = "<group>"; };
+		BBE9A9A3AE9BCFCC99C66CC2 /* listen-open.caf */ = {isa = PBXFileReference; lastKnownFileType = file; path = listen-open.caf; sourceTree = "<group>"; };
+		D606AC733EF19E370AA1F655 /* heard.caf */ = {isa = PBXFileReference; lastKnownFileType = file; path = heard.caf; sourceTree = "<group>"; };
+		90A73F8680C2E5306F8B4FD2 /* listen-close.caf */ = {isa = PBXFileReference; lastKnownFileType = file; path = listen-close.caf; sourceTree = "<group>"; };
+		532F79E9460BFF2026DB491D /* needs-you.caf */ = {isa = PBXFileReference; lastKnownFileType = file; path = needs-you.caf; sourceTree = "<group>"; };
+		0E1468BEC93B95AE6975B9DA /* done.caf */ = {isa = PBXFileReference; lastKnownFileType = file; path = done.caf; sourceTree = "<group>"; };
 		71D63D93FE46E3122AE67699 /* LiveActivityPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveActivityPolicy.swift; sourceTree = "<group>"; };
 		4B19EFA86D37EC78A3650620 /* ListeningActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListeningActivity.swift; sourceTree = "<group>"; };
 		C351E862978EAAB94B6CAB86 /* LiveActivityController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveActivityController.swift; sourceTree = "<group>"; };
@@ -285,9 +301,22 @@
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
+		4591195055453FB3323CAF30 /* Sound */ = {
+			isa = PBXGroup;
+			children = (
+				BBE9A9A3AE9BCFCC99C66CC2 /* listen-open.caf */,
+				D606AC733EF19E370AA1F655 /* heard.caf */,
+				90A73F8680C2E5306F8B4FD2 /* listen-close.caf */,
+				532F79E9460BFF2026DB491D /* needs-you.caf */,
+				0E1468BEC93B95AE6975B9DA /* done.caf */,
+			);
+			path = Sound;
+			sourceTree = "<group>";
+		};
 		063094A8D9088415CCE84AA3 /* Resources */ = {
 			isa = PBXGroup;
 			children = (
+				4591195055453FB3323CAF30 /* Sound */,
 				5BFC5E07E4D0F9F2C46C4FD8 /* speaker-embedding.onnx */,
 			);
 			path = Resources;
@@ -309,6 +338,9 @@
 				CBACE3464713E6166EC9C761 /* LaunchIntro.swift */,
 				3E8C5BC69A7A026AE4BFD4B0 /* DashboardPolicy.swift */,
 				7B465DF96D2E645792543F28 /* InsightsPolicy.swift */,
+				E38A59A13F9DB87F2091557E /* SoundPolicy.swift */,
+				DDFE98A2B1A5702BEC7A76F0 /* SoundEngine.swift */,
+				CE3EE622D33391C9BD3CD53E /* DoneCeremonyPolicy.swift */,
 				71D63D93FE46E3122AE67699 /* LiveActivityPolicy.swift */,
 				4B19EFA86D37EC78A3650620 /* ListeningActivity.swift */,
 				C351E862978EAAB94B6CAB86 /* LiveActivityController.swift */,
@@ -635,6 +667,11 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F5DEFB7C120D20717E577A3A /* listen-open.caf in Resources */,
+				3A2948C4658DE5D6B1825671 /* heard.caf in Resources */,
+				43AB5AC1BF9833E6FAB7AEE0 /* listen-close.caf in Resources */,
+				87DA107B36936F0541C0E733 /* needs-you.caf in Resources */,
+				E3175D9698F92762A6060951 /* done.caf in Resources */,
 				57F25F7D221433600AB7BFCE /* Assets.xcassets in Resources */,
 				946396466F25E501C639DFF1 /* PrivacyInfo.xcprivacy in Resources */,
 				C4743CD12B7A47A9E6B3F8F3 /* speaker-embedding.onnx in Resources */,
@@ -658,6 +695,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				BB680F715F9F08F778122961 /* SoundPolicy.swift in Sources */,
+				C7D12CBB73B341FC00A9A373 /* SoundEngine.swift in Sources */,
+				E597B00B55C409D6F4440D78 /* DoneCeremonyPolicy.swift in Sources */,
 				EDDCB55F315B63EAF452B38B /* LiveActivityPolicy.swift in Sources */,
 				3F7695082DABCDB75CD88573 /* ListeningActivity.swift in Sources */,
 				A78AAA75DBF0FE1EC9030F7D /* LiveActivityController.swift in Sources */,
@@ -826,7 +866,7 @@
 				CODE_SIGN_INJECT_BASE_ENTITLEMENTS = NO;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 150;
+				CURRENT_PROJECT_VERSION = 151;
 				DEVELOPMENT_TEAM = "$(DEVELOPMENT_TEAM)";
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -898,7 +938,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 150;
+				CURRENT_PROJECT_VERSION = 151;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = "$(DEVELOPMENT_TEAM)";
 				ENABLE_NS_ASSERTIONS = NO;
@@ -933,7 +973,7 @@
 				CODE_SIGN_INJECT_BASE_ENTITLEMENTS = NO;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 150;
+				CURRENT_PROJECT_VERSION = 151;
 				DEVELOPMENT_TEAM = "$(DEVELOPMENT_TEAM)";
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -1004,7 +1044,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 150;
+				CURRENT_PROJECT_VERSION = 151;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = "$(DEVELOPMENT_TEAM)";
 				ENABLE_STRICT_OBJC_MSGSEND = YES;

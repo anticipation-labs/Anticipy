@@ -692,6 +692,32 @@ final class AnticipySession: ObservableObject {
         return nil
     }
     @Published var pendantCapturing = false
+    /// Job ids that finished on the LAST refresh and have not yet had their
+    /// moment. Published so `DoneCard` can ask "is this one mine?" — a card is
+    /// built for every finished job on every render, and only the ones that
+    /// actually just arrived may run a ceremony.
+    @Published var ceremonyPending: Set<String> = []
+    /// Job ids that have already had a ceremony, ever. Durable across
+    /// relaunches: a moment that replays every cold launch is not a moment,
+    /// it is a jingle. Bounded, because this grows forever otherwise.
+    @AppStorage("ceremony.spent") private var ceremonySpentRaw = ""
+
+    /// Whether this job has already had its moment.
+    func ceremonyWasSpent(on id: String) -> Bool {
+        ceremonySpentRaw.split(separator: " ").contains(Substring(id))
+    }
+
+    /// Spend it. Bounded to the last 200 ids: a set that grows forever is a
+    /// preference file that grows forever, and a job old enough to fall off the
+    /// end is old enough that its card is long gone from the deck.
+    func spendCeremony(on id: String) {
+        guard !ceremonyWasSpent(on: id) else { return }
+        var ids = ceremonySpentRaw.split(separator: " ").map(String.init)
+        ids.append(id)
+        if ids.count > 200 { ids.removeFirst(ids.count - 200) }
+        ceremonySpentRaw = ids.joined(separator: " ")
+        ceremonyPending.remove(id)
+    }
 
     /// What the screen is allowed to claim. Before this, "still loading",
     /// "you're offline", "the server refused me" and "you genuinely have
@@ -715,10 +741,22 @@ final class AnticipySession: ObservableObject {
     /// turn it off. This is "knowing when to start" without ever surprising
     /// you: the only hand on the switch is yours.
     @AppStorage("keepListening") var keepListening = false
+    /// SOUND. On by default and turned off in Settings, exactly like haptics.
+    /// Read here rather than in `SoundEngine` because the engine is not an
+    /// ObservableObject and @AppStorage in a class does not publish — the
+    /// session is where the app already keeps the owner's standing wishes.
+    @AppStorage(AppPreferences.soundKey) var soundOn = true
 
     private var pollTask: Task<Void, Never>?
     private var bag = Set<AnyCancellable>()
     private var seenDoneJobIDs = Set<String>()
+    /// The same shape for jobs that started waiting on the owner. Separate from
+    /// `seenDoneJobIDs` because a job passes through `awaiting_confirm` on its
+    /// way to `done`, and one set could not tell the two crossings apart.
+    private var seenWaitingJobIDs = Set<String>()
+    /// Whether a refresh has completed in this process. The two sets above
+    /// cannot answer that on their own — see the note at `newlyDone`.
+    private var hasRefreshedBefore = false
     /// Invalidated by every new refresh and every account boundary. It is not
     /// persisted: this is a lifetime token for in-flight work, not user state.
     private var refreshGeneration = 0
@@ -1006,6 +1044,12 @@ final class AnticipySession: ObservableObject {
         // NOT — buzzing on every finalized utterance all day is a phone that
         // won't stop twitching; the meaningful buzz is the act-verdict one.
         if source == .typed { Haptics.tap() }
+        // The tick. A transient rather than a tone, which is what lets it play
+        // over a live microphone at all — it carries no pitch track, so the
+        // recogniser cannot hear it as speech. SoundPolicy rate-limits it to
+        // one every twelve seconds: somebody in a meeting produces a line every
+        // few seconds and a cue on each one is a woodpecker in their pocket.
+        playCue(.heard)
         sessionLines.append(SessionLine(text: line))
         // Stamped locally too, not only on the wire: the line is in the feed
         // for the ~3s until the server echoes it, and a badge that appears a
@@ -1341,10 +1385,44 @@ final class AnticipySession: ObservableObject {
         }
         // A quiet buzz the moment finished work lands.
         let doneIDs = Set(jobs.filter { $0.status == "done" }.map(\.id))
-        if !seenDoneJobIDs.isEmpty, !doneIDs.subtracting(seenDoneJobIDs).isEmpty {
+        // WHY THIS IS NOT `seenDoneJobIDs.isEmpty`, WHICH IS WHAT IT USED TO BE.
+        //
+        // The old guard suppressed the whole first refresh by asking whether the
+        // set was empty — but the set is ALSO empty on the refresh that first
+        // fills it, which is the refresh carrying an owner's first-ever
+        // completed errand. So the one completion most worth marking was the one
+        // guaranteed to arrive in silence: no haptic, no cue, no ceremony.
+        //
+        // The question being asked is "have we seen a refresh before", and that
+        // is now what is stored. An owner with one finished errand on their
+        // first-ever poll still gets nothing (everything is genuinely new to
+        // them), but the SECOND poll onward is honest.
+        let newlyDone = hasRefreshedBefore ? doneIDs.subtracting(seenDoneJobIDs) : []
+        if !newlyDone.isEmpty {
             Haptics.success()
+            // THE ONE CUE WITH WARMTH IN IT. Tonal, so on the speaker route
+            // with the microphone live SoundPolicy refuses it and the haptic
+            // above carries the moment alone — which is honest: the alternative
+            // is putting a note into somebody's own transcript.
+            playCue(.done)
+            // The card that just landed is the one allowed a ceremony. Recorded
+            // here, where the arrival is actually detected, rather than in a
+            // view that may not be on screen when it happens.
+            ceremonyPending = newlyDone
         }
+        // THE KNOCK. Something crossed into needing the owner since the last
+        // refresh. A transient, so it is allowed over a live microphone, and it
+        // is the only cue in the vocabulary that is about something the owner
+        // did NOT cause — which is exactly why it is a polite knock and not a
+        // chime. Suppressed on the first refresh after launch for the same
+        // reason `newlyDone` is: everything is new to an empty set.
+        let waitingIDs = Set(jobs.filter { $0.status == "awaiting_confirm" }.map(\.id))
+        if hasRefreshedBefore, !waitingIDs.subtracting(seenWaitingJobIDs).isEmpty {
+            playCue(.needsYou)
+        }
+        seenWaitingJobIDs = waitingIDs
         seenDoneJobIDs = doneIDs
+        hasRefreshedBefore = true
         // Connection health from the extension's heartbeat, not guesswork.
         let fetchedAgent = try? await b.fetchAgent(owner: requestedOwnerID)
         guard refreshLeaseIsCurrent(lease) else { return }
@@ -1909,6 +1987,19 @@ final class AnticipySession: ObservableObject {
     }
 
     func startListening() {
+        // THE CUE COMES FIRST, AND THE ORDER IS THE WHOLE REASON IT IS AUDIBLE.
+        //
+        // `listen-open` is tonal, and SoundPolicy refuses a tonal cue whenever
+        // the microphone is running on the speaker route — our own capture
+        // session is `.measurement` (no echo cancellation) pointed at
+        // `.defaultToSpeaker`, so a pitched sound played an inch from a live
+        // mic can be transcribed and posted as a line the owner never said.
+        //
+        // Played here, before `listener.start()`, the engine is not running
+        // yet and the rule never has to refuse. Move this line below the start
+        // and the cue silently stops existing on every phone without
+        // headphones. `run_sound_tests.sh` fails if it moves.
+        playCue(.listenOpen)
         // keepListening is only armed once the mic is actually ours. Setting it
         // first meant a refused permission was remembered as "she should be
         // listening", so every foreground re-fired a start iOS instantly denies.
@@ -2232,6 +2323,9 @@ final class AnticipySession: ObservableObject {
         inFlight = []
         confirmedStatus = [:]
         seenDoneJobIDs = []
+        seenWaitingJobIDs = []
+        hasRefreshedBefore = false
+        ceremonyPending = []
         agentPaired = false
         agentOnline = false
         agentLastSeenSeconds = nil
@@ -2253,6 +2347,13 @@ final class AnticipySession: ObservableObject {
         for source in ContextSource.allCases {
             UserDefaults.standard.removeObject(forKey: Self.sentKey(source))
         }
+        // THE CEREMONY LEDGER IS PERSON STATE, and it is here rather than in
+        // clearSignedInSurface for the reason the four sign-out defects before
+        // it established: what belongs to a PERSON is purged when the person
+        // changes, not when a session ends. Left behind, the next owner of this
+        // handset would find their first finished errands arriving in silence,
+        // marked as already seen by somebody else.
+        UserDefaults.standard.removeObject(forKey: "ceremony.spent")
         UserDefaults.standard.removeObject(forKey: "interview.declined")
         UserDefaults.standard.removeObject(forKey: "browserOfferDeferred")
         UserDefaults.standard.removeObject(forKey: "firstOpenedAt")
@@ -2415,6 +2516,29 @@ final class AnticipySession: ObservableObject {
     func stopListening() {
         keepListening = false
         listener.stop()
+        // AFTER the stop, and for the mirror of the reason in `startListening`:
+        // `listen-close` is tonal, and the engine has to be down before a
+        // pitched cue is safe on the speaker route.
+        playCue(.listenClose)
+    }
+
+    /// Every sound in the app goes through here.
+    ///
+    /// One funnel rather than five call sites into `SoundEngine`, because the
+    /// three facts a decision needs — the owner's switch, whether the engine is
+    /// actually running, and whether first run is over — live on this object and
+    /// nowhere else. `microphoneRunning` is deliberately
+    /// `isListening && !suspended` rather than the owner's standing wish: a
+    /// suspended engine is not hearing anything, so a tonal cue is safe.
+    func playCue(_ cue: SoundPolicy.Cue) {
+        // The engine needs the listener to deafen its tap while a cue sounds.
+        // Set every time rather than once at init: the session outlives no
+        // listener, but a future replacement would leave a stale weak ref.
+        SoundEngine.shared.listener = listener
+        SoundEngine.shared.play(cue,
+                                soundOn: soundOn,
+                                microphoneRunning: listener.isListening && !listener.suspended,
+                                pastFirstRun: isSignedIn)
     }
 
     /// Called on launch and on returning to foreground: if listening was on

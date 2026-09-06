@@ -1,5 +1,6 @@
 import AVFoundation
 import Foundation
+import QuartzCore
 import Speech
 // For the background task assertion held across an interruption. This file is
 // not a pure policy file — it owns AVAudioEngine and SFSpeechRecognizer and
@@ -37,6 +38,14 @@ import UIKit
 /// of glowing "Listening" over a dead microphone.
 final class PhoneListener: NSObject, ObservableObject {
     @Published var isListening = false
+    /// Until when this tap must feed NOTHING to any of its four sinks, on the
+    /// audio clock. Written by `SoundEngine` immediately before it plays a cue,
+    /// read on the audio thread. A `Double` rather than a `Date` because
+    /// `CACurrentMediaTime` is monotonic and this must survive a clock change.
+    ///
+    /// Deliberately not `@Published`: it changes several times a minute and
+    /// nothing on screen depends on it.
+    var deafUntil: CFTimeInterval = 0
     @Published var partial = ""
     @Published var authorized = true
     /// True while the user wants listening but the mic is down (interruption,
@@ -540,6 +549,27 @@ final class PhoneListener: NSObject, ObservableObject {
         let installed = AudioTapExceptionShield.perform {
             input.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
                 guard let self else { return }
+                // ── DEAFNESS WHILE WE ARE THE ONES MAKING THE NOISE ──────────
+                //
+                // This check sits ABOVE every sink on purpose, and there are
+                // FOUR of them below: the speaker embedder, the analyzer, the
+                // recognizer request, and the orphan replay queue. A deafen
+                // that covered only the recognizer would still let a cue reach
+                // the voiceprint, and a polluted voiceprint is not something the
+                // owner can see happening or undo.
+                //
+                // The capture session is `.measurement` — minimal input
+                // processing, so NO echo cancellation — pointed at
+                // `.defaultToSpeaker`. Our own cues therefore arrive back at
+                // this tap at full strength. `SoundEngine` arms the window a
+                // moment BEFORE it plays, so even the opening breath (which is
+                // deliberately played before this tap exists) is covered for
+                // the part of it still sounding once capture begins.
+                //
+                // Dropping audio is a real cost, which is why the policy rations
+                // it: five cues, a rate limit on the only repeating one, and a
+                // tail measured in fractions of a second.
+                if self.deafUntil > CACurrentMediaTime() { return }
                 // The same audio the recognizer hears also feeds the on-device
                 // voice check — a short rolling window, never stored, never
                 // sent. Only its one-word verdict ever leaves the phone.

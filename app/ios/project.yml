@@ -741,7 +741,29 @@ settings:
     #      level-1 decline on a skip, and the suite measured exactly that. The
     #      gate refused 149 and a commit went past it anyway; this puts the flag
     #      back to false and the number forward so the bytes are named.
-    CURRENT_PROJECT_VERSION: "150"
+    # 151: THE FIRST NOISE THIS PRODUCT HAS EVER MADE, and the moment an errand
+    #      comes back stops being one line of haptic.
+    #
+    #      Stage 1, sound: five cues and no sixth, synthesised deterministically
+    #      by Tools/synth_cues.py. The rule that shapes the whole layer is that
+    #      the app must never record its own voice — the capture session is
+    #      .measurement (no echo cancellation) on .defaultToSpeaker, so a cue
+    #      arrives back at the tap at full strength and could be transcribed
+    #      into a line the owner never said, or drift their voiceprint. The tap
+    #      goes deaf while a cue sounds, above ALL FOUR of its sinks, and tonal
+    #      cues are still refused over a live mic on the speaker route until a
+    #      handset proves the deafness.
+    #
+    #      Stage 2, the done ceremony: anticipation (a running row breathes at
+    #      the pendant's own 2.99s), reveal (the proof block's rows land one at
+    #      a time), afterglow. Around the EVIDENCE, never applause — the
+    #      "nothing congratulates" rule is untouched and the new suite proves
+    #      compatibility with it.
+    #
+    #      Also fixes a live defect found on the way: `seenDoneJobIDs.isEmpty`
+    #      meant an owner's FIRST-EVER completed errand arrived with no haptic
+    #      at all, because the set is empty on the refresh that first fills it.
+    CURRENT_PROJECT_VERSION: "151"
     DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: NO
@@ -793,7 +815,7 @@ targets:
         # literal from a Mac one, and two products answering "which build
         # are you holding" with different numbers is the exact disease this
         # gate exists to prevent.
-        CURRENT_PROJECT_VERSION: "150"
+        CURRENT_PROJECT_VERSION: "151"
         DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_ENTITLEMENTS: ../macos/AnticipyMac/AnticipyMac.entitlements

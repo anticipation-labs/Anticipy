@@ -236,8 +236,26 @@ struct OwnerTurn: View {
 /// card implies something finished.
 struct WorkingTurn: View {
     var text: String
+    /// Whether the server is working on this RIGHT NOW, or it is only queued.
+    /// Defaults true so every existing call site keeps its current behaviour;
+    /// `DoneCeremonyPolicy.breathes` is the one place that decides what the
+    /// word means.
+    var running: Bool = true
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// The owner's own switch, which every other ambient motion in this app
+    /// honours alongside Reduce Motion as `reduceMotion || !ambientMotion`.
+    @AppStorage(AppPreferences.ambientMotionKey) private var ambientMotion = true
     @State private var spin = false
+
+    /// THE ANTICIPATION STAGE of the done ceremony. A job that is running
+    /// breathes; the reveal and the afterglow happen later, on the card it
+    /// becomes. The spinner beside it says "working" to somebody LOOKING; this
+    /// says it to somebody glancing, which is the whole difference between a
+    /// status and an anticipation.
+    private var breathes: Bool {
+        DoneCeremonyPolicy.breathes(status: running ? "running" : "queued")
+            && !reduceMotion && ambientMotion
+    }
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 10) {
@@ -253,6 +271,28 @@ struct WorkingTurn: View {
                 .foregroundStyle(OnboardTheme.text2)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
+        }
+        // A hairline edge, not a glow — the strongest thing this product does
+        // to a row is still nothing much. TimelineView rather than
+        // `.repeatForever`, which is banned for anything touching layout: a
+        // repeatForever transaction once interpolated a bar's LAYOUT POSITION
+        // when the parent ScrollView settled and three bars wandered across the
+        // screen. Capped at 30fps like every other ambient view here, because
+        // this can breathe for forty minutes.
+        .overlay(alignment: .leading) {
+            TimelineView(.animation(minimumInterval: DoneCeremonyPolicy.redrawInterval,
+                                    paused: !breathes)) { context in
+                let t = context.date.timeIntervalSinceReferenceDate
+                let breath = breathes
+                    ? (sin(t * DoneCeremonyPolicy.breathOmega) + 1) / 2 : 0.0
+                RoundedRectangle(cornerRadius: 1, style: .continuous)
+                    .fill(OnboardTheme.champagne.opacity(0.10 + 0.26 * breath))
+                    .frame(width: 2)
+                    .padding(.vertical, 2)
+                    .offset(x: -10)
+            }
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
         }
         .onAppear { spin = true }
         .accessibilityElement(children: .combine)

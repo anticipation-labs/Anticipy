@@ -163,6 +163,21 @@ sh "$HERE/run_insights_tests.sh"
 # anything. A one-tap yes on a locked screen is a yes given without the
 # consequence in front of you, by somebody who may not be the owner.
 sh "$HERE/run_live_activity_tests.sh"
+# The sound layer — the first noise this product has ever made, in an app whose
+# whole premise is listening. Its hard legs are the ones that cannot be walked:
+# the two breaths must BRACKET the capture engine (a tonal cue inside the
+# running window goes silent on every phone without headphones, and nothing
+# reports a missing sound), the tap's deafness must dominate all FOUR of its
+# sinks including the on-device voiceprint, and the deafness must be armed
+# before the noise rather than racing it.
+sh "$HERE/run_sound_tests.sh"
+# The done ceremony. The moment an errand comes back was one line —
+# Haptics.success() — and the ceremony added around it is around the EVIDENCE,
+# never around applause: run_insights_tests.sh's "nothing congratulates" rule
+# stays exactly as written and this suite proves the new policy is compatible
+# with it. Its other legs are the four lines that must never be delayed, and
+# the budget the plan compresses to fit rather than overruns.
+sh "$HERE/run_done_ceremony_tests.sh"
 # What Home SAYS once it has placed a job — the same screen one step later. Four
 # of its sentences carry a number the phone counted: how many things are waiting
 # on a browser, how many interview answers she already holds, how long the
