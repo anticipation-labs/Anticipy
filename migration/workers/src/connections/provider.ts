@@ -128,6 +128,10 @@ import type {
   Toolkit,
   ToolkitMeta,
 } from "../../../../spike/two-hands/src/connections/contract.ts";
+// The Two Hands contract's closed failure set for an execute — `auth`, `rate`,
+// `schema`, `other` — which the router's fallback plan and the ledger's excused
+// failures both switch on. Type only, erased, same reasoning as above.
+import type { ExecErrorKind } from "../../../../spike/two-hands/src/contract.ts";
 
 /**
  * THE CATALOG ROW THIS ADAPTER BUILDS: the contract's `ToolkitMeta`, plus the
@@ -206,6 +210,66 @@ export const MAX_CACHED_SESSIONS = 500;
  *  question, and `next_cursor` is deliberately not read, so nothing here can
  *  walk the catalog. */
 export const MAX_SEARCH_RESULTS = 40;
+
+// ---------------------------------------------------------------------------
+// THE TOOL CATALOG AND EXECUTE — the API hand's two endpoints, measured live
+// 2026-09-06 against this account's key, api v3.1 (and v3, which answers the
+// same shape on both):
+//
+//   GET  /tools?toolkit_slug={slug}&limit={n}[&cursor={c}]
+//        -> 200 {items, next_cursor, total_pages, current_page, total_items}
+//        item: {slug, name, description, toolkit:{slug,name,logo}, tags,
+//               scopes, scope_requirements, input_parameters,
+//               output_parameters, is_deprecated, deprecated:{…}, no_auth,
+//               version, available_versions}
+//        googlecalendar 49 tools (v3 lists 28 — v3.1 is the fuller catalog),
+//        gmail 63, slack 167, hubspot 245. `limit=1000` returned all 245 in
+//        one page; `limit=3` paged with a working `cursor`. An UNKNOWN toolkit
+//        slug answers 200 {items: [], total_items: 0} — an empty catalog is a
+//        real answer, exactly as it is for search().
+//        `deprecated` is an OBJECT ({displayName, version, is_deprecated,…}),
+//        so the boolean is `is_deprecated`; four of googlecalendar's 49 are.
+//        `tags` carries the MCP-style hints readOnlyHint / destructiveHint /
+//        createHint / updateHint (FIND_EVENT: readOnlyHint; CREATE_EVENT:
+//        createHint; DELETE_EVENT: destructiveHint; UPDATE_EVENT: updateHint).
+//        api_hand.ts reads those to TIGHTEN a declared effect, never loosen it.
+//
+//   POST /tools/execute/{TOOL_SLUG}  body {user_id, arguments, [connected_account_id]}
+//        -> measured with the probe owner, who has NO connection, so nothing
+//           could run:
+//        404 {error:{slug:"ActionExecute_ConnectedAccountNotFound", code:1810,
+//             status:404}}  when the owner has no account for the toolkit —
+//             and the SAME slug, naming the id, when `connected_account_id` is
+//             given and is not that owner's: the vendor cross-checks the pair.
+//        404 {error:{slug:"Tool_ToolNotFound", code:2401}}  unknown tool slug.
+//        400 "Only one of 'text' or 'arguments' must be provided" when both
+//             are sent (measured by the workflow that wrote this task).
+//        An UNRECOGNISED body key is accepted in silence (`bogus_key_zz: 1`
+//             changed nothing), which is why every key sent below is one the
+//             vendor's own error text has named back.
+//        THE SUCCESS BODY IS NOT MEASURED — no owner on this backend has a
+//        connected account (live D1 `connections`: 0 rows, 2026-09-06), and
+//        creating one is the owner's tap. The docs' shape is {data, error,
+//        successful, log_id}; `execute()` reads it as a FLOOR (something must
+//        positively say it ran) and says so at the read.
+// ---------------------------------------------------------------------------
+
+/** Rows per catalog page. The vendor honoured 1000 in one page; 200 keeps a
+ *  page of input schemas small in a Worker while hubspot's 245 still arrive in
+ *  two. `tools()` walks `next_cursor` — this is a page size, not a ceiling. */
+export const TOOLS_PAGE_LIMIT = 200;
+
+/** The ceiling on pages walked for one toolkit. 10 x 200 = 2,000 tools, eight
+ *  times the biggest toolkit measured. A catalog that has not ended by then is
+ *  REFUSED rather than cut: an allow-list cut short silently refuses every tool
+ *  past the cut for a reason nobody can see. */
+export const MAX_TOOL_PAGES = 10;
+
+/** The two vendor error slugs an execute 404 was measured to carry, and what
+ *  each means for the hand that called. Exact identifier matches against a
+ *  vendor enum — the same kind of plumbing as reading the status itself. */
+export const EXECUTE_NO_ACCOUNT_TOKEN = "ActionExecute_ConnectedAccountNotFound";
+export const EXECUTE_TOOL_NOT_FOUND_TOKEN = "Tool_ToolNotFound";
 
 // ---------------------------------------------------------------------------
 // NAMED FAILURES. A method that returns an empty list because nobody set a key
@@ -312,6 +376,67 @@ export class ConnectionsBadArgument extends Error {
   }
 }
 
+/**
+ * Which of the contract's four failure kinds a vendor refusal is.
+ *
+ * The status decides, and on a 404 the vendor's own error slug decides between
+ * the two measured meanings — "this owner has no account here" (a credential
+ * problem: the router's re-auth nudge, the ledger's excused failure) and "no
+ * such tool" (a request problem: the router's schema failure, never executed).
+ * A 404 without either token stays `other`, the bucket the router reads as
+ * "may have landed", because a status nobody has measured is not a promise
+ * that nothing happened.
+ *
+ * The kind is NEVER read out of the prose `message`. A vendor copy edit would
+ * otherwise turn every token expiry into a demotion, silently.
+ */
+export function execErrorKind(status: number, token: string): ExecErrorKind {
+  if (status === 401 || status === 403) return "auth";
+  if (status === 429) return "rate";
+  if (status === 400 || status === 422) return "schema";
+  if (status === 404) {
+    if (token === EXECUTE_NO_ACCOUNT_TOKEN) return "auth";
+    if (token === EXECUTE_TOOL_NOT_FOUND_TOKEN) return "schema";
+  }
+  return "other";
+}
+
+/** The vendor refused an execute. `ConnectionsRequestFailed` with the vendor's
+ *  error token kept as a FIELD and the contract's kind already derived, so the
+ *  hand that called does not parse a message to learn which of four things
+ *  happened. `retryable` still comes from the status, as for every method. */
+export class ConnectionsExecuteFailed extends ConnectionsRequestFailed {
+  readonly token: string;
+  readonly kind: ExecErrorKind;
+  constructor(status: number, token: string) {
+    super("execute", status, token);
+    this.name = "ConnectionsExecuteFailed";
+    this.token = token;
+    this.kind = execErrorKind(status, token);
+  }
+}
+
+/** The HTTP call succeeded and the TOOL failed: a 2xx whose body says
+ *  `successful: false` or carries an `error`. Its own class because reading
+ *  only the status here records a failed send as a success, and a rung that
+ *  climbs on failed sends is the worst outcome the ladder can have. `status`
+ *  is the structured status inside the error when the vendor sends one, else
+ *  0; `kind` is derived from that and never from words. */
+export class ConnectionsToolFailed extends Error {
+  readonly code: string;
+  readonly status: number;
+  readonly token: string;
+  readonly kind: ExecErrorKind;
+  constructor(status: number, token: string) {
+    super(`connections execute ran and the tool reported a failure${token ? `: ${token}` : ""}`);
+    this.name = "ConnectionsToolFailed";
+    this.code = "connections_tool_failed";
+    this.status = status;
+    this.token = token;
+    this.kind = status === 0 ? "other" : execErrorKind(status, token);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Structural readers. These parse JSON the vendor sent. None of them reads
 // prose to decide anything.
@@ -327,6 +452,18 @@ function asArray(v: unknown): unknown[] {
 }
 function asString(v: unknown): string | null {
   return typeof v === "string" && v.length > 0 ? v : null;
+}
+function asFiniteNumber(v: unknown): number | null {
+  return typeof v === "number" && Number.isFinite(v) ? v : null;
+}
+/** Non-empty trimmed strings out of a vendor array; anything else dropped. */
+function asStringList(v: unknown): string[] {
+  const out: string[] = [];
+  for (const raw of asArray(v)) {
+    const text = (asString(raw) ?? "").trim();
+    if (text) out.push(text);
+  }
+  return out;
 }
 
 /** ONE canonical spelling for a toolkit, everywhere.
@@ -555,6 +692,19 @@ function requireAccountId(op: string, raw: unknown): string {
   return id;
 }
 
+/** A vendor tool identifier, as the caller spelled it. Trimmed and nothing
+ *  else: the spelling on the wire is the CATALOG's, and api_hand.ts only lets a
+ *  slug through that came back from `tools()`. Whitespace inside means this is
+ *  a sentence and not an identifier, whatever the caller believed. */
+function requireToolSlug(op: string, raw: unknown): string {
+  const slug = raw === null || raw === undefined ? "" : String(raw).trim();
+  if (slug.length === 0) throw new ConnectionsBadArgument(op, "no tool slug was given");
+  if (/\s/.test(slug) || slug.length > 200) {
+    throw new ConnectionsBadArgument(op, "the tool slug is not a vendor tool identifier");
+  }
+  return slug;
+}
+
 /** Our own callback, checked before it is handed to the vendor.
  *
  *  A blank or relative callback is not a small bug: the person taps a connect
@@ -763,6 +913,76 @@ function readToolkitMeta(
     // the signal working right up until an app arrived that was not in the map.
     mailHosts: NO_MAIL_HOSTS,
   };
+}
+
+/**
+ * ONE TOOL IN A TOOLKIT'S CATALOG, as `tools()` returns it.
+ *
+ * This is the API hand's ALLOW-LIST row: api_hand.ts executes a slug only if it
+ * is the `slug` of one of these, spelled by the vendor, and never a slug a model
+ * typed. Everything else here is carried for the caller that has to build a
+ * call (`inputParameters`), tighten an effect (`tags`), or explain a refusal
+ * (`name`, `description`, `deprecated`). Nothing in this row is read as prose
+ * by this file.
+ */
+export interface CatalogTool {
+  /** The vendor's exact spelling — the path segment of an execute. */
+  readonly slug: string;
+  readonly name: string;
+  readonly description: string | null;
+  /** Canonical toolkit slug, the same key `connections` rows carry. */
+  readonly toolkit: Toolkit;
+  /** `is_deprecated === true`. Carried, not branched on: the vendor still
+   *  serves a deprecated tool, and hiding it would refuse a step for a reason
+   *  the caller cannot see. */
+  readonly deprecated: boolean;
+  /** The vendor's tag strings, unchanged. The MCP-style hints among them
+   *  (`readOnlyHint`, `destructiveHint`, `createHint`, `updateHint`) are what
+   *  api_hand.ts tightens a declared effect with. */
+  readonly tags: readonly string[];
+  readonly scopes: readonly string[];
+  /** The tool's JSON-schema for `arguments`, or null when the vendor sent
+   *  none. For the caller that builds the call; not validated here. */
+  readonly inputParameters: Record<string, unknown> | null;
+}
+
+/** One catalog tool, or null when the row cannot be an allow-list entry.
+ *
+ *  Two things are fatal to a row: no slug (nothing to execute) and no toolkit
+ *  (nothing to check the connection row against). Both are read as STRINGS at
+ *  every step, as `connections()` reads `item.toolkit`, because the measured
+ *  shape nests the toolkit in an object and `String(object)` would stamp
+ *  "[object object]" into the key every later check compares. */
+function readCatalogTool(root: Record<string, unknown>): CatalogTool | null {
+  const slug = (asString(root.slug) ?? "").trim();
+  const toolkit = toolkitSlug(
+    asString(asRecord(root.toolkit)?.slug)
+      ?? asString(root.toolkit_slug)
+      ?? asString(root.toolkit)
+      ?? "",
+  );
+  if (slug.length === 0 || toolkit.length === 0) return null;
+  return {
+    slug,
+    name: asString(root.name) ?? slug,
+    description: asString(root.description) ?? null,
+    toolkit,
+    // `deprecated` is an OBJECT on the live row and would be truthy for every
+    // tool; `is_deprecated` is the boolean, at the root and inside that object.
+    deprecated: root.is_deprecated === true || asRecord(root.deprecated)?.is_deprecated === true,
+    tags: asStringList(root.tags),
+    scopes: asStringList(root.scopes),
+    inputParameters: asRecord(root.input_parameters),
+  };
+}
+
+/** What `execute()` hands back when the vendor said the tool ran. */
+export interface ExecuteReceipt {
+  /** The tool's own result, or null when the vendor sent none. */
+  readonly data: unknown;
+  /** The vendor's log id for this run, when it sent one — the handle for
+   *  reading the run back on the vendor's side. */
+  readonly logId: string | null;
 }
 
 /**
@@ -1484,6 +1704,188 @@ export class ComposioConnections implements ConnectionProvider {
 
     // The vendor's order, cut to the cap. Never re-sorted.
     return out.slice(0, limit);
+  }
+
+  // -------------------------------------------------------------------------
+  // tools — THE ALLOW-LIST THE API HAND EXECUTES FROM
+  // -------------------------------------------------------------------------
+  /**
+   * Every tool the vendor publishes for one toolkit, in the vendor's order.
+   *
+   * This list is the only place an executable slug can come from. api_hand.ts
+   * refuses a slug that is not in it, so a model that types
+   * `GMAIL_DELETE_EVERYTHING` gets a refusal and not a 404 from an endpoint
+   * that would have run it had it existed. The vendor is asked with the
+   * toolkit slug and nothing else — no local filter, no ranking, no name of
+   * ours anywhere — and the answer is returned whole.
+   *
+   * AN EMPTY LIST IS AN ANSWER, ONLY FROM THE VENDOR. `items: []` was measured
+   * for an unknown toolkit slug; it means "nothing to execute here", and every
+   * slug then refuses, which is the floor working. Every other empty — no key,
+   * a dead network, a non-2xx, a body with no `items`, a page of rows none of
+   * which can be read, a catalog that has not ended by `MAX_TOOL_PAGES` —
+   * THROWS. An allow-list that came back short for a reason nobody can see
+   * refuses real tools with "unknown tool" as the alibi.
+   *
+   * A ROW NAMING ANOTHER TOOLKIT REFUSES THE CALL. The query is scoped by
+   * `toolkit_slug`; a stray row means the scoping did not hold, and the whole
+   * point of the allow-list is that a slug in it is executable under THIS
+   * toolkit's connection row and its write opt-in. One unreadable row among
+   * readable ones is dropped and counted (the list can only shrink, which is
+   * the safe direction); a page where nothing is readable refuses.
+   *
+   * No owner argument, for the reason `search()` gives: this is the vendor's
+   * global catalog and names nobody.
+   */
+  async tools(toolkit: Toolkit): Promise<CatalogTool[]> {
+    const asked = requireToolkit("tools", toolkit);
+    const out: CatalogTool[] = [];
+    let unreadable = 0;
+    let seen = 0;
+    let cursor: string | null = null;
+
+    for (let page = 0; page < MAX_TOOL_PAGES; page++) {
+      const path = `/tools?toolkit_slug=${encodeURIComponent(asked)}&limit=${TOOLS_PAGE_LIMIT}`
+        + (cursor === null ? "" : `&cursor=${encodeURIComponent(cursor)}`);
+      const json = await this.#callOrThrow("tools", "GET", path);
+      const root = asRecord(json);
+      const items = Array.isArray(root?.items) ? (root.items as unknown[]) : null;
+      if (items === null) {
+        throw new ConnectionsResponseShape("tools", "no items array in the response");
+      }
+      seen += items.length;
+      for (const entry of items) {
+        const row = asRecord(entry);
+        const tool = row === null ? null : readCatalogTool(row);
+        if (tool === null) {
+          unreadable++;
+          continue;
+        }
+        if (tool.toolkit !== asked) {
+          throw new ConnectionsResponseShape(
+            "tools",
+            "a tool row named a different toolkit than the one asked for, so the vendor's "
+              + "toolkit filter did not hold and nothing here is an allow-list for it",
+          );
+        }
+        out.push(tool);
+      }
+      cursor = asString(root?.next_cursor);
+      if (cursor === null || items.length === 0) {
+        cursor = null;
+        break;
+      }
+    }
+
+    if (cursor !== null) {
+      throw new ConnectionsResponseShape(
+        "tools",
+        `the catalog had not ended after ${MAX_TOOL_PAGES} pages, so this list would be cut `
+          + "short and refuse real tools as unknown",
+      );
+    }
+    if (out.length === 0 && unreadable > 0) {
+      throw new ConnectionsResponseShape(
+        "tools",
+        `${unreadable} of ${seen} catalog tool rows could not be read, so nothing here is an `
+          + "answer about what this toolkit can do",
+      );
+    }
+    return out;
+  }
+
+  // -------------------------------------------------------------------------
+  // execute — THE API HAND ACTING
+  // -------------------------------------------------------------------------
+  /**
+   * Run one tool for one owner. The owner goes on the wire as `user_id`, which
+   * is the scoping Composio resolves the credential by — the wrong value here
+   * is a step run against a different person's account, and the vendor would
+   * answer 200. So the id is re-validated at runtime like every other method,
+   * and `connectedAccountId`, when the caller has the owner's own row to hand,
+   * is sent too: the vendor was measured to cross-check the pair and refuse an
+   * account that is not this user's, which is a second lock on the same door.
+   *
+   * THIS METHOD DOES NOT DECIDE WHETHER THE STEP MAY RUN. It has no idea
+   * whether a connections row exists, whether the owner opted into writes, or
+   * whether the slug is real. api_hand.ts owns those three floors and calls
+   * this only after all of them held. Calling this directly from anywhere else
+   * is the bypass; the test for api_hand reads its source to see that the path
+   * to here goes through the floors.
+   *
+   * NO RETRY, on purpose and forever: the endpoint takes no idempotency key and
+   * a write that lands twice is the failure the whole ladder exists to prevent.
+   * A rate limit's one retry belongs to the router, which knows the effect.
+   *
+   * FAILURES ARE TYPED, NEVER STRINGS. A non-2xx is `ConnectionsExecuteFailed`
+   * (status, the vendor's error token, the contract's kind). A 2xx whose body
+   * says the tool failed is `ConnectionsToolFailed`. A body that says nothing
+   * either way is `ConnectionsResponseShape` — this is a floor, "did the vendor
+   * say it ran?", and a floor that lifts itself on silence would record a send
+   * that never happened as a success.
+   */
+  async execute(
+    user: OwnerId,
+    toolSlug: string,
+    args: Record<string, unknown>,
+    connectedAccountId?: string | null,
+  ): Promise<ExecuteReceipt> {
+    const owner = requireOwner("execute", user);
+    const slug = requireToolSlug("execute", toolSlug);
+    const argsRecord = asRecord(args);
+    if (argsRecord === null) {
+      // The vendor's own 400 is "Only one of 'text' or 'arguments' must be
+      // provided"; this adapter only ever sends `arguments`, and it must be an
+      // object, because a string here would be a sentence for the vendor's
+      // model to interpret — the API hand runs a tool, it does not ask one.
+      throw new ConnectionsBadArgument("execute", "arguments must be a plain object");
+    }
+    const account = connectedAccountId === undefined || connectedAccountId === null
+      ? null
+      : requireAccountId("execute", connectedAccountId);
+
+    const body: Record<string, unknown> = {
+      // The whole point. Composio resolves which credential runs this by
+      // exactly this value.
+      user_id: owner,
+      arguments: argsRecord,
+    };
+    if (account !== null) body.connected_account_id = account;
+
+    const { status, ok, json } = await this.#call(
+      "execute",
+      "POST",
+      `/tools/execute/${encodeURIComponent(slug)}`,
+      body,
+    );
+    if (!ok) throw new ConnectionsExecuteFailed(status, this.#errorToken(json));
+
+    const root = asRecord(json);
+    if (root === null) throw new ConnectionsResponseShape("execute", "response was not an object");
+
+    // THE TOOL'S OWN VERDICT. Docs shape: {data, error, successful, log_id},
+    // with the tool's failure in `error` while the HTTP call itself is 200.
+    // NOT measured live — nobody on this backend has a connected account — so
+    // every field is read defensively and the read is a FLOOR: `successful:
+    // true`, or a `data` object with nothing against it, is the vendor saying
+    // it ran. Anything else is not.
+    const error = root.error;
+    const errorPresent = error !== undefined && error !== null && error !== false && error !== "";
+    if (root.successful === false || errorPresent) {
+      const inner = asRecord(error);
+      throw new ConnectionsToolFailed(
+        asFiniteNumber(inner?.status) ?? 0,
+        this.#errorToken(inner === null ? root : { error: inner }),
+      );
+    }
+    if (root.successful !== true && asRecord(root.data) === null) {
+      throw new ConnectionsResponseShape(
+        "execute",
+        "the response neither said successful nor carried a data object, so nothing confirms "
+          + "the tool ran",
+      );
+    }
+    return { data: root.data ?? null, logId: asString(root.log_id) };
   }
 }
 

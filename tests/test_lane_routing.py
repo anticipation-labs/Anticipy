@@ -76,12 +76,30 @@ def test_a_goal_that_reads_both_ways_is_browser():
 
 
 def test_explicit_browser_navigation_uses_the_browser_arm():
+    # UNTIL 2026-09-06 THIS PINNED A WORD LIST. _BROWSER_TARGET_RE read the
+    # goal's wording -- "in my browser", "in Chrome", "new tab" -- and that is
+    # the exact Law-1 violation the router now removes: which hand is a MEANING
+    # question, asked of a model. So the three phrasings below reach the browser
+    # through a model that read them, and with NO model they have no verdict --
+    # which is research, because a verdict nobody gave licenses nothing.
+    # (A goal that DECLARES its lane in a typed field still needs no model:
+    # params["source"] == "browser" is a stored declaration, and the test for it
+    # is the last line.)
+    from brain import hands as _hands
+    class _SaysBrowser:
+        live = True
+        def __init__(self): self.asked = []
+        def chat(self, system, user, temperature=0.1, **kw):
+            self.asked.append((system, user, temperature))
+            import types
+            return types.SimpleNamespace(text='{"hand":"browser","reason":"the owner named the browser"}')
     for goal in ("open Wikipedia in my browser",
                  "go to the dashboard in Chrome",
                  "show the article in a new tab"):
-        assert job_lane(goal) == "", goal
+        assert job_lane(goal, llm=_SaysBrowser()) == "", goal
+        assert job_lane(goal) == "research", f"no model, no verdict: {goal}"
     assert job_lane("open Wikipedia") == "research"
-    assert job_lane("open Wikipedia", {"source": "open it in my browser"}) == ""
+    assert job_lane("open Wikipedia", {"source": "browser"}) == ""
 
 
 def _queue(monkeypatch, goal, key="test-key"):
@@ -111,8 +129,13 @@ def _queue(monkeypatch, goal, key="test-key"):
 
 
 def test_queue_stamps_explicit_browser_navigation_on_browser_lane(monkeypatch):
+    # The queue path has no model in this rig, so "in my browser" is wording
+    # nobody read: no verdict, research lane. The declared form (source =
+    # "browser") is the one the queue can honour without a model. Both the
+    # 2026-09-06 change and the reason are in test_explicit_browser_navigation
+    # _uses_the_browser_arm above.
     posted = _queue(monkeypatch, "open Wikipedia in my browser")
-    assert posted["lane"] == ""
+    assert posted["lane"] == "research"
     assert posted["status"] == "queued"
 
 

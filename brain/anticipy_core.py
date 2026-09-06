@@ -1177,24 +1177,90 @@ _BROWSER_TARGET_RE = re.compile(
 )
 
 
-def job_lane(goal: str, params: dict | None = None) -> str:
-    """Choose the executor from intent, not merely the leading verb.
+def job_lane(goal: str, params: dict | None = None, *, owner_ref: str = "",
+             backend_url: str = "", llm=None) -> str:
+    """Which lane a freshly minted job runs on: "" is the browser lane,
+    "research" is the server's own read-only arm (RESEARCH_LANE).
 
-    Ordinary read-only work belongs on the server research arm. An explicit
-    request to operate the owner's browser belongs on the browser arm even
-    when the action itself is read-only (open, visit, show)."""
+    WHICH HAND IS A QUESTION OF MEANING, and it is asked of a model. Until
+    2026-09-06 this function decided it with three regexes over the goal's
+    wording — a browser-target pattern (audit item 18), the read-only verb
+    list (registered standing tape, still load-bearing in is_consequential
+    and untouched here), and the deny list. brain/hands.py now asks the
+    Overwatch question in the house shape — ONE question on its own, a
+    four-state verdict, the caller comparing it — and hands the model the
+    FACTS: which apps this owner has connected and whether writes are on
+    for each, whether his Mac is online, and the ledger rung.
+
+    THE POLARITY. A verdict of browser lands here as ""; research and hold
+    land as "research"; and NO verdict — no model, an unreadable reply
+    twice, a dead gateway — lands as "research" too, because research is
+    the one lane a browser may not claim and the one hand that cannot change
+    the world. That is a FLOOR: nothing licenses a hand that acts unless the
+    model said so. An api verdict maps to "" for now (no executor exists and
+    a new lane string is claimable by every extension in the wild — see
+    hands.LANE_FOR) with the verdict riding on the row.
+
+    THE SEATBELT HOLDS AFTER THE VERDICT. The irreversible-verb deny list is
+    what a plan TOUCHES, which Law 1 permits; it runs after the model has
+    answered, whatever it answered, so a step that sends, pays or deletes
+    stays on the held browser lane even when the model called it research.
+    It is a floor, never the decider: the verdict is still recorded.
+
+    `owner_ref`, `backend_url` and `llm` are the mint point's to pass (it has
+    self.owner_ref, self.backend_url and self.llm in hand). Absent, the
+    router falls back to the process' own scope and its own client, and a
+    fact it cannot read is UNKNOWN — which never licenses the api hand.
+
+    The verdict is written to `params["_hand"]` — an underscore key, so the
+    browser side never reads it as an owner fact — and rides on the row as
+    the audit line the spec asks for: hand, reason, effect, app, lane."""
+    # Imported here and not at module scope so the diff that replaced the
+    # regexes is this one function, and so hands.py — which must never
+    # import this module — cannot be pulled into a cycle by it.
+    from . import hands
     g = (goal or "").strip()
-    source = str((params or {}).get("source") or "")
-    if _IRREVERSIBLE_RE.search(g):
-        return ""
-    if _BROWSER_TARGET_RE.search(f"{g} {source}"):
-        return ""
     # A computable goal that somehow reaches the queue anyway (the hear()
     # path answers most of them before a job exists) belongs on the server
-    # arm, never in his browser — same capability test as is_consequential.
+    # arm, never in his browser — a CAPABILITY test, the same one
+    # is_consequential runs, and no model is spent on it.
     if compute_answer(g):
-        return "research"
-    return "research" if _READ_ONLY_RE.search(g) else ""
+        verdict = hands.HandVerdict(hands.HAND_RESEARCH,
+                                    "computable on the server; no hand needed")
+    # A DECLARED lane is not a meaning question. The brain's own research arm
+    # prefixes its goals "research:", and a source of "browser" is the owner
+    # saying "in my browser" through a typed field -- both are stored
+    # declarations, the same class of fact device_lane reads, and Law 1 is
+    # about wording, not fields. Honouring them here is what keeps the six
+    # pre-existing lane tests true without a word list: no model is asked
+    # about a goal that already carries its lane.
+    elif g.lower().startswith("research:"):
+        verdict = hands.HandVerdict(hands.HAND_RESEARCH, "declared by the research arm")
+    elif str((params or {}).get("source") or "").lower() == "browser":
+        verdict = hands.HandVerdict(hands.HAND_BROWSER, "declared: the owner asked for the browser")
+    else:
+        verdict = hands.choose_hand(
+            g, hands.gather_context(params, owner_ref=owner_ref,
+                                    backend_url=backend_url), llm=llm)
+    lane = hands.lane_for(verdict)
+    # NO VERDICT ON A CONSEQUENTIAL GOAL IS A CARD, NOT SILENCE. lane_for sends
+    # every no-verdict to research because research cannot act -- correct for
+    # "look up the ferry schedule". But "book a table" with no verdict parked on
+    # research does NOTHING and TELLS NOBODY: the app renders only
+    # awaiting_confirm/needs_user as cards (anticipy_core.py:3507) and research
+    # is neither. The browser lane is the one where is_consequential holds it
+    # as awaiting_confirm and a person sees it. So: no verdict + consequential
+    # -> "" (held, visible). is_consequential is what a plan TOUCHES, which
+    # Law 1 permits; the model was still asked first and its silence recorded.
+    if verdict.hand in hands.NO_VERDICT or verdict.hand == hands.HAND_HOLD:
+        if is_consequential(g, params):
+            lane = ""
+    # THE SEATBELT, AFTER THE VERDICT.
+    if _IRREVERSIBLE_RE.search(g):
+        lane = ""
+    if isinstance(params, dict):
+        params["_hand"] = dict(verdict.as_note(), lane=lane)
+    return lane
 
 # How the best text-native agents actually sound (studied: Tomo — the
 # iMessage coach people text 20 days a month because check-ins read like a
