@@ -106,7 +106,7 @@ jobs:
             --keep-vars \
             --tag "$GITHUB_SHA" \
             --var ANTICIPY_MAX_OWNER_WORKERS:"$cap" \
-            --containers-rollout gradual
+            --containers-rollout immediate
 
       - name: Verify the active fleet, running source and current memory snapshots
         env:

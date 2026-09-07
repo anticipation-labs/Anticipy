@@ -140,11 +140,11 @@
       // Start with 25%, then explicitly reach the whole fleet. This is the
       // minimum connection age before replacement, NOT the shutdown budget.
       // Cloudflare separately gives SIGTERM handlers 15 minutes to flush.
-      // A one-hour connection age kept the previous image serving after a
-      // successful deploy. Five minutes protects a fresh boot without hiding
-      // the release for an hour. See the 2026-09-07 audit and CF rollout docs.
+      // Long-running brain processes have no short browser session to protect
+      // with an additional connection-age delay. Use the platform default;
+      // process shutdown still gets the full, separate 15-minute drain.
       "rollout_step_percentage": [25, 100],
-      "rollout_active_grace_period": 300
+      "rollout_active_grace_period": 0
     }
   ],
 
