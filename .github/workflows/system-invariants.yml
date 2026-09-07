@@ -98,3 +98,28 @@ jobs:
           xcrun --show-sdk-version
       - name: Prove Mac recorder invariants
         run: sh app/macos/Tests/run_all.sh
+      # The suites compile the pure halves with swiftc. Whether the APP still
+      # builds — the xcodegen target's source list, the SwiftUI shell, the
+      # macOS 26 speech APIs — is only answered by xcodebuild, and until this
+      # step nothing answered it before a release. Unsigned on purpose: this
+      # proves the source, mac-release.yml proves the signature.
+      - name: Install xcodegen
+        run: brew install xcodegen
+      - name: The Mac app builds (universal, unsigned)
+        working-directory: app/ios
+        run: |
+          set -o pipefail
+          xcodegen generate
+          xcodebuild -project Anticipy.xcodeproj -scheme AnticipyMac \
+            -configuration Release -destination 'generic/platform=macOS' \
+            -derivedDataPath "$RUNNER_TEMP/mac-derived" \
+            ARCHS='arm64 x86_64' ONLY_ACTIVE_ARCH=NO \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGN_IDENTITY= \
+            build | tail -40
+          app="$RUNNER_TEMP/mac-derived/Build/Products/Release/AnticipyMac.app"
+          test -d "$app" || { echo "::error::no AnticipyMac.app was produced"; exit 1; }
+          test "$(lipo -archs "$app/Contents/MacOS/AnticipyMac")" = "x86_64 arm64"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$app/Contents/Info.plist"
+          # The binary must carry the brain's address and not the retired one.
+          strings "$app/Contents/MacOS/AnticipyMac" | grep -q 'https://api.anticipy.ai'
+          ! strings "$app/Contents/MacOS/AnticipyMac" | grep -q 'railway.app'

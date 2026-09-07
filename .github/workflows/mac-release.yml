@@ -1,0 +1,169 @@
+name: Mac release (Developer ID, notarized)
+
+# Builds Anticipy for Mac exactly as app/macos/Tools/build_release.sh does on
+# the lab Mac — universal, hardened, Developer-ID-signed, notarized, stapled,
+# Gatekeeper-checked — and opens a pull request that commits the zip over
+# backend/pb_public/mac/Anticipy-for-Mac.zip, which the API Worker serves as a
+# static asset. Dispatch-only; nothing here runs on a push.
+#
+# WHY IT EXISTS. Build 119 was made by hand on the lab Mac on 2026-09-01. The
+# source moved after it (#37: the app now posts to api.anticipy.ai), and the
+# only machine that could produce the next signed build was that one laptop.
+# overnight/stranger_gate.py leg 10 is red until the zip is rebuilt; this is
+# the rebuild, from any branch, by anyone with the dispatch button.
+#
+# REQUIRED REPO SECRETS
+#   MAC_SIGNING_P12_BASE64     the Developer ID Application identity — cert AND
+#                              private key — exported from the lab Mac's
+#                              Keychain as a .p12, then `base64 < file`. Only
+#                              the Account Holder can mint a Developer ID
+#                              certificate and Xcode's cloud signing cannot,
+#                              so this file is the one thing this workflow
+#                              cannot make for itself.
+#   MAC_SIGNING_P12_PASSWORD   the password given at export.
+#   ASC_KEY_ID / ASC_ISSUER_ID / ASC_KEY_P8
+#                              already present for ios-testflight.yml; the same
+#                              App Store Connect API key is what notarytool
+#                              accepts (--key/--key-id/--issuer).
+#
+# Every line of every `run:` block stays indented under its block scalar
+# (audit F18 — a heredoc at column 1 once made a dispatch-only workflow fire on
+# every push). Prove it parses before pushing:
+#   ruby -ryaml -e 'YAML.load_file(".github/workflows/mac-release.yml")'
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type RELEASE to build, notarize and open the PR that commits the zip'
+        required: true
+        default: ''
+
+concurrency:
+  group: mac-release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release:
+    if: ${{ github.event.inputs.confirm == 'RELEASE' }}
+    runs-on: macos-15
+    timeout-minutes: 60
+    env:
+      DEVELOPMENT_TEAM: "49T86P9XGW"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Use Xcode 26 (the recorder targets the macOS 26 SDK)
+        run: |
+          X26=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
+          test -n "$X26" || { echo "::error::no Xcode 26 on this runner"; exit 1; }
+          sudo xcode-select -s "$X26"
+          xcodebuild -version
+
+      - name: Mac logic gate — the suites run before anything is signed
+        run: sh app/macos/Tests/run_all.sh
+
+      - name: Install xcodegen
+        run: brew install xcodegen
+
+      - name: Import the Developer ID identity into a throwaway keychain
+        env:
+          MAC_SIGNING_P12_BASE64: ${{ secrets.MAC_SIGNING_P12_BASE64 }}
+          MAC_SIGNING_P12_PASSWORD: ${{ secrets.MAC_SIGNING_P12_PASSWORD }}
+        run: |
+          if [ -z "$MAC_SIGNING_P12_BASE64" ]; then
+            echo "::error::MAC_SIGNING_P12_BASE64 is not set. Export the 'Developer ID Application: Omar Ebrahim (49T86P9XGW)' identity from the lab Mac's Keychain as a .p12 (certificate and private key), then: base64 < identity.p12 | pbcopy → repo secret MAC_SIGNING_P12_BASE64, and the export password → MAC_SIGNING_P12_PASSWORD."
+            exit 1
+          fi
+          keychain="$RUNNER_TEMP/release.keychain-db"
+          keychain_password=$(uuidgen)
+          security create-keychain -p "$keychain_password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$keychain_password" "$keychain"
+          echo -n "$MAC_SIGNING_P12_BASE64" | base64 --decode -o "$RUNNER_TEMP/identity.p12"
+          security import "$RUNNER_TEMP/identity.p12" -k "$keychain" \
+            -P "$MAC_SIGNING_P12_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
+          rm -f "$RUNNER_TEMP/identity.p12"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$keychain_password" "$keychain"
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          identity=$(security find-identity -v -p codesigning "$keychain" \
+            | grep 'Developer ID Application' | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          if [ -z "$identity" ]; then
+            echo "::error::the .p12 holds no 'Developer ID Application' identity"
+            exit 1
+          fi
+          echo "MAC_SIGNING_IDENTITY=$identity" >> "$GITHUB_ENV"
+          echo "signing as: $identity"
+
+      - name: Write the App Store Connect API key (notarytool takes the same key TestFlight uses)
+        env:
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/asc"
+          echo -n "$ASC_KEY_P8" | base64 --decode -o "$RUNNER_TEMP/asc/AuthKey.p8"
+
+      - name: Build, sign, notarize, staple — app/macos/Tools/build_release.sh, verbatim
+        env:
+          NOTARY_KEY_PATH: ${{ runner.temp }}/asc/AuthKey.p8
+          NOTARY_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          sh app/macos/Tools/build_release.sh "$RUNNER_TEMP/macbuild"
+
+      - name: The zip is the tree's app — version, build, signature, ticket
+        run: |
+          zip="$RUNNER_TEMP/macbuild/Anticipy-for-Mac.zip"
+          rm -rf "$RUNNER_TEMP/check" && mkdir -p "$RUNNER_TEMP/check"
+          ditto -x -k "$zip" "$RUNNER_TEMP/check"
+          app="$RUNNER_TEMP/check/AnticipyMac.app"
+          build=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$app/Contents/Info.plist")
+          version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/Info.plist")
+          want=$(grep -E '^[[:space:]]*CURRENT_PROJECT_VERSION:' app/ios/project.yml | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          test "$build" = "$want" || { echo "::error::the app says build $build, project.yml says $want"; exit 1; }
+          codesign --verify --deep --strict --verbose=2 "$app"
+          xcrun stapler validate "$app"
+          spctl -a -vvv -t exec "$app"
+          strings "$app/Contents/MacOS/AnticipyMac" | grep -q 'https://api.anticipy.ai'
+          ! strings "$app/Contents/MacOS/AnticipyMac" | grep -q 'railway.app'
+          echo "MAC_BUILD=$build" >> "$GITHUB_ENV"
+          echo "MAC_VERSION=$version" >> "$GITHUB_ENV"
+          shasum -a 256 "$zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Anticipy-for-Mac-${{ env.MAC_VERSION }}-${{ env.MAC_BUILD }}
+          path: ${{ runner.temp }}/macbuild/Anticipy-for-Mac.zip
+          if-no-files-found: error
+
+      - name: Open the PR that commits the zip where the Worker serves it
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp "$RUNNER_TEMP/macbuild/Anticipy-for-Mac.zip" backend/pb_public/mac/Anticipy-for-Mac.zip
+          branch="mac-release/${MAC_VERSION}-b${MAC_BUILD}-${{ github.run_id }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$branch"
+          git add backend/pb_public/mac/Anticipy-for-Mac.zip
+          git commit -m "Ship notarized Mac recorder build ${MAC_BUILD} (${MAC_VERSION})" \
+            -m "Built by mac-release.yml run ${{ github.run_id }} from ${{ github.sha }}. sha256: $(shasum -a 256 backend/pb_public/mac/Anticipy-for-Mac.zip | cut -d' ' -f1)" \
+            -m "After merging: cd migration/workers && npm run deploy — the Worker serves this file as a static asset, and overnight/stranger_gate.py leg 11 compares what /download hands over against these bytes."
+          git push -u origin "$branch"
+          {
+            echo "Built, signed, notarized and stapled by mac-release.yml run ${{ github.run_id }} from ${{ github.sha }}."
+            echo
+            echo "After merging, deploy the Worker so /mac/Anticipy-for-Mac.zip serves these bytes:"
+            echo
+            echo '    cd migration/workers && npm run deploy'
+            echo
+            echo 'Then python3 overnight/stranger_gate.py: legs 10 and 11 read this zip.'
+          } > "$RUNNER_TEMP/pr-body.md"
+          gh pr create --base "${{ github.ref_name }}" --head "$branch" \
+            --title "Ship notarized Mac recorder build ${MAC_BUILD} (${MAC_VERSION})" \
+            --body-file "$RUNNER_TEMP/pr-body.md"
