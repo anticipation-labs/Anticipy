@@ -48,7 +48,10 @@ def _brain(monkeypatch):
     a = Anticipy(memory=Memory(":memory:"), llm=None, owner_id="t")
     released = []
 
-    def release(line):
+    def release(line, **kw):
+        # Scripted contextual verdict; the real judge is exercised separately.
+        if kw.get("context") == THE_CALL:
+            return None
         released.append(line)
         return "Book dinner at Earls tomorrow at 7 PM"
 

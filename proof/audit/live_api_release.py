@@ -91,6 +91,30 @@ def prove(base, verify_deployment=False):
         check(status in (403, 404), "Other account cannot read the event")
         status, _, _ = request(base, "PATCH", event_path, {"text": "unauthorized"}, stranger["token"])
         check(status in (403, 404), "Other account cannot change the event")
+        # This owner is excluded from the brain fleet. A research-lane fixture
+        # has no browser claimant or provider effect, even for the success case.
+        status, task, _ = request(base, "POST", "/api/collections/jobs/records", {
+            "owner_ref": owner["id"], "goal": "Synthetic approval race check",
+            "device_id": "release-proof", "status": "awaiting_confirm", "lane": "research",
+            "params": json.dumps({"lane": "research", "source": "isolated release fixture"}),
+        }, owner["token"])
+        check(status == 200 and bool(task.get("id")), "Isolated held task created")
+        task_path = "/api/collections/jobs/records/" + task["id"]
+        status, _, task_headers = request(base, "GET", task_path, token=owner["token"])
+        etag = task_headers.get("ETag")
+        check(status == 200 and bool(etag), "Live API supplies task approval precondition")
+        status, _, _ = request(base, "PATCH", task_path, {"goal": "Changed synthetic scope"}, owner["token"])
+        check(status == 200, "Concurrent task amendment saved")
+        status, _, _ = request(base, "PATCH", task_path, {"status": "queued"}, owner["token"], {"If-Match": etag})
+        check(status == 412, "Stale approval refused by live database")
+        status, current, task_headers = request(base, "GET", task_path, token=owner["token"])
+        check(status == 200 and current.get("status") == "awaiting_confirm"
+              and current.get("goal") == "Changed synthetic scope", "Refused approval preserves held corrected task")
+        current_etag = task_headers.get("ETag")
+        status, _, _ = request(base, "PATCH", task_path, {"status": "queued"}, owner["token"], {"If-Match": current_etag})
+        check(status == 200, "Fresh approval precondition accepted")
+        status, _, _ = request(base, "PATCH", task_path, {"status": "queued"}, owner["token"], {"If-Match": current_etag})
+        check(status == 412, "Repeated approval cannot win twice")
         status, _, _ = request(base, "DELETE", "/api/collections/owners/records/" + owner["id"], token=owner["token"])
         check(status == 405, "Generic deletion cannot bypass account cleanup")
         status, _, _ = request(base, "POST", "/me/delete", {"confirm": "delete"}, "a.b.%%%%")

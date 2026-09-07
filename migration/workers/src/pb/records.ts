@@ -187,6 +187,20 @@ export interface RecordsRequest {
   forcedScope?: { column: string; value: string } | null;
   /** Extra clauses the policy chain injected (research_lane's lane exclusion). */
   extraAst?: Node | null;
+  ifMatch?: string | null;
+  /** The exact row against which the policy chain checked this mutation. */
+  storedRow?: Record<string, unknown> | null;
+}
+
+// Text columns defining job authority. The token is opaque to clients; the SQL
+// comparison uses the original values, so two concurrent approvals cannot win.
+const JOB_AUTHORITY = ["id", "owner_ref", "owner", "status", "goal", "params",
+  "workflow_id", "workflow_state", "scope_digest", "approval", "updated"] as const;
+
+export async function jobETag(row: Record<string, unknown>): Promise<string> {
+  const bytes = new TextEncoder().encode(JSON.stringify(JOB_AUTHORITY.map(k => row[k] ?? "")));
+  const hash = await crypto.subtle.digest("SHA-256", bytes);
+  return '"' + Array.from(new Uint8Array(hash), b => b.toString(16).padStart(2, "0")).join("") + '"';
 }
 
 export function resolveCollection(name: string): CollectionDef | null {
@@ -332,7 +346,9 @@ export async function view(env: Env, req: RecordsRequest): Promise<Response> {
 
   const row = await fetchOne(env, def, req.recordId as string, req.forcedScope ?? null);
   if (!row) return notFound();
-  return json(200, rowToRecord(def.name, row, def.boolColumns));
+  const response = json(200, rowToRecord(def.name, row, def.boolColumns));
+  if (def.name === "jobs") response.headers.set("ETag", await jobETag(row));
+  return response;
 }
 
 // ---------------------------------------------------------------------------
@@ -548,6 +564,17 @@ export async function update(env: Env, req: RecordsRequest): Promise<Response> {
   const def = req.collection;
   let body = req.body ?? {};
   const id = req.recordId as string;
+  let expected: Record<string, unknown> | null = null;
+  if (req.ifMatch != null) {
+    if (def.name !== "jobs" || !/^"[a-f0-9]{64}"$/.test(req.ifMatch)) {
+      return badRequest("If-Match requires a job ETag from a current record read.");
+    }
+    expected = req.storedRow ?? await fetchOne(env, def, id, req.forcedScope ?? null);
+    if (!expected) return notFound();
+    if (req.ifMatch !== await jobETag(expected)) {
+      return json(412, { code: 412, message: "Task changed; review its current scope before approving." });
+    }
+  }
 
   // job_commitment_identity.pb.js, the update half — AND THE ONE THAT MATTERS,
   // because a job reaches `done`/`failed`/`cancelled` by being PATCHed there.
@@ -591,6 +618,13 @@ export async function update(env: Env, req: RecordsRequest): Promise<Response> {
     vals.push(req.forcedScope.value);
   }
 
+  if (expected) {
+    for (const key of JOB_AUTHORITY) {
+      where += ` AND ${quoteIdent(key)} IS ?${vals.length + 1}`;
+      vals.push(expected[key] ?? null);
+    }
+  }
+
   let res;
   try {
     res = await env.DB.prepare(
@@ -612,7 +646,9 @@ export async function update(env: Env, req: RecordsRequest): Promise<Response> {
     });
   }
 
-  if (!res.meta.changes) return notFound();
+  if (!res.meta.changes) return expected
+    ? json(412, { code: 412, message: "Task changed during approval; no changes were saved." })
+    : notFound();
 
   const row = await fetchOne(env, def, id, null);
   return json(200, rowToRecord(def.name, row ?? {}, def.boolColumns));

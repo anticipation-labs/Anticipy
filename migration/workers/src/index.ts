@@ -574,6 +574,7 @@ async function handleRecords(
   const req: records.RecordsRequest = {
     collection: def, recordId, method, url, body, principal,
     forcedScope: ctx.forcedScope, extraAst: ctx.extraAst,
+    ifMatch: request.headers.get("If-Match"), storedRow: ctx.storedRow,
   };
 
   // THE ONE COLLECTION WITH BYTES. 1700000045_evidence.js has the only

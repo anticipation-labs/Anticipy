@@ -28,6 +28,7 @@ import requests
 
 from . import pb
 from . import research
+from .spoken_consent import judge as judge_spoken_consent
 
 from .asking import ask_line, question_line
 from .compute import compute_answer
@@ -1552,67 +1553,76 @@ class Anticipy:
         re.IGNORECASE)
     _IMPERATIVE_RE = re.compile(r"^\s*(remind me to|remember to|make sure)\b", re.IGNORECASE)
 
-    # Contentless approval — nothing in it but the yes. Anything carrying a
-    # detail ("let's do Earls at 7") falls through to triage as before.
-    _GO_AHEAD_RE = re.compile(
-        r"^(ok(ay)?|yes|yeah|yep|sure|perfect|alright|cool|great)?[,!.\s]*"
-        r"(let'?s do it|do it|go ahead|go for it|make it happen|i'?m in|"
-        r"sounds good|let'?s go|book it|send it)[,!.\s]*$", re.IGNORECASE)
-
     @staticmethod
     def _recently_asked(job: dict, window: float = 900.0) -> bool:
-        """Was this card put to him recently enough to be what "do it" means?"""
-        import datetime as _dt
+        """A valid timestamp bounds automatic approval eligibility, not meaning."""
+        import datetime as dt
         try:
-            created = _dt.datetime.strptime(
-                (job.get("created") or "")[:19], "%Y-%m-%d %H:%M:%S"
-            ).replace(tzinfo=_dt.timezone.utc).timestamp()
-        except Exception:
-            return True          # unreadable timestamp: assume it counts
-        return time.time() - created <= window
+            stamp = str(job.get("created") or "").replace("Z", "+00:00")
+            created = dt.datetime.fromisoformat(stamp)
+            if created.tzinfo is None:
+                created = created.replace(tzinfo=dt.timezone.utc)
+            age = time.time() - created.timestamp()
+            return 0 <= age <= window
+        except (ValueError, TypeError, OverflowError):
+            return False
 
-    def _release_freshest_held(self, line: str) -> Optional[str]:
-        """Release the plan he was JUST asked about — and only that: the
-        newest held card, and only while the asking is minutes old. A yes an
-        hour later is about something else and stays with triage."""
+    def _release_freshest_held(self, line: str, *, context=None, speaker=None,
+                              explicit=False) -> Optional[str]:
+        """Approve only the task a contextual verdict selects, unchanged in D1.
+
+        The historical method name is retained for callers. List order no longer
+        selects a task. Incomplete candidate lists, absent judgments, malformed
+        state and concurrent changes all leave held work held.
+        """
         try:
-            filt = 'status="awaiting_confirm"'
+            model = getattr(getattr(self, "brain", None), "strong", None) or self.llm
+            if not model or not getattr(model, "live", False):
+                return None
             owner_filter = self._owner_filter()
-            if owner_filter:
-                filt += f" && {owner_filter}"
-            # Fetch MORE THAN ONE on purpose. Asking for a single row made
-            # "yeah do it" spoken aloud release whichever card happened to be
-            # newest, with no test that it was the one he meant — and that
-            # release does a real thing in the world. The same three words
-            # sent over SMS correctly come back "which one, 1) or 2)?",
-            # because that path refuses to guess between candidates. Two lanes
-            # to the same decision must not have different rules about acting
-            # on a guess; the stricter one is right.
+            if not owner_filter:
+                return None
             r = pb.get(f"{self.backend_url}/api/collections/jobs/records",
-                       params={"filter": filt, "perPage": 4, "sort": "-created"},
-                       timeout=10)
-            items = r.json().get("items", []) if r.ok else []
-            if not items:
+                       params={"filter": f'status="awaiting_confirm" && {owner_filter}',
+                               "perPage": 100, "sort": "-created"}, timeout=10)
+            if not r.ok:
                 return None
-            if len([j for j in items if self._recently_asked(j)]) > 1:
-                # Several live cards, one unqualified "do it". Fall through to
-                # triage, which can ask him which — rather than book one and
-                # find out afterwards.
+            listing = r.json()
+            items = listing.get("items", [])
+            if not items or listing.get("totalPages", 1) > 1:
                 return None
-            job = items[0]
-            import datetime as _dt
-            try:
-                created = _dt.datetime.strptime(
-                    (job.get("created") or "")[:19], "%Y-%m-%d %H:%M:%S"
-                ).replace(tzinfo=_dt.timezone.utc).timestamp()
-            except Exception:
-                created = time.time()
-            if time.time() - created > 900:
+            def owned(row):
+                if self.owner_ref:
+                    return row.get("owner_ref") == self.owner_ref
+                return row.get("owner") == self.owner_id
+            if any(not owned(j) or j.get("status") != "awaiting_confirm" for j in items):
                 return None
-            try:
-                params = json.loads(job.get("params") or "{}")
-            except Exception:
-                params = {}
+            if not any(self._recently_asked(j) for j in items):
+                return None
+            if model is not self.llm:
+                for key in ("owner_name", "owner_email", "owner_zone"):
+                    setattr(model, key, getattr(self.llm, key, None))
+            verdict = judge_spoken_consent(
+                model, line=line, conversation=context or [], tasks=items,
+                speaker=speaker, explicit=explicit)
+            if verdict["verdict"] != "approved":
+                return None
+            job = next(j for j in items if j["id"] == verdict["job_id"])
+            if not self._recently_asked(job):
+                return None
+            # The view's ETag advertises that the API supports atomic If-Match.
+            # Re-read after the model: even a correct judgment cannot approve a
+            # scope another writer changed while it was thinking.
+            latest = pb.get(
+                f"{self.backend_url}/api/collections/jobs/records/{job['id']}", timeout=10)
+            if not latest.ok or latest.json() != job:
+                return None
+            etag = getattr(latest, "headers", {}).get("ETag")
+            if not etag:
+                return None
+            params = json.loads(job.get("params") or "{}")
+            if not isinstance(params, dict):
+                return None
             params["authorized"] = True
             params["approved_scope"] = (
                 f"Task: {job.get('goal', '')}. "
@@ -1638,10 +1648,15 @@ class Anticipy:
                 params = put_in_params(params, workflow)
                 fields.update(workflow.job_fields())
                 fields["params"] = json.dumps(params)
+            params["spoken_consent"] = {
+                "verdict": "approved", "job_id": job["id"], "owner_words": line,
+                "reason": str(verdict.get("reason") or ""),
+                "source_event_id": getattr(self, "_source_event_id", ""),
+            }
+            fields["params"] = json.dumps(params)
             pr = pb.patch(
                 f"{self.backend_url}/api/collections/jobs/records/{job['id']}",
-                json=fields,
-                timeout=10)
+                json=fields, headers={"If-Match": etag}, timeout=10)
             return (job.get("goal") or None) if getattr(pr, "ok", False) else None
         except Exception:
             return None
@@ -1823,6 +1838,22 @@ class Anticipy:
             if last_heard and len(last_heard) > 2 else ""
         )
         self._last_heard = (line, heard_at, self._source_event_id)
+        # The consent judge sees all words and the whole supplied conversation.
+        # Only transport/speaker/meeting evidence routes around it; a word list
+        # cannot decide whether speech is eligible to approve a task.
+        if speaker != "other" and channel != "sms" and not in_meeting:
+            released = self._release_freshest_held(
+                line, context=context, speaker=speaker, explicit=explicit)
+            if released:
+                mem = self.memory.ingest(line, speaker=speaker)
+                self._prev = None
+                for loop in self.loops:
+                    if loop.what == released and loop.status == "awaiting_ok":
+                        loop.status = "handling"
+                return {"memory": mem, "decision": Decision(
+                    decision="act", goal=released,
+                    reason="contextual owner approval of the unchanged held task",
+                    addressee="assistant", owes="owner"), "anticipy_says": None}
         # Unmistakable dictation is known before anything can answer or act:
         # a line the owner voice-typed at another machine must not be
         # answered from memory as if he had asked HER. Explicit lines (he
@@ -1916,64 +1947,6 @@ class Anticipy:
             return {"memory": mem, "decision": Decision(
                 decision="ignore", goal=None, reason="fragment, no intent"),
                 "anticipy_says": None}
-        # A bare spoken go-ahead ("Okay let's do it") names nothing on its
-        # own — the "it" is the plan she just held and asked about. Triaging
-        # it as a fresh line is how a contentless yes once minted a brand-new
-        # goal out of injected context ("extract memory into compact JSON", a
-        # leaked internal instruction, live 2026-08-11). His yes lands on the
-        # freshly held plan; only when nothing is freshly held does the line
-        # fall through to triage.
-        #
-        # A YES SAID TO SOMEBODY ELSE IS NOT A YES TO HER.
-        #
-        # This shortcut releases a consequential card with no confirmation, so
-        # it must only fire on speech that could plausibly be aimed at her.
-        # Two ways it could not be:
-        #
-        #  - He is mid-conversation with a person she cannot hear. "Okay let's
-        #    do it" to the man on the phone is the purest back-channel there
-        #    is, and it is the exact class in_conversation() was built for —
-        #    yet the release ran two lines before that evidence was ever
-        #    consulted, so an investor call within fifteen minutes of a held
-        #    dinner would have booked the dinner. speaker is no protection:
-        #    measured on 200 tagged lines, 97% of them carry no verdict at all.
-        #  - It arrived over SMS. conversation.py owns confirm semantics for
-        #    texts — it decides go/amend against the item it actually asked
-        #    about — and only hands a line to _think() once it has judged it a
-        #    new request or chat. A "sounds good" the SMS lane already
-        #    declined to treat as a confirmation must not come back through
-        #    the ambient door and release the newest card instead.
-        #  - The meeting posture is armed. in_conversation() is a BACK-CHANNEL
-        #    density test and needs a fifth of the recent lines to be almost
-        #    pure agreement; the 2026-08-23 Meet ran at 13% against its 20%
-        #    threshold and never tripped it. That is the whole reason
-        #    meeting_heard exists, and it means a substantive two-way meeting
-        #    is invisible here while being the likeliest room for "okay let's
-        #    do it" to belong to somebody else. The posture already holds
-        #    fresh consequential CARDS for the after-call digest; this was the
-        #    one path that needs no card, because it releases work already
-        #    sitting at the gate — so a yes across the table could have sent
-        #    an email.
-        #
-        # None of the three loses the yes: the line falls through to triage
-        # with mid_conversation and the meeting pre-check riding along, which
-        # is the honest place to judge it — and anything minted mid-meeting is
-        # held for the digest anyway. Being wrong here costs one tap; being
-        # wrong the other way costs an action nobody authorised.
-        ambient = (not dictated and speaker != "other" and channel != "sms"
-                   and not in_meeting and not in_conversation(context))
-        if ambient and self._GO_AHEAD_RE.match(line.strip()):
-            released = self._release_freshest_held(line)
-            if released:
-                self._prev = None
-                for l in self.loops:
-                    if l.what == released and l.status == "awaiting_ok":
-                        l.status = "handling"
-                return {"memory": mem, "decision": Decision(
-                    decision="act", goal=released,
-                    reason="his go-ahead — released the plan he was asked about",
-                    addressee="assistant", owes="owner"),
-                    "anticipy_says": None}
         # Split-thought context is only the last line, only if it's recent
         # (people pause seconds, not hours), and only if it wasn't already
         # acted on — an acted line re-fed as context mints duplicate jobs.

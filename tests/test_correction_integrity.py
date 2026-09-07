@@ -125,18 +125,6 @@ def test_a_prior_amend_rides_into_the_later_release(monkeypatch):
     assert "override the task wording" in p["approved_scope"]
 
 
-def test_spoken_go_ahead_also_carries_prior_corrections(monkeypatch):
-    a = Anticipy(memory=Memory(":memory:"), llm=None, owner_id="t")
-    job = {"id": "j9", "goal": "book dinner at 8pm",
-           "status": "awaiting_confirm",
-           "params": json.dumps({"corrections": {"time": "6pm"}}),
-           "created": "2999-01-01 00:00:00"}
-    patched = _pb(monkeypatch, coremod, job)
-    a.hear("Okay let's do it.")
-    p = json.loads(patched["params"])
-    assert "They changed: time: 6pm" in p["approved_scope"]
-
-
 # ---------------------------------------------------------------- failure 2
 
 def test_resume_drops_a_code_the_owner_never_gave(monkeypatch):
@@ -186,28 +174,6 @@ def test_non_code_changes_pass_untouched():
 
 
 # ---------------------------------------------------------------- failure 3
-
-def test_bare_spoken_go_ahead_releases_the_held_plan(monkeypatch):
-    a = Anticipy(memory=Memory(":memory:"), llm=None, owner_id="t")
-    job = {"id": "j9", "goal": "book dinner for 4 at Bella Vista",
-           "status": "awaiting_confirm", "params": json.dumps({}),
-           "created": "2999-01-01 00:00:00"}
-    patched = _pb(monkeypatch, coremod, job)
-    out = a.hear("Okay let's do it.")
-    assert out["decision"].decision == "act"
-    assert out["decision"].goal == "book dinner for 4 at Bella Vista"
-    assert patched["status"] == "queued"
-    p = json.loads(patched["params"])
-    assert p["authorized"] is True
-    assert 'They said: "Okay let\'s do it."' in p["approved_scope"]
-
-
-def test_go_ahead_with_content_still_goes_to_triage():
-    assert not Anticipy._GO_AHEAD_RE.match("Let's do Earls tomorrow at 2 PM")
-    assert Anticipy._GO_AHEAD_RE.match("Okay let's do it.")
-    assert Anticipy._GO_AHEAD_RE.match("sounds good")
-    assert not Anticipy._GO_AHEAD_RE.match("do it for four people")
-
 
 def test_instruction_shaped_memory_stays_out_of_triage_context():
     src = open(os.path.join(os.path.dirname(os.path.dirname(
