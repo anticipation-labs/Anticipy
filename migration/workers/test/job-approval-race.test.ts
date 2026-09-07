@@ -19,6 +19,7 @@ async function task() {
   const response = await view({DB:t.db}, req({recordId:row.id, method:'GET'}));
   const etag = response.headers.get('ETag');
   assert.match(etag!, /^"[a-f0-9]{64}"$/);
+  assert.equal(response.headers.get('Cache-Control'), 'private, no-store, no-transform');
   return {id:row.id, etag, stored: t.query<Record<string,unknown>>('SELECT * FROM jobs WHERE id = ?', row.id)[0]};
 }
 let checks = 0;

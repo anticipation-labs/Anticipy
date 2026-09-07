@@ -347,7 +347,12 @@ export async function view(env: Env, req: RecordsRequest): Promise<Response> {
   const row = await fetchOne(env, def, req.recordId as string, req.forcedScope ?? null);
   if (!row) return notFound();
   const response = json(200, rowToRecord(def.name, row, def.boolColumns));
-  if (def.name === "jobs") response.headers.set("ETag", await jobETag(row));
+  if (def.name === "jobs") {
+    response.headers.set("ETag", await jobETag(row));
+    // Cloudflare compression weakens ETags. A job's next conditional write
+    // requires this exact strong token, so preserve the response end to end.
+    response.headers.set("Cache-Control", "private, no-store, no-transform");
+  }
   return response;
 }
 

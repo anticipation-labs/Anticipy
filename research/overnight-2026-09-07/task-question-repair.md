@@ -88,3 +88,11 @@ for the Internal group, including the owner's iCloud tester account. The backend
 source readback reported all eight children running the expected source hash,
 but its fleet observation subsequently became stale. That operational check
 remains open until fresh snapshot and fleet observations are obtained.
+
+The expanded live fixture also found that Cloudflare compression changed a job's
+strong ETag into `W/"..."`, which the API correctly refused for a conditional
+write. The same GET with identity encoding returned the strong token. Job detail
+responses now include `private, no-store, no-transform`, preserving the token
+without weakening stale-write protection. This applies to every job and client,
+including iPhone requests. Cloudflare documents this behavior in its
+[compression documentation](https://developers.cloudflare.com/speed/optimization/content/compression/).

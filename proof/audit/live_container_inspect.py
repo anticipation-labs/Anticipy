@@ -7,6 +7,12 @@ from proof.audit.live_api_release import request
 
 
 def main():
+    account_base = ('https://api.cloudflare.com/client/v4/accounts/'
+                    + os.environ['CLOUDFLARE_ACCOUNT_ID'])
+    status, schedules, _ = request(account_base, 'GET', '/workers/scripts/anticipy-brain/schedules',
+        token=os.environ['CLOUDFLARE_API_TOKEN'])
+    print(json.dumps({'schedules_http': status, 'configured_schedules': schedules.get('result')
+                     if status == 200 else None}))
     base = ("https://api.cloudflare.com/client/v4/accounts/"
             + os.environ["CLOUDFLARE_ACCOUNT_ID"] + "/containers")
 
