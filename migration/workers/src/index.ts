@@ -45,7 +45,7 @@ import {
   internalFellowsSubmissionsRelease,
 } from "./routes/fellows.ts";
 import type { FellowsEnv } from "./routes/fellows_base.ts";
-import { smsInbound, transcriptionToken, type SmsEnv } from "./routes/sms.ts";
+import { transcriptionToken, type SmsEnv } from "./routes/sms.ts";
 import { sendblueInbound, type SendblueEnv } from "./routes/sendblue.ts";
 import { connectionCommand } from "./routes/connection_command.ts";
 import { contextRequest } from "./routes/context_request.ts";
@@ -247,19 +247,15 @@ export default {
       return adminSmsLines(request, env as unknown as AdminSmsLinesEnv);
     }
 
-    // Twilio's inbound webhook. TWILIO_AUTH_TOKEN is the only thing that can
-    // validate X-Twilio-Signature -- there is no API-key equivalent.
+    // Retired provider endpoint. Do not parse, persist, or dispatch its body.
     if (path === "/sms/inbound" && method === "POST") {
-      // ctx IS LOAD-BEARING, as it is for /c/{token}/go. The text twin
-      // (src/connections/wiring.ts handleInboundText) spends a model call
-      // AFTER the row is written and after the carrier has its answer; without
-      // waitUntil a Worker cancels that work the moment the TwiML is returned.
-      return smsInbound(request, env as unknown as SmsEnv, ctx);
+      return new Response(JSON.stringify({ error: "messaging_endpoint_retired" }), {
+        status: 410, headers: { "content-type": "application/json" },
+      });
     }
     // Sendblue's webhook: inbound iMessage/SMS AND status updates for texts we
     // sent, on one URL, proven by the dashboard's secret in sb-signing-secret.
-    // It lands the same events row /sms/inbound lands (src/pb/sender.ts), so
-    // the brain cannot tell the carriers apart.
+    // Both channels enter the owner-scoped event stream in src/pb/sender.ts.
     if (path === "/sms/sendblue" && method === "POST") {
       return sendblueInbound(request, env as unknown as SendblueEnv, ctx);
     }

@@ -93,37 +93,17 @@ def has_credentials(env: Optional[Mapping[str, str]] = None) -> bool:
 
 
 def choose_provider(env: Optional[Mapping[str, str]] = None) -> str:
-    """Which arm the worker texts through: "sendblue" | "twilio" | "mock".
+    """SendBlue is the only live texting provider. Retired or missing means mock.
 
-    ONE RULE, THREE READERS — the worker's transport build, its `worker up`
-    banner, and overnight/does_she_reach_them.py — so a gate can never
-    measure a different vendor than the one the worker is texting through.
-
-    ANTICIPY_SMS_PROVIDER names a vendor outright. Unset, the choice is
-    Sendblue when its three variables are all present, else Twilio when its
-    credentials are, else mock. POLARITY, decided here: a vendor that is
-    NAMED but NOT CONFIGURED is "mock", never the other vendor. An operator
-    who wrote `sendblue` and forgot the secret has asked for one channel and
-    must not be answered on another — falling through to Twilio would text
-    the owner from a number he has just been told is retired. Mock sends
-    nothing, and the banner says `sms=mock` where the operator is looking.
-    An unrecognised name is the same case: a typo is not a vendor.
+    Old Twilio credentials may remain in a deployment during secret cleanup;
+    neither their presence nor an explicit retired-provider setting selects it.
+    A configuration mistake never switches the sender to another provider.
     """
     env = os.environ if env is None else env
     asked = (env.get("ANTICIPY_SMS_PROVIDER") or "").strip().lower()
-    sendblue = has_credentials(env)
-    twilio = va.has_credentials(env)
-    if asked == "sendblue":
-        return "sendblue" if sendblue else "mock"
-    if asked == "twilio":
-        return "twilio" if twilio else "mock"
-    if asked:
+    if asked not in ("", "sendblue"):
         return "mock"
-    if sendblue:
-        return "sendblue"
-    if twilio:
-        return "twilio"
-    return "mock"
+    return "sendblue" if has_credentials(env) else "mock"
 
 
 def key_tail(key_id: str) -> str:

@@ -314,26 +314,11 @@ def main() -> None:
     signal.signal(signal.SIGINT, request_stop)
     print(f"supervisor up · pb={PB} · isolated-owner-limit={MAX_OWNER_WORKERS}")
 
-    last_webhook = 0.0
     # Wait for owner children to start before the first snapshot. A failed
     # upload retries in fifteen minutes; a missing configuration is an
     # intentional no-op so this image can safely precede its credentials.
     next_state_backup = time.monotonic() + 30
     while not stopping:
-        # The Twilio number must keep pointing at us, and exactly one process
-        # may check. That job used to be handed to the first-sorted owner's
-        # CHILD, baked into its environment at spawn — so when that owner was
-        # removed from discovery the role moved to a child that had already
-        # been started with ANTICIPY_WEBHOOK_MANAGER=0, and NOBODY checked
-        # anywhere until the supervisor itself restarted. The watchdog exists
-        # because the number really was repointed at a stranger's Vercel app
-        # on 2026-08-03 and every text he sent went there for a day; going
-        # dark with nothing in any log saying so is the one failure it may
-        # not have. Outside the try below on purpose: a backend outage must
-        # not take the watchdog down with discovery.
-        if time.time() - last_webhook > worker.WEBHOOK_CHECK_EVERY_SECONDS:
-            last_webhook = time.time()
-            worker.ensure_inbound_webhook()
         # One discovery snapshot, used for BOTH decisions. Fetching it twice
         # would let an account disappear between the two calls and have its
         # memory purged on evidence the reconcile never saw.

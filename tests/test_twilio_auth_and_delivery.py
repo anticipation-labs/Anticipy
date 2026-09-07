@@ -422,51 +422,17 @@ def test_an_unreachable_derived_url_refuses_and_says_which_part_is_wrong(clean_e
         assert url == "" and fragment in why, (pb, why)
 
 
-def test_the_binding_is_only_written_after_the_url_answers_as_our_backend(clean_env):
-    rec, printed = _run(clean_env)
-    assert rec.health_urls == ["https://backend.example.com/api/health"]
-    assert rec.posts and rec.posts[0]["SmsUrl"] == "https://backend.example.com/sms/inbound"
-    assert any("WEBHOOK HIJACK" in line for line in printed), printed
-
-
-def test_a_url_that_serves_nothing_never_replaces_a_live_binding(clean_env):
-    """Reachability proves routable, not OURS. The disagreement that caused the
-    outage was between two live services, and only one of them serves the hook."""
-    rec, printed = _run(clean_env, health_ok=False)
-    assert rec.posts == [], "a URL that 404s must not be handed to Twilio"
-    joined = " ".join(printed)
-    assert "NOT repointing" in joined and "real.example.com" in joined
-
-
-def test_reading_and_writing_the_binding_authenticates_with_the_api_key(clean_env):
-    rec, _ = _run(clean_env, TWILIO_API_KEY_SID=KEY_SID,
-                  TWILIO_API_KEY_SECRET=KEY_SECRET)
-    assert rec.numbers_auth == (KEY_SID, KEY_SECRET)
-    assert rec.post_auth == (KEY_SID, KEY_SECRET)
-
-
-def test_a_worker_with_only_a_key_can_still_check_its_own_ear(clean_env):
-    """Outbound moved off the auth token; the number's configuration is just
-    another REST call, so it must move too or the check dies with the token."""
-    rec, _ = _run(clean_env, TWILIO_AUTH_TOKEN=None, TWILIO_API_KEY_SID=KEY_SID,
-                  TWILIO_API_KEY_SECRET=KEY_SECRET)
-    assert rec.numbers_auth == (KEY_SID, KEY_SECRET)
-    assert len(rec.posts) == 1
-
-
-def test_a_credential_that_cannot_read_the_account_says_so_instead_of_nothing(clean_env):
-    """Silence made "the key has no permissions" and "the binding is fine" the
-    same observation."""
-    rec, printed = _run(clean_env, list_ok=False)
-    assert rec.posts == []
-    joined = " ".join(printed)
-    assert "401" in joined and "could not read the inbound binding" in joined
-
-
-def test_a_number_that_is_not_on_this_account_is_named_out_loud(clean_env):
-    rec, printed = _run(clean_env, TWILIO_PHONE_NUMBER="+15559998888")
-    assert rec.posts == []
-    assert any("is not on this account" in line for line in printed), printed
+@pytest.mark.parametrize("options", [
+    {}, {"health_ok": False}, {"list_ok": False},
+    {"TWILIO_API_KEY_SID": KEY_SID, "TWILIO_API_KEY_SECRET": KEY_SECRET},
+    {"TWILIO_AUTH_TOKEN": None, "TWILIO_API_KEY_SID": KEY_SID, "TWILIO_API_KEY_SECRET": KEY_SECRET},
+    {"TWILIO_PHONE_NUMBER": "+15559998888"},
+])
+def test_retired_provider_does_not_probe_read_or_rewrite_a_binding(clean_env, options):
+    rec, printed = _run(clean_env, **options)
+    assert rec.health_urls == [] and rec.posts == []
+    assert rec.numbers_auth is None and rec.post_auth is None
+    assert printed == []
 
 
 def test_a_correct_binding_costs_one_read_and_no_probe(clean_env):

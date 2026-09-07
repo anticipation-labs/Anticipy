@@ -1,6 +1,29 @@
 # Anticipy overnight repair — 7 September 2026
 
-## Latest checkpoint — 2026-09-07 13:39 UTC
+## Latest checkpoint — 2026-09-07 14:03 UTC
+
+- Effect repair 9a624068 is LIVE: brain run34128094202 verified8/8 runtime
+  sources b8b8ffa1ac81a79eff829eb6e01cc71e2bb67f15533028df9b525dcfdfcec6d5.
+- SendBlue-only runtime candidate verified: full Python3099passed2skipped
+  (overnight-sendblue-full-final.log),98 targetedpassed, full WorkerAPI suite
+  passed (overnight-sendblue-api-full-3.log), TypeScript check passed.
+  Old provider fallback/direct-arm attachment and webhook rewriting removed;
+  old POST/sms/inbound now410. Documentation: sendblue-retirement.md.
+  Commit and deploy API, verify old410/modern auth plus34 live checks, then
+  brain cap100 and verify8/8 live source. Candidate not yet live at checkpoint.
+- Next: immediate and accurate missing-browser/access explanation in app,
+  missing connection guidance, compound preparation, full50 current-model
+  transcript review, updatedPDF and honest shipped/tested/blocked matrix.
+- iOS164 remains VALID/InternalIN_BETA_TESTING. Sanket164 attached but Apple
+  blocks submission while159is in review. Personal installed extension0.15
+  remains unchanged because chrome://extensions was policy-blocked; do not
+  use alternate tooling to bypass that restriction.
+- Budget: gateway observed$10.6412 plus native reserved upperbound$4.1317.
+  Operating caps25+10 remain below user-authorized50. No real-person test SMS.
+- Simulator Today/mic stopped. Active local services89202/60349/UIbrain54948.
+
+## Previous checkpoint — 2026-09-07 13:39 UTC
+
 
 - iOS16410c8eb2 uploaded06:20:18Vancouver; CI34125816490 success.
   ASC34127186288 confirms VALID and Internal IN_BETA_TESTING. That read timed

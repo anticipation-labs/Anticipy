@@ -64,7 +64,7 @@ function doneFromHook(): string {
 
 interface Sent { url: string; body: string }
 let sent: Sent[] = [];
-let reply: () => Response = () => new Response(JSON.stringify({ sid: "SM1" }), { status: 201 });
+let reply: () => Response = () => new Response(JSON.stringify({ message_handle: "synthetic1", status: "QUEUED" }), { status: 201 });
 globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   const raw = init?.body;
   sent.push({
@@ -81,11 +81,11 @@ const PHONE = "+15550100001";
 const OWNER = "owner000000one1";
 
 function env(db: D1Database): ResetEnv {
-  // Twilio, because its body is a form the test can read the sentence out of.
+  // SendBlue JSON is the current outbound wire.
   return {
     DB: db,
-    TWILIO_ACCOUNT_SID: "ACtest", TWILIO_AUTH_TOKEN: "twtoken",
-    TWILIO_PHONE_NUMBER: "+15550002222",
+    SENDBLUE_API_KEY_ID: "synthetic-key", SENDBLUE_API_SECRET_KEY: "synthetic-secret",
+    SENDBLUE_FROM_NUMBER: "+15550002222",
   } as unknown as ResetEnv;
 }
 
@@ -96,11 +96,12 @@ function seeded() {
   return t;
 }
 
-/** The `Body=` parameter of the one Twilio POST. */
+/** The content of the one SendBlue POST. */
 function textSent(): string {
   assert.equal(sent.length, 1, `expected exactly one outbound text, got ${sent.length}`);
-  const body = new URLSearchParams(sent[0].body);
-  return String(body.get("Body") ?? "");
+  const body = JSON.parse(sent[0].body);
+  assert.ok(sent[0].url.endsWith("/api/send-message"));
+  return String(body.content ?? "");
 }
 
 // ---------------------------------------------------------------------------
@@ -148,7 +149,7 @@ await check("a send the provider refuses leaves NO live code in the table", asyn
       method: "POST", headers: { "content-type": "application/json" },
       body: JSON.stringify({ email: EMAIL }),
     }), env(t.db));
-  reply = () => new Response(JSON.stringify({ sid: "SM1" }), { status: 201 });
+  reply = () => new Response(JSON.stringify({ message_handle: "synthetic1", status: "QUEUED" }), { status: 201 });
   assert.equal(res.status, 200, "a refused send must still answer the same 200");
   assert.equal(t.query("SELECT id FROM password_resets").length, 0);
   t.close();

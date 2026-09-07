@@ -93,20 +93,9 @@ def test_an_unreachable_target_writes_nothing(monkeypatch):
         assert rec.posts == [], f"{url} must not be written to Twilio"
 
 
-def test_a_public_https_target_is_still_repaired(monkeypatch):
-    """The guard must not disable the feature it protects.
-
-    Without this, "refuse the bad ones" could be satisfied by refusing
-    everything, and the hijack this function exists to fix would silently stop
-    being fixed.
-    """
+def test_retired_provider_does_not_repoint_even_a_public_target(monkeypatch):
     rec = _run("https://backend.example.com/sms/inbound?token=abc", monkeypatch)
-    assert len(rec.posts) == 1, "a reachable URL must still be repointed"
-    assert rec.posts[0]["SmsUrl"] == "https://backend.example.com/sms/inbound?token=abc"
-    assert rec.posts[0]["SmsMethod"] == "POST"
-    # An application SID silently overrides every sms_* URL, so clearing it is
-    # part of a working repair.
-    assert rec.posts[0]["SmsApplicationSid"] == ""
+    assert rec.posts == []
 
 
 def test_a_correct_binding_is_left_alone(monkeypatch):
@@ -115,12 +104,12 @@ def test_a_correct_binding_is_left_alone(monkeypatch):
     assert rec.posts == [], "an already-correct binding must not be rewritten"
 
 
-def test_172_addresses_outside_rfc1918_are_not_treated_as_private(monkeypatch):
+def test_retired_provider_does_not_write_public_ip_targets(monkeypatch):
     """172.15.x and 172.32.x are PUBLIC. A sloppy `startswith("172.")` would
     refuse real hosts and quietly stop repairing a genuine hijack."""
     for url in ("https://172.15.0.1/sms/inbound", "https://172.32.0.1/sms/inbound"):
         rec = _run(url, monkeypatch)
-        assert len(rec.posts) == 1, f"{url} is public and must still be written"
+        assert rec.posts == [], f"{url} must not reach a retired provider"
 
 
 def test_no_credentials_means_no_calls_at_all(monkeypatch):

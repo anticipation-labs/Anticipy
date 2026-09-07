@@ -1117,8 +1117,8 @@ await check("THE TEXT TWIN: the two carriers and the entry point are wired the s
     assert.ok(/ctx\?: ExecutionContext/.test(source),
       `${name} must take a ctx, or a Worker cancels the twin the moment it answers`);
   }
-  assert.equal(INDEX_SOURCE.split("smsInbound(request, env as unknown as SmsEnv, ctx)").length - 1, 1,
-    "src/index.ts does not pass ctx to smsInbound");
+  assert.equal(INDEX_SOURCE.split("smsInbound(request, env as unknown as SmsEnv, ctx)").length - 1, 0,
+    "retired Twilio route must not dispatch commands");
   assert.equal(
     INDEX_SOURCE.split("sendblueInbound(request, env as unknown as SendblueEnv, ctx)").length - 1, 1,
     "src/index.ts does not pass ctx to sendblueInbound");

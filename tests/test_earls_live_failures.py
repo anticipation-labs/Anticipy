@@ -159,9 +159,11 @@ def test_optional_fields_never_block_is_law():
 
 # ------------------------------------------------------------- failure 6
 
-def test_webhook_self_heal_compares_full_urls():
-    assert 'current == ours and not shadowed' in WORKER
-    assert 'current.split("?")[0] == ours.split("?")[0]' not in WORKER
+def test_retired_webhook_has_no_rebinding_network_path():
+    from brain import worker
+    import inspect
+    assert "requests." not in inspect.getsource(worker.ensure_inbound_webhook)
+    assert "api.twilio.com" not in WORKER
 
 
 def test_sms_rejections_are_logged():

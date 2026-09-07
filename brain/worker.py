@@ -39,7 +39,6 @@ from .conversation import (Conversation, MockTransport, MessageTransport,
 from . import sendblue_arm
 from .llm import (LLM, TZ as TZ_FALLBACK, DECISION_CALL_CEILING,
                   DECISION_DEADLINE_SECONDS, budget_spent_last)
-from .voice_arm import VoiceArm, has_credentials, rest_credential
 from .workflow import (claim as claim_plan, fail as fail_plan,
                        from_params as workflow_from_params,
                        put_in_params, recover_expired as recover_expired_plan,
@@ -1002,22 +1001,11 @@ SENDBLUE_INBOUND_PATH = "/sms/sendblue"
 
 
 def inbound_ear_note(provider: str) -> str:
-    """The one startup line about where the owner's texts land, per provider.
-
-    Twilio's binding is READ AND WRITTEN by `ensure_inbound_webhook` every
-    beat, because the number really was repointed at a stranger's app once
-    and nothing said so. Sendblue exposes no per-number binding to this
-    process: its inbound webhook is configured in the dashboard
-    (Developer → Webhooks), so the most this worker can do is say, once,
-    where it has to point — derived from ANTICIPY_PB for the same reason the
-    Twilio target is, so two services cannot disagree about it.
-    """
+    """Describe the active SendBlue webhook configuration without changing it."""
     if provider == "sendblue":
         return (f"inbound texts: Sendblue's webhook is configured in its "
                 f"dashboard (Developer → Webhooks), not by this worker; it "
                 f"must point at {PB.rstrip('/')}{SENDBLUE_INBOUND_PATH}")
-    if provider == "twilio":
-        return "inbound texts: Twilio's binding is checked every beat"
     return "inbound texts: no message provider, nothing to point anywhere"
 
 
@@ -1032,98 +1020,12 @@ def sms_banner(provider: str, arm) -> str:
     """
     if provider == "sendblue":
         return f"sendblue:{sendblue_arm.key_tail(getattr(arm, 'key_id', ''))}"
-    if provider == "twilio":
-        return "twilio"
     return "mock"
 
 
 def ensure_inbound_webhook() -> None:
-    # TWILIO'S EAR, AND ONLY TWILIO'S. Everything below reads and rewrites the
-    # inbound binding of a Twilio number; a deployment texting through
-    # Sendblue has no business touching it, even when TWILIO_* is still in
-    # its environment from before the switch. Silent on purpose: this runs
-    # every beat from the worker and the supervisor alike, and the one line
-    # about where Sendblue's webhook lives is printed once at startup
-    # (`inbound_ear_note`).
-    if sendblue_arm.choose_provider() != "twilio":
-        return
-    sid = os.environ.get("TWILIO_ACCOUNT_SID")
-    number = os.environ.get("TWILIO_PHONE_NUMBER") or os.environ.get("TWILIO_FROM")
-    # Reading the number's configuration is a REST call like any other, so it
-    # authenticates with the same preferred-API-key credential as a send. An
-    # inbound signature is the only thing that still needs the auth token
-    # itself, and that check does not live in this service.
-    credential = rest_credential()
-    if not (sid and number and credential):
-        return          # not our job to guess; stay quiet
-    ours, refusal = webhook_target()
-    if not ours:
-        print(f"NOT repointing inbound SMS: {refusal}. Leaving the existing "
-              f"binding alone.")
-        return
-    try:
-        r = requests.get(
-            f"https://api.twilio.com/2010-04-01/Accounts/{sid}/IncomingPhoneNumbers.json",
-            auth=credential.basic(), timeout=15)
-        if not r.ok:
-            # Was silent, which made "the credential cannot read this account"
-            # and "the binding is fine" the same observation.
-            print(f"could not read the inbound binding from Twilio: HTTP "
-                  f"{r.status_code} using {credential.describes}")
-            return
-        rows = [n for n in r.json().get("incoming_phone_numbers", [])
-                if n.get("phone_number") == number]
-        if not rows:
-            print(f"TWILIO_PHONE_NUMBER …{str(number)[-4:]} is not on this "
-                  f"account — nothing to point at {ours.split('?')[0]}. Her "
-                  f"inbound texts are going somewhere this worker cannot see.")
-            return
-        n = rows[0]
-        current = n.get("sms_url") or ""
-        # An application SID silently overrides every sms_* URL, so a matching
-        # URL with one set is still not a working inbound binding.
-        shadowed = bool(str(n.get("sms_application_sid") or "").strip())
-        # FULL-string equality. Comparing with the query stripped declared a
-        # stale "?token=..." URL healthy for three days while Twilio's
-        # signature — computed over the full URL including the query — failed
-        # against the clean env URL on every single inbound text (found
-        # 2026-08-15: zero inbound events since Aug 12, all 403).
-        if current == ours and not shadowed:
-            return
-        print(f"WEBHOOK HIJACK: inbound SMS was pointing at {current.split('?')[0] or '(empty)'}"
-              f"{' (shadowed by an application SID)' if shadowed else ''} — "
-              f"pointing it back at {ours.split('?')[0]}")
-        # THE URL WE ARE ABOUT TO HAND TWILIO HAS TO BE OUR BACKEND.
-        #
-        # Reachability says the URL is routable from the internet; it says
-        # nothing about what answers there. One GET to /api/health on the same
-        # origin turns "the two services agree" from a claim about environment
-        # variables into an observation: if that origin is not a PocketBase
-        # that answers, then whatever the number currently points at is likelier
-        # to be right than a URL serving nothing, and the safe move is to leave
-        # the live binding alone and say so.
-        origin = urlparse(ours)
-        health = f"{origin.scheme}://{origin.netloc}/api/health"
-        try:
-            probe = requests.get(health, timeout=10)
-            answered = bool(getattr(probe, "ok", False))
-            detail = f"HTTP {getattr(probe, 'status_code', '?')}"
-        except Exception as exc:
-            answered, detail = False, str(exc)
-        if not answered:
-            print(f"NOT repointing inbound SMS: {health} is not answering as "
-                  f"our PocketBase ({detail}), so this URL cannot be the one "
-                  f"Twilio should reach. Leaving {current.split('?')[0] or '(empty)'} "
-                  f"in place.")
-            return
-        u = requests.post(
-            f"https://api.twilio.com/2010-04-01/Accounts/{sid}/IncomingPhoneNumbers/{n['sid']}.json",
-            auth=credential.basic(), timeout=15,
-            data={"SmsUrl": ours, "SmsMethod": "POST", "SmsApplicationSid": ""})
-        print("webhook repointed" if u.ok else f"could not repoint the webhook: {u.status_code}")
-    except Exception as e:
-        # This must never be able to stop her hearing or texting.
-        print(f"webhook check failed (harmless): {e}")
+    """Retired compatibility entry point: never reads or rewrites Twilio."""
+    return
 
 
 def post_event(kind: str, text: str, decision: str = "", goal: str = "",
@@ -5117,6 +5019,16 @@ def ask_about_stuck_jobs(anticipy, convo) -> None:
         print(f"stuck-job ask failed: {e}")
 
 
+def configure_message_transport(anticipy, provider):
+    """Bind both sending surfaces to one provider, clearing any old direct arm."""
+    arm = sendblue_arm.SendblueArm() if provider == "sendblue" else None
+    anticipy.voice = arm
+    transport = (MessageTransport(
+        arm, before_send=lambda destination: canonical_phone_allows_effect(anticipy, destination),
+    ) if arm else MockTransport())
+    return arm, transport
+
+
 def main() -> None:
     global ACTIVE_OWNER_REF, ACTIVE_OWNER_ID, CLOCK_TZ
     legacy_owner = os.environ.get("ANTICIPY_OWNER_ID", "").strip()
@@ -5151,48 +5063,18 @@ def main() -> None:
                         owner_phone=("" if os.environ.get("ANTICIPY_SUPERVISED") == "1"
                                      else os.environ.get("ANTICIPY_OWNER_PHONE", "owner")),
                         owner_id=legacy_owner, owner_ref=owner_ref)
-    # WHAT WAS HERE UNTIL 2026-09-05, Sendblue arm: `live_sms =
-    # has_credentials(); voice = VoiceArm() if live_sms else None; transport =
-    # TwilioTransport(voice, ...) if voice else MockTransport()`, and the
-    # banner said `sms=live`. One vendor, so "configured" and "which" were
-    # the same question. They are not any more.
-    #
-    # WHICH ARM TEXTS is decided once, by brain/sendblue_arm.py
-    # `choose_provider` — the same rule the reach gate reads — so the banner,
-    # the transport and the measurement can never name different vendors.
-    # Sendblue when its three variables are set, else Twilio when its
-    # credentials are (an API key OR the auth token: brain/voice_arm.py
-    # `has_credentials` is the one place that knows), else mock. A provider
-    # NAMED in ANTICIPY_SMS_PROVIDER but not configured is mock, never the
-    # other vendor, and says so here where the operator is looking.
+    # SendBlue is the only active texting provider. Missing or retired
+    # configuration disables sending, including the direct notification path.
     sms_provider = sendblue_arm.choose_provider()
     asked = (os.environ.get("ANTICIPY_SMS_PROVIDER") or "").strip().lower()
     if asked and sms_provider == "mock":
         print(f"ANTICIPY_SMS_PROVIDER={asked!r} but that provider is not "
               f"configured on this process — texting is MOCK, not the other "
               f"vendor. Set its credentials or unset the variable.")
-    # The Twilio arm is ALSO the calling arm, so it is built whenever Twilio
-    # is configured, whatever texts ride on. Calls stay on Twilio; Sendblue
-    # does not dial.
-    voice = VoiceArm() if has_credentials() else None
-    if sms_provider == "sendblue":
-        arm = sendblue_arm.SendblueArm()
-    elif sms_provider == "twilio":
-        arm = voice
-    else:
-        arm = None
-    # notify_owner's direct `.text` fallback (brain/anticipy_core.py) must
-    # reach the SAME channel the conversation does, or a text that missed the
-    # conversational lane would go out through the vendor that was retired.
-    if arm is not None:
-        anticipy.voice = arm
-    elif voice:
-        anticipy.voice = voice
-    transport = (MessageTransport(
-        arm,
-        before_send=lambda destination: canonical_phone_allows_effect(
-            anticipy, destination),
-    ) if arm else MockTransport())
+    # Only the selected SendBlue arm may reach a phone. In particular, a
+    # missing SendBlue configuration cannot attach a legacy Twilio arm to
+    # notify_owner while the conversational transport says it is mock.
+    arm, transport = configure_message_transport(anticipy, sms_provider)
     convo = Conversation(anticipy, transport=transport)
     anticipy.conversation = convo
     # This is deliberately installed after every transport is attached and
@@ -5232,7 +5114,7 @@ def main() -> None:
           # "sms=mock" is load-bearing text, not a nicety: proof/local_rig.sh
           # refuses to continue unless the boot banner says it, and kills a
           # laptop worker that could text a real person. Anything else names
-          # the vendor (`sms=twilio`, `sms=sendblue:…1234`). The credential
+          # the vendor (`sms=sendblue:…1234`). The credential
           # goes in its own field — after a key is minted, the only way to
           # know whether outbound really moved off the full-access auth token
           # is to read it off the process.
@@ -5297,7 +5179,6 @@ def main() -> None:
     # repeat the network read on the first loop turn; the minute beat below
     # remains the authority for changes after startup.
     last_profile = time.time()
-    last_webhook = 0.0
     while True:
         try:
             # Pick up the owner's number from the app (and any change to it)
@@ -5353,13 +5234,6 @@ def main() -> None:
                 # anything, so a tap during the read cannot be undone by the
                 # facts arriving a moment behind it.
                 ingest_read_facts(memory, owner_ref=anticipy.owner_ref)
-            # Is the number still wired to us? Cheap, and the failure it
-            # catches is invisible from in here — she simply never hears him.
-            manages_webhook = (os.environ.get("ANTICIPY_SUPERVISED") != "1" or
-                               os.environ.get("ANTICIPY_WEBHOOK_MANAGER") == "1")
-            if manages_webhook and time.time() - last_webhook > WEBHOOK_CHECK_EVERY_SECONDS:
-                last_webhook = time.time()
-                ensure_inbound_webhook()
             # The clock: she reviews her open loops on her own schedule and
             # may initiate — rarely, in daytime, rate-limited, gated.
             now = time.time()
