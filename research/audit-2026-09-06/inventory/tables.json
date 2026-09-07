@@ -1,0 +1,664 @@
+[
+  {
+    "table": "agent_audit_sessions",
+    "columns": [
+      "id",
+      "created",
+      "updated",
+      "task_tag",
+      "agent_id",
+      "owner_ref",
+      "active",
+      "expires_at"
+    ],
+    "identity_columns": [
+      "owner_ref"
+    ],
+    "foreign_keys": [],
+    "review_status": "schema_inventoried"
+  },
+  {
+    "table": "agent_llm_audit",
+    "columns": [
+      "id",
+      "created",
+      "updated",
+      "task_tag",
+      "agent_id",
+      "owner_ref",
+      "model",
+      "provider",
+      "status",
+      "http_status",
+      "duration_ms",
+      "request_sha256",
+      "response_sha256",
+      "client_request_json",
+      "provider_request_json",
+      "provider_response_json",
+      "client_response_json",
+      "error",
+      "proxy_version",
+      "provider_model"
+    ],
+    "identity_columns": [
+      "owner_ref"
+    ],
+    "foreign_keys": [],
+    "review_status": "schema_inventoried"
+  },
+  {
+    "table": "agents",
+    "columns": [
+      "id",
+      "created",
+      "updated",
+      "agent_id",
+      "pair_code",
+      "owner",
+      "paired",
+      "last_seen",
+      "browser",
+      "owner_ref",
+      "agent_token",
+      "llm_calls",
+      "llm_hour",
+      "solve_calls",
+      "solve_hour"
+    ],
+    "identity_columns": [
+      "owner",
+      "owner_ref"
+    ],
+    "foreign_keys": [],
+    "review_status": "schema_inventoried"
+  },
+  {
+    "table": "app_usage_signals",
+    "columns": [
+      "user_id",
+      "toolkit",
+      "source",
+      "alias",
+      "weight",
+      "last_seen_at"
+    ],
+    "identity_columns": [
+      "user_id"
+    ],
+    "foreign_keys": [],
+    "review_status": "schema_inventoried"
+  },
+  {
+    "table": "connect_codes",
+    "columns": [
+      "id",
+      "token_handle",
+      "user_id",
+      "code_hash",
+      "expires_at",
+      "attempts",
+      "used_at",
+      "created_at"
+    ],
+    "identity_columns": [
+      "user_id"
+    ],
+    "foreign_keys": [],
+    "review_status": "schema_inventoried"
+  },
+  {
+    "table": "connect_links",
+    "columns": [
+      "token_handle",
+      "user_id",
+      "toolkit",
+      "alias",
+      "expires_at",
+      "used_at",
+      "completed_at"
+    ],
+    "identity_columns": [
+      "user_id"
+    ],
+    "foreign_keys": [],
+    "review_status": "schema_inventoried"
+  },
+  {
+    "table": "connect_nudges",
+    "columns": [
+      "user_id",
+      "toolkit",
+      "state",
+      "level",
+      "snooze_until",
+      "trigger",
+      "sent_at",
+      "acted_at",
+      "channel"
+    ],
+    "identity_columns": [
+      "user_id"
+    ],
+    "foreign_keys": [],
+    "review_status": "schema_inventoried"
+  },
+  {
+    "table": "connections",
+    "columns": [
+      "connected_account_id",
+      "user_id",
+      "toolkit",
+      "alias",
+      "status",
+      "writes_enabled",
+      "last_used_at"
+    ],
+    "identity_columns": [
+      "user_id"
+    ],
+    "foreign_keys": [],
+    "review_status": "schema_inventoried"
+  },
+  {
+    "table": "events",
+    "columns": [
+      "id",
+      "created",
+      "updated",
+      "device_id",
+      "kind",
+      "text",
+      "decision",
+      "goal",
+      "needs_confirmation",
+      "capture_started_at",
+      "capture_ended_at",
+      "gap_before_ms",
+      "seq",
+      "boot_id",
+      "source",
+      "backfill",
+      "segment",
+      "speaker",
+      "owner_ref",
+      "addressee",
+      "spoken_at",
+      "parent_line",
+      "external_event_id",
+      "explicit",
+      "importance",
+      "heard_ms",
+      "heard_calls"
+    ],
+    "identity_columns": [
+      "owner_ref"
+    ],
+    "foreign_keys": [],
+    "review_status": "schema_inventoried"
+  },
+  {
+    "table": "evidence",
+    "columns": [
+      "id",
+      "created",
+      "updated",
+      "owner_ref",
+      "job",
+      "effect_key",
+      "image",
+      "share_expires",
+      "fetches"
+    ],
+    "identity_columns": [
+      "owner_ref"
+    ],
+    "foreign_keys": [],
+    "review_status": "schema_inventoried"
+  },
+  {
+    "table": "internal_activity",
+    "columns": [
+      "id",
+      "created",
+      "updated",
+      "actor",
+      "actor_name",
+      "action",
+      "subject",
+      "ref",
+      "verb"
+    ],
+    "identity_columns": [],
+    "foreign_keys": [],
+    "review_status": "schema_inventoried"
+  },
+  {
+    "table": "internal_comments",
+    "columns": [
+      "id",
+      "created",
+      "updated",
+      "todo",
+      "author",
+      "author_name",
+      "text",
+      "parent",
+      "edited_at",
+      "deleted"
+    ],
+    "identity_columns": [],
+    "foreign_keys": [],
+    "review_status": "schema_inventoried"
+  },
+  {
+    "table": "internal_config",
+    "columns": [
+      "id",
+      "created",
+      "updated",
+      "key",
+      "value"
+    ],
+    "identity_columns": [],
+    "foreign_keys": [],
+    "review_status": "schema_inventoried"
+  },
+  {
+    "table": "internal_events",
+    "columns": [
+      "id",
+      "created",
+      "updated",
+      "title",
+      "date",
+      "notes",
+      "countdown",
+      "created_by"
+    ],
+    "identity_columns": [],
+    "foreign_keys": [],
+    "review_status": "schema_inventoried"
+  },
+  {
+    "table": "internal_expenses",
+    "columns": [
+      "id",
+      "created",
+      "updated",
+      "title",
+      "amount",
+      "currency",
+      "date",
+      "track",
+      "person",
+      "created_by"
+    ],
+    "identity_columns": [
+      "person"
+    ],
+    "foreign_keys": [],
+    "review_status": "schema_inventoried"
+  },
+  {
+    "table": "internal_meter",
+    "columns": [
+      "id",
+      "created",
+      "updated",
+      "name",
+      "hour",
+      "calls",
+      "live_job_id"
+    ],
+    "identity_columns": [],
+    "foreign_keys": [],
+    "review_status": "schema_inventoried"
+  },
+  {
+    "table": "internal_notes",
+    "columns": [
+      "id",
+      "created",
+      "updated",
+      "title",
+      "body",
+      "track",
+      "created_by",
+      "updated_by"
+    ],
+    "identity_columns": [],
+    "foreign_keys": [],
+    "review_status": "schema_inventoried"
+  },
+  {
+    "table": "internal_notifs",
+    "columns": [
+      "id",
+      "created",
+      "updated",
+      "person",
+      "kind",
+      "text",
+      "sub",
+      "todo",
+      "actor",
+      "read",
+      "emailed_at",
+      "smsed_at"
+    ],
+    "identity_columns": [
+      "person"
+    ],
+    "foreign_keys": [],
+    "review_status": "schema_inventoried"
+  },
+  {
+    "table": "internal_passwords",
+    "columns": [
+      "id",
+      "created",
+      "updated",
+      "service",
+      "username",
+      "secret_enc",
+      "url",
+      "notes",
+      "updated_by"
+    ],
+    "identity_columns": [],
+    "foreign_keys": [],
+    "review_status": "schema_inventoried"
+  },
+  {
+    "table": "internal_people",
+    "columns": [
+      "id",
+      "created",
+      "updated",
+      "name",
+      "email",
+      "phone",
+      "is_admin",
+      "active",
+      "role",
+      "focus",
+      "tz",
+      "remind_pref",
+      "email_on",
+      "sms_on",
+      "code_hash",
+      "code_set_at",
+      "last_in"
+    ],
+    "identity_columns": [],
+    "foreign_keys": [],
+    "review_status": "schema_inventoried"
+  },
+  {
+    "table": "internal_reminders",
+    "columns": [
+      "id",
+      "created",
+      "updated",
+      "todo",
+      "person",
+      "rule",
+      "fire_at",
+      "channel",
+      "label",
+      "sent_at",
+      "attempts",
+      "created_by"
+    ],
+    "identity_columns": [
+      "person"
+    ],
+    "foreign_keys": [],
+    "review_status": "schema_inventoried"
+  },
+  {
+    "table": "internal_sessions",
+    "columns": [
+      "id",
+      "created",
+      "updated",
+      "person",
+      "token_hash",
+      "expires",
+      "ip",
+      "ua"
+    ],
+    "identity_columns": [
+      "person"
+    ],
+    "foreign_keys": [],
+    "review_status": "schema_inventoried"
+  },
+  {
+    "table": "internal_todos",
+    "columns": [
+      "id",
+      "created",
+      "updated",
+      "title",
+      "notes",
+      "track",
+      "assignees",
+      "due",
+      "status",
+      "done_at",
+      "done_by",
+      "created_by",
+      "remind_at",
+      "remind_channel",
+      "remind_sent_at",
+      "followup_sent_at",
+      "research_job_id",
+      "remind_attempts",
+      "stage",
+      "priority",
+      "due_time",
+      "repeat_rule",
+      "hold_reason",
+      "watchers",
+      "subtasks",
+      "attachments",
+      "cmt_count",
+      "position"
+    ],
+    "identity_columns": [],
+    "foreign_keys": [],
+    "review_status": "schema_inventoried"
+  },
+  {
+    "table": "internal_tracks",
+    "columns": [
+      "id",
+      "created",
+      "updated",
+      "name",
+      "kind",
+      "members",
+      "active",
+      "desc",
+      "owner",
+      "archived",
+      "notes"
+    ],
+    "identity_columns": [
+      "owner"
+    ],
+    "foreign_keys": [],
+    "review_status": "schema_inventoried"
+  },
+  {
+    "table": "jobs",
+    "columns": [
+      "id",
+      "created",
+      "updated",
+      "goal",
+      "params",
+      "status",
+      "result",
+      "device_id",
+      "owner",
+      "claimed_by",
+      "claimed_at",
+      "owner_ref",
+      "lane",
+      "attempts",
+      "trace",
+      "workflow_id",
+      "workflow_version",
+      "workflow_state",
+      "consequence",
+      "lineage_key",
+      "effect_key",
+      "scope_digest",
+      "approval",
+      "receipt",
+      "reconciliation",
+      "lease_token",
+      "lease_until",
+      "source_event_ids",
+      "effect_uncertain",
+      "watching_until",
+      "commitment_key"
+    ],
+    "identity_columns": [
+      "owner",
+      "owner_ref"
+    ],
+    "foreign_keys": [],
+    "review_status": "schema_inventoried"
+  },
+  {
+    "table": "owner_profile",
+    "columns": [
+      "id",
+      "created",
+      "updated",
+      "owner_id",
+      "phone",
+      "name",
+      "first_name",
+      "last_name",
+      "email",
+      "birthday",
+      "facts",
+      "owner_ref",
+      "timezone"
+    ],
+    "identity_columns": [
+      "owner_id",
+      "owner_ref"
+    ],
+    "foreign_keys": [],
+    "review_status": "schema_inventoried"
+  },
+  {
+    "table": "owners",
+    "columns": [
+      "id",
+      "created",
+      "updated",
+      "email",
+      "emailVisibility",
+      "verified",
+      "password",
+      "tokenKey",
+      "phone",
+      "legacy_uuid"
+    ],
+    "identity_columns": [],
+    "foreign_keys": [],
+    "review_status": "schema_inventoried"
+  },
+  {
+    "table": "password_resets",
+    "columns": [
+      "id",
+      "created",
+      "updated",
+      "owner",
+      "code_hash",
+      "expires",
+      "attempts",
+      "used"
+    ],
+    "identity_columns": [
+      "owner"
+    ],
+    "foreign_keys": [],
+    "review_status": "schema_inventoried"
+  },
+  {
+    "table": "pendants",
+    "columns": [
+      "id",
+      "created",
+      "updated",
+      "device_id",
+      "name",
+      "pair_code",
+      "owner",
+      "paired",
+      "battery",
+      "owner_ref"
+    ],
+    "identity_columns": [
+      "owner",
+      "owner_ref"
+    ],
+    "foreign_keys": [],
+    "review_status": "schema_inventoried"
+  },
+  {
+    "table": "purges",
+    "columns": [
+      "id",
+      "created",
+      "updated",
+      "owner_ref",
+      "legacy_uuid",
+      "memory_purged",
+      "requested_at",
+      "purged_at"
+    ],
+    "identity_columns": [
+      "owner_ref"
+    ],
+    "foreign_keys": [],
+    "review_status": "schema_inventoried"
+  },
+  {
+    "table": "segments",
+    "columns": [
+      "id",
+      "created",
+      "updated",
+      "owner",
+      "status",
+      "started_at",
+      "last_speech_at",
+      "ended_at",
+      "turn_count",
+      "word_count",
+      "summary",
+      "entities",
+      "parent_segment",
+      "triaged_through_seq",
+      "dirty",
+      "supersedes",
+      "owner_ref"
+    ],
+    "identity_columns": [
+      "owner",
+      "owner_ref"
+    ],
+    "foreign_keys": [],
+    "review_status": "schema_inventoried"
+  }
+]

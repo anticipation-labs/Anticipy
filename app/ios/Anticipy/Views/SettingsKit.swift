@@ -708,10 +708,42 @@ private struct RowChevron: View {
 
 /// The whole row lights while it is held. `Theme.surface` is this app's word for
 /// something set INTO the page, which is what a pressed row is.
+/// WHAT A SETTINGS ROW FEELS LIKE UNDER A THUMB.
+///
+/// This one style is worn by every row on all fourteen Settings screens, which
+/// is why it is the only place this change had to be made. The audit found
+/// those screens carrying 3,697 lines with ONE animation and ZERO transitions
+/// between them — the flattest surface in the product, and the one where
+/// sign-out and delete-account live. Polish is a trust signal precisely in the
+/// places where being unsure costs the most.
+///
+/// The press is a spring rather than a curve, because a row is a physical thing
+/// being pushed and released and a linear fade is not how objects behave. It is
+/// small on purpose: 0.4% of scale is under the threshold anybody would name,
+/// and over the threshold everybody feels.
 struct CardRowButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .background(configuration.isPressed ? Theme.surface : Color.clear)
+        PressedRow(pressed: configuration.isPressed) { configuration.label }
+    }
+
+    /// A real View, because `@Environment` cannot be read from a `ButtonStyle`
+    /// itself — `makeBody` builds a view, but the style is not one, so the
+    /// value would never update.
+    private struct PressedRow<Label: View>: View {
+        let pressed: Bool
+        @ViewBuilder let label: () -> Label
+        @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+        var body: some View {
+            label()
+                .background(pressed ? Theme.surface : Color.clear)
+                // Under Reduce Motion the row still CHANGES — it just stops
+                // moving. The tint is the feedback; the scale is the flourish.
+                .scaleEffect(pressed && !reduceMotion ? 0.996 : 1.0)
+                .animation(reduceMotion ? nil
+                           : .spring(response: 0.28, dampingFraction: 0.7),
+                           value: pressed)
+        }
     }
 }
 

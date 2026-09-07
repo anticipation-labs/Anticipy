@@ -20,6 +20,8 @@
  * (config/wrangler.brain.jsonc), so the API Worker's bundle stays lean.
  */
 import { planFleet, parseCap } from "./plan";
+import { OwnerLifecycle } from "./owner_lifecycle";
+import { drainMemoryPurges, type PurgeEnv } from "./purge";
 import { Container, getContainer } from "@cloudflare/containers";
 import { DurableObject } from "cloudflare:workers";
 
@@ -84,6 +86,12 @@ export class OwnerBrain extends Container<BrainEnv> {
   defaultPort = 8731;          // the control server; without it the container is unobservable (§3.2)
   requiredPorts = [8731];
   sleepAfter = "24h";
+  private lifecycle = new OwnerLifecycle(
+    this.ctx.storage,
+    async (ref) => !!await this.env.DB.prepare("SELECT id FROM owners WHERE id = ?").bind(ref).first(),
+    async (owner) => { await this.startAndWaitForPorts({ startOptions: { envVars: this.envFor(owner) } }); },
+    async () => { await this.destroy(); },
+  );
 
   // Deliberately empty. §3.1: a container-backed DO is kept alive by a
   // self-rearming alarm, and onActivityExpired is where an owner-idle policy
@@ -98,9 +106,11 @@ export class OwnerBrain extends Container<BrainEnv> {
    * already-running container.
    */
   async ensure(owner: Owner): Promise<void> {
-    await this.startAndWaitForPorts({
-      startOptions: { envVars: this.envFor(owner) },
-    });
+    await this.lifecycle.ensure(owner);
+  }
+
+  async eraseMemory(ref: string): Promise<void> {
+    await this.lifecycle.erase(ref);
   }
 
   async shutdown(): Promise<void> {
@@ -170,6 +180,11 @@ export class BrainSupervisor extends DurableObject<BrainEnv> {
    *   - over-capacity PRINTS EVERY PASS, so going over the cap is visible.
    */
   async tick(): Promise<{ served: number; unserved: string[] }> {
+    // Deletion removes owners from discovery, so an ordinary retirement loop
+    // never sees them. Drain their durable requests before starting this fleet.
+    const cleanup = await drainMemoryPurges(this.env as unknown as PurgeEnv,
+      async (ref) => { await getContainer(this.env.OWNER_BRAIN, ref).eraseMemory(ref); });
+    if (cleanup.purged || cleanup.failed) console.log(`brain memory cleanup: ${JSON.stringify(cleanup)}`);
     // ZERO MEANS ZERO. `parseInt(...) || 100` read a cap of 0 as "unset" and
     // served every real owner — measured 2026-09-05 16:58Z: a deploy meant to
     // leave Railway as the only brain for real owners put four of them on

@@ -29,10 +29,13 @@ their memory quietly.
 """
 from __future__ import annotations
 
+import json
 import os
 import signal
+import sqlite3
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from datetime import datetime, timezone
@@ -68,6 +71,10 @@ STATE_NAMES = ("memory.db", "clock_state.json")
 _owner_dir = STATE_ROOT / OWNER_REF
 _stop = threading.Event()
 _child: subprocess.Popen | None = None
+# Timer, child-restart and shutdown paths can all request a snapshot. Serialize
+# the snapshot and upload together: a mutex over the local copy alone still
+# permits an older upload to complete last and overwrite newer memory in R2.
+_snapshot_lock = threading.RLock()
 
 
 def _log(msg: str) -> None:
@@ -138,23 +145,41 @@ def pull_state(s3) -> None:
     exist (audit F28); that is what the first line does."""
     assert_bucket_reachable(s3)
     _owner_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
-    for name in STATE_NAMES:
-        key = _r2_key(name)
-        dest = _owner_dir / name
-        try:
-            s3.download_file(R2_BUCKET, key, str(dest))
-            _log(f"pulled {key} -> {dest} ({dest.stat().st_size} bytes)")
-        except Exception as err:  # noqa: BLE001 — we must inspect the code
-            if _is_not_found(err):
-                _log(f"no {key} in R2 yet — new owner, starting with an empty {name}")
-                continue
-            # A failed GET (as against a 404) MUST abort. Booting on an empty
-            # dir when the object exists is silent memory loss for a real person.
-            raise RuntimeError(
-                f"R2 GET failed for {key} and it is NOT a 404. Aborting the boot "
-                f"rather than starting on an empty {name} and overwriting a live "
-                f"memory on the next snapshot. Underlying error: {err!r}"
-            ) from err
+    # Download and validate the whole checkpoint before replacing either local
+    # file. A failed second download must not leave half a new checkpoint live.
+    # This does not make the two remote keys a transactional generation.
+    with tempfile.TemporaryDirectory(prefix=".restore-", dir=_owner_dir) as temporary:
+        staged = []
+        for name in STATE_NAMES:
+            key = _r2_key(name)
+            dest = Path(temporary) / name
+            try:
+                s3.download_file(R2_BUCKET, key, str(dest))
+            except Exception as err:  # noqa: BLE001 — distinguish absent from unavailable
+                if _is_not_found(err) and not (_owner_dir / name).exists():
+                    _log(f"no {key} in R2 yet — no existing local {name}")
+                    continue
+                raise RuntimeError(
+                    f"R2 GET failed for {key}; refusing to replace the local checkpoint. "
+                    f"Underlying error: {err!r}"
+                ) from err
+            try:
+                if name == "memory.db":
+                    with dest.open("rb") as stream:
+                        if stream.read(16) != b"SQLite format 3\x00":
+                            raise ValueError("memory is not a SQLite database")
+                    with sqlite3.connect(dest.as_uri() + "?mode=ro", uri=True) as db:
+                        if db.execute("PRAGMA quick_check").fetchall() != [("ok",)]:
+                            raise ValueError("memory database failed its integrity check")
+                elif not isinstance(json.loads(dest.read_text()), dict):
+                    raise ValueError("outreach state must be a JSON object")
+            except Exception as err:
+                raise RuntimeError(f"R2 state for {name} failed validation; local checkpoint preserved") from err
+            staged.append((name, dest))
+        for name, dest in staged:
+            os.chmod(dest, 0o600)
+            dest.replace(_owner_dir / name)
+            _log(f"validated and restored {_r2_key(name)} ({(_owner_dir / name).stat().st_size} bytes)")
 
 
 def _is_not_found(err: Exception) -> bool:
@@ -176,6 +201,12 @@ def snapshot_once(s3) -> None:
     """One consistent snapshot of both files, uploaded. THE SNAPSHOT INTERVAL IS
     THE CRASH-LOSS WINDOW: a container lost without SIGTERM costs this owner up
     to SNAPSHOT_SECONDS of memory. That number was chosen at 60s knowingly."""
+    with _snapshot_lock:
+        _snapshot_once(s3)
+
+
+def _snapshot_once(s3) -> None:
+    """Caller holds the per-process snapshot lock through upload completion."""
     mem = _owner_dir / "memory.db"
     if mem.exists():
         tmp = _owner_dir / ".memory.snapshot.db"

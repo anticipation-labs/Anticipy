@@ -24,6 +24,10 @@ struct OnboardingView: View {
     /// step 2 hands over to it exactly as Settings does; nothing here opens a
     /// URL itself, and nothing here holds a second copy of the allowlist.
     @EnvironmentObject var connect: ConnectSession
+    /// MOTION SENSITIVITY. Read so the animations below can stand down; the
+    /// beat is kept either way, so a flow under Reduce Motion takes the same
+    /// time and simply shows its finished frame rather than travelling to it.
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Called the instant the last step is cleared. The CALLER writes the
     /// durable "this person has onboarded" flag and then plays the celebration
     /// over Home — see AnticipyApp.
@@ -225,7 +229,7 @@ struct OnboardingView: View {
                 // iOS said no, or said no once before: the switch may not
                 // stay on over nothing.
                 if !session.notifier.authorized {
-                    withAnimation(Theme.spring) { notificationsWanted = false }
+                    withAnimation(reduceMotion ? nil : Theme.spring) { notificationsWanted = false }
                 }
             }
         }
@@ -763,7 +767,7 @@ struct OnboardingView: View {
     }
 
     private func go(_ to: Int) {
-        withAnimation(Theme.springSlow) { step = to }
+        withAnimation(reduceMotion ? nil : Theme.springSlow) { step = to }
     }
 
     /// The page after this one in THIS segment, on THIS launch.
@@ -895,7 +899,7 @@ struct OnboardingView: View {
                 let ok = await session.saveOwnerPhone(phone)
                 guard ok else {
                     savingPhone = false
-                    withAnimation(Theme.spring) { phoneSaveFailed = true }
+                    withAnimation(reduceMotion ? nil : Theme.spring) { phoneSaveFailed = true }
                     return
                 }
                 phoneSaved = true
@@ -912,7 +916,7 @@ struct OnboardingView: View {
                 let ok = await session.saveOwnerDetails(first: first, last: "", email: mail)
                 guard ok else {
                     savingPhone = false
-                    withAnimation(Theme.spring) { phoneSaveFailed = true }
+                    withAnimation(reduceMotion ? nil : Theme.spring) { phoneSaveFailed = true }
                     return
                 }
                 detailsSaved = true
@@ -959,7 +963,7 @@ struct OnboardingView: View {
                 phoneSaved = true
                 phoneSaveFailed = false
             } else {
-                withAnimation(Theme.spring) { phoneSaveFailed = true }
+                withAnimation(reduceMotion ? nil : Theme.spring) { phoneSaveFailed = true }
                 // Bring them back once so a good number can't vanish quietly.
                 if !phoneSkipped { go(Step.name) }
             }
@@ -1048,12 +1052,12 @@ struct OnboardingView: View {
         .ignoresSafeArea(edges: .top)
         .task {
             guard welcomeStage == 0 else { return }
-            withAnimation(Theme.springSlow) { welcomeStage = 1 }
+            withAnimation(reduceMotion ? nil : Theme.springSlow) { welcomeStage = 1 }
             Haptics.herMessage()
             try? await Task.sleep(nanoseconds: 320_000_000)
-            withAnimation(Theme.spring) { welcomeStage = 2 }
+            withAnimation(reduceMotion ? nil : Theme.spring) { welcomeStage = 2 }
             try? await Task.sleep(nanoseconds: 260_000_000)
-            withAnimation(Theme.spring) { welcomeStage = 3 }
+            withAnimation(reduceMotion ? nil : Theme.spring) { welcomeStage = 3 }
         }
     }
 
@@ -1108,7 +1112,7 @@ struct OnboardingView: View {
                 .padding(.top, 90 * scale)
                 .onChange(of: tourPage) { _ in Haptics.pageTurn() }
                 PagerDots(count: 3, index: tourPage) { i in
-                    withAnimation(Theme.spring) { tourPage = i }
+                    withAnimation(reduceMotion ? nil : Theme.spring) { tourPage = i }
                 }
                 .padding(.bottom, 36)
                 Button("Get started") { Task { await advance() } }

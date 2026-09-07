@@ -1,4 +1,4 @@
-name: Brain → Cloudflare Containers (deploy)
+name: Backend deployment (API or brain)
 
 # Builds the brain image and deploys the OwnerBrain + BrainSupervisor Workers to
 # Cloudflare Containers, per migration/BRAIN-ON-CONTAINERS.md. The image is built
@@ -21,8 +21,14 @@ name: Brain → Cloudflare Containers (deploy)
 on:
   workflow_dispatch:
     inputs:
+      component:
+        description: 'Backend component to deploy'
+        required: true
+        type: choice
+        options: [brain, api, inspect]
+        default: brain
       confirm:
-        description: 'Type DEPLOY to build+deploy the brain'
+        description: 'Type DEPLOY to deploy the selected component'
         required: true
         default: ''
       cap:
@@ -36,24 +42,28 @@ concurrency:
 
 jobs:
   deploy:
-    if: ${{ github.event.inputs.confirm == 'DEPLOY' }}
+    if: ${{ github.ref == 'refs/heads/cloudflare-backend' && github.event.inputs.confirm == 'DEPLOY' && github.event.inputs.component != 'api' && github.event.inputs.component != 'inspect' }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      DEPLOY_CAP: ${{ github.event.inputs.cap }}
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
-        with: { node-version: '22' }
+        with: { node-version: '24' }
 
       - name: Install wrangler + containers SDK
         working-directory: migration/workers/brain
         run: |
-          npm install @cloudflare/containers@0.3.7 >/dev/null 2>&1 || true
-          npm i -g wrangler@4 >/dev/null 2>&1
-          wrangler --version
+          npm ci
+          npm ci --prefix ..
+          echo "$GITHUB_WORKSPACE/migration/workers/node_modules/.bin" >> "$GITHUB_PATH"
+          ../node_modules/.bin/wrangler --version
+          npm test
+          npm run typecheck
 
       - name: Pre-flight — every owner this deploy will serve has state in R2 (the container aborts without it)
         env:
@@ -68,7 +78,7 @@ jobs:
           # owners/<id>/memory.db, or this deploy is refused here, not in a
           # crash loop. Discovery-served owners are checked when the cap allows any.
           allow=$(grep -oE '"ANTICIPY_SERVE_OWNERS": *"[^"]*"' migration/config/wrangler.brain.jsonc | sed -E 's/.*: *"([^"]*)"/\1/' | tr ',' ' ')
-          cap='${{ github.event.inputs.cap }}'
+          cap="$DEPLOY_CAP"
           missing=0; checked=0
           for ref in $allow; do
             ref=$(echo "$ref" | tr -d ' '); [ -n "$ref" ] || continue
@@ -85,13 +95,15 @@ jobs:
       - name: Deploy brain (remote container build — no local Docker)
         run: |
           set -euo pipefail
-          cap='${{ github.event.inputs.cap }}'
-          echo "Deploying anticipy-brain with max_instances/cap = $cap (start small per §10.6)"
+          cap="$DEPLOY_CAP"
+          [[ "$cap" =~ ^[0-9]+$ ]] && [ "$cap" -le 100 ] || { echo "Invalid capacity"; exit 1; }
+          echo "Deploying anticipy-brain with discovery cap = $cap"
           # wrangler builds the image from brain/Dockerfile remotely and deploys
           # OwnerBrain + BrainSupervisor. --containers-rollout gradual is the safe
           # default; the first run should be cap=1.
           wrangler deploy \
             --config migration/config/wrangler.brain.jsonc \
+            --keep-vars \
             --var ANTICIPY_MAX_OWNER_WORKERS:"$cap" \
             --containers-rollout gradual
 
@@ -103,3 +115,45 @@ jobs:
           echo "  * the brain answers a real text for the ONE test owner"
           echo "Do NOT raise the cap to 100 until the single owner is proven."
           echo "Leave the Railway volume in place, unmounted, for two weeks (§10.9)."
+
+  api:
+    if: ${{ github.ref == 'refs/heads/cloudflare-backend' && github.event.inputs.confirm == 'DEPLOY' && github.event.inputs.component == 'api' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '24' }
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+      - name: Test the API source that will be deployed
+        working-directory: migration/workers
+        run: |
+          npm ci
+          npm test
+          npm run typecheck
+          npm run stage:assets
+          npm run check:assets
+      - name: Apply the non-destructive account erasure write fence
+        working-directory: migration/workers
+        run: npx --no-install wrangler d1 execute anticipy-backend --remote --config wrangler.jsonc --file ../d1/2026-09-07-account-erasure-fence.sql
+      - name: Deploy the API while preserving separately configured provider variables
+        working-directory: migration/workers
+        run: npx --no-install wrangler deploy --config wrangler.jsonc --keep-vars --tag "$GITHUB_SHA"
+      - name: Verify the active version and exercise signup, ownership and deletion over the live URL
+        run: python proof/audit/live_api_release.py --base https://api.anticipy.ai --verify-deployment
+
+  inspect:
+    if: ${{ github.ref == 'refs/heads/cloudflare-backend' && github.event.inputs.component == 'inspect' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read deployed database structure without customer rows
+        run: python3 -m proof.audit.live_schema

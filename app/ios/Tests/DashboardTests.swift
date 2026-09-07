@@ -72,19 +72,35 @@ let turns = P.thread(heard: heard, said: said, jobs: jobs)
 check(turns.count == 6, "an empty line is not a turn, and a finished job is not one either",
       "got \(turns.count)")
 check(turns.map(\.at) == turns.map(\.at).sorted(), "the thread is in time order")
-check({ if case .owner = turns[0] { return true }; return false }(),
-      "the oldest turn is the thing that was said first")
+check({ if case .pending = turns[0] { return true }; return false }(),
+      "un-goaled speech is a COUNT at the front, never the sentence itself")
+
+/// Every string a turn would put on screen. Leg 2 asserts over this rather than
+/// over the source, so a NEW case that leaked the owner's words would fail too.
+func turnText(_ t: P.Turn) -> String {
+    switch t {
+    case .owner(_, let s, _, _): return s
+    case .working(_, let s, _): return s
+    case .said(_, let s, _, _): return s
+    case .question(_, let s, _): return s
+    case .approval(_, let g, let c, _): return g + " " + (c ?? "")
+    case .pending(let id, let n, _): return id + " \(n)"
+    case .quiet(let id, let n, _): return id + " \(n)"
+    }
+}
 
 func kind(_ t: P.Turn) -> String {
     switch t {
     case .owner: return "owner"
+    case .pending: return "pending"
+    case .quiet: return "quiet"
     case .working: return "working"
     case .said: return "said"
     case .approval: return "approval"
     case .question: return "question"
     }
 }
-check(turns.map(kind) == ["owner", "approval", "working", "said", "question", "question"],
+check(turns.map(kind) == ["pending", "approval", "working", "said", "question", "question"],
       "every row becomes the turn its own verdict says it is", "got \(turns.map(kind))")
 
 check({ if case .said(_, _, _, let done) = turns[3] { return done }; return false }(),
@@ -93,13 +109,103 @@ check(!turns.contains { if case .said(let id, _, _, _) = $0 { return id == "j3" 
       "a finished JOB is not in the thread at all — the deck at the foot owns it, "
       + "because that is where the shelf rule lives")
 
+// ------------------------------------ the transcript is off the front (2026-09-06)
+//
+// The owner's report: "it shows every little word that I'm saying. I don't want
+// you to do that." What replaced the words is a count. These five legs are the
+// ones that make hiding them honest rather than lossy.
+
+// 1. NEVER SILENT. This is the expiry on the incident that made the old
+//    behaviour right: somebody talked to a phone that had judged nothing yet,
+//    watched an empty screen, and concluded she was dead. Membership may change
+//    only while this holds.
+let onlyUnjudged = P.thread(
+    heard: [P.HeardRow(id: "u1", text: "something nobody has judged yet",
+                       at: "2026-09-05T10:00:00Z")],
+    said: [], jobs: [])
+check(onlyUnjudged.count >= 1,
+      "one un-goaled line still produces one row — the thread is never silent "
+      + "while anything is outstanding")
+
+// 2. NO OWNER WORDS ANYWHERE IN THE THREAD. Asserted over the policy's own
+//    values rather than by grepping the file, so a second code path that
+//    reintroduced the text would still be caught.
+let secret = "XYZZYPLUGH"
+let withSecret = P.thread(
+    heard: [P.HeardRow(id: "x1", text: secret, at: "2026-09-05T10:00:00Z"),
+            P.HeardRow(id: "x2", text: secret, at: "2026-09-05T10:01:00Z",
+                       decision: "ignore")],
+    said: [], jobs: [])
+check(!withSecret.contains { turnText($0).contains(secret) },
+      "the owner's own words appear in no turn the thread emits")
+
+// 3. THE COUNT IS HONEST. Three waiting and one goaled is three, not four.
+let mixed = P.thread(
+    heard: [P.HeardRow(id: "m1", text: "one", at: "2026-09-05T10:00:00Z"),
+            P.HeardRow(id: "m2", text: "two", at: "2026-09-05T10:01:00Z",
+                       decision: "processing"),
+            P.HeardRow(id: "m3", text: "three", at: "2026-09-05T10:02:00Z"),
+            P.HeardRow(id: "m4", text: "four", at: "2026-09-05T10:03:00Z",
+                       goal: "Book the table")],
+    said: [], jobs: [])
+check(mixed.contains { if case .pending(_, let n, _) = $0 { return n == 3 }; return false },
+      "the pending count counts only what is still outstanding",
+      "got \(mixed.map(kind))")
+check(mixed.contains { if case .working(_, let t, _) = $0 { return t == "Book the table" }; return false },
+      "a goaled line is still its task, unchanged by any of this")
+
+// 4. TERMINAL LINES LEAVE THE COUNT. A line the brain judged and left alone is
+//    finished; counting it forever would make "3 waiting" a standing lie.
+let judged = P.thread(
+    heard: [P.HeardRow(id: "t1", text: "chat about the weather",
+                       at: "2026-09-05T10:00:00Z", decision: "ignore")],
+    said: [], jobs: [])
+check(!judged.contains { if case .pending = $0 { return true }; return false },
+      "a judged line with no goal is not pending")
+check(judged.contains { if case .quiet(_, let n, _) = $0 { return n == 1 }; return false },
+      "it is one quiet row instead — heard, and nothing needed",
+      "got \(judged.map(kind))")
+
+// 5. THE TWO NEVER MERGE. Still-coming and finished-with-nothing-to-do are
+//    opposite facts, and one row for both could never fall to zero.
+let both = P.thread(
+    heard: [P.HeardRow(id: "b1", text: "waiting", at: "2026-09-05T10:00:00Z"),
+            P.HeardRow(id: "b2", text: "done with", at: "2026-09-05T10:01:00Z",
+                       decision: "ignore")],
+    said: [], jobs: [])
+check(both.filter { if case .pending = $0 { return true }; return false }.count == 1
+      && both.filter { if case .quiet = $0 { return true }; return false }.count == 1,
+      "pending and quiet are separate rows, one of each",
+      "got \(both.map(kind))")
+
 // A tie in time is broken by id, so two rows written in the same second do not
 // swap places between two redraws of the same screen.
+//
+// EXERCISED ON `said` ROWS SINCE 2026-09-06. It used to use two heard rows, and
+// heard rows no longer map one-to-one onto turns — un-goaled speech collapses
+// into a single count. The property under test is the ORDERING, which is
+// unchanged; the fixture moved to rows that still produce one turn each so the
+// leg keeps testing it instead of testing the collapse by accident.
 let tied = P.thread(
+    heard: [],
+    said: [P.SaidRow(id: "b", text: "second", at: "2026-09-05T10:00:00Z", decision: "done"),
+           P.SaidRow(id: "a", text: "first", at: "2026-09-05T10:00:00Z", decision: "done")],
+    jobs: [])
+check(tied.map(\.id) == ["a", "b"], "a tie in time is broken the same way every draw")
+
+// And the collapsed row's own id is stable: it is the newest contributing row's,
+// so the count keeps its place in the thread instead of jumping between draws.
+let sameSecond = P.thread(
     heard: [P.HeardRow(id: "b", text: "second", at: "2026-09-05T10:00:00Z"),
             P.HeardRow(id: "a", text: "first", at: "2026-09-05T10:00:00Z")],
     said: [], jobs: [])
-check(tied.map(\.id) == ["a", "b"], "a tie in time is broken the same way every draw")
+check(sameSecond.count == 1,
+      "two un-goaled lines in the same second are ONE count, not two rows",
+      "got \(sameSecond.map(kind))")
+check(P.thread(heard: [P.HeardRow(id: "b", text: "second", at: "2026-09-05T10:00:00Z"),
+                       P.HeardRow(id: "a", text: "first", at: "2026-09-05T10:00:00Z")],
+               said: [], jobs: []).map(\.id) == sameSecond.map(\.id),
+      "and the same input draws the same id every time")
 check(P.thread(heard: [], said: [], jobs: []).isEmpty, "nothing in, nothing out")
 
 // ---------------------------------------------------------------- seatbelt

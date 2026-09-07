@@ -21,6 +21,7 @@ import json
 import os
 import subprocess
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
@@ -117,13 +118,18 @@ class Client:
         self.credentials = credentials
 
     def request(self, method: str, path: str,
-                params: dict[str, str | int] | None = None) -> Any:
+                params: dict[str, str | int] | None = None,
+                body: dict[str, Any] | None = None) -> Any:
         url = API + path
         if params:
             url += "?" + urllib.parse.urlencode(params)
+        headers = {"Authorization": "Bearer " + self.credentials.token()}
+        payload = None
+        if body is not None:
+            payload = json.dumps(body).encode()
+            headers["Content-Type"] = "application/json"
         request = urllib.request.Request(
-            url, method=method,
-            headers={"Authorization": "Bearer " + self.credentials.token()})
+            url, method=method, data=payload, headers=headers)
         with urllib.request.urlopen(request, timeout=30) as response:
             if response.status == 204:
                 return None
@@ -186,6 +192,245 @@ def live_next_build(client: Client, bundle_id: str,
     return next_build_number(
         [(item.get("attributes") or {}).get("version", "") for item in builds],
         source)
+
+
+def invite_tester(client: Client, bundle_id: str, group_name: str,
+                  email: str, first: str, last: str, confirm: str) -> int:
+    """Add ONE person to ONE tester group. A WRITE, and it is not reversible
+    from here.
+
+    Apple emails an invitation to the address the moment this succeeds. That
+    reaches a real human being, so this command exists behind a confirmation
+    the caller has to type out, and the confirmation is not a boolean flag:
+    `--confirm INVITE` cannot be set by a default, a stale environment
+    variable, or a workflow input somebody left filled in from last time.
+
+    It refuses to create a group, refuses to remove anybody, and refuses to
+    guess which group is meant when the name does not match exactly one.
+    """
+    if confirm != "INVITE":
+        print("refused: this invites a real person by email. Pass "
+              "--confirm INVITE to mean it.")
+        return 2
+    if "@" not in email or email.startswith("@") or email.endswith("@"):
+        print(f"refused: {email!r} is not an address")
+        return 2
+
+    apps = client.request("GET", "/v1/apps", {
+        "filter[bundleId]": bundle_id, "limit": 1})["data"]
+    if len(apps) != 1:
+        raise RuntimeError(f"expected one app for {bundle_id}, found {len(apps)}")
+
+    groups = client.request("GET", "/v1/betaGroups", {
+        "filter[app]": apps[0]["id"], "limit": 50})["data"]
+    named = [g for g in groups
+             if (g.get("attributes") or {}).get("name") == group_name]
+    if len(named) != 1:
+        have = ", ".join(sorted((g.get("attributes") or {}).get("name", "?")
+                                for g in groups)) or "none"
+        print(f"refused: {group_name!r} does not name exactly one group. "
+              f"Groups on this app: {have}")
+        return 2
+    group = named[0]
+
+    # Already there is a SUCCESS, not an error: the caller wanted this person
+    # able to install, and they are. Re-inviting would send a second email for
+    # nothing.
+    existing = client.request("GET", f"/v1/betaGroups/{group['id']}/betaTesters",
+                              {"limit": 100})["data"]
+    for tester in existing:
+        attrs = tester.get("attributes") or {}
+        if (attrs.get("email") or "").lower() == email.lower():
+            print(f"already in {group_name}: state={attrs.get('state', '?')}. "
+                  "Nothing sent.")
+            return 0
+
+    # A PERSON CAN ALREADY EXIST WITHOUT BEING IN THIS GROUP.
+    #
+    # Apple keeps one beta tester record per address per account. Creating a
+    # second answers 409 Conflict, which is what the first attempt at Tejas hit
+    # after josegaelcl06 had gone through cleanly -- the difference being that
+    # one address was new to the account and the other was not. So: look the
+    # person up first, and if they exist, ATTACH them to the group rather than
+    # trying to make a second copy of them.
+    found = client.request("GET", "/v1/betaTesters", {
+        "filter[email]": email, "limit": 1})["data"]
+    if found:
+        client.request(
+            "POST", f"/v1/betaGroups/{group['id']}/relationships/betaTesters",
+            body={"data": [{"type": "betaTesters", "id": found[0]["id"]}]})
+        print(f"{email} already had a tester record on this account and has "
+              f"been added to {group_name}.")
+    else:
+        try:
+            client.request("POST", "/v1/betaTesters", body={
+                "data": {
+                    "type": "betaTesters",
+                    "attributes": {"firstName": first, "lastName": last,
+                                   "email": email},
+                    "relationships": {"betaGroups": {"data": [
+                        {"type": "betaGroups", "id": group["id"]}]}},
+                }
+            })
+        except urllib.error.HTTPError as error:
+            # Apple explains itself in the body. Printing the status alone
+            # sends the reader to guess between "already exists", "no seats"
+            # and "this key may not".
+            detail = ""
+            try:
+                detail = error.read().decode()[:500]
+            except Exception:                 # noqa: BLE001
+                pass
+            print(f"refused by App Store Connect: HTTP {error.code}")
+            if detail:
+                print(detail)
+            return 1
+    print(f"{email} is on {group_name}. Apple has sent the email; the person "
+          "must accept it in TestFlight before any build appears.")
+
+    after = client.request("GET", f"/v1/betaGroups/{group['id']}/betaTesters",
+                           {"limit": 100})["data"]
+    for tester in after:
+        attrs = tester.get("attributes") or {}
+        if (attrs.get("email") or "").lower() == email.lower():
+            print(f"confirmed on the group: state={attrs.get('state', '?')}")
+            return 0
+    print("WARNING: the invitation was accepted by the API but the person is "
+          "not on the group when read back. Check App Store Connect.")
+    return 1
+
+
+def who_can_install(client: Client, bundle_id: str, version: str) -> int:
+    """Which tester groups can actually install one build — READ ONLY.
+
+    A build can be VALID and still reach nobody. "VALID" is Apple's verdict on
+    the BYTES: processing finished and the archive is installable. Whether a
+    human sees it in TestFlight is a separate fact — the build has to be
+    attached to a beta group, and an external group additionally needs a review
+    that VALID says nothing about. On 2026-09-06 the owner's phone was on build
+    88 while 153 was VALID, which is exactly the shape this answers.
+
+    It asks and prints. It attaches nothing: assigning a build to testers
+    distributes software to people, which is the owner's decision to make in
+    App Store Connect, not a side effect of a status query.
+    """
+    apps = client.request("GET", "/v1/apps", {
+        "filter[bundleId]": bundle_id, "limit": 1})["data"]
+    if len(apps) != 1:
+        raise RuntimeError(f"expected one app for {bundle_id}, found {len(apps)}")
+    app_id = apps[0]["id"]
+
+    builds = client.request("GET", "/v1/builds", {
+        "filter[app]": app_id, "filter[version]": version, "limit": 5})["data"]
+    if not builds:
+        print(f"build {version} does not exist under {bundle_id}")
+        return 1
+    build = builds[0]
+    attrs = build.get("attributes") or {}
+    state = attrs.get("processingState", "?")
+    expired = attrs.get("expired")
+    print(f"build {version}: processingState={state} expired={expired} "
+          f"uploaded={attrs.get('uploadedDate', '?')}")
+
+    # EVERY QUERY BELOW IS ALLOWED TO FAIL SEPARATELY. The App Store Connect
+    # key's role decides which of these routes it may read, and the first
+    # attempt at this command died on a 403 from the beta-groups route after
+    # having already learned the build was VALID -- printing a traceback
+    # instead of the half of the answer it held. A status query that stops at
+    # the first refusal tells the reader nothing, and "I was not allowed to
+    # ask" is a different fact from "nobody can install it".
+    def ask(path: str, params: dict[str, str | int]) -> tuple[Any, str]:
+        try:
+            return client.request("GET", path, params)["data"], ""
+        except urllib.error.HTTPError as error:
+            if error.code == 403:
+                return None, ("403 Forbidden -- this API key's role may not "
+                              "read " + path + ". A key with App Manager can.")
+            return None, f"HTTP {error.code} from {path}"
+        except Exception as error:            # noqa: BLE001 - report, never raise
+            return None, f"{type(error).__name__} from {path}: {error}"
+
+    groups, why = ask(f"/v1/builds/{build['id']}/betaGroups", {"limit": 50})
+    if groups is None:
+        # Second route to the same fact. It filters groups by build rather than
+        # walking the build's relationship, and the role that refuses one
+        # sometimes allows the other.
+        groups, why2 = ask("/v1/betaGroups",
+                           {"filter[builds]": build["id"], "limit": 50})
+        if groups is None:
+            print("could not read the tester groups: " + why)
+            print("  and the other way round: " + why2)
+    if groups is None:
+        pass
+    elif not groups:
+        # The whole point of the command. Nobody is told anything by silence.
+        print("NOBODY. This build is attached to no tester group, so it does "
+              "not appear in anyone's TestFlight.")
+    else:
+        print(f"{len(groups)} group(s) can install it:")
+        for group in groups:
+            g = group.get("attributes") or {}
+            kind = "internal" if g.get("isInternalGroup") else "external"
+            print(f"  - {g.get('name', '?')} ({kind}), "
+                  f"public link {'on' if g.get('publicLinkEnabled') else 'off'}")
+
+    # An external group sees nothing until review clears, and that state does
+    # not live on the group.
+    # WHO IS IN THE GROUP, and what TestFlight thinks each of them has done.
+    #
+    # A build attached to a group still reaches nobody if the group is empty,
+    # or if the person is invited and never accepted. That is a different
+    # failure from an unassigned build and it looks identical from outside:
+    # TestFlight simply shows nothing.
+    #
+    # EMAILS ARE MASKED. This runs in CI and its log is readable by everyone
+    # with access to the repository. The question is "is this person in, and
+    # did they accept", which a masked address answers; a full contact list of
+    # everybody else is not part of the question.
+    def mask(address: str) -> str:
+        name, _, domain = address.partition("@")
+        if not domain:
+            return "?"
+        head = name[:2] if len(name) > 2 else name[:1]
+        return f"{head}***@{domain}"
+
+    for group in (groups or []):
+        gname = (group.get("attributes") or {}).get("name", "?")
+        testers, why3 = ask(f"/v1/betaGroups/{group['id']}/betaTesters",
+                            {"limit": 100})
+        if testers is None:
+            print(f"could not read testers of {gname}: {why3}")
+            continue
+        if not testers:
+            print(f"group {gname} has NO testers, so the build reaches nobody")
+            continue
+        print(f"group {gname}: {len(testers)} tester(s)")
+        for tester in testers:
+            t = tester.get("attributes") or {}
+            print(f"  - {mask(t.get('email', ''))}  state={t.get('state', '?')}")
+
+    review, why = ask("/v1/buildBetaDetails",
+                      {"filter[build]": build["id"], "limit": 1})
+    if review is None:
+        print("could not read the tester states: " + why)
+    elif review:
+        r = review[0].get("attributes") or {}
+        print(f"internal testers: {r.get('internalBuildState', '?')}")
+        print(f"external testers: {r.get('externalBuildState', '?')}")
+
+    # For context, so a reader can see whether an OLDER build is the one
+    # testers are actually being offered.
+    recent, why = ask("/v1/builds",
+                      {"filter[app]": app_id, "limit": 8, "sort": "-version"})
+    if recent is None:
+        print("could not list recent builds: " + why)
+        return 0
+    print("most recent builds Apple holds:")
+    for item in recent:
+        a = item.get("attributes") or {}
+        print(f"  {a.get('version', '?'):>5}  {a.get('processingState', '?')}"
+              f"  expired={a.get('expired')}")
+    return 0
 
 
 def processing_verdict(builds: list[dict[str, Any]],
@@ -281,6 +526,16 @@ def main() -> int:
                       default=BUILD_PROCESSING_TIMEOUT_SECONDS)
     slot = sub.add_parser("free-signing-slot")
     slot.add_argument("--dry-run", action="store_true")
+    who = sub.add_parser("who-can-install")
+    who.add_argument("--bundle", required=True)
+    who.add_argument("--build", required=True)
+    invite = sub.add_parser("invite-tester")
+    invite.add_argument("--bundle", required=True)
+    invite.add_argument("--group", required=True)
+    invite.add_argument("--email", required=True)
+    invite.add_argument("--first", required=True)
+    invite.add_argument("--last", required=True)
+    invite.add_argument("--confirm", default="")
     args = parser.parse_args()
 
     client = Client(Credentials.environment())
@@ -289,6 +544,11 @@ def main() -> int:
             client, args.bundle, args.marketing, args.source))
     elif args.command == "wait-build":
         wait_for_valid_build(client, args.bundle, args.build, args.timeout)
+    elif args.command == "who-can-install":
+        return who_can_install(client, args.bundle, args.build)
+    elif args.command == "invite-tester":
+        return invite_tester(client, args.bundle, args.group, args.email,
+                             args.first, args.last, args.confirm)
     else:
         free_signing_slot(client, args.dry_run)
     return 0

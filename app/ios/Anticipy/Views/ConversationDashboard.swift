@@ -42,6 +42,11 @@ struct ConversationDashboard<Notices: View, Approval: View, Deck: View, Settings
     let turns: [DashboardPolicy.Turn]
     let captureState: DashboardPolicy.CaptureState
     let listening: Bool
+    /// Whether iOS has taken the microphone away. Passed in rather than read
+    /// here so the one control at the foot can be derived from
+    /// `ListenControlPolicy` — a screen that assumes the mic is available shows
+    /// a start button over a live listener, which is the defect this closed.
+    var micBlocked: Bool = false
     let everListened: Bool
     let history: [DashboardPolicy.Day]
 
@@ -51,6 +56,15 @@ struct ConversationDashboard<Notices: View, Approval: View, Deck: View, Settings
     let onStopListening: () -> Void
     let onSend: (String) -> Void
     let onOpenSession: (DashboardPolicy.Session) -> Void
+    /// WHERE THE WORDS WENT.
+    ///
+    /// The thread stopped printing the owner's own sentences on 2026-09-06.
+    /// They did not stop existing — they are in `ListeningHistoryView`, whole,
+    /// with per-line status and the ear that heard each one. This is the tap
+    /// that reaches them, and it is a required input rather than an optional
+    /// one on purpose: a collapsed count with nothing behind it would be the
+    /// transcript hidden rather than moved.
+    let onOpenHistory: () -> Void
     let onRefresh: () async -> Void
 
     /// The notices and offers Home already owns — the microphone recovery, the
@@ -107,8 +121,14 @@ struct ConversationDashboard<Notices: View, Approval: View, Deck: View, Settings
     private var face: DashboardPolicy.CaptureFace {
         // A hold is the owner's own doing, so it outranks every state the
         // listener could report about why it is not running.
+        // RAW turns, deliberately — not `captureCards`. The cards are filtered
+        // to tasks now, and asking THEM whether anything was heard would tell
+        // the face "nothing yet" all through a sentence she is transcribing
+        // perfectly well. That is the empty-screen incident wearing a new
+        // shape: the face must know she is hearing somebody even while there
+        // is nothing to show.
         DashboardPolicy.captureFace(held ? .paused : captureState,
-                                    heardAnything: !captureCards.isEmpty)
+                                    heardAnything: !turns.isEmpty)
     }
 
     // MARK: - The thread
@@ -124,10 +144,10 @@ struct ConversationDashboard<Notices: View, Approval: View, Deck: View, Settings
                 ScrollView {
                     VStack(alignment: .leading, spacing: 18) {
                         notices()
-                        if turns.isEmpty {
+                        if threadTurns.isEmpty {
                             emptyLine
                         } else {
-                            ForEach(turns, id: \.id) { turn in
+                            ForEach(threadTurns, id: \.id) { turn in
                                 view(for: turn).id(turn.id)
                             }
                         }
@@ -152,8 +172,12 @@ struct ConversationDashboard<Notices: View, Approval: View, Deck: View, Settings
 
     @ViewBuilder private func view(for turn: DashboardPolicy.Turn) -> some View {
         switch turn {
-        case .owner(_, let text, _):
-            OwnerTurn(text: text)
+        case .owner(_, let text, _, let speaker):
+            OwnerTurn(text: text, speaker: speaker)
+        case .pending(_, let count, _):
+            PendingTurn(count: count)
+        case .quiet(_, let count, _):
+            QuietTurn(count: count) { onOpenHistory() }
         case .working(_, let text, _):
             WorkingTurn(text: text)
         case .said(_, let text, _, let done):
@@ -221,13 +245,34 @@ struct ConversationDashboard<Notices: View, Approval: View, Deck: View, Settings
                    placeholder: "Ask Anticipy, or tell her something…",
                    onSend: send,
                    focus: $writing)
+            // DERIVED, NEVER HARDWIRED. A button that always says "Listen with
+            // phone" is a button that says it over a live microphone — which is
+            // how the ✕ above was able to strand a running listener with no way
+            // to stop it. `ListenControlPolicy` already answers this question
+            // for the whole app; the label, the glyph and what the tap MEANS all
+            // come from it now, so the screen cannot offer a start over a
+            // session that is already running.
+            let control = ListenControlPolicy.face(micBlocked: micBlocked,
+                                                   isListening: listening,
+                                                   suspended: false)
             Button {
                 Haptics.engage()
-                onStartListening()
+                switch control.tap {
+                case .start:   onStartListening()
+                case .stop:    onStopListening()
+                case .nothing: break
+                }
             } label: {
                 HStack(spacing: 10) {
-                    Image(systemName: "mic.fill").font(.system(size: 15, weight: .semibold))
-                    Text("Listen with phone").font(.system(size: 16, weight: .semibold))
+                    // The policy's glyph, except that the landing face has no
+                    // room for a breathing dot — it is a foot button, not the
+                    // capture face. A live listener gets the stop square there.
+                    Image(systemName: {
+                        if case .symbol(let name) = control.glyph { return name }
+                        return "stop.fill"
+                    }())
+                        .font(.system(size: 15, weight: .semibold))
+                    Text(control.label).font(.system(size: 16, weight: .semibold))
                 }
                 .foregroundStyle(OnboardTheme.onInk)
                 .frame(maxWidth: .infinity)
@@ -262,18 +307,63 @@ struct ConversationDashboard<Notices: View, Approval: View, Deck: View, Settings
     /// The cards that appear while she listens: the turns from THIS capture,
     /// which are the ones the thread has not settled yet. Never parsed out of
     /// the audio here — they are rows the brain already decided.
+    /// THE THREAD, WITHOUT THE TRANSCRIPT.
+    ///
+    /// Same rule as the capture face and the same reason: the owner asked for
+    /// the tasks, not for their own words read back at them. `.owner` turns are
+    /// the raw heard lines and they now live in History → a conversation, where
+    /// `SessionTranscriptView` shows every one of them attributed.
+    ///
+    /// A TYPED line is the exception and stays. Somebody who types a sentence
+    /// into the ask bar and watches it vanish has been given no acknowledgement
+    /// at all — that is a send with no receipt, which is a different bug from
+    /// the one being fixed here. It is distinguishable because the tagger marks
+    /// a typed line "owner" outright while an ambient one is judged.
+    private var threadTurns: [DashboardPolicy.Turn] {
+        turns.filter { turn in
+            if case .owner(_, _, _, let speaker) = turn { return speaker == "owner" }
+            return true
+        }
+    }
+
     private var captureCards: [DashboardPolicy.Turn] {
-        // WHAT SHE IS HEARING, newest last — including the plain lines. The
-        // first version showed only turns that had already become a job or an
-        // approval, so somebody talking to a phone that had not finished
-        // thinking watched an empty screen and had no reason to believe it was
-        // working. The reference this screen is built from puts what you said
-        // on the screen as you say it, and that is the whole reassurance.
+        // WHAT SHE IS DOING, newest last. NOT what she is hearing.
         //
-        // It shows the lines; it does NOT decide which of them mattered. That
-        // is law 1 and it belongs to the brain — a card here says "heard this",
-        // never "this is a commitment".
-        Array(turns.suffix(4))
+        // This used to be `Array(turns.suffix(4))` over everything, so speaking
+        // filled the screen with a running transcript of every word — which is
+        // what the owner reported on 2026-09-06: "it shows every little word
+        // that I'm saying. I want you to hide the transcript and only show the
+        // task." The transcript is not lost; it is what the history face is
+        // made of, and `HeardGroup` has always grouped it there.
+        //
+        // THE INCIDENT THIS MUST NOT REOPEN. The first version of this screen
+        // ALSO showed only judged turns, and somebody talking to a phone that
+        // had not finished thinking watched an empty screen and had no reason
+        // to believe it was working. Filtering alone re-creates that exactly.
+        //
+        // So the reassurance moves rather than disappears: `face` is told
+        // `heardAnything` from the RAW turns, not from this filtered list, so
+        // the capture face still knows she is hearing somebody and says so —
+        // and the waveform and the breathing mark are live the whole time. The
+        // owner sees proof she is listening without seeing their own words
+        // typed back at them.
+        //
+        // It still does NOT decide which lines mattered. That is law 1 and it
+        // belongs to the brain: a card appears here because the brain gave the
+        // line a goal, never because this file recognised a word.
+        Array(turns.filter(isTask).suffix(4))
+    }
+
+    /// Whether a turn is something she is DOING rather than something she
+    /// heard. The three heard-shaped cases are excluded: `.owner` is the raw
+    /// line, and `.pending` / `.quiet` are the collapsed counts that replaced
+    /// it. The capture face already says "listening" in its own subtitle, so a
+    /// count of unanswered speech there would be the same reassurance twice.
+    private func isTask(_ t: DashboardPolicy.Turn) -> Bool {
+        switch t {
+        case .owner, .pending, .quiet: return false
+        default: return true
+        }
     }
 
     private func isWorking(_ t: DashboardPolicy.Turn) -> Bool {
@@ -285,6 +375,22 @@ struct ConversationDashboard<Notices: View, Approval: View, Deck: View, Settings
         VStack(spacing: 0) {
             HStack {
                 Button {
+                    // IT ENDS THE CAPTURE, NOT JUST THE FACE.
+                    //
+                    // This used to write `held = false; mode = .thread` and
+                    // nothing else — so tapping it took somebody back to the
+                    // thread with the microphone STILL RUNNING, the tap still
+                    // installed and `keepListening` still true. The landing
+                    // face's only listen control calls `onStartListening()`,
+                    // which is a no-op on a live listener, so there was then
+                    // no control anywhere on Home that could stop it. That is
+                    // the "I pressed stop and it kept listening" report, and
+                    // this line is the whole of it.
+                    //
+                    // Guarded on `listening`: a ✕ after a hold must not call
+                    // stopListening() a second time and sound `listen-close`
+                    // over a session that already closed.
+                    if listening { onStopListening() }
                     withAnimation(Theme.springSlow) { held = false; mode = .thread }
                 } label: {
                     Image(systemName: "xmark")
@@ -351,7 +457,14 @@ struct ConversationDashboard<Notices: View, Approval: View, Deck: View, Settings
         case .working(_, let text, _): return text
         case .said(_, let text, _, _): return text
         case .question(_, let text, _): return text
-        case .owner(_, let text, _): return text
+        case .owner(_, let text, _, _): return text
+        // Never the words. These two carry a count and nothing else, which is
+        // the whole reason they exist.
+        case .pending(_, let count, _):
+            return count == 1 ? "1 thing heard" : "\(count) things heard"
+        case .quiet(_, let count, _):
+            return count == 1 ? "1 thing heard, nothing needed"
+                              : "\(count) things heard, nothing needed"
         }
     }
 

@@ -1,0 +1,2557 @@
+[
+  {
+    "path": ".agents/skills/testing-anticipy/SKILL.md",
+    "bytes": 8199,
+    "sha256": "5ffbe505bc2fbd1cea4475f79b5a1452d3934a76eec5f3378ee0c64bf3a1256f",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "AGENTS.md",
+    "bytes": 5677,
+    "sha256": "992d2e992a21293c1c3ffeb7a51409c3f7d75d1005a35cf4d1e3df8a7fec2a00",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "AUDIT-2026-07-21.md",
+    "bytes": 14089,
+    "sha256": "0b803133087366db3ca1178cb9d29ad86c7ae67c577e000c2db979c478c3d59a",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "BACKLOG.md",
+    "bytes": 2910,
+    "sha256": "42bda606a6ec950ed6aa50046d762507391f636367b16faf722713922e0feae3",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "CAPTURE-ARCHITECTURE.md",
+    "bytes": 33291,
+    "sha256": "44022eab75242b2107906bbb0e7bcfd0d7e3a436a569f97114ea7c57859a0110",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "CLAUDE-INTAKE-PROMPT.md",
+    "bytes": 796,
+    "sha256": "d0083775ff5862df6672fc86e5460b510a51cc341f13bc4f7cbe6121191d0688",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "CLAUDE-ONBOARDING.md",
+    "bytes": 6539,
+    "sha256": "9d217a31d56468c7cc11e0f547333cc71deec344d5dec85d3854adc05901d17f",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "CLAUDE.md",
+    "bytes": 5312,
+    "sha256": "c61963cf460cff75c79101c5f625d88157bfef09703c3b70352c715d21f1bdde",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "HANDOFF-2026-08-08.md",
+    "bytes": 9268,
+    "sha256": "13688b157537738630370050163c3a8378caaf83cdba2b2b987b0c6999d9cc06",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "HANDOFF-TRANSCRIPT.md",
+    "bytes": 476453,
+    "sha256": "fe910171c25977233c6fc50cdc9991837e2e0a08379a892e89a2b3431282c565",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "HANDOFF.md",
+    "bytes": 55370,
+    "sha256": "9802340f87110ac2b52309bbe92de9e642a21dd84c19b70f6662e89ba88b7c1f",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "HARNESS-LAWS.md",
+    "bytes": 12549,
+    "sha256": "d382ec6a18b803d1e6fb83a6f28b6ddf33bbfc858d1af30f08a87cfdcf067ba8",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "ORCHESTRATOR-HANDOFF.md",
+    "bytes": 17765,
+    "sha256": "60e53ab8e20d02c74708744c212c98c034c7e673b318b73146047383ce21c2ef",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "PROOF_REPORT.md",
+    "bytes": 8110,
+    "sha256": "19d2d19e0ebbf15526d6b98ee605afa59fbfffc3a2ecc331be41f59c02537736",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "README.md",
+    "bytes": 1823,
+    "sha256": "857a8cc403063e8a1b08e5b596a5e0edcc6f0d2f76bf39063c805629e0045b03",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "TESTING-PASS-2026-08-21-ROUND2.md",
+    "bytes": 15107,
+    "sha256": "d272b76af20d113aef87e89aeb6e8d7c67fc5666ab8271376efaa40c64d5cae9",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "TESTING-PASS-2026-08-21.md",
+    "bytes": 11828,
+    "sha256": "cb7174da41141f717021592d79cb5cc64eb847be2a607a4c1187ddc6182f2a84",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "WHAT-CHANGED-2026-08-02.md",
+    "bytes": 5884,
+    "sha256": "5d858e96ecf56b0cbedbdfa7a64b3655a6e4b925eb1e586cc157f79000d0bd0f",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "WHAT-I-FOUND-2026-08-11.md",
+    "bytes": 14479,
+    "sha256": "237629b1e7b998edceb9733093d2b6c0656c08b73fa39bceaab25a004c753d9c",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "app/ios/README.md",
+    "bytes": 4866,
+    "sha256": "5cc33f8f85e0bfa03d8cb5a1c788e1c1cf78146d2dfaae54f062de8da560d941",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "backend/ops/README.md",
+    "bytes": 2010,
+    "sha256": "f9bcb676e22c8a75211ebf316c12c5fcc47dd7e5620d25f883ec50d2c7a8ce93",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "backend/pb_public/internal.html",
+    "bytes": 136244,
+    "sha256": "1a250419087b784e631e12df3e4546d74662fe371155c6f4d60111f18fd75918",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "backend/pb_public/mac.html",
+    "bytes": 7304,
+    "sha256": "62da5f173cb543df071a5de0c0dea297bac1a62167badf0a16bbd33fca8bcc65",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "backend/pb_public/privacy.html",
+    "bytes": 11078,
+    "sha256": "75dcdfe9f1b7113c3607a76d346be9ed931cb7c0dea37c93b2e907405150b393",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "backend/pb_public/setup.html",
+    "bytes": 12659,
+    "sha256": "d985fd8139130498a36e414d05a9ff14ac1d7a2c3bbae41689283f02f29466aa",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "brain/EXEMPLARS-A-LIFE.md",
+    "bytes": 19383,
+    "sha256": "9716bcea19272a115188bcab200264690dbe09f06e5f47a270615c58bc33c957",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "brain/EXEMPLARS.md",
+    "bytes": 13202,
+    "sha256": "98ce0257554efa2be321fa96fefd94c07221171335879c31299b3b780597232b",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "design/CONSUMER-FEEL-DIRECTION-2026-08-03.md",
+    "bytes": 58602,
+    "sha256": "fbbb430541fde5aaaf3a6d01ec5f01f368bb70752d480e797516dca2261a0a7a",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "design/CONSUMER-READINESS-2026-08-03.md",
+    "bytes": 51650,
+    "sha256": "00aba3f1a8a8bc3c4fa1ed2f6501db7b0c4f9fa8fdbe0aad02a5f03ec4befa9f",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "design/LOCAL-FIRST.md",
+    "bytes": 3713,
+    "sha256": "f63d9c3f4160c4776703f0a7337f20aff17411e319d330e25e702621f2780290",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "design/LOGIN-DESIGN-2026-08-03.md",
+    "bytes": 62050,
+    "sha256": "a91d45fbb18e150b4f631b76a58f9b422dbb964f37aff4ec540a9a87891929d8",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "design/NO-MORE-TIMERS.md",
+    "bytes": 8860,
+    "sha256": "17e91915dbcf67f22cad94497f7026ec69ccbbcf1b4d279e6f14c085e7b1d8de",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "design/PREMIUM-FEEL.md",
+    "bytes": 9540,
+    "sha256": "03f15670f23f0da868ba4a8a1107cd73d5fad80f165163c98c045002551ebf7c",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "design/PRODUCTION-ROADMAP.md",
+    "bytes": 12057,
+    "sha256": "ddbed5fc5377abed730f499ddc3f35620f2048a151e3beca72b89ebbec7580c2",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "design/briefs/01-research-arm.md",
+    "bytes": 1892,
+    "sha256": "60002a9a64bc76d0c7e2aba13884122b43490923f834e12255046f3659441b1b",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "design/briefs/02-addressee-classification.md",
+    "bytes": 2044,
+    "sha256": "975fbe5ef55d398d3ca2762fa3cc0dbc4618607aba4c45c231f9ab40bc3ca36c",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "design/briefs/03-never-foreground.md",
+    "bytes": 1595,
+    "sha256": "3c95e27c0dbd006c8108c76d388802b825f2288b1120714649acb17106be121e",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "design/briefs/04-three-lane-delivery.md",
+    "bytes": 2600,
+    "sha256": "e31bcbcf04564f6c04a3d7ac1cf22a54fbfe29ab9725a1f85c7158f1730ad5de",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "design/briefs/05-memory-consolidation.md",
+    "bytes": 2418,
+    "sha256": "b1df48c44a094c756f829214b30104eb25bf3e3aa5c263cf9b590660e44e1e5c",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "design/briefs/06-heardlog-and-sync.md",
+    "bytes": 2596,
+    "sha256": "51c2175298a9fcabbc055483dfa3523bf4332b3a4db31335e236834a1c29376c",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "design/briefs/07-segment-fed-triage.md",
+    "bytes": 2185,
+    "sha256": "f3c9c93cecf0f2de08e9d81394dcaa7269deed28830f804010a223fb4b2ef11b",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "design/briefs/08-day-zero.md",
+    "bytes": 2575,
+    "sha256": "8c6c9b11866db8ff4ec1d4f1b561745f5884eddeb35a25c18169da5e9ab7fe93",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "design/briefs/09-local-speaker-recognition.md",
+    "bytes": 6963,
+    "sha256": "bb7cadfb8ae3451d2b6df11f09e5f5a40fefa1533735e7a9b4525b0e5107d561",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "design/day-zero.md",
+    "bytes": 17954,
+    "sha256": "099d5f2cf1c689f44513ed49f2bc13bad4da968abb2694d1e900bb92473d090a",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "design/memory-consolidation.md",
+    "bytes": 4819,
+    "sha256": "268fb6c215be15e230f47cb76fd7433469d2538bce1fe8809ef32ca57dde12c8",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "docs/BOARD-STATE-2026-08-24.md",
+    "bytes": 12799,
+    "sha256": "5ec64eec5d6a5dc4778d4d4e79a9533516b7382d331134733bd85200e243970e",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "docs/BOARD-STATE-2026-08-25.md",
+    "bytes": 6641,
+    "sha256": "44e99ca004f7635493efb536e63218dd1d128fd397f252d0cc1edd86a37e34b8",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "docs/BRIEF-AUDIT-2026-08-24.md",
+    "bytes": 7650,
+    "sha256": "9bea43e6d619bb005342620101accff4b15f8a2054b57524107407a156d02334",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "docs/BRIEF.html",
+    "bytes": 234313,
+    "sha256": "12b1002c06e89caeb22b4d1f278907a3fa0a1944addee876a04f8ca3cae3855f",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "docs/CONSUMER-UX-AUDIT-2026-08-30.md",
+    "bytes": 6293,
+    "sha256": "45624d85e054817ebf919c2b71e6cd70303aeb7dcf0d854ce7d7116eb9d87a98",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "docs/DECISIONS-2026-08-24.md",
+    "bytes": 12875,
+    "sha256": "8ba106d8c39586d5314f2e82249abfcec62ba7ca44a6ecf9c230a22194428d37",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "docs/FIFTY-MOMENTS-STATUS.md",
+    "bytes": 16637,
+    "sha256": "3f1be1f154fd1a6c917bf694e84c0ccfcb6d399e708d4f0ad1e8409c3a59f642",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "docs/FOLLOWUPS.md",
+    "bytes": 4238,
+    "sha256": "9540677a6828e2ab46a391b722d8fa84a6ca3751876d0726b47e862489db015a",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "docs/HANDOFF-SHIP-IOS.md",
+    "bytes": 4951,
+    "sha256": "8af128bb90c9abd76bbb1b6f6898a5ba8115f233a84ec6660be8b86bdcbd109b",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "docs/LOCAL-DEVELOPMENT-MAC.md",
+    "bytes": 9941,
+    "sha256": "e1c42fd86a7572fee8a27470ce6871913e418fb67a3cce614143fba8d7c2ca8c",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "docs/MANUAL-VOICE-TEST.md",
+    "bytes": 30763,
+    "sha256": "1323bd25b87557da2f228c993b794441171a70fbd6f0385a03ecee3da2d57258",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "docs/MORNING-2026-08-30.md",
+    "bytes": 4157,
+    "sha256": "e3c871a269f0f415e58fefbb14b7f32bf74294e3b3d9687e88720a0c88f34d39",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "docs/TAKEOVER-2026-08-30.md",
+    "bytes": 9953,
+    "sha256": "7c5421251217b03a4d48dd3a77bc166c14286f7a2eeb9097fb43cab0a46e32f7",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "docs/spec-connections.txt",
+    "bytes": 72936,
+    "sha256": "d9252289569653f8041e3c837e7fa27884080580be2d2e65b439f6061f8a521f",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "docs/superpowers/plans/2026-08-24-five-organs-roadmap.md",
+    "bytes": 14756,
+    "sha256": "0037abe3f55b0922be2df016f216fbcea99cc5fbd540b97748dac5cb38ac127c",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "docs/superpowers/plans/2026-08-24-voice-capture.md",
+    "bytes": 19762,
+    "sha256": "7231470eb67e11493e9eee0c51d97ee5fc2c82ad0b8843c5c31e323fa80ee4a3",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "docs/superpowers/plans/2026-08-25-phone-as-pendant.md",
+    "bytes": 15753,
+    "sha256": "af4e58b7a5d25308d7c2a3fb7ba4d63200b37f968f5f83000078daace325ad8c",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "docs/superpowers/plans/2026-08-25-shelf-2-undo.md",
+    "bytes": 17246,
+    "sha256": "8b94ece182481a5d6448a528cf18c99e84cf2188af75121d5ca710628157e5bc",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "docs/superpowers/specs/2026-08-24-shelf-2-redesign.md",
+    "bytes": 82373,
+    "sha256": "275d072f1d63c4687f481176c99fece7b3b79b29ba7d7671818a0ad898d8c44f",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "docs/superpowers/specs/2026-08-24-voice-capture-design.md",
+    "bytes": 20163,
+    "sha256": "c360fdec68c1aef3ba8bd445e218176b6cafc113498d65e74850b2035197d956",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "docs/superpowers/specs/2026-08-25-ears-turn-envelope.md",
+    "bytes": 35327,
+    "sha256": "bc6904cb1dbd8df77149503dff1163d6e1eb8f3323f65656760114e036ef8db8",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "docs/superpowers/specs/2026-08-25-facts-that-expire.md",
+    "bytes": 5509,
+    "sha256": "c30809926112cad9e37bbfd2d613c23edd9e7934750f63e4a33819594c6d6788",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "docs/superpowers/specs/2026-08-25-hands1-skills-reach.md",
+    "bytes": 38411,
+    "sha256": "03cddccb9cefc5bc7fc9084b636d34715f364ee227f13c7328c5783a172f4573",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "docs/superpowers/specs/2026-08-25-ios-call-recorder.md",
+    "bytes": 50093,
+    "sha256": "056a857be33d8d7684c65c6d55fc46334787c4599d46eb33e133fdceafdbf404",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "docs/superpowers/specs/2026-08-25-library-law-clean.md",
+    "bytes": 31233,
+    "sha256": "40aac4f8a71a21c9a1c31b711fc86c881d221e063a833f2372368a5f81733559",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "docs/superpowers/specs/2026-08-25-macos-meeting-recorder.md",
+    "bytes": 63607,
+    "sha256": "4b2940c9d22ab238ec8013c895c1792c464cb2c903f52ca0f0b934db0a9eff8f",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "docs/superpowers/specs/2026-08-25-mouth-evidence-capture.md",
+    "bytes": 46533,
+    "sha256": "fa20832fb789ac3b57c7386410425c5faf65bb63893cf6a4f616a6796160db70",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "docs/superpowers/specs/2026-08-25-mouth-photo-receipt.md",
+    "bytes": 39626,
+    "sha256": "f0ffc96021de10812bbb75b3324510ab04dad258e80dab1b74023937030e4221",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "docs/superpowers/specs/2026-08-25-sorter-conversation-granularity.md",
+    "bytes": 43879,
+    "sha256": "23467b60d11f8bcc27d076da0c4320da65a91a60c754a480779064effc6c575f",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "extension/onboarding.html",
+    "bytes": 42645,
+    "sha256": "9158f5620d1f57e54f020569fa54fbde5907f7a24cc669959c682db7d0ed6139",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "extension/popup.html",
+    "bytes": 37911,
+    "sha256": "60dcab3953e2b0183dad34d718e014f91aa1c8f984794c469ff7b88eadf98b87",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "extension/store/LISTING.md",
+    "bytes": 19536,
+    "sha256": "1f019e05b0a3dc17a77548779ea66daaeb49a70099c9b1c38b00a006de1cbb67",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "extension/tests/MANUAL-PROOF-never-foreground.md",
+    "bytes": 11829,
+    "sha256": "c665b6d37b7b5ddb5551d255549e8358181280c8e5c9a6171195a2cc08e577d5",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "extension/tests/hostile_checkout.html",
+    "bytes": 6467,
+    "sha256": "5c0221a4bffb2bd81a67599dbc586ea4d59d8f7e946a14e5e4b564ae99ace856",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "firmware/source/CMakeLists.txt",
+    "bytes": 3097,
+    "sha256": "0c36c405b4fb5b299c32704c4378ac5244202324f9d0c411655a1d9db99c41f6",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "firmware/source/README.rst",
+    "bytes": 1298,
+    "sha256": "5c6d4987e910479c6699208cd245a331732a7da7d058a93761523da53f56b7cb",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "migration/BLOCKERS.md",
+    "bytes": 4402,
+    "sha256": "d412fa0653e953ebc8e59ea45bcb06e16dac3741c56248a4beedcccea599c602",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "migration/BRAIN-ON-CONTAINERS.md",
+    "bytes": 25955,
+    "sha256": "70b78060b3751e6d0b939dedb3b8b8f542f25ccdfe74468d44139f7e32b42fec",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "migration/CRITIQUE.md",
+    "bytes": 41405,
+    "sha256": "be2910d776ba9fbdba117af75cbe029ab2d7d87007fde690078851ade9d8935d",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "migration/CUTOVER-STATE.md",
+    "bytes": 8632,
+    "sha256": "548b31ba1be0ce6f13c83a29b904c6780c7687977ba596fd110f4d5bd3395c0f",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "migration/STATUS.md",
+    "bytes": 13068,
+    "sha256": "60876b13573f52af81cc25062774757277cbe7c6902d513ef18cb89efede768f",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "migration/d1/FELLOWSHIP-PRECEDENT.md",
+    "bytes": 9557,
+    "sha256": "2b503c4019276f313442ca9a7bd1934516c39ab47a4e9c362a113cc252f7fb3d",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "migration/d1/GAPS.md",
+    "bytes": 22037,
+    "sha256": "a10659d347d214607a6991d72d3b056c3d999d6320c9e0c403290b4775981d04",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "migration/d1/RULES.md",
+    "bytes": 21716,
+    "sha256": "527c612280f80a703a0a555213754a7e381071b256c60be8327a6172b53cb9b4",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "migration/recovered/README.md",
+    "bytes": 3270,
+    "sha256": "65e81fa6e4340c7f6e709c9fc7c0c9b84f681a7ff4247b36ba4d783966667815",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "migration/runbooks/CLIENTS.md",
+    "bytes": 24557,
+    "sha256": "443d9b71720bc75d9ed6002b1b90ae82dc455bfcd15bce1bbbc8d169bf39a946",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "migration/runbooks/CRON-SWAP.md",
+    "bytes": 17953,
+    "sha256": "6069b660470198519281bcf3dc7b27023031dadd74a4ae5a6f8d2c6e0e2ebd7f",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "migration/runbooks/CUTOVER.md",
+    "bytes": 24859,
+    "sha256": "a7f9dd03ea7f0e0dfcdc78655c7e41e16b95ef3e4baca5007464a64988499d87",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "migration/runbooks/EXPORT.md",
+    "bytes": 34600,
+    "sha256": "cfbaf2601132a564998f833e16b40fb9ef6cdf0bce564665a9f325c22bd59f84",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "migration/runbooks/FINISH-MIGRATION-CHECKLIST.md",
+    "bytes": 6394,
+    "sha256": "5c644c5d7bf5a0a1d4456c6c835193f922625ff6924873504c894b039fdc0282",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "migration/runbooks/ROTATION.md",
+    "bytes": 37915,
+    "sha256": "c284b2edf9903505aec6edb2e7a819efd867abfe18b96d47ad219d2e9999da2e",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "migration/runbooks/SECRETS-RAILWAY.md",
+    "bytes": 3986,
+    "sha256": "438f572850f50b72944e501120dd40ae27bc6729d1f696370610a65e87212f5c",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "migration/runbooks/SECRETS.md",
+    "bytes": 44556,
+    "sha256": "de36d0ae0dcf1b7872039f0a589c0d50dc4e3451517e8e3c07223a19334568cd",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "migration/runbooks/VERIFICATION.md",
+    "bytes": 11493,
+    "sha256": "28bf1dd009cf11041af4f3a34a8449fbb98f077b9d8ca06b81c68fab694a9af7",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "migration/runbooks/WEBSITE.md",
+    "bytes": 54093,
+    "sha256": "5c071e270b70867ec416bf8baddb283781eedd353c3ded89716e226cfa8c24c6",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "migration/runbooks/reencrypt_vault.md",
+    "bytes": 25579,
+    "sha256": "3d6e9b1c7593da60a8555085f0fc124ba48dd129b3ae0070ce1fe12b6370e6f3",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "migration/spec/CONTRACT.md",
+    "bytes": 180284,
+    "sha256": "338e8374484cdd3766f15df98e022cb2fffb283082909b9f2c94716f53ec93ef",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "migration/spec/baseline/CALIBRATION.md",
+    "bytes": 13360,
+    "sha256": "44fe7c92fcddc3bc7265089d40b05c54980866b9e8e7c210e8cd7eefb44aeed5",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "migration/spec/baseline/README.md",
+    "bytes": 2857,
+    "sha256": "14d347d0c245f1ab27af9f618ab8b8be46da477b723469d12ecbf24103f0d7cf",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "migration/spike/bcrypt-on-workerd.md",
+    "bytes": 2464,
+    "sha256": "96cdbef1a6e505d3ca1cd9a7f26900a25454407fe5e695fefdf6eaeb554a970b",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "migration/spike/containers-availability.md",
+    "bytes": 3031,
+    "sha256": "d697e6d105eb6126eb58dc8373aa45f4f456a7c0538fbe7f6bc7ee3b3e76181c",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "migration/spike/containers-sdk/node_modules/@cloudflare/containers/README.md",
+    "bytes": 23246,
+    "sha256": "9ec7d73378adb0d530c53dfa766be8624058a6bb135eff77b1e5b5e88ea9687c",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "migration/spike/filter-dsl-verification.md",
+    "bytes": 3256,
+    "sha256": "cfa573bf086cf788a5e891420c25b472d1e8fe8e050a85e1d180589462b1961c",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "migration/spike/rewrite-redirect-following.md",
+    "bytes": 6395,
+    "sha256": "a8cc0d885cf7c19e087a5767e9fe6659d2d222235c0cf423ff7797a38d9ddbe0",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "migration/spike/two-cloudflare-accounts.md",
+    "bytes": 2610,
+    "sha256": "978d6baf92fbfcbbf678ebf534c44c171e8577983ec24e75ce2f175eb6f7a40e",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "migration/spike/website-verification.md",
+    "bytes": 3348,
+    "sha256": "15344223905f3bc812e8dcc8bb16975ce22713cd5724291f4d95df4455730da7",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "migration/workers/ARCHITECTURE.md",
+    "bytes": 51883,
+    "sha256": "a8b46e3042aff13565ceeffad63c37e75af9514251832070d299c8c143b3e655",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "migration/workers/BRAIN.md",
+    "bytes": 66820,
+    "sha256": "ccfa3964c54a50f5588715935406b0d4cc57c4dafe28e0b9f5ad2cc824e2ab89",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "migration/workers/HQ.md",
+    "bytes": 45244,
+    "sha256": "f3082552b015034a90fdb88271c42742c414989e044919e6cf4b9a584089d1c5",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "overnight/MORNING.md",
+    "bytes": 7011,
+    "sha256": "8322d4418745f67de64472c8a366d655a37ea000237a81ecb606f3d6dfc917a6",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "overnight/RESEARCH-NOTES.md",
+    "bytes": 3103,
+    "sha256": "cd4932e865b8a4001d1c8e848dc089f04487ed57e1b6cc02d137b05fe3ecb5cc",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "proof/RECORDING-PROTOCOL.md",
+    "bytes": 7967,
+    "sha256": "a29a3afa42aae44bba044ed63957e2e71f2df4bb23d255bc1c29a90333f8c84a",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "proof/agent-v2-report.md",
+    "bytes": 2420,
+    "sha256": "217a8e5190dafdcfe84ea0213499b2571737727a7ec086b1f6c48b395d6f4262",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "proof/ambient/scorecard.txt",
+    "bytes": 10673,
+    "sha256": "f8d07407aa998592fb9d499a7d729234e25acd8905289327230f560b69dc4dfe",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "proof/anticipy-core-report.md",
+    "bytes": 2353,
+    "sha256": "6633d45a0136e6dd2f62d13d96054482779c4a934fc98d17bf5188a5939385f0",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "proof/deepgram_transcript.txt",
+    "bytes": 546,
+    "sha256": "5fd496d849510cb590537b756fda6e0bc2b5eb3110b4efaa2b04f9bae1780cf6",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "proof/fixtures/README.md",
+    "bytes": 12860,
+    "sha256": "1ae9e625ec5b64f2b8675854cb89750c34fee541da87be663b6a65b84499cce3",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "proof/fixtures/read_aloud_script.txt",
+    "bytes": 2039,
+    "sha256": "6e4249583aa5756958e2a88a6caddd1012fae42c5e9cea31df2377eec11a1d28",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "proof/ios-build-report.md",
+    "bytes": 1542,
+    "sha256": "f12566ab509b89af52083970eade43d5a70776e1fe3effe70b2aa3c0b9af060a",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "proof/local_transcript.txt",
+    "bytes": 483,
+    "sha256": "45c1bc263c4878dd89869f3688a11ea7b4ea5dc28f03ca3c624709f117d16601",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "proof/navigation-report.md",
+    "bytes": 1412,
+    "sha256": "03a8368bd90416f04462344d79aa78db76918d2000cc2ae8418cd4caee4441eb",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "proof/preflight/2026-09-06-synthetic-control.txt",
+    "bytes": 2175,
+    "sha256": "4be2b33dd7d06357cd0e9d81e8b0e080757fd60c0a96e989e95db8505c70d7a1",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "proof/profiles5-report.md",
+    "bytes": 14705,
+    "sha256": "1c92f2612b8491d39aa80eaa3a29d70a93d92cc5a2cb5f4838a0e3cf851a94e1",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "proof/scenario-report.md",
+    "bytes": 1686,
+    "sha256": "5c2a6b20cafba9509f048ce679829b722286aca8b2d498f53f37f8be3d430d9b",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "proof/test-report.md",
+    "bytes": 1595,
+    "sha256": "ec5e0f30ffb7cb9bf3ac26a59553d28f91a19bfd84b610f041cc7b214ae95924",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "proof/watch-b122/README.md",
+    "bytes": 3647,
+    "sha256": "982866f6b8a700dbb8aadaea63af6a3d28b6ad2ec6a4738bee6e9f9f7e480cab",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "proof/watch-b122/ROUTINE.md",
+    "bytes": 4695,
+    "sha256": "e8915fb3e9c87551407a1d4d4a3af4a9ddcb6d81034fe7a167fc371c40a93686",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-08-24-api-ladder.md",
+    "bytes": 35682,
+    "sha256": "40857f382434402f897f866bf6bc9a56edc6a6dae9f46802d1728b594fba11b3",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-08-24-battery-and-ear.md",
+    "bytes": 18422,
+    "sha256": "b3c550c7b8aa5605158298bbf90214b554caac1c757666ba791d0da928fcc4f3",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-08-24-clock-verb-list.md",
+    "bytes": 19790,
+    "sha256": "e19eb72d30ef9a342956b6dc928b266d3e25050984f13e3bf1fd1ff8c714e891",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-08-24-cold-stranger-walkthrough.md",
+    "bytes": 34135,
+    "sha256": "14fc2c666e3f56f81dea576f7f904bbce5f71d70bd56a539e7b7ccb7250dcf6a",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-08-24-deepgram-leak.md",
+    "bytes": 24403,
+    "sha256": "cb1846013b2adeab3a2bf3895d938e33bd4acca482844e856ae98dff36434fe9",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-08-24-echo-guard.md",
+    "bytes": 18967,
+    "sha256": "ef19714e67fe9760ec3af688ce343e8f43d54a56508c61664c245c6a01fe89ee",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-08-24-engine-harness-fixes.md",
+    "bytes": 31172,
+    "sha256": "50162edc8ce723fbe9662a6d5e8a1e123e6dfd88406cc541945f35fb3134b050",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-08-24-engine-options.md",
+    "bytes": 50344,
+    "sha256": "36d35cd9b448421faad27d8e7cb4c395292a5139b3748fe7a4c16fa6700263a3",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-08-24-evidence-host.md",
+    "bytes": 22914,
+    "sha256": "7235d2a80589fdce5e8c3af5e6043bc6a7baa79c17108252c8fe5bded2126b98",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-08-24-fence-correction.md",
+    "bytes": 18128,
+    "sha256": "26656a4aa24caa03734bba34a505cdfb183eac8f91d2ed6a86c0c1a3f613bb32",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-08-24-inbox-consent-nonce.md",
+    "bytes": 24372,
+    "sha256": "63f5c7545ff8686883a62f88c2817cc6a79b8b292fe784a1cd2317e7beb48247",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-08-24-journal-gate-fixes.md",
+    "bytes": 17060,
+    "sha256": "147b148af741fd1634bd0d75af1fec1cc877a5239cc7b56973ca462f40fc38bd",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-08-24-law1-audit.md",
+    "bytes": 63019,
+    "sha256": "b82364fc7ce9b13b02c95dd9d666cdfe0e42dc306f8b06ec84358dec28704425",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-08-24-mouth-and-hands1.md",
+    "bytes": 30693,
+    "sha256": "10783f4af48bc882abf4015e5209755aa74fd164ad30ac486bd8a66da4e782ee",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-08-24-stranger-gate-fixes.md",
+    "bytes": 22468,
+    "sha256": "98f90534f3cc3d32cec55ec89e2b99ffb66f38b9f7cc1d985875039b8e8ef5f6",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-08-24-stranger-gate.md",
+    "bytes": 21921,
+    "sha256": "b5ed66d237259296477262716e4ebdf87e4838f0c193ca6ec0c9c388c229b8cd",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-08-24-supersession-fixes.md",
+    "bytes": 26783,
+    "sha256": "a0c6c3f3d150f920cad4d82dcf01a13aff4e8bd1eec0ca231256a35438f8f961",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-08-24-tape-gate-fixes.md",
+    "bytes": 25087,
+    "sha256": "d26f872388577803a5bfd5ff9e51cecd1f6ce984d5addaa9715d5ade1a68123d",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-08-24-vector-channel-assessment.md",
+    "bytes": 11354,
+    "sha256": "d9b57ae673e3254717a97c5c5eefc1467178b2d8b409a831834919eaa013dc6f",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-08-24-why-voice-tests-dont-complete.md",
+    "bytes": 45457,
+    "sha256": "8e6edeb7f3d9ef13632d62a5df7d1ad09fdeed020a21f65ab078b0f325dd8583",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-08-25-agents-died-on-disk.md",
+    "bytes": 1993,
+    "sha256": "ba880410e8133f8c785ac2b7c70d95b264c397031f5ed798b5d862d4e3534962",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-08-25-branch-migration-audit.md",
+    "bytes": 3083,
+    "sha256": "dd9aebd584a2f92f672898b8c6a4d811e837164ce8b680cc06e21a03a0663677",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-08-25-calendar-hand-design.md",
+    "bytes": 5679,
+    "sha256": "242986ed536dd0a17f0ef96b3830ca469fb98b9938ca844e27603a02466f1263",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-08-25-call-detection.md",
+    "bytes": 18758,
+    "sha256": "ce57e8a2bd6a59bab0909a10ae08b42cb38eb425cd1242fa04e2ece7eb3efa40",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-08-25-claim-audit.md",
+    "bytes": 24626,
+    "sha256": "b1488bf80723146cc854056118e9695a361b3408d00b1827613e6aecf5b12901",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-08-25-closed-tape.md",
+    "bytes": 17648,
+    "sha256": "d0e92a40eb2a3bea68d63023ed591bf0566b717b225fb9df2864132d4bdcc193",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-08-25-ears-build.md",
+    "bytes": 13559,
+    "sha256": "d6097281d886f4c09f7383b3cb9a9947c565074d5e948f286810a2a96dc89b70",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-08-25-extension-zip.md",
+    "bytes": 9564,
+    "sha256": "a86d0f2b4ae5ba2185429a23dac5039e21b4c91a7bdb1bff40a8214e5abeef5f",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-08-25-first-words-night.md",
+    "bytes": 9337,
+    "sha256": "e7c2e785739e9452d3d71722fc78af19e20257cf108141d18bb0af6dc88afeb4",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-08-25-hands1-build.md",
+    "bytes": 36671,
+    "sha256": "019a646573e698b394793b9ee3c7702bafc80c0a5f0d899a3a41bb16153febc9",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-08-25-hands3.md",
+    "bytes": 18321,
+    "sha256": "c6cc0942b9122579802d016f850c52a480b84beef9917b98270e1dcaab3a982e",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-08-25-inbound-sms-reply.md",
+    "bytes": 18183,
+    "sha256": "8259bda2714754336945c2c077a22e39b77b043413674e54e34707abbf670ea2",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-08-25-library-build.md",
+    "bytes": 12194,
+    "sha256": "662515cbeaeff5941cb11ab24738bfa447a156ff8e9e6ab9d36a75f46eb3442b",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-08-25-macos-concurrent-capture.md",
+    "bytes": 23309,
+    "sha256": "8d900b2df6b90a6284fef071756171fd2123c32532a2bf0c1f52041518779aa5",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-08-25-mobile-ux-audit.md",
+    "bytes": 36845,
+    "sha256": "0a88ea72c3a3f875b9cab0007f415a2e66efc5f6f4d483eba1f5c6b58ed7843e",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-08-25-mouth-photo-build.md",
+    "bytes": 12918,
+    "sha256": "8f40d97df67430e611e3a6722bf5c3aa66e67bcb7114f43833f9732a70019745",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-08-25-outcome-rate.md",
+    "bytes": 17569,
+    "sha256": "b4f975546600c2482d8e11b15f9ee8bcc7edf62c336560e1cf2c78682bbaa0b0",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-08-25-pendant-is-mute.md",
+    "bytes": 6864,
+    "sha256": "990fc9f2eed75709d79eeb7055790cfd6e431b7721fbf6c7d67f0597384b2cc8",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-08-25-research-gate-wiring.md",
+    "bytes": 20213,
+    "sha256": "edc33146bacdeafa40f24560fd0f8b7d8b2efe1fbd472c1e733c5c0313cc9ad9",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-08-25-shelf2-build.md",
+    "bytes": 20366,
+    "sha256": "f75faa06cc7235023ca5041cd89d8aaed48fe3d12f95d0b1aa6d9f260e4201c8",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-08-25-sorter-build.md",
+    "bytes": 13263,
+    "sha256": "3508f949bb79b1c16804a027998b1b9474e715c445dfd057add36fac108ce031",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-08-25-stranger-legs-457.md",
+    "bytes": 12824,
+    "sha256": "44905876465a18303b888f145e5a01ec241032e5121b3bb552db43b53d85f579",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-08-25-the-ears-stopped.md",
+    "bytes": 14776,
+    "sha256": "9f1d4c3fbe8771dd20130c0156efa1dc506736187e66c8f0ff71d885f6f02c22",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-08-25-transcription-quality.md",
+    "bytes": 43986,
+    "sha256": "42109fd4cc2d99c8179457ca9f5c7e5798f72ea4951a3e7e4fc0525af656c3a7",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-08-25-voice-tests-verified.md",
+    "bytes": 19959,
+    "sha256": "7259486a3ebfa4f801c03132c02b436c5de4a11f302558d6a17305a03cf6ae91",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-08-26-calendar-findings-closed.md",
+    "bytes": 2895,
+    "sha256": "602125ef5174f8e1d8b852be268e7f1edb14b32c526a9cfa8b1ca2ba59432955",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-08-26-hands2-better-answer.md",
+    "bytes": 23310,
+    "sha256": "686f0bc86d831c71359bc3c66ad8c087d8e0d65737c929337b8d11b7b9221f63",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-08-26-hq-deploy-clobber.md",
+    "bytes": 1810,
+    "sha256": "d9f5083ed449e2ad54c30f054fdc5e98634b8f63e5c2e3ea5304d6b5a7d442b8",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-08-30-consumer-computer-onboarding.md",
+    "bytes": 2695,
+    "sha256": "5fe8381b084183bae273fededb21cb43e6811a5d73cdcf9b494f4bd8297e3c7d",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-08-30-youtube-audio-tap-crash.md",
+    "bytes": 2492,
+    "sha256": "7ccfab9a9b11de421f7cb16f75578169dc91b7918699214daeecdff21db2492a",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-08-31-consumer-home-and-action-feedback.md",
+    "bytes": 6797,
+    "sha256": "34a32882d3251979ed53baa7a85cc05fce6390aca5c246dcb46818b007913d9c",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-08-31-database-resilience.md",
+    "bytes": 5531,
+    "sha256": "ef27025627097762be0415fbdfeb89f67434e21b7b17af8d7abf6c7459fa35f7",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-08-31-floating-listening-indicators.md",
+    "bytes": 3693,
+    "sha256": "f9aafe82f99ce2381bdf5b86d095c6401febb6d581758ed23b7f45056d718bdb",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-08-31-founder-identity-reset.md",
+    "bytes": 7235,
+    "sha256": "db950a02e782cf645f16b85d6a8d0150da78324e5352e0acc8e3aeb743703b25",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-08-31-team-sync-handoff-incident.md",
+    "bytes": 5086,
+    "sha256": "a77ac3120a851e0952617ac22168b6181b4b83638cf1634b9de96f8e69d1bb07",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-09-01-full-system-defect-audit.md",
+    "bytes": 8133,
+    "sha256": "00cee1dea241370395d4f40c12b85b9b35212167316440160325775a16b1c133",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-09-01-reservation-agent-incident.md",
+    "bytes": 9167,
+    "sha256": "c72ff7fb8ef2e8292ed8ea25bb211c2740229cf60d1f2c618d34701fb6755231",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-09-01-unified-release-handoff.md",
+    "bytes": 3243,
+    "sha256": "67f0c43ea2866d0843bc186aaad22ce6a3842c935b7be704ea6e797a152faa7d",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-09-04-I-changed-a-real-password-while-probing.md",
+    "bytes": 3234,
+    "sha256": "0618819b2e326ea9331c79aad8534a3d4eb44daf72bd9e0d9d8a449576c84a2b",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-09-04-brain-container-code-written.md",
+    "bytes": 3992,
+    "sha256": "01dc4780005eae02b7df5da7f01539548f8cb68244612b49d0787044ba2c82d9",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-09-04-fellowship-surface-ported.md",
+    "bytes": 4227,
+    "sha256": "1e215911934dbf4aa576a86ffccf5d3f1f38c84f1d1b521adca15510ee856ca1",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-09-04-five-route-divergences-explained.md",
+    "bytes": 2967,
+    "sha256": "26d1d9d12708f43c757afd129d726ee827f7a93b54335d4e6996d972811868a4",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-09-04-hq-hook-IS-production.md",
+    "bytes": 5058,
+    "sha256": "ea36196a22f97d1c0e06ea53a3f0e5fa47139b24bac52221293d1164c43228e1",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-09-04-omi-architecture-extraction.md",
+    "bytes": 35194,
+    "sha256": "63f870b40cd4bee642067115d74c53aeea5f3d124d3085b7bbfdeb423b6a9532",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-09-04-omi-port-coverage.md",
+    "bytes": 13654,
+    "sha256": "ad6d0ebbe802a9714f5a20572c21b80e59f35ec89100956eff61cabfb74c16b1",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-09-04-production-is-not-this-repo.md",
+    "bytes": 5585,
+    "sha256": "7734531b12807d9f1ba33cc3d0ad1c91b5ba12cb71cdde42896124e8272262f9",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-09-04-recovering-the-deployed-source.md",
+    "bytes": 5066,
+    "sha256": "d6772f1f93c7c11458d8ff74691be3b82df20ab78491b0b723095db2ce32fa72",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-09-04-routes-absent-in-production.md",
+    "bytes": 14827,
+    "sha256": "f9fc2b7f5b43c78bff993d27f7ec9418a008e12bc2647305aa9e6f2fb67e922f",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-09-04-signup-was-dead-on-the-worker.md",
+    "bytes": 4432,
+    "sha256": "2c313937d639330dfe96e79a66fc672a60864e0a9476ec1b14da7c7eb6f55c95",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-09-04-the-auth-secret-nobody-set.md",
+    "bytes": 7225,
+    "sha256": "ea5faf97742533cbfa82376cb3b7d9b4a3b76cfbafa858ba039bc38c6f1cce08",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-09-04-the-product-surface-nobody-diffed.md",
+    "bytes": 3661,
+    "sha256": "4559c3f6ddd2b0b0191be21e5f8b873540c3c9ad20830d3e048d83e0fee088eb",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-09-04-the-sweep-was-a-silent-noop.md",
+    "bytes": 4367,
+    "sha256": "550756f07e5a68a9bbf7445f8e50c74adacaf3b1624091a9caa835a99e67d293",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-09-04-the-workers-dev-url-is-wedged.md",
+    "bytes": 5383,
+    "sha256": "019ccb9deea4d994a3a96e24ddc8ab0775c4f1f494ee7f6c15e36d39b1f2b8f0",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-09-04-two-routes-that-are-not-in-this-repo.md",
+    "bytes": 9949,
+    "sha256": "a4370e1bf06d9f716e3cb957c81d2c7b47f588651753740f69377bf1a5715574",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-09-05-agents-table-malformed.md",
+    "bytes": 8490,
+    "sha256": "49ff3af25b0c71c483df2db29e73935e2012e32b3474030ff0d689b095010baf",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-09-05-audit-71-challenge-verdict.md",
+    "bytes": 12432,
+    "sha256": "f14bbfafe10e2e3f987c589297938ad5ff934793d78551d6cc68454e73dd2a71",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-09-05-brain-of-record.md",
+    "bytes": 3324,
+    "sha256": "b03f1c13b8a9d1a661696b359347ab1020145366ab465eabc251cb788bc924e7",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-09-05-browser-law1-round-two.md",
+    "bytes": 11926,
+    "sha256": "17d82d6f085a00c470a191dd0a2ad1ec932b79adffc5c4447da3d827c1ef6108",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-09-05-browser-region-audit.md",
+    "bytes": 25544,
+    "sha256": "fd34e1d35fffbea4554e45f764733f461b6b086fc218956932c51452d2006779",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-09-05-cloudflare-era-plan.md",
+    "bytes": 29521,
+    "sha256": "77d8f9ab54c4ab98c659b4db35bdc537cfd5631101208d5f5faba29aa3f1309c",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-09-05-completeness-audit.md",
+    "bytes": 40476,
+    "sha256": "850ac7ccf5f2f569041af51f2c208848cd07b685c9765ec5a1fff38f1e72b67c",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-09-05-composio-connections.md",
+    "bytes": 6327,
+    "sha256": "c8943e2da1c6b2b1db031a0f3a525fff4952780d7f63bafa4f0160a9a220c61a",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-09-05-deploy-readiness.md",
+    "bytes": 4728,
+    "sha256": "9e252cbb3c05183e144a156ed698b807d0ad06c4429558918f3c4951db586d72",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-09-05-hands-live-run.md",
+    "bytes": 11316,
+    "sha256": "6944824fa18cc744c3e9051a66e83f33480b430fb3a39ab7a49e908bfce556f8",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-09-05-omi-port-10a-no-verdict-below-the-floor.md",
+    "bytes": 10727,
+    "sha256": "d121db7d98d0886c0c8d857b31ce53da88cbd92451e48646e92ce22983e4a5b6",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-09-05-port-06-reasoning-bounds.md",
+    "bytes": 14619,
+    "sha256": "ca5512e66a1ce553de5eba65ac49a233c8068e2492be7f05e919d297470f6b73",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-09-05-release-0.15.0.md",
+    "bytes": 10622,
+    "sha256": "123920965df26e59c39df9ef694e4cc5454f9a9024f2b4009e91518ad888ed8b",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-09-05-sendblue-outbound-arm.md",
+    "bytes": 7318,
+    "sha256": "e0c4ec4f260ea627e37938675349d7a4474bbf7e79c8a2c719c5304fbafbd339",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-09-05-two-hands-signatures.md",
+    "bytes": 16917,
+    "sha256": "e82b00dcfa08885e3f6447821cfde8d0cb32edf279751ea2bf18baa83ded133a",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-09-05-website-cutover-in-progress.md",
+    "bytes": 14632,
+    "sha256": "8999c295013b23e7913e141b77b3df5bfa7ef27d9970f5e87d12a537cbe4f5d2",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-09-06-api-lane-is-not-browser-work.md",
+    "bytes": 6994,
+    "sha256": "cf5385882d300efc38a8a24f576c90473954a4daf9829b42cfc41a18e7cf586c",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-09-06-composio-connections-live.md",
+    "bytes": 18488,
+    "sha256": "ffe90db583380bca4e7920c8c84ccb973444bb8d7cb5b196eb198227615dccb8",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-09-06-composio-in-the-app.md",
+    "bytes": 15645,
+    "sha256": "2cf856268acb065d7459590f94ecf036b5b142e975a669a65180cf0b676aa10f",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-09-06-composio-webhook-live.md",
+    "bytes": 4523,
+    "sha256": "dc56406c92ff0818281cd1d9ca88310cd089743b155780293eaed95bb32b3d5f",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-09-06-every-phone-number.md",
+    "bytes": 5751,
+    "sha256": "8a1db4e67b522e9070563193040650c81d11842653fc296f0efb6b66e51e86b9",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-09-06-insights-retention.md",
+    "bytes": 6836,
+    "sha256": "5ddb2af39f0d69d397fe8487fbcc91e8c48e8f67e26dcd668f7a1ee3c1790a34",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-09-06-live-activity.md",
+    "bytes": 7965,
+    "sha256": "d2e8cbfc3e4e1c5b5f99e6e3ba517eb1abf488688c418f9c48af00212d3c0e83",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-09-06-mac-development-setup.md",
+    "bytes": 6484,
+    "sha256": "283d9d7a6be341ceb0c2c6245e045ef4d260e94a9de9872708cd96058565475f",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-09-06-nobody-could-connect-anything.md",
+    "bytes": 4671,
+    "sha256": "034aa80408bfc2c2205630da281c9b64a021371befe9142e8d088aeff97c3905",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-09-06-pendant-onboarding-design.md",
+    "bytes": 8072,
+    "sha256": "8f5a8db19c4623ae23f10eac3b857db01eb8022ab4763093e25af895c65e1658",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-09-06-repair-swapped-in-a-file-missing-a-table.md",
+    "bytes": 5299,
+    "sha256": "d56db3c2ca990699199aba2e038cdefda39539aab824ea4c87b5f69d668bceb5",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-09-06-spike-fence-expired.md",
+    "bytes": 4657,
+    "sha256": "fea4b26a43d3e53a553e6d93cb7130734a847ac5807bc074f7154d4d90e38ccb",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/2026-09-07-browser-hand-gets-no-job.md",
+    "bytes": 3448,
+    "sha256": "172d38a1ffcbd8fca3e7bfd47eba839cc262d31824c79197d29a1eb95304658a",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/DELETED-BRANCHES.md",
+    "bytes": 5139,
+    "sha256": "18e717ac25f2e68ef4f756d97f68b50713361ba18b1a68b2f4655fa0bc999019",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/README.md",
+    "bytes": 2664,
+    "sha256": "66a19844d6fd7819b3e7e68f7252ae3d63a10d9b26f9135e43559235b56dbf7f",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/deploy-preorder/planning/00-handoff/AGENT_WAVE_VERIFY.md",
+    "bytes": 4149,
+    "sha256": "2b987e3e21f912d0de030e0eb94bffb34b21160a1c55c8af93bbde47e1cdc009",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/deploy-preorder/planning/00-handoff/ARCHITECTURE.md",
+    "bytes": 19111,
+    "sha256": "80e184cfdff3244ee2a591eaf049600787d32bc43b1fda1947dbd16679c7b1fd",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/deploy-preorder/planning/00-handoff/AUTONOMOUS_LOOP_WAKE_UP_REPORT.md",
+    "bytes": 6731,
+    "sha256": "9498438b0c97e8a958e5eae7e47f98955f043fab68e8d6de715773e380451119",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/deploy-preorder/planning/00-handoff/BLOCKERS_LIVE.md",
+    "bytes": 1350,
+    "sha256": "6187d21f2acbfa1edda5ecedfefdddebb4eddfdcebe2019bdd1566d1b2bda8da",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/deploy-preorder/planning/00-handoff/BUG_LIST.md",
+    "bytes": 131237,
+    "sha256": "fc54d3d10cc81b90eb66038486f9ade8dbb0b51771232dfe8cde53aa384ac86a",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/deploy-preorder/planning/00-handoff/COLDSTART_90S_REPORT.md",
+    "bytes": 10212,
+    "sha256": "d0319a9d386ac65ef2d321f7068b47d6524d965878c04e64e44334f385b43cc5",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/deploy-preorder/planning/00-handoff/CONTEXT_HANDOFF.md",
+    "bytes": 7699,
+    "sha256": "02af44e861c44f2abbf0aeb8d0ea28676ffc622a37f2d3ac75d02a28d53b1413",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/deploy-preorder/planning/00-handoff/COST_CEILING_AUDIT.md",
+    "bytes": 8550,
+    "sha256": "ced67607bd58d537b3f807ca89ad33d6553c0f25fc59e0895018dfee6751a607",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/deploy-preorder/planning/00-handoff/COST_CEILING_PATCH.md",
+    "bytes": 9292,
+    "sha256": "6419794613f611b032a434a008228b612da7ca9a12e4a08894791656765cab08",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/deploy-preorder/planning/00-handoff/CYCLE_PROCEDURE.md",
+    "bytes": 9030,
+    "sha256": "b36324b7d77ff4f2268108e1bd3530349dd4b08a302cf230d67c1d77eaac41e9",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/deploy-preorder/planning/00-handoff/DEMO_RECORDING_PLAYBOOK.md",
+    "bytes": 10646,
+    "sha256": "103af3b9729b51ce0354d7ca2f0d68fb39204fe4dee8e2d6bc9e1cc7bf43895c",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/deploy-preorder/planning/00-handoff/DESIGN_BRIEF.md",
+    "bytes": 6874,
+    "sha256": "c57ccfc1670325f3fdc8bae3927fbe7486e068e54c8efcde62a781c72f99e3c0",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/deploy-preorder/planning/00-handoff/E2E_STRANGER_FLOW_VERIFY.md",
+    "bytes": 10092,
+    "sha256": "b83fd22b24a9237780194a23e5951ad1e6ddc1308faf85e6e34e243bd01945ea",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/deploy-preorder/planning/00-handoff/E2E_VULN_FIX_REPORT.md",
+    "bytes": 8249,
+    "sha256": "9eaaf87f48a9cdbc5eb567500447d0c296f14ff84f066e8ce58a85168e2e2148",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/deploy-preorder/planning/00-handoff/ENGINE_WATCHDOG_AUDIT.md",
+    "bytes": 4952,
+    "sha256": "00de4b847e4c4b4294af618ece588c5f13150034a23b5c698f25ffa26736ee8b",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/deploy-preorder/planning/00-handoff/HANDOFF.md",
+    "bytes": 27450,
+    "sha256": "aa0601d184df30a858d87bb785251ea7087733fa5c0eb7cbf5648c4534af76cf",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/deploy-preorder/planning/00-handoff/HANDOFF_COMPLETE.md",
+    "bytes": 24511,
+    "sha256": "5b9abad1e0c2a622c28208c3e2ad070c6e0a94b078865badebc75e58f35816ba",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/deploy-preorder/planning/00-handoff/HANDOFF_FOR_NEXT_AGENT.md",
+    "bytes": 14400,
+    "sha256": "d7f226fac018076d5cab7a94f7acc105e92385ddcc9aad1d7fadd26d27a23db2",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/deploy-preorder/planning/00-handoff/HANDOFF_HONEST.md",
+    "bytes": 17190,
+    "sha256": "2ff99b89545922c2770ea195e422006bb8a156db91bc8a8271de61f903ffe863",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/deploy-preorder/planning/00-handoff/INTEGRATION_WALK_REPORT.md",
+    "bytes": 6107,
+    "sha256": "598dac992a68a91faad1749f00dea89736ef12df48303c8b7ba3ab5ec2766518",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/deploy-preorder/planning/00-handoff/LIVE_DEMO_HARDENING_REPORT.md",
+    "bytes": 8389,
+    "sha256": "386a1608a9f63808788dc5d3a4cb5238117d6f805a7c1f14c2531d9313a5a526",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/deploy-preorder/planning/00-handoff/MASTER_HANDOFF.md",
+    "bytes": 67759,
+    "sha256": "163dfaed6477536a6613fe839b4adf9a297ca9c236aaf531460585c0ddd9760b",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/deploy-preorder/planning/00-handoff/NORTH_STAR.md",
+    "bytes": 3868,
+    "sha256": "9808a6bb62b1de07251c02750a2980c4997ef2dcbb5459bb1fc24668923a2988",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/deploy-preorder/planning/00-handoff/NORTH_STAR_v2.md",
+    "bytes": 10485,
+    "sha256": "87412e35c688ae011c82bcf47b4392ab892d2191325172e9de26021777876a7e",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/deploy-preorder/planning/00-handoff/OMAR_LEAK_HUNT.md",
+    "bytes": 11733,
+    "sha256": "7f667546b13505702bca9102a43f058d5b978a1bd2f0e9e5257e99bfdbc614a5",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/deploy-preorder/planning/00-handoff/ORCHESTRATOR.md",
+    "bytes": 80276,
+    "sha256": "b778c6f4904a8dbbc6546466ff7ed8b74a1e890860e9385164364faaa6ad794d",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/deploy-preorder/planning/00-handoff/PROGRESS_LOG.md",
+    "bytes": 13997,
+    "sha256": "48f83e6e8016a8f51c98fdb89cf2eb89916674e91294d3a8d28208044f075e70",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/deploy-preorder/planning/00-handoff/QUEUE_AUDIT.md",
+    "bytes": 3840,
+    "sha256": "8b35b2fed71fed5af67a8395cb6bdbd55aaed497b3de6fd9930483d432278e4d",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/deploy-preorder/planning/00-handoff/RALPH_LOOP.md",
+    "bytes": 9192,
+    "sha256": "5d6f6ce77c65b992ffa29090deacb39b3930432656d700327af3ea7412fe7ec5",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/deploy-preorder/planning/00-handoff/RESEARCH/a2p-10dlc.md",
+    "bytes": 10448,
+    "sha256": "ea910b0e82d7c03b02f5f66647e97b423cb7ce22d1377cd0656c9a68d0f73075",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/deploy-preorder/planning/00-handoff/RESEARCH/agent-loops.md",
+    "bytes": 12328,
+    "sha256": "f4d718149575b4160b94516c6493036ae5fff45b37e4d2e3f892f3699dbd88e0",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/deploy-preorder/planning/00-handoff/RESEARCH/chrome-apis.md",
+    "bytes": 13312,
+    "sha256": "d434956c4585d8b80fa9e4c87da0a831db580f06ae8b8e39f7b697dfb784bff3",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/deploy-preorder/planning/00-handoff/RESEARCH/llm-cost-routing.md",
+    "bytes": 10784,
+    "sha256": "6df1a304c0907c30ebf1806ca93dbf320f1379b77c7c1c556ed69ea365ffb089",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/deploy-preorder/planning/00-handoff/RESEARCH/resend-email.md",
+    "bytes": 10061,
+    "sha256": "e9c952d4e93265c95a4cd641a5ef500f58889aa169b11195b21d5c213e497dd3",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/deploy-preorder/planning/00-handoff/ROADMAP.md",
+    "bytes": 14213,
+    "sha256": "56677301802cbb6cc31b816908f0fb522070297720ffc824c947fd6085375002",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/deploy-preorder/planning/00-handoff/SESSION_HANDOFF_2026_05_30.md",
+    "bytes": 9930,
+    "sha256": "dcec7b33200aa832229ba486843f2515e5b91520eb183b93d83e97a639e82fa4",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/deploy-preorder/planning/00-handoff/SMS_COPY_AUDIT.md",
+    "bytes": 16962,
+    "sha256": "6a29d1bfd5f47758d1e3db72bf95e7e01a4519765e66f1e53201e87e7b281aaf",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/deploy-preorder/planning/00-handoff/STATUS_LIVE.md",
+    "bytes": 2899,
+    "sha256": "3082f7eab1994ba1e03af484d1005779aa1ca7ae6c2f3639bdd95ccad873ec05",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/deploy-preorder/planning/00-handoff/SURFACE_AUDIT.md",
+    "bytes": 16732,
+    "sha256": "9edd6d8350f1a32ebeacf08fd1c0d4239784462a011f5736a9a1fce8c26aa712",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/deploy-preorder/planning/00-handoff/TAB_OPEN_AUDIT.md",
+    "bytes": 5819,
+    "sha256": "5fb15c9a8fbb359de8c37cdd16bd4ac83b295e57365ea42c07fc222f9cd214c4",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/deploy-preorder/planning/00-handoff/TWILIO_DELIVERY_TEST.md",
+    "bytes": 5861,
+    "sha256": "f3afc85b1af18a5918e315254ef2ffe09914b14f307e0869d9d43da3c9538033",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/deploy-preorder/planning/00-handoff/USER_E2E_TESTS.md",
+    "bytes": 4485,
+    "sha256": "327d3d83bf457ca64f3dde28938d517251b7aa591c5c37e34415e97949ea1576",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/deploy-preorder/planning/00-handoff/UX_VISUAL_TEST_REPORT_v2.md",
+    "bytes": 10980,
+    "sha256": "db043df55db89d4edad1d0a6a98d1cfe78d04eee6814b70f71d2ac1f1bbdc152",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/deploy-preorder/planning/00-handoff/VERCEL_DEPLOY_RUNBOOK.md",
+    "bytes": 2890,
+    "sha256": "453d178f3d87cf13847ca348ff7c4a24fab803642c286e94a17809f135d7f582",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/deploy-preorder/planning/00-handoff/VERIFICATION_PROTOCOL.md",
+    "bytes": 4294,
+    "sha256": "41b55078738a876eae770e85df9cbde39f4eb7ab3f498cc4e37b125488667a5b",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/deploy-preorder/planning/00-handoff/Z001_HARNESS_STALE.md",
+    "bytes": 1337,
+    "sha256": "367aa0cff2f28230ed0e24d70cd2029f7d8feba71dbac2928d95728e11e6294f",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/hoe-build/00_AMENDMENT_NEVER_STALL.md",
+    "bytes": 11020,
+    "sha256": "efeb87d10f822988d41d5f5c93ef7dacadb8e26f9b6f887935fc7f2f1c234480",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/hoe-build/00_READ_ME_FIRST.md",
+    "bytes": 5020,
+    "sha256": "980608b8ac518b7c00a2135aaf45d825ac91d80cb949f03a829d8e9fd0a0cfba",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/hoe-build/AGENTS.md",
+    "bytes": 6734,
+    "sha256": "6ecafc8a44cd688479711284433b63d0c8bf60f401bbb6e4220e638baeb1b568",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/hoe-build/AMAZON_RETURN_HANDOFF.md",
+    "bytes": 8597,
+    "sha256": "18619b2c6cf3efc2ad8f3c8ca31974b1eabe75e7f3c1f480ecb0f8ba58446f36",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/hoe-build/ANTICIPY_48H_LEDGER_2026-06-22.md",
+    "bytes": 7218,
+    "sha256": "fdf1101f74940a30a63f9c626cff72e52bddeb2671ebbed5eeefd68ff338e2ae",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/hoe-build/ANTICIPY_AGENT_OPERATING_STRUCTURE.md",
+    "bytes": 14574,
+    "sha256": "ff0f8431aea7866dc3ea4dfe9740e5d6247af3b36f269a1be0daf6e21dbb2ca6",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/hoe-build/ANTICIPY_ARCHITECTURE.md",
+    "bytes": 31720,
+    "sha256": "24dc7fa2617568350bd8d29dd273b6e625a01a1209e40ebe7a0bd6d4da271e17",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/hoe-build/ANTICIPY_DISTRIBUTION_OPERATING_LEDGER_2026-06-22.md",
+    "bytes": 14852,
+    "sha256": "6caec6ebbf6796e9aa5b889b70e7b15c8ae1223b1ce0423143824a2302193f09",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/hoe-build/ANTICIPY_DONE_VISION_2026-06-15.md",
+    "bytes": 19727,
+    "sha256": "53e389f3b1f6f697e47d572ae05d773523dc38ad1e1a4b9ac10cc6dc10cf15d9",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/hoe-build/ANTICIPY_ENGINE_AUDIT_2026-06-15.md",
+    "bytes": 206337,
+    "sha256": "f1bfc8788ad3b7575e3518f9fcc0db9841208b3863b21e54ac06a372aac87809",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/hoe-build/ANTICIPY_EXECUTION_PLAN.md",
+    "bytes": 18812,
+    "sha256": "b756dc12e1d8e6794128bf5d12a59a84e3e9013506a84e0dc02c57b9d1ad899f",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/hoe-build/ANTICIPY_PLAN.md",
+    "bytes": 6948,
+    "sha256": "65c509f4471de11612c731e2dc0a37a9a7868c0211a8dafc0287fce8c14543f1",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/hoe-build/ANTICIPY_PRD.md",
+    "bytes": 28202,
+    "sha256": "a0b2ea8730400066851cce1d0ca06ab266e298cff05ecf9f99f01cc1764c55ac",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/hoe-build/ANTICIPY_SOURCE_OF_TRUTH.md",
+    "bytes": 227568,
+    "sha256": "8de4deb22165425fdcbef037c591f923a084a7ddb995920e6f06baf9e8c90fca",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/hoe-build/ANTICIPY_UX_SPEC.md",
+    "bytes": 37687,
+    "sha256": "dc35c4a44d98c661a3379923688c47d614129b568fe198d058f4d805b3fbdb5d",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/hoe-build/AUTONOMY_LINE.md",
+    "bytes": 1937,
+    "sha256": "f149f3b0734707940252841fd1d24ed3ef59a2209a276bbab38c744507232301",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/hoe-build/CANON/00_START_HERE.md",
+    "bytes": 6610,
+    "sha256": "59fca1886d6b71b042f9707a1a9811affb4f80407e8e273f98ebd2f4276c7ce4",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/hoe-build/CANON/01_WHAT_ANTICIPY_IS.md",
+    "bytes": 9418,
+    "sha256": "12ace988e7f3eb56fc5c16b6dd0dfd228cbcc7e0f1e075082f9bfaf6d8eca733",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/hoe-build/CANON/02_PROACTIVE_ENGINE.md",
+    "bytes": 11045,
+    "sha256": "f8dda5ff8a6f08dbb3a8b17fe2c10db1d75ac6583eb3108365006d2235913b73",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/hoe-build/CANON/03_ARCHITECTURE.md",
+    "bytes": 14851,
+    "sha256": "e00e4249ee1746bd04dcd7ca28bceb4a69f24d70db1e564925d1502322bbe5f6",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/hoe-build/CANON/04_DEFINITION_OF_DONE.md",
+    "bytes": 4945,
+    "sha256": "df66e17d7f272bf330dcda419c4e4b49bd9b2340ca361726b5502b3ac536e94f",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/hoe-build/CANON/05_CURRENT_STATE.md",
+    "bytes": 8606,
+    "sha256": "b7e1a01ef48427a5b6ac1b495146878487e3119857fac5ecdae0d678140165a1",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/hoe-build/CANON/99_SUPERSEDED_INDEX.md",
+    "bytes": 14093,
+    "sha256": "693984eb19e79cb70a3b6a73beacde8aa416be1be61b7e49aa5b40f6e59428cb",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/hoe-build/CANON/BROWSER_PLAN.md",
+    "bytes": 13476,
+    "sha256": "43d22f480bae1a60a00e3573bf9e872dafc89f0897411d41c339583d77f77b4b",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/hoe-build/CANON/THE_MAP.md",
+    "bytes": 20298,
+    "sha256": "6cb97bcdbac7de6bcd93b403beaac5578b490a7314e89855df945d90410674f2",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/hoe-build/CANON/UI_FLOW.md",
+    "bytes": 2795,
+    "sha256": "ad2eb085c6c8151134cc9b9d3723eafee8ad88fa64f68e12e776401c4ca39959",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/hoe-build/CANON/UI_SPEC.md",
+    "bytes": 17003,
+    "sha256": "5e98b8b37931b12069c8ba4d9cd3ac29abb6d90328a2fc47b8159d48baae4c72",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/hoe-build/CLAUDE.md",
+    "bytes": 3127,
+    "sha256": "45e9e7296f24a66c8293bd5a4696f43e2301421aab6e568138fd189bfa2c516a",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/hoe-build/CODEX.md",
+    "bytes": 1985,
+    "sha256": "eb17f0259f924889f05b96fbfc616445ad99e5d10751d1ebe0ad425bf34b5e60",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/hoe-build/CODEX_BRIEF.md",
+    "bytes": 15355,
+    "sha256": "aab3a4c68992a89b61437b2a507fdb4b3b102a2e625b87496c17d7c6c5578bcd",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/hoe-build/CURRENT_STATE.md",
+    "bytes": 10009,
+    "sha256": "5980ed242ad53c32fd54a0debbfca79ac6e1e32be28b9ecb705047c47fcad63f",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/hoe-build/DONE_DEFINITION.md",
+    "bytes": 3845,
+    "sha256": "c109b75d9141939f502e5bcdc98b326bb6882f26f31dce3504b52b67dcc59865",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/hoe-build/LEDGER.md",
+    "bytes": 25631,
+    "sha256": "02a8b1d7dac0f181fc1fa9c5d92586612a6995d563d7442f3719f79cba137ea3",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/hoe-build/MEMORY_WAKEUP.md",
+    "bytes": 3138,
+    "sha256": "d89ccad416c0fd5a36b6167e585213772c3da1b24c2a3bf5b0e7b232e03310dc",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/hoe-build/MISSION_LOCK.md",
+    "bytes": 25833,
+    "sha256": "6f77fe9691d0a672f654ee4e1bd000da5862e7e78c32a7b498fa1bd1f5e07a59",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/hoe-build/PENDING_FOR_OMAR.md",
+    "bytes": 8744,
+    "sha256": "2009fb9fb6925bbdf75df6305c855aa2ccacb3cc36fa63a4aac9fd53b5119af4",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/hoe-build/PLANS/00_OVERARCHING.md",
+    "bytes": 7322,
+    "sha256": "d7e735df5113783085e7e7a3f120e4b2ca9a9b3f11f6deae6973f570d2da06c9",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/hoe-build/PLANS/FIX-00_canon-docs.md",
+    "bytes": 4399,
+    "sha256": "42560ae185948ce0e576777fb991c93f72966bdb3ff3ebdd803051c6675efbaf",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/hoe-build/PLANS/FIX-01_one-pipeline.md",
+    "bytes": 6103,
+    "sha256": "17176d018e9580db73915c64ef4d16b741fbfa4807b9780f47c6f1b71fc9a6f0",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/hoe-build/PLANS/FIX-02_orphans.md",
+    "bytes": 2428,
+    "sha256": "3053fa53557a32bbce63a9e5e5a5429d3437ca93ce4c9b707cc14c19c4f4a5cc",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/hoe-build/PLANS/FIX-03_deep-scrape-wire.md",
+    "bytes": 1822,
+    "sha256": "42ad1f1b52d9b22b509842bd2cdc9a25bf9f3e9f39e9f8b0c1dbc59866212ed2",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/hoe-build/PLANS/FIX-04_autonomy-wire.md",
+    "bytes": 1408,
+    "sha256": "7fe37b920761cb61dfe5e264368faadfa160de8c12ffd23ac908b7475469853e",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/hoe-build/PLANS/FIX-06_pending-wire.md",
+    "bytes": 1686,
+    "sha256": "aaa9493b05c74cf29118afce8b14c1220a412e20264d1ff0bcc807a76b89ff08",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/hoe-build/PLANS/FIX-07_true-proactive.md",
+    "bytes": 6286,
+    "sha256": "61c03321885c93e0ebc8b16dd7710e838bda9eac10421f5f6b2d5a3a80aec0c0",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/hoe-build/PLANS/FIX-11_scrape-expansion.md",
+    "bytes": 2757,
+    "sha256": "1d3658639ac8e205b109db987bdfb4200307594e3b49ba4e92c9e2813d79726d",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/hoe-build/PLANS/_TEMPLATE.md",
+    "bytes": 3538,
+    "sha256": "eadfb4cc0e0376268117210883de5e26ac2b7b0c1edbb0c1315bd7201805115e",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/hoe-build/PLAN_TO_DONE.md",
+    "bytes": 11428,
+    "sha256": "812166f6d53df36a1ccc0549d0d02ace43afa20b6ea0d05c35981bb29e295e10",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/hoe-build/PRODUCT_STATUS.md",
+    "bytes": 6781,
+    "sha256": "3fe6a63b514bc62970452333758754b2c25559527f6bb4e4be4062fd958ae364",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/hoe-build/README.md",
+    "bytes": 2060,
+    "sha256": "3cfd3a9525734087bbb27697b251b999d5b31710cf728e25b44a6846ff291acd",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/hoe-build/SOURCE_OF_TRUTH.md",
+    "bytes": 3978,
+    "sha256": "fe361c7e6f93342b9ec3d70f77aeec6194aeba28148858fa388a73b8dcbc8436",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/hoe-build/STATUS.md",
+    "bytes": 7640,
+    "sha256": "9a688e4e57e9d32a842364a10f72f30a118a9f25e0740509875874e586c89ccb",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/hoe-build/THE_BAR.md",
+    "bytes": 5079,
+    "sha256": "8334f0424e5aefdc30dee006696c200e03259a6e2a3995b624b25e2a26fa6ec8",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/hoe-build/THE_FORGE.md",
+    "bytes": 5444,
+    "sha256": "68d4f5843eb1c750e43c9c64c63b80c16a4e680985cabec9820515ce208e038e",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/hoe-build/THE_MISSION.md",
+    "bytes": 8017,
+    "sha256": "7749275db34601f9c5f5b44b534abd44cd9bc907e3f6af42761183e9fc26751b",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/hoe-build/THE_PLAN_TO_FLUSH.md",
+    "bytes": 2812,
+    "sha256": "4911e192ef497a70266bdf0adac8f1af61301105357a5301d726c883d15efb84",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/hoe-build/WAKEUP.md",
+    "bytes": 6339,
+    "sha256": "6eba7f839ff350717db837f121e349a603eff5b8b305d82904323b813dd7d9e9",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/hoe-build/WAKEUP_REPORT.md",
+    "bytes": 7616,
+    "sha256": "9acb6853e1863272e1d9264fe413c312316bdf244b46d15920b96a537c5a12d1",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/hoe-build/WHEN_OMAR_RETURNS.md",
+    "bytes": 4884,
+    "sha256": "2a50d587287f2cd7b022d55295232b9c782689dbf77d44aff189af7276d081d1",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/recon-engine-state/ENGINE_STATE.md",
+    "bytes": 25344,
+    "sha256": "82c4ba5eabe209f0480366b6ef5f205f66fd4a285a72a5fbab76b681ff48b390",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/recon-engine-state/recon/all_test_files.txt",
+    "bytes": 4811,
+    "sha256": "d231414f0f9933ac26f5770d33952d5ee1bcd68296b4033e1cf4806ffb3036c3",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/recon-engine-state/recon/anticipy_api_health.txt",
+    "bytes": 172,
+    "sha256": "bbd11941078cc8987fcb9e55a3652732a76f0f473cae41d2b7c850e334c21995",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/recon-engine-state/recon/anticipy_engine.html",
+    "bytes": 12966,
+    "sha256": "5dae7be134f37c1b547e37f0fc0a63f2781435edce52866d414c0da51ee274e2",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/recon-engine-state/recon/anticipy_funded.html",
+    "bytes": 42736,
+    "sha256": "5bfa911ae9858d44b4729a34a8b6bb6f0f2a0be1c263bb192b15a2e75f66cc89",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/recon-engine-state/recon/anticipy_production_railway_docs.html",
+    "bytes": 1021,
+    "sha256": "1953d851f6528fc566934cb425ea4c96bd94a53b0697d64684904353fa79b838",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/recon-engine-state/recon/anticipy_root.html",
+    "bytes": 54548,
+    "sha256": "d4774068504bcb7feb2dc38e093e4d975716a3d7b664b019408c7d643e6bb696",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/recon-engine-state/recon/copouts_general.txt",
+    "bytes": 7069,
+    "sha256": "9c37c99053c04683bd0db0a465f03e80a5dd36dff78669c4fce2752fdd05f519",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/recon-engine-state/recon/copouts_paths.txt",
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/recon-engine-state/recon/copouts_sitespecific.txt",
+    "bytes": 686,
+    "sha256": "ab236a732347d58a7bd8454e301ca29770316c0a9a78c41afc946368f2521e71",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/recon-engine-state/recon/env_keys_engine_uses.txt",
+    "bytes": 129,
+    "sha256": "9e694b736bb8b37b2374de319bd805aa4532042f0c35a5fa61c82151cc735431",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/recon-engine-state/recon/env_keys_frontend_uses.txt",
+    "bytes": 861,
+    "sha256": "ee8834ac89b2a4dc35881e765593c535854a7181ad219b726a002be4d868f097",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/recon-engine-state/recon/env_keys_present.txt",
+    "bytes": 345,
+    "sha256": "bd503472ff149bdbae4172847ef3739bf9920c31ea8eef0f6fcf71d4146bdf76",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/archive-2026-09-04/recon-engine-state/recon/railway_root.txt",
+    "bytes": 101,
+    "sha256": "c8e7e5bd3473e54fdfd05678c4e8cdbd356ccbf911bcf1ffa247ad7d1ca8b248",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/browser_agent_mechanics.md",
+    "bytes": 6296,
+    "sha256": "a2aa2c7e628100076d564e31aad06a40f6fbd208b17c92de87a40c1e06643573",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/evals/call-2026-08-23-tejas/FINDINGS.md",
+    "bytes": 2954,
+    "sha256": "a8a00702592091aa9e2b112ab774879d00c40a9778075d8aea14486f2d1a406b",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/evals/call-2026-08-23-tejas/WHERE-IS-THE-REST.md",
+    "bytes": 200,
+    "sha256": "ad4b2acb3147134506d93821970691646ab21f7cef948961d867906b015b297b",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/evals/form-family-2026-08-24/FINDINGS.md",
+    "bytes": 7388,
+    "sha256": "9b08212da5d2a3129216b3a5e09682a94667e187bbe01b567fb4eef694cb8c35",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/evals/login-wall-2026-09-05/FINDINGS.md",
+    "bytes": 5639,
+    "sha256": "2e8dfc60eaec98ceda91ed368dd8b6415b2e6420dac1d644191c0add1d56c0ba",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/site/index.html",
+    "bytes": 57115,
+    "sha256": "424048c28b0ad444c55be3a344de15aeed0280bf5d341220e907b85a14aeb0ed",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "research/solutions-2026-08-24/SOLUTIONS.md",
+    "bytes": 12596,
+    "sha256": "5952192a92532b72f0efbade52929c458d03eb2a4ccb2334e5a36f9f1e2e3ef9",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "spike/two-hands/README.md",
+    "bytes": 2606,
+    "sha256": "9988631445bf9706c3fd5b855bf712bd9b96a26fc0b8b845fe9b5c88ba123437",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "spike/two-hands/RESULTS.md",
+    "bytes": 36506,
+    "sha256": "66d345443864f594a5b6352171c447bafd3cc6d03fa09afab3e328dc9e50e26b",
+    "review_status": "not_reviewed",
+    "notes": []
+  },
+  {
+    "path": "website/index.html",
+    "bytes": 23473,
+    "sha256": "aea229ea63f0f9b936dd4ad259cac08e94db8766c397307d54b1451debba63e3",
+    "review_status": "not_reviewed",
+    "notes": []
+  }
+]

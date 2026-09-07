@@ -122,8 +122,37 @@ enum DashboardPolicy {
     /// One turn in the conversation. Every case carries a verdict somebody
     /// else made; none of them is inferred from the text.
     enum Turn: Equatable {
-        /// Something the owner said or typed.
-        case owner(id: String, text: String, at: String)
+        /// Something SOMEBODY said or typed — not necessarily the owner.
+        ///
+        /// `speaker` is the tagger's verdict: "owner", "other", or nil when the
+        /// phone could not tell. It was absent until 2026-09-06 and every line
+        /// rendered as one continuous bubble on one side, which in a room with
+        /// two people is not a transcript of a conversation — it is one
+        /// person's monologue with everybody else's words put in their mouth.
+        case owner(id: String, text: String, at: String, speaker: String? = nil)
+        /// SPEECH SHE HAS NOT COME BACK ON YET — a count and a clock, never
+        /// the words.
+        ///
+        /// The owner's report, 2026-09-06: "it shows every little word that I'm
+        /// saying. I don't want you to do that." Between a sentence leaving the
+        /// phone and the brain stamping a goal there is a window of at least
+        /// five seconds, and the thread used to fill it with the sentence
+        /// itself. This is what fills it now.
+        ///
+        /// A COUNT, NEVER A GIST. The phone may put in a title slot only a
+        /// string a model stamped or the human's own characters — the rule
+        /// `HeardGroup.openingTextLine` states as "she does not get to invent a
+        /// summary she never made". A count and a timestamp are neither: they
+        /// are structure, and structure is the only honest thing left when the
+        /// words are hidden and the meaning has not arrived.
+        case pending(id: String, count: Int, at: String)
+        /// SPEECH SHE HEARD AND LEFT ALONE — judged, no goal, nothing to do.
+        ///
+        /// Separate from `.pending` because they are opposite facts wearing the
+        /// same silence: one is still coming, one is finished. Folded together,
+        /// the count would never fall and "3 waiting" would be a permanent lie.
+        /// Taps through to the full transcript, which is where the words went.
+        case quiet(id: String, count: Int, at: String)
         /// She is working on it. The sentence is the brain's, not ours.
         case working(id: String, text: String, at: String)
         /// Something she found, did, or wants to say back.
@@ -135,18 +164,20 @@ enum DashboardPolicy {
 
         var at: String {
             switch self {
-            case .owner(_, _, let at), .working(_, _, let at),
+            case .owner(_, _, let at, _), .working(_, _, let at),
                  .said(_, _, let at, _), .approval(_, _, _, let at),
-                 .question(_, _, let at):
+                 .question(_, _, let at), .pending(_, _, let at),
+                 .quiet(_, _, let at):
                 return at
             }
         }
 
         var id: String {
             switch self {
-            case .owner(let id, _, _), .working(let id, _, _),
+            case .owner(let id, _, _, _), .working(let id, _, _),
                  .said(let id, _, _, _), .approval(let id, _, _, _),
-                 .question(let id, _, _):
+                 .question(let id, _, _), .pending(let id, _, _),
+                 .quiet(let id, _, _):
                 return id
             }
         }
@@ -193,6 +224,26 @@ enum DashboardPolicy {
         let id: String
         let text: String
         let at: String
+        /// THE BRAIN'S VERDICT ON THIS LINE — `ignore`, `act` or `ask`.
+        ///
+        /// It was being dropped. `TranscriptLine` has carried this since the
+        /// brain started stamping it, and the mapping into this struct kept
+        /// only id/text/at — so the policy layer STRUCTURALLY could not tell a
+        /// line the brain called a task from a line it called noise, and the
+        /// thread rendered every one of them as an identical grey bubble. That
+        /// is the "it shows the whole transcript instead of the task" report.
+        ///
+        /// NOT A LAW 1 PROBLEM AND NOT A LAW 1 FIX. Nothing here decides what a
+        /// sentence means; this is a column a MODEL wrote, read back. The phone
+        /// still cannot judge a line and must never try.
+        var decision: String? = nil
+        /// What she is quietly chasing because of this line. Stamped even when
+        /// the decision is `ignore` — that pairing is the difference between
+        /// "left alone" and "looking into it".
+        var goal: String? = nil
+        /// Who said it, as the tagger judged. nil means the phone could not say
+        /// — which is a real answer and must never be rendered as "the owner".
+        var speaker: String? = nil
     }
 
     /// Assemble the thread. Oldest first, because a conversation is read
@@ -205,8 +256,58 @@ enum DashboardPolicy {
         var turns: [Turn] = []
         turns.reserveCapacity(heard.count + said.count + jobs.count)
 
+        // THE TASK LEADS, AND NOW IT IS THE ONLY THING THAT SPEAKS.
+        //
+        // A line the brain gave a goal to renders as that thing. A line with no
+        // goal used to render as the sentence itself, and that is the wall the
+        // owner reported on 2026-09-06: "it shows every little word that I'm
+        // saying." Un-goaled speech now collapses into ONE row carrying a count
+        // and no words.
+        //
+        // THIS OVERRULES A DELIBERATE DECISION, and it is recorded rather than
+        // deleted. The comment that stood here said: "EVERY LINE STILL APPEARS.
+        // Filtering to only the judged ones was tried and reverted — somebody
+        // talking to a phone which had judged nothing yet watched an empty
+        // screen and concluded she was dead. Leading with the task is a change
+        // of FACE, never of membership." That incident was real and its fear is
+        // right, so membership changes only on the condition that killed it
+        // last time cannot recur: the thread is NEVER silent while anything is
+        // outstanding. One un-goaled line still produces one row, which is what
+        // the empty screen lacked. The owner chose this shape on 2026-09-06
+        // over showing nothing and over keeping the words.
+        //
+        // TWO BUCKETS, NOT ONE. Still-coming and finished-with-nothing-to-do
+        // are opposite facts wearing the same silence. Folded together the
+        // count could never fall, and "3 waiting" would be a standing lie.
+        var pendingCount = 0, pendingAt = "", pendingID = ""
+        var quietCount = 0, quietAt = "", quietID = ""
         for row in heard where !row.text.isEmpty {
-            turns.append(.owner(id: row.id, text: row.text, at: row.at))
+            if let goal = row.goal?.trimmingCharacters(in: .whitespacesAndNewlines),
+               !goal.isEmpty {
+                turns.append(.working(id: row.id, text: goal, at: row.at))
+                continue
+            }
+            // `decision` is a column a MODEL wrote, read back. Nothing here
+            // reads the text, and no rule decides what any sentence means.
+            let verdict = (row.decision ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            if verdict.isEmpty || verdict == "processing" {
+                pendingCount += 1
+                if row.at >= pendingAt { pendingAt = row.at; pendingID = row.id }
+            } else {
+                quietCount += 1
+                if row.at >= quietAt { quietAt = row.at; quietID = row.id }
+            }
+        }
+        // The id is the newest contributing row's, so the row keeps its place
+        // in the ordering below rather than pinning itself to the top or the
+        // bottom of a thread it is part of.
+        if pendingCount > 0 {
+            turns.append(.pending(id: "pending." + pendingID, count: pendingCount,
+                                  at: pendingAt))
+        }
+        if quietCount > 0 {
+            turns.append(.quiet(id: "quiet." + quietID, count: quietCount,
+                                at: quietAt))
         }
         for row in said where !row.text.isEmpty {
             switch row.decision {
@@ -245,7 +346,9 @@ enum DashboardPolicy {
     // MARK: - History
 
     /// A past conversation, as the list shows it.
-    struct Session: Equatable {
+    /// Identifiable so a tapped row can present its own transcript — the
+    /// history list had no destination until the transcript needed one.
+    struct Session: Equatable, Identifiable {
         let id: String
         let title: String
         /// ISO-8601, as every row on this phone carries it.

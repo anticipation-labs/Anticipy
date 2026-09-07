@@ -17,6 +17,9 @@ enum AnticipySession {
         let text: String
         let decision: String?
         var goal: String? = nil
+        /// Who said it. Mirrored from the real type so the two cannot drift —
+        /// the gate compares them field for field.
+        var speaker: String? = nil
         var segmentID: String? = nil
         var created: String = ""
         var source: String? = nil

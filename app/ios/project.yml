@@ -12,7 +12,7 @@ options:
 # exactly what it costs and how to put it back.
 settings:
   base:
-    MARKETING_VERSION: "1.1.0"
+    MARKETING_VERSION: "1.1.1"
     VERSIONING_SYSTEM: apple-generic
     # docs ex 111: "Bump the version when the bytes change." Five behaviour
     # commits landed (ex 77, 78, 83, 87, 88, 90), and the brief records build 63
@@ -763,7 +763,85 @@ settings:
     #      Also fixes a live defect found on the way: `seenDoneJobIDs.isEmpty`
     #      meant an owner's FIRST-EVER completed errand arrived with no haptic
     #      at all, because the set is empty on the refresh that first fills it.
-    CURRENT_PROJECT_VERSION: "151"
+    # 152: STAGES 3, 4 AND 5 of the sensory audit, closing the last findings.
+    #
+    #      3, completion drive: the interview's own answered-count drawn as a
+    #      ring instead of a shrinking list. MONOTONE by construction, which is
+    #      why a ring is honest here and a streak was not — the ears went deaf
+    #      for thirty hours once and a streak would have billed that to the
+    #      owner. The second ring (connected apps) is HIDDEN rather than guessed:
+    #      Home cannot see that count, and a screen that cannot see a number must
+    #      not invent a denominator for it.
+    #
+    #      4, Settings: fourteen screens, ~3,700 lines, one animation and no
+    #      suite at all — and the place sign-out and delete-account live. Every
+    #      row now answers the thumb through the one shared style, and the first
+    #      suite this surface has ever had made FIVE destructive rows argue why
+    #      they skip confirmation rather than merely omitting it.
+    #
+    #      5, spatial continuity: the insights peek GROWS into its page. That
+    #      required moving it off .sheet — matchedGeometryEffect cannot cross a
+    #      sheet's presentation boundary, so as a sheet it could only ever be a
+    #      cut. Three circular corners made continuous, and a whole-tree motion
+    #      contract that found five more files animating without ever asking
+    #      about Reduce Motion, OnboardingView among them at fifteen.
+    # 155: TWO LIVE DEFECTS THE OWNER REPORTED, both in the dashboard.
+    #
+    #      STOP DID NOT STOP. The X on the capture face fired no listening
+    #      callback at all — it flipped `mode` back to .thread and left the
+    #      microphone running, the tap installed and keepListening true. Worse,
+    #      the face carrying the only working stop (the tick) became
+    #      UNREACHABLE, because `mode = .capture` happens only on a false->true
+    #      edge of `listening` and listening never went false. From that tap
+    #      onward Home could not stop capture at all; only Settings or the
+    #      lock-screen capsule could. The X ends the capture now, and the foot
+    #      control is DERIVED from ListenControlPolicy instead of being
+    #      hardwired to start — a button that always says "Listen with phone"
+    #      says it over a live mic, where begin() makes it a silent no-op.
+    #
+    #      THE DASHBOARD COULD ONLY DRAW A TRANSCRIPT. The mapping into
+    #      HeardRow kept id/text/at and DROPPED the `decision` and `goal` the
+    #      brain stamps, so the policy layer structurally could not tell a line
+    #      the brain recognised as a task from one it called noise. Every line
+    #      rendered as the same grey bubble. The verdict travels now and a line
+    #      with a goal leads with it — a change of FACE, never of membership,
+    #      because filtering to judged lines only was tried and reverted.
+    #
+    #      AND THE CAPTURE FACE NO LONGER TYPES YOUR WORDS BACK AT YOU. It
+    #      showed every heard line while you spoke; it shows what she is DOING
+    #      now, and the transcript lives on the history face where it always
+    #      was. `heardAnything` reads the RAW turns so the reassurance survives
+    #      the filter — the first version of this screen filtered the same way
+    #      and somebody talking to a phone mid-thought watched an empty screen.
+    #
+    #      Not a Law 1 change: `decision` and `goal` are columns a MODEL wrote,
+    #      read back. The phone still cannot judge a line and must never try.
+    # 156: TWO OR MORE PEOPLE ARE NOT ONE PERSON. `SpeakerTagger` has stamped
+    #      `speaker` on every pushed line since the field existed and the
+    #      column is in the wire map — but NOTHING EVER DECODED IT. Every line
+    #      arrived anonymous and drew in the owner's own bubble on the right,
+    #      so a meeting with three people read back as one person's monologue
+    #      with everybody else's words put in their mouth. BrainEvent decodes
+    #      it now, TranscriptLine and the turn carry it, and an explicit
+    #      "other" draws on the opposite side under "Someone else".
+    #
+    #      nil is NOT "somebody else" — it is the phone saying it could not
+    #      tell, and guessing either way attributes words to the wrong person.
+    #      And it prints no NAME: the roster holds none, so the label says
+    #      exactly what is known and no more.
+    # 158: THE TRANSCRIPT HAS SOMEWHERE TO LIVE, so hiding it stops being
+    #      deletion. Tapping a past conversation did nothing — `onOpenSession`
+    #      was `{ _ in }` with the comment "opening one back up is not built
+    #      yet". It opens `SessionTranscriptView` now: every line of that
+    #      conversation, attributed, each with the goal the brain drew from it.
+    #
+    #      With that home in place BOTH faces stop showing raw heard lines: the
+    #      capture face did in 155, the thread does now. One exception kept on
+    #      purpose — a TYPED line still appears in the thread, because somebody
+    #      who types a sentence and watches it vanish has had no
+    #      acknowledgement at all, which is a send with no receipt and a
+    #      different bug from this one.
+    CURRENT_PROJECT_VERSION: "158"
     DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: NO
@@ -810,13 +888,13 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: ai.anticipy.mac
-        MARKETING_VERSION: "1.1.0"
+        MARKETING_VERSION: "1.1.1"
         # LITERAL, and it moves in lockstep with the app's number: the
         # build-number gate reads the shared pbxproj and cannot tell an iOS
         # literal from a Mac one, and two products answering "which build
         # are you holding" with different numbers is the exact disease this
         # gate exists to prevent.
-        CURRENT_PROJECT_VERSION: "151"
+        CURRENT_PROJECT_VERSION: "158"
         DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_ENTITLEMENTS: ../macos/AnticipyMac/AnticipyMac.entitlements
@@ -870,7 +948,7 @@ targets:
         # and a nested "$(CURRENT_PROJECT_VERSION)" reads as exactly that.
         # These move with the app target's numbers, by hand, in the same
         # commit.
-        MARKETING_VERSION: "1.1.0"
+        MARKETING_VERSION: "1.1.1"
         DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
         CODE_SIGN_STYLE: Automatic
         GENERATE_INFOPLIST_FILE: YES
@@ -951,6 +1029,12 @@ targets:
       path: Anticipy/Info.plist
       properties:
         CFBundleDisplayName: Anticipy
+        # The scratch recorder writes WAVs to Documents/scratch/. Without
+        # these two keys that directory is reachable only by unpacking the
+        # container in Xcode, and the person making the recordings is holding
+        # a phone, not a Mac. Added with the recorder, 2026-09-06.
+        UIFileSharingEnabled: true
+        LSSupportsOpeningDocumentsInPlace: true
         CFBundleIconName: AppIcon
         # The widget's doorbell. A Lock Screen or home tile taps through this
         # scheme and the app's onOpenURL starts listening — no AppIntent, no

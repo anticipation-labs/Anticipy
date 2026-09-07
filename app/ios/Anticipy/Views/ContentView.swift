@@ -581,6 +581,9 @@ struct HomeView: View {
     /// The newest line already considered. Nil until the first poll populates
     /// the feed, which is what stops a cold launch asking about yesterday.
     @State private var lastSeenLineID: String?
+    /// The transcript's new home, one tap from the collapsed count that
+    /// replaced it on the thread (2026-09-06).
+    @State private var showListeningHistory = false
     /// WHEN the phone last heard anything, if the record ends in an
     /// interruption and only then — an instant, not a count of seconds, and
     /// that difference is the whole of it.
@@ -611,6 +614,20 @@ struct HomeView: View {
     @State private var lastAskedSource: ContextSource?
     @State private var showInterview = false
     @State private var showingInsights = false
+    /// The past conversation being read back, if any.
+    @State private var openedSession: DashboardPolicy.Session?
+    /// THE SHARED ELEMENT between the peek card and the page it opens.
+    ///
+    /// Apple almost never cuts between states — it MOVES the object you were
+    /// looking at, so your mental map survives the navigation. Before this the
+    /// whole app had zero `matchedGeometryEffect` in eighteen thousand lines,
+    /// and this is the navigation where it is worth the most: the peek is
+    /// literally a smaller version of the page's own header.
+    @Namespace private var insightsNamespace
+    /// Home animates in sixteen places and, until Stage 5, read this in none.
+    /// Not a preference — motion sensitivity is a real condition and iOS
+    /// exposes the setting.
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// "I'll do this later", remembered. The browser ask below is the one
     /// page first run no longer has, and an offer that returns every time the
     /// feed refreshes is nagging, not offering — so a decline is written down,
@@ -1074,6 +1091,30 @@ struct HomeView: View {
     /// figure that does not depend on the brain having judged anything — which
     /// matters, because the brain is capped and judges nothing for almost
     /// everybody today.
+    /// THE TWO OPEN LOOPS, counted from what the app already holds.
+    ///
+    /// Both are MONOTONE by construction — answers given and apps connected only
+    /// ever go up — which is the whole reason a ring is honest here and a streak
+    /// was not. Neither is derived from opens, sessions or elapsed days;
+    /// `run_rings_tests.sh` refuses that vocabulary outright.
+    ///
+    /// `closedDays: nil` means "we do not track when it closed", and the policy
+    /// reads that as "keep drawing it" rather than guessing. A ring that
+    /// vanished on a date nobody recorded would be worse than one that stays.
+    private var openRings: [RingsPolicy.Face] {
+        let progress = InterviewProgress()
+        return RingsPolicy.rings(
+            knows: (done: progress.answeredCount,
+                    total: InterviewQuestion.script.count,
+                    closedDays: nil),
+            // nil, and honestly so: the connected-apps count lives on
+            // ConnectedAppsModel, which Home does not hold. The ring is hidden
+            // rather than drawn from a number this screen would have to guess.
+            // Threading that model here is Stage 4's work, and the policy is
+            // already shaped for it.
+            reaches: nil)
+    }
+
     private var insightCounts: InsightsPolicy.Counts {
         var c = InsightsPolicy.Counts.nothing
         let cal = Calendar.current
@@ -1134,7 +1175,10 @@ struct HomeView: View {
     /// lives in `DashboardPolicy` where `run_dashboard_tests.sh` can walk it.
     private var dashboardTurns: [DashboardPolicy.Turn] {
         let heard = session.transcript.map {
-            DashboardPolicy.HeardRow(id: $0.id, text: $0.text, at: $0.created)
+            // The verdict travels with the line. It was dropped here, which is
+            // why the dashboard could only ever draw a transcript.
+            DashboardPolicy.HeardRow(id: $0.id, text: $0.text, at: $0.created,
+                                     decision: $0.decision, goal: $0.goal)
         }
         let said = session.anticipySays.compactMap { ev -> DashboardPolicy.SaidRow? in
             guard ev.kind == "anticipy_says", let text = ev.text, !text.isEmpty else { return nil }
@@ -1209,6 +1253,7 @@ struct HomeView: View {
                     turns: dashboardTurns,
                     captureState: dashboardCaptureState,
                     listening: session.listener.isListening,
+                    micBlocked: micNeedsHelp,
                     everListened: !session.transcript.isEmpty,
                     history: dashboardHistory,
                     onStartListening: { session.startListening() },
@@ -1218,7 +1263,11 @@ struct HomeView: View {
                     },
                     onStopListening: { session.stopListening() },
                     onSend: { line in typedLine = line; submitTyped() },
-                    onOpenSession: { _ in },   // opening one back up is not built yet
+                    // OPENING ONE BACK UP, which was never built until the
+                    // transcript needed somewhere to live. The capture face
+                    // shows tasks now; this is where the words went.
+                    onOpenSession: { openedSession = $0 },
+                    onOpenHistory: { showListeningHistory = true },
                     onRefresh: { await session.refresh() }
                 ) {
                     dashboardNotices
@@ -1233,9 +1282,15 @@ struct HomeView: View {
                             // THE PEEK, where the "Done" heading was. It keeps
                             // the deck's own guard, so an owner with nothing
                             // finished sees no card rather than an empty one.
-                            InsightsPeekCard(counts: insightCounts) {
+                            InsightsPeekCard(counts: insightCounts,
+                                             namespace: insightsNamespace,
+                                             hidden: showingInsights) {
                                 Haptics.engage()
-                                showingInsights = true
+                                withAnimation(reduceMotion ? nil
+                                              : .spring(response: 0.42,
+                                                        dampingFraction: 0.86)) {
+                                    showingInsights = true
+                                }
                             }
                             DoneDeck(jobs: finishedShown)
                         }
@@ -1327,9 +1382,47 @@ struct HomeView: View {
             // and the next poll, three seconds later, presented it again. Swipe
             // it away twice and it came back twice. A swipe is a "not now", and
             // it is recorded as one.
-            .sheet(isPresented: $showingInsights) {
-                InsightsView(counts: insightCounts,
-                             finished: finishedShown) { showingInsights = false }
+            // AN OVERLAY, NOT A SHEET, and the reason is structural rather
+            // than stylistic: `matchedGeometryEffect` cannot cross a sheet's
+            // presentation boundary. Presented as a sheet, this navigation can
+            // only ever be a cut. The page was already dismissed by callback
+            // rather than by the sheet's own gesture, so nothing was lost in
+            // the move.
+            .overlay {
+                if showingInsights {
+                    InsightsView(counts: insightCounts,
+                                 finished: finishedShown,
+                                 rings: openRings,
+                                 namespace: insightsNamespace) {
+                        withAnimation(reduceMotion ? nil
+                                      : .spring(response: 0.38,
+                                                dampingFraction: 0.9)) {
+                            showingInsights = false
+                        }
+                    }
+                    .transition(.opacity)
+                    .zIndex(2)
+                }
+            }
+            .sheet(isPresented: $showListeningHistory) {
+                // WHERE THE WORDS WENT. The thread shows tasks and a count; the
+                // sentences themselves are here, whole, with each line's status
+                // and the ear that heard it. This screen already existed and
+                // already pages the whole account — it is reused rather than
+                // rebuilt, so there is one transcript surface and not two that
+                // can disagree.
+                NavigationStack { ListeningHistoryView(session: session) }
+            }
+            .sheet(item: $openedSession) { picked in
+                SessionTranscriptView(
+                    title: picked.title,
+                    when: DashboardPolicy.history([picked], now: Date()).first?.heading ?? "",
+                    // The SAME grouping the history list is built from, so the
+                    // rows and their contents can never disagree about which
+                    // conversation a line belongs to.
+                    lines: HeardGroup.build(session.transcript)
+                        .first { $0.id == picked.id }?.lines ?? []
+                ) { openedSession = nil }
             }
             .sheet(isPresented: $showInterview) {
                 InterviewView().environmentObject(session)
@@ -1640,7 +1733,7 @@ struct HomeView: View {
             // The arrow brings its own 44pt, so the row adds the hair rather
             // than stacking two paddings into a 62pt compose bar.
             .padding(.vertical, Theme.Space.hair)
-            .background(RoundedRectangle(cornerRadius: 12).fill(Theme.surface))
+            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Theme.surface))
         }
     }
 
@@ -2425,7 +2518,7 @@ struct ConfirmJobCard: View {
                     .foregroundStyle(Theme.text)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 10)
-                    .background(RoundedRectangle(cornerRadius: 10).fill(Theme.surface))
+                    .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Theme.surface))
                     .accessibilityLabel("Your answer for this task")
             }
             // The write failed and the card is still sitting here. Without
@@ -2576,7 +2669,7 @@ struct AskCard: View {
                 .foregroundStyle(Theme.text)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 10)
-                .background(RoundedRectangle(cornerRadius: 10).fill(Theme.surface))
+                .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Theme.surface))
                 .accessibilityLabel("Your answer to her question")
             // Same reason ConfirmJobCard carries this row: a write that failed
             // while the card stayed put reads as a UI glitch, and the natural

@@ -148,8 +148,10 @@ export async function verifyToken(
   if (parts.length !== 3) return null;
 
   let claims: Claims;
+  let signature: Uint8Array;
   try {
     claims = JSON.parse(new TextDecoder().decode(b64uDecode(parts[1])));
+    signature = b64uDecode(parts[2]);
   } catch { return null; }
   if (!claims || typeof claims.id !== "string" || claims.type !== "auth") return null;
   if (typeof claims.exp !== "number" || claims.exp * 1000 <= Date.now()) return null;
@@ -169,7 +171,7 @@ export async function verifyToken(
 
   const key = await hmacKey(env, tokenKey);
   const ok = await crypto.subtle.verify(
-    "HMAC", key, b64uDecode(parts[2]),
+    "HMAC", key, signature,
     new TextEncoder().encode(`${parts[0]}.${parts[1]}`),
   );
   if (!ok) return null;

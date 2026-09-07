@@ -1,0 +1,9 @@
+{
+  "scope": "local workerd and D1 only",
+  "signup": 200,
+  "seed_event": 200,
+  "delete": 200,
+  "stale_service_write": 409,
+  "account_deleted": true,
+  "production_modified": false
+}

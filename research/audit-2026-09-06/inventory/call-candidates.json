@@ -1,0 +1,2536 @@
+[
+  {
+    "path": "app/ios/Anticipy/Backend/AnticipyBackend.swift",
+    "line": 214,
+    "code": "var r = URLRequest(url: url)",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "app/ios/Anticipy/Backend/AnticipyBackend.swift",
+    "line": 252,
+    "code": "var r = URLRequest(url: url)",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "app/ios/Anticipy/Backend/AnticipyBackend.swift",
+    "line": 1020,
+    "code": "var req = URLRequest(url: baseURL.appendingPathComponent(\"api/health\"))",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "app/ios/Anticipy/Backend/ConnectedAppsClient.swift",
+    "line": 537,
+    "code": "var request = URLRequest(url: url)",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "app/ios/Anticipy/Backend/ConnectedAppsClient.swift",
+    "line": 545,
+    "code": "var request = URLRequest(url: who.baseURL.appendingPathComponent(path))",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "app/macos/AnticipyMac/PocketBase.swift",
+    "line": 130,
+    "code": "var req = URLRequest(url: baseURL.appendingPathComponent(\"api/collections/owners/auth-with-password\"))",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "app/macos/AnticipyMac/PocketBase.swift",
+    "line": 215,
+    "code": "var request = URLRequest(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "app/macos/AnticipyMac/PocketBase.swift",
+    "line": 225,
+    "code": "URLSession.shared.dataTask(with: request) { _, response, _ in",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/anticipy_core.py",
+    "line": 1560,
+    "code": "r = pb.get(f\"{self.backend_url}/api/collections/jobs/records\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/anticipy_core.py",
+    "line": 1610,
+    "code": "pr = pb.patch(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/anticipy_core.py",
+    "line": 3543,
+    "code": "got = pb.get(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/anticipy_core.py",
+    "line": 3561,
+    "code": "r = pb.patch(f\"{self.backend_url}/api/collections/jobs/records/{job_id}\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/anticipy_core.py",
+    "line": 3590,
+    "code": "r = pb.get(f\"{self.backend_url}/api/collections/events/records\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/anticipy_core.py",
+    "line": 3741,
+    "code": "r = pb.get(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/anticipy_core.py",
+    "line": 4388,
+    "code": "r = pb.post(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/anticipy_core.py",
+    "line": 4427,
+    "code": "found = pb.get(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/anticipy_core.py",
+    "line": 4450,
+    "code": "found = pb.get(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/anticipy_core.py",
+    "line": 4462,
+    "code": "r2 = pb.patch(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/anticipy_core.py",
+    "line": 4859,
+    "code": "keyed = pb.get(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/anticipy_core.py",
+    "line": 4869,
+    "code": "r = pb.get(f\"{self.backend_url}/api/collections/jobs/records\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/anticipy_core.py",
+    "line": 5042,
+    "code": "r = pb.patch(f\"{self.backend_url}/api/collections/jobs/records/{job_id}\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/anticipy_core.py",
+    "line": 5274,
+    "code": "r = pb.get(f\"{self.backend_url}/api/collections/jobs/records\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/anticipy_core.py",
+    "line": 5288,
+    "code": "r = pb.get(f\"{self.backend_url}/api/collections/jobs/records\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/anticipy_core.py",
+    "line": 5366,
+    "code": "r = pb.get(f\"{self.backend_url}/api/collections/jobs/records\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/anticipy_core.py",
+    "line": 5396,
+    "code": "r = pb.get(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/conversation.py",
+    "line": 775,
+    "code": "r = pb.get(f\"{self.anticipy.backend_url}/api/collections/jobs/records\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/conversation.py",
+    "line": 827,
+    "code": "r = pb.get(f\"{self.anticipy.backend_url}/api/collections/jobs/records\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/conversation.py",
+    "line": 878,
+    "code": "r = pb.get(f\"{base}/api/collections/owner_profile/records\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/conversation.py",
+    "line": 932,
+    "code": "pb.patch(f\"{base}/api/collections/owner_profile/records/{rec['id']}\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/conversation.py",
+    "line": 1043,
+    "code": "r = pb.get(f\"{base}/api/collections/jobs/records\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/conversation.py",
+    "line": 1248,
+    "code": "r = pb.get(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/conversation.py",
+    "line": 1280,
+    "code": "r = pb.get(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/conversation.py",
+    "line": 1298,
+    "code": "r = pb.get(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/conversation.py",
+    "line": 1586,
+    "code": "r = pb.get(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/conversation.py",
+    "line": 1946,
+    "code": "r = pb.patch(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/evidence.py",
+    "line": 118,
+    "code": "r = pb.post(f\"{_backend(base)}/evidence/share\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/hands.py",
+    "line": 1032,
+    "code": "r = pb.get(f\"{base}/api/collections/connections/records\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/hands.py",
+    "line": 1072,
+    "code": "r = pb.get(f\"{base}{API_HAND_TOOLS_PATH}\", params={\"toolkit\": want},",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/hands.py",
+    "line": 1105,
+    "code": "r = pb.get(f\"{base}/api/collections/agents/records\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/pb.py",
+    "line": 38,
+    "code": "return requests.get(url, headers=_headers(extra),",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/pb.py",
+    "line": 44,
+    "code": "return requests.post(url, headers=_headers(extra),",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/pb.py",
+    "line": 50,
+    "code": "return requests.patch(url, headers=_headers(extra),",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/research.py",
+    "line": 109,
+    "code": "r = requests.get(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/research.py",
+    "line": 145,
+    "code": "r = requests.post(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/research.py",
+    "line": 283,
+    "code": "r = requests.get(current, timeout=12, allow_redirects=False, headers={",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/segmenter.py",
+    "line": 320,
+    "code": "r = pb.get(f\"{self.base}/api/collections/segments/records\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/segmenter.py",
+    "line": 333,
+    "code": "r = pb.get(f\"{self.base}/api/collections/segments/records\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/segmenter.py",
+    "line": 363,
+    "code": "r = pb.get(f\"{self.base}/api/collections/events/records\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/segmenter.py",
+    "line": 393,
+    "code": "r = pb.get(f\"{self.base}/api/collections/events/records\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/segmenter.py",
+    "line": 415,
+    "code": "pb.patch(f\"{self.base}/api/collections/segments/records/{segment['id']}\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/segmenter.py",
+    "line": 434,
+    "code": "r = pb.post(f\"{self.base}/api/collections/segments/records\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/segmenter.py",
+    "line": 448,
+    "code": "pb.patch(f\"{self.base}/api/collections/segments/records/{segment['id']}\", json={",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/segmenter.py",
+    "line": 459,
+    "code": "pb.patch(f\"{self.base}/api/collections/segments/records/{segment['id']}\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/segmenter.py",
+    "line": 466,
+    "code": "pb.patch(f\"{self.base}/api/collections/events/records/{event_id}\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/sendblue_arm.py",
+    "line": 270,
+    "code": "response = requests.post(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/supervisor.py",
+    "line": 54,
+    "code": "response = pb.get(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/supervisor.py",
+    "line": 182,
+    "code": "response = pb.get(f\"{PB}/api/collections/purges/records\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/supervisor.py",
+    "line": 251,
+    "code": "pb.patch(f\"{PB}/api/collections/purges/records/{row.get('id')}\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/voice_arm.py",
+    "line": 478,
+    "code": "response = requests.post(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/voice_arm.py",
+    "line": 554,
+    "code": "requests.post(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/worker.py",
+    "line": 143,
+    "code": "r = pb.get(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/worker.py",
+    "line": 243,
+    "code": "r = pb.get(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/worker.py",
+    "line": 267,
+    "code": "r = pb.get(f\"{PB}/api/collections/owners/records/{ref}\", timeout=10)",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/worker.py",
+    "line": 424,
+    "code": "r = pb.get(f\"{PB}/api/collections/owners/records/{owner_ref}\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/worker.py",
+    "line": 443,
+    "code": "r = pb.get(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/worker.py",
+    "line": 1064,
+    "code": "r = requests.get(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/worker.py",
+    "line": 1107,
+    "code": "probe = requests.get(health, timeout=10)",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/worker.py",
+    "line": 1118,
+    "code": "u = requests.post(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/worker.py",
+    "line": 1172,
+    "code": "response = pb.post(f\"{PB}/api/collections/events/records\", json=body, timeout=10)",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/worker.py",
+    "line": 1314,
+    "code": "r = pb.get(f\"{PB}/api/collections/agents/records\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/worker.py",
+    "line": 1364,
+    "code": "r = pb.get(f\"{PB}/api/collections/jobs/records\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/worker.py",
+    "line": 1534,
+    "code": "r = pb.get(f\"{anticipy.backend_url}/api/collections/jobs/records\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/worker.py",
+    "line": 1655,
+    "code": "r = pb.get(f\"{base}/api/collections/jobs/records\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/worker.py",
+    "line": 1687,
+    "code": "back = pb.patch(f\"{base}/api/collections/jobs/records/{job['id']}\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/worker.py",
+    "line": 1752,
+    "code": "r = pb.get(f\"{base}/api/collections/jobs/records\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/worker.py",
+    "line": 1812,
+    "code": "back = pb.patch(f\"{base}/api/collections/jobs/records/{job['id']}\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/worker.py",
+    "line": 1847,
+    "code": "r = pb.get(f\"{base}/api/collections/jobs/records\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/worker.py",
+    "line": 1877,
+    "code": "pb.patch(f\"{base}/api/collections/jobs/records/{job['id']}\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/worker.py",
+    "line": 1903,
+    "code": "claim = pb.patch(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/worker.py",
+    "line": 1909,
+    "code": "check = pb.get(f\"{base}/api/collections/jobs/records/{job['id']}\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/worker.py",
+    "line": 1954,
+    "code": "finished = pb.patch(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/worker.py",
+    "line": 2055,
+    "code": "r = pb.get(f\"{base}/api/collections/jobs/records\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/worker.py",
+    "line": 2109,
+    "code": "back = pb.patch(f\"{base}/api/collections/jobs/records/{job['id']}\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/worker.py",
+    "line": 2143,
+    "code": "back = pb.patch(f\"{anticipy.backend_url}/api/collections/jobs/records/{job['id']}\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/worker.py",
+    "line": 2167,
+    "code": "r = pb.get(f\"{base}/api/collections/jobs/records\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/worker.py",
+    "line": 2207,
+    "code": "claim = pb.patch(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/worker.py",
+    "line": 2212,
+    "code": "check = pb.get(f\"{base}/api/collections/jobs/records/{job['id']}\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/worker.py",
+    "line": 2303,
+    "code": "r = pb.get(f\"{PB}/api/collections/jobs/records\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/worker.py",
+    "line": 2366,
+    "code": "r = pb.get(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/worker.py",
+    "line": 2465,
+    "code": "r = pb.get(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/worker.py",
+    "line": 2873,
+    "code": "r = pb.get(f\"{PB}/api/collections/events/records\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/worker.py",
+    "line": 2952,
+    "code": "r = pb.post(f\"{PB}/api/collections/events/records\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/worker.py",
+    "line": 3261,
+    "code": "r = pb.get(f\"{PB}/api/collections/events/records\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/worker.py",
+    "line": 3341,
+    "code": "r = pb.get(f\"{PB}/api/collections/events/records\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/worker.py",
+    "line": 3367,
+    "code": "r = pb.get(f\"{PB}/api/collections/events/records\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/worker.py",
+    "line": 3403,
+    "code": "r = pb.get(f\"{PB}/api/collections/events/records\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/worker.py",
+    "line": 3459,
+    "code": "r = pb.get(f\"{PB}/api/collections/events/records\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/worker.py",
+    "line": 3507,
+    "code": "r = pb.get(f\"{PB}/api/collections/events/records\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/worker.py",
+    "line": 3572,
+    "code": "r = pb.get(f\"{PB}/api/collections/events/records\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/worker.py",
+    "line": 4191,
+    "code": "r = pb.get(f\"{PB}/api/collections/owners/records\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/worker.py",
+    "line": 4224,
+    "code": "r = pb.get(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/worker.py",
+    "line": 4261,
+    "code": "r = pb.get(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/worker.py",
+    "line": 4302,
+    "code": "pb.patch(f\"{PB}/api/collections/events/records/{event_id}\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/worker.py",
+    "line": 4395,
+    "code": "r = pb.patch(url, json={**body, **measured}, timeout=10)",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/worker.py",
+    "line": 4420,
+    "code": "r = pb.patch(url, json=body, timeout=10)",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/worker.py",
+    "line": 4541,
+    "code": "r = pb.get(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/worker.py",
+    "line": 4553,
+    "code": "back = pb.patch(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/worker.py",
+    "line": 4813,
+    "code": "r = pb.patch(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "brain/worker.py",
+    "line": 4841,
+    "code": "r = pb.get(f\"{PB}/api/collections/jobs/records\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "extension/agent_loop.js",
+    "line": 139,
+    "code": "r = await fetch(url, { signal, method: \"POST\", headers, body });",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "extension/agent_loop.js",
+    "line": 3221,
+    "code": "const started = await fetch(`${base}/agent/solve-captcha`, {",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "extension/agent_loop.js",
+    "line": 3238,
+    "code": "const got = await fetch(`${base}/agent/solve-captcha/result`, {",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "extension/background.js",
+    "line": 160,
+    "code": "const r = await fetch(`${await backendBase()}/agent/upgrade-credential`, {",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "extension/background.js",
+    "line": 171,
+    "code": "const post = async (id) => fetch(`${await backendBase()}/agent/register`, {",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "extension/background.js",
+    "line": 299,
+    "code": "const r = await fetch(`${await backendBase()}/agent/key?agent_id=${encodeURIComponent(agentId)}`,",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "extension/background.js",
+    "line": 354,
+    "code": "const r = await fetch(`${await backendBase()}/api/collections/agents/records/${reg.recordId}`, {",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "extension/background.js",
+    "line": 387,
+    "code": "const r = await fetch(`${await backendBase()}/api/collections/jobs/records?filter=${filter}&perPage=20&sort=claimed_at`,",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "extension/background.js",
+    "line": 555,
+    "code": "const poll = async () => fetch(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "extension/background.js",
+    "line": 717,
+    "code": "const r = await fetch(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "extension/background.js",
+    "line": 841,
+    "code": "const r = await fetch(`${await backendBase()}/api/collections/jobs/records/${id}`,",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "extension/background.js",
+    "line": 849,
+    "code": "const r = await fetch(`${await backendBase()}/api/collections/jobs/records/${id}`, {",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "extension/background.js",
+    "line": 878,
+    "code": "const r = await fetch(`${await backendBase()}/api/collections/jobs/records/${id}`,",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "extension/background.js",
+    "line": 1015,
+    "code": "const r = await fetch(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "extension/background.js",
+    "line": 1153,
+    "code": "const r = await fetch(`${await backendBase()}/api/collections/events/records`, {",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "extension/background.js",
+    "line": 1367,
+    "code": "const send = deps.fetch || ((...a) => fetch(...a));",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "extension/background.js",
+    "line": 1623,
+    "code": "const pr = await fetch(`${await backendBase()}/agent/key?agent_id=${encodeURIComponent(myId || \"\")}`,",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "extension/onboarding.js",
+    "line": 39,
+    "code": "const r = await fetch(`${await backendBase()}/api/health`);",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "extension/popup.js",
+    "line": 60,
+    "code": "const r = await fetch(`${await backendBase()}/api/health`);",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "extension/popup.js",
+    "line": 82,
+    "code": "const r = await fetch(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/recovered/fellowship_guardian.pb.js",
+    "line": 208,
+    "code": "+ 'fetch(\"/fellows/guardian\",{method:\"POST\",headers:{\"Content-Type\":\"application/json\"},'",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/spike/containers-sdk/node_modules/@cloudflare/containers/dist/lib/container.d.ts",
+    "line": 47,
+    "code": "fetch(request: Request): Promise<Response>;",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/spike/containers-sdk/node_modules/@cloudflare/containers/dist/lib/container.d.ts",
+    "line": 285,
+    "code": "fetch(request: Request): Promise<Response>;",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/spike/containers-sdk/node_modules/@cloudflare/containers/dist/lib/container.js",
+    "line": 197,
+    "code": "async fetch(request) {",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/spike/containers-sdk/node_modules/@cloudflare/containers/dist/lib/container.js",
+    "line": 238,
+    "code": "return fetch(request);",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/spike/containers-sdk/node_modules/@cloudflare/containers/dist/lib/container.js",
+    "line": 256,
+    "code": "return fetch(request);",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/spike/containers-sdk/node_modules/@cloudflare/containers/dist/lib/container.js",
+    "line": 260,
+    "code": "return fetch(request);",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/spike/containers-sdk/node_modules/@cloudflare/containers/dist/lib/container.js",
+    "line": 664,
+    "code": "await tcpPort.fetch(`http://${this.pingEndpoint}`, { signal: combinedSignal });",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/spike/containers-sdk/node_modules/@cloudflare/containers/dist/lib/container.js",
+    "line": 891,
+    "code": "const res = await tcpPort.fetch(containerUrl, request);",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/spike/containers-sdk/node_modules/@cloudflare/containers/dist/lib/container.js",
+    "line": 985,
+    "code": "async fetch(request) {",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/spike/containers-sdk/node_modules/@cloudflare/containers/dist/lib/container.js",
+    "line": 987,
+    "code": "throw new Error('No port configured for this container. Set the `defaultPort` in your Container subclass, or specify a port with `container.fetch(switchPort(request, port))`.');",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/spike/containers-sdk/node_modules/@cloudflare/containers/dist/lib/container.js",
+    "line": 1390,
+    "code": "await port.fetch('http://containerstarthealthcheck', { signal: combinedSignal });",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/brain/src/index.ts",
+    "line": 285,
+    "code": "async fetch(request: Request, env: BrainEnv): Promise<Response> {",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/connections/ask.ts",
+    "line": 544,
+    "code": "const res = await fetch(url, {",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/connections/provider.ts",
+    "line": 1130,
+    "code": "res = await this.#fetch(`${this.#baseUrl}${path}`, {",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/connections/wiring.ts",
+    "line": 277,
+    "code": "const res = await fetch(url, {",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/cron.ts",
+    "line": 921,
+    "code": "const res = await fetch(\"https://api.resend.com/emails\", {",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/do/PairCodeCounter.ts",
+    "line": 63,
+    "code": "async fetch(request: Request): Promise<Response> {",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 155,
+    "code": "async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 524,
+    "code": "if (isStaticPath(path)) return env.ASSETS.fetch(request);",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/llm.ts",
+    "line": 444,
+    "code": "const res = await fetch(url, {",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/messaging.ts",
+    "line": 207,
+    "code": "const res = await fetch(apiBase(env.SENDBLUE_API_BASE, SENDBLUE_BASE, \"SENDBLUE_API_BASE\")",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/messaging.ts",
+    "line": 273,
+    "code": "const res = await fetch(`${base}/2010-04-01/Accounts/${sid}/Messages.json`, {",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/policy/guard.ts",
+    "line": 355,
+    "code": "const gate = await stub.fetch(\"https://pair/check\", {",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/policy/guard.ts",
+    "line": 373,
+    "code": "await stub.fetch(\"https://pair/spend\", { method: \"POST\", body: JSON.stringify({ ip }) });",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/routes/admin_sms_lines.ts",
+    "line": 38,
+    "code": "const r = await fetch(SENDBLUE_BASE + path, { headers });",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/routes/fellows.ts",
+    "line": 960,
+    "code": "const res = await fetch(\"https://openrouter.ai/api/v1/chat/completions\", {",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/routes/fellows.ts",
+    "line": 1445,
+    "code": "+ 'fetch(\"/fellows/guardian\",{method:\"POST\",headers:{\"Content-Type\":\"application/json\"},'",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/routes/fellows.ts",
+    "line": 1885,
+    "code": "res = await fetch(OEMBED[p.platform] + encodeURIComponent(p.probe_url),",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/routes/fellows_base.ts",
+    "line": 75,
+    "code": "const res = await fetch(\"https://api.resend.com/emails\", {",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/routes/hq.ts",
+    "line": 158,
+    "code": "const res = await env.ASSETS.fetch(new URL(\"/internal.html\", req.url).toString());",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/routes/hq_assistant.ts",
+    "line": 203,
+    "code": "const res = await fetch(\"https://openrouter.ai/api/v1/chat/completions\", {",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/test/api-lane-claim.test.ts",
+    "line": 198,
+    "code": "return silent(() => worker.fetch(req, env as never, exec));",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/test/connections-text-commands.test.ts",
+    "line": 866,
+    "code": "for (const forbidden of [\"fetch(\", \".prepare(\", \"env.DB\", \"await sql\", \"crypto.\"]) {",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/test/connections-wiring.test.ts",
+    "line": 1277,
+    "code": "const mine = await worker.fetch(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/test/connections-wiring.test.ts",
+    "line": 1289,
+    "code": "const nobody = await worker.fetch(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/test/connections-wiring.test.ts",
+    "line": 1305,
+    "code": "const code = await worker.fetch(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/test/connections-wiring.test.ts",
+    "line": 1315,
+    "code": "const page = await worker.fetch(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/test/evidence-bytes.test.ts",
+    "line": 74,
+    "code": "worker.fetch(req, env as never, ctx);",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/test/messaging.test.ts",
+    "line": 210,
+    "code": "await check(\"a thrown fetch (timeout, refused) is a result, never an exception\", async () => {",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "overnight/are_the_ears_live.py",
+    "line": 167,
+    "code": "r = requests.get(f\"{PB}/api/collections/events/records\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "overnight/are_the_ears_live.py",
+    "line": 176,
+    "code": "r = requests.get(f\"{PB}/api/collections/events/records\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "overnight/are_the_ears_live.py",
+    "line": 288,
+    "code": "health = requests.get(f\"{PB}/api/health\", timeout=20)",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "overnight/does_she_reach_them.py",
+    "line": 223,
+    "code": "msgs = fetch()",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "overnight/is_it_live.py",
+    "line": 41,
+    "code": "def fetch(path, binary=False):",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "overnight/is_it_live.py",
+    "line": 48,
+    "code": "fetch(\"/api/health\")",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "overnight/is_it_live.py",
+    "line": 57,
+    "code": "page = fetch(\"/setup.html\")",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "overnight/is_it_live.py",
+    "line": 71,
+    "code": "blob = fetch(f\"/{zip_name}.zip\", binary=True)",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "overnight/is_memory_durable.py",
+    "line": 186,
+    "code": "r = requests.get(f\"{pb}/api/collections/events/records\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "overnight/is_the_brain_live.py",
+    "line": 100,
+    "code": "def fetch(collection: str, params: dict) -> list[dict]:",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "overnight/is_the_brain_live.py",
+    "line": 101,
+    "code": "r = requests.get(f\"{PB}/api/collections/{collection}/records\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "overnight/is_the_brain_live.py",
+    "line": 384,
+    "code": "said = fetch(\"events\", {\"perPage\": 500, \"sort\": \"-created\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "overnight/is_the_brain_live.py",
+    "line": 401,
+    "code": "for p in fetch(\"owner_profile\", {\"perPage\": 500}):",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "overnight/is_the_brain_live.py",
+    "line": 420,
+    "code": "slots = fetch(\"events\", {\"perPage\": 500, \"sort\": \"-created\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "overnight/is_the_decision_bounded.py",
+    "line": 104,
+    "code": "r = requests.get(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "overnight/is_the_decision_bounded.py",
+    "line": 236,
+    "code": "health = requests.get(f\"{PB}/api/health\", timeout=20)",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "overnight/is_the_gateway_live.py",
+    "line": 193,
+    "code": "r = requests.get(f\"{pb}/api/collections/events/records\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "overnight/stranger_gate.py",
+    "line": 742,
+    "code": "blob = fetch(url)",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "overnight/stranger_gate.py",
+    "line": 1736,
+    "code": "live = fetch(url).decode(\"utf-8\", \"replace\")",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "overnight/turn_envelope_gate.py",
+    "line": 405,
+    "code": "def fetch(filter_expr: str, per_page: int = 500) -> list:",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "overnight/turn_envelope_gate.py",
+    "line": 406,
+    "code": "r = requests.get(f\"{PB}/api/collections/events/records\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "overnight/turn_envelope_gate.py",
+    "line": 415,
+    "code": "r = requests.get(f\"{PB}/api/collections/events/records\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "overnight/turn_envelope_gate.py",
+    "line": 441,
+    "code": "rows = fetch(f'kind=\"transcript\" && created >= \"{since}\"')",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "overnight/unattributed_lane_live.py",
+    "line": 133,
+    "code": "r = requests.get(f\"{PB}/api/collections/{collection}/records\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "overnight/unattributed_lane_live.py",
+    "line": 148,
+    "code": "r = requests.get(f\"{PB}/api/collections/{collection}/records\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "overnight/unattributed_lane_live.py",
+    "line": 295,
+    "code": "healthy = requests.get(f\"{PB}/api/health\", timeout=20).status_code == 200",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/agent_defaults_replay.mjs",
+    "line": 87,
+    "code": "const r = await fetch(\"https://openrouter.ai/api/v1/chat/completions\", {",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/agent_defaults_replay.mjs",
+    "line": 106,
+    "code": "const r = await fetch(\"https://openrouter.ai/api/v1/chat/completions\", {",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/agent_defaults_replay.mjs",
+    "line": 123,
+    "code": "const r = await fetch(\"https://openrouter.ai/api/v1/chat/completions\", {",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/battery/commit_gate.mjs",
+    "line": 91,
+    "code": "const r = await fetch(`${FIXTURE}${path}`, { method, signal: AbortSignal.timeout(5000) });",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/battery/job.mjs",
+    "line": 36,
+    "code": "const r = await fetch(`${CFG.base}${path}`, {",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/battery/run.mjs",
+    "line": 173,
+    "code": "const r = await fetch(`${FIXTURE}${path}`, { method, signal: ctl.signal });",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/battery/run.mjs",
+    "line": 442,
+    "code": "const r = await fetch(`${FIXTURE}/wiki/`, { signal: ctl.signal });",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/capture_day.py",
+    "line": 347,
+    "code": "r = requests.get(f\"{PB}/api/collections/events/records\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/chrome_arm.mjs",
+    "line": 180,
+    "code": "const r = await fetch(`${BASE}${path}`, {",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/chrome_arm.mjs",
+    "line": 197,
+    "code": "const r = await fetch(`http://127.0.0.1:${PORT}/json/list`);",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/chrome_arm.mjs",
+    "line": 257,
+    "code": "await fetch(`http://127.0.0.1:${PORT}/json/close/${id}`).catch(() => {});",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/chrome_arm.mjs",
+    "line": 286,
+    "code": "const page = await fetch(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/chrome_arm.mjs",
+    "line": 323,
+    "code": "const page = await fetch(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/chrome_arm.mjs",
+    "line": 328,
+    "code": "await fetch(`http://127.0.0.1:${PORT}/json/close/${page.id}`).catch(() => {});",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/chrome_arm.mjs",
+    "line": 355,
+    "code": "return fetch(`http://127.0.0.1:${PORT}/json/version`, { signal: AbortSignal.timeout(1500) })",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/chrome_arm.mjs",
+    "line": 474,
+    "code": "await fetch(\"https://${blocked}/api/health\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/chrome_arm.mjs",
+    "line": 511,
+    "code": "const setup = await fetch(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/chrome_arm.mjs",
+    "line": 526,
+    "code": "await fetch(`http://127.0.0.1:${PORT}/json/close/${setup.id}`).catch(() => {});",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/day_zero_20.py",
+    "line": 277,
+    "code": "const response = await fetch('/complete/{slug}', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body:JSON.stringify(payload)}});",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/day_zero_20.py",
+    "line": 337,
+    "code": "expect(requests.post(f\"{PB}/api/collections/owners/records\", json={",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/day_zero_20.py",
+    "line": 341,
+    "code": "auth = expect(requests.post(f\"{PB}/api/collections/owners/auth-with-password\", json={",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/day_zero_20.py",
+    "line": 346,
+    "code": "expect(requests.post(f\"{PB}/api/collections/owner_profile/records\", headers=headers, json={",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/day_zero_20.py",
+    "line": 356,
+    "code": "expect(requests.patch(f\"{PB}/api/collections/agents/records/{agent['record_id']}\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/day_zero_20.py",
+    "line": 371,
+    "code": "response = requests.get(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/day_zero_20.py",
+    "line": 407,
+    "code": "return expect(requests.post(f\"{PB}/api/collections/jobs/records\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/day_zero_20.py",
+    "line": 420,
+    "code": "row = requests.get(f\"{PB}/api/collections/jobs/records/{job_id}\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/day_zero_20.py",
+    "line": 433,
+    "code": "return requests.get(f\"{PB}/api/collections/jobs/records/{job_id}\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/day_zero_20.py",
+    "line": 654,
+    "code": "expect(requests.get(f\"{PB}/api/health\", timeout=5), 200, \"backend health\")",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/extension_smoke.mjs",
+    "line": 108,
+    "code": "const r = await fetch(`${BASE}${path}`, {",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/extension_stress.mjs",
+    "line": 76,
+    "code": "const r = await fetch(`${FIXTURE}${path}`, { method, signal: AbortSignal.timeout(5000) });",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/extension_stress.mjs",
+    "line": 112,
+    "code": "const r = await fetch(`http://127.0.0.1:${port}/json/list`,",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/hands_battery.py",
+    "line": 184,
+    "code": "fetch('/booked', {method:'POST', body: JSON.stringify(payload)});",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/hands_battery.py",
+    "line": 204,
+    "code": "fetch('/booked', {method:'POST', body: JSON.stringify(p)});",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/hands_battery.py",
+    "line": 231,
+    "code": "await fetch('/otp/send', {method:'POST'});",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/hands_battery.py",
+    "line": 237,
+    "code": "const r = await fetch('/otp/verify?code=' +",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/hands_battery.py",
+    "line": 264,
+    "code": "fetch('/picked', {method:'POST', body: JSON.stringify({city:c})}); };",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/hands_battery.py",
+    "line": 285,
+    "code": "fetch('/ticket', {method:'POST', body: JSON.stringify(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/hands_battery.py",
+    "line": 322,
+    "code": "fetch('/booked', {method:'POST', body: JSON.stringify(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/hands_battery.py",
+    "line": 362,
+    "code": "f\"go.onclick=()=>{{fetch('/booked',{{method:'POST',\"",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/outcome_rate.py",
+    "line": 443,
+    "code": "r = requests.get(f\"{PB}/api/collections/{collection}/records\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/pendant_audio_e2e.py",
+    "line": 51,
+    "code": "signup = requests.post(f\"{base}/api/collections/owners/records\", json={",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/pendant_audio_e2e.py",
+    "line": 57,
+    "code": "auth = requests.post(f\"{base}/api/collections/owners/auth-with-password\", json={",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/pendant_audio_e2e.py",
+    "line": 62,
+    "code": "issued = requests.post(f\"{base}/transcription/token\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/postdeploy_production.py",
+    "line": 58,
+    "code": "require(requests.get(f\"{BASE}/api/health\", timeout=20), 200, \"PocketBase health\")",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/postdeploy_production.py",
+    "line": 59,
+    "code": "setup = require(requests.get(f\"{BASE}/setup.html\", timeout=20), 200, \"browser setup\")",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/postdeploy_production.py",
+    "line": 69,
+    "code": "privacy = require(requests.get(f\"{BASE}/privacy.html\", timeout=20), 200, \"privacy policy\")",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/postdeploy_production.py",
+    "line": 77,
+    "code": "requests.get(f\"{BASE}{expected_download}\", timeout=30),",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/postdeploy_production.py",
+    "line": 88,
+    "code": "requests.get(f\"{BASE}/worker/owners\", headers={\"X-Anticipy-Token\": service_token},",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/postdeploy_production.py",
+    "line": 103,
+    "code": "require(requests.post(webhook_url, data=sms_body,",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/postdeploy_production.py",
+    "line": 107,
+    "code": "signed = require(requests.post(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/prod20.py",
+    "line": 17,
+    "code": "r = requests.get(f\"{PB}{path}\", params=params, timeout=15)",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/prod20.py",
+    "line": 25,
+    "code": "r = requests.post(f\"{PB}/api/collections/events/records\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/prod20.py",
+    "line": 73,
+    "code": "requests.patch(f\"{PB}/api/collections/jobs/records/{jid}\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/reload_ext.py",
+    "line": 3,
+    "code": "ts = requests.get(\"http://localhost:29229/json\").json()",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/replay_settled_e2e.py",
+    "line": 33,
+    "code": "before = {j[\"id\"] for j in requests.get(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/replay_settled_e2e.py",
+    "line": 44,
+    "code": "items = requests.get(f\"{PB}/api/collections/jobs/records\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/run_conversational.py",
+    "line": 55,
+    "code": "r = requests.post(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/run_conversational.py",
+    "line": 66,
+    "code": "return requests.get(f\"{BASE}/api/collections/jobs/records/{jid}\", timeout=10).json()",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/run_conversational.py",
+    "line": 70,
+    "code": "requests.patch(f\"{BASE}/api/collections/jobs/records/{jid}\", json=fields)",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/run_e2e_round2.py",
+    "line": 43,
+    "code": "r = requests.post(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/run_e2e_round2.py",
+    "line": 54,
+    "code": "return requests.get(f\"{BASE}/api/collections/jobs/records/{jid}\", timeout=10).json()",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/run_e2e_round2.py",
+    "line": 58,
+    "code": "requests.patch(f\"{BASE}/api/collections/jobs/records/{jid}\", json=fields)",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/run_e2e_scenarios.py",
+    "line": 52,
+    "code": "r = requests.post(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/run_e2e_scenarios.py",
+    "line": 73,
+    "code": "return requests.get(f\"{BASE}/api/collections/jobs/records/{jid}\", timeout=10).json()",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/run_e2e_scenarios.py",
+    "line": 86,
+    "code": "requests.patch(f\"{BASE}/api/collections/jobs/records/{jid}\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/run_full_chain.py",
+    "line": 64,
+    "code": "ag = requests.get(f\"{BASE}/api/collections/agents/records\").json()[\"items\"][0]",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/run_postfix2.py",
+    "line": 34,
+    "code": "return requests.get(f\"{BASE}/api/collections/jobs/records/{jid}\", timeout=10).json()",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/run_postfix2.py",
+    "line": 87,
+    "code": "r = requests.post(f\"{BASE}/api/collections/jobs/records\", json={",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/sw_monitor.py",
+    "line": 23,
+    "code": "targets = requests.get(f\"http://127.0.0.1:{PORT}/json\").json()",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/swtest_mappage.py",
+    "line": 3,
+    "code": "ts = requests.get(\"http://localhost:29229/json\").json()",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/test_anticipy_live.py",
+    "line": 17,
+    "code": "assert requests.get(f\"{BASE}/api/health\", timeout=5).ok",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/test_anticipy_live.py",
+    "line": 25,
+    "code": "job = requests.get(f\"{BASE}/api/collections/jobs/records/{job_id}\").json()",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/test_anticipy_live.py",
+    "line": 31,
+    "code": "requests.patch(f\"{BASE}/api/collections/jobs/records/{job_id}\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/test_anticipy_live.py",
+    "line": 33,
+    "code": "job = requests.get(f\"{BASE}/api/collections/jobs/records/{job_id}\").json()",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/test_anticipy_live.py",
+    "line": 38,
+    "code": "requests.patch(f\"{BASE}/api/collections/jobs/records/{job_id}\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/test_pairing_live.py",
+    "line": 23,
+    "code": "assert requests.get(f\"{BASE}/api/health\", timeout=5).ok",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/test_pairing_live.py",
+    "line": 28,
+    "code": "rec = requests.post(AGENTS, json={",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/test_pairing_live.py",
+    "line": 37,
+    "code": "found = requests.get(AGENTS, params={\"filter\": f'pair_code=\"{pair_code}\"'}).json()[\"items\"]",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/test_pairing_live.py",
+    "line": 39,
+    "code": "requests.patch(f\"{AGENTS}/{rec['id']}\", json={\"owner\": owner, \"paired\": True})",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/test_pairing_live.py",
+    "line": 40,
+    "code": "bound = requests.get(f\"{AGENTS}/{rec['id']}\").json()",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/test_pairing_live.py",
+    "line": 45,
+    "code": "bad = requests.get(AGENTS, params={\"filter\": 'pair_code=\"000000\"'}).json()[\"items\"]",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/test_pairing_live.py",
+    "line": 50,
+    "code": "requests.patch(f\"{AGENTS}/{rec['id']}\", json={\"last_seen\": now()})",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/test_pairing_live.py",
+    "line": 51,
+    "code": "seen = requests.get(f\"{AGENTS}/{rec['id']}\").json()[\"last_seen\"]",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/test_pairing_live.py",
+    "line": 62,
+    "code": "requests.patch(f\"{JOBS}/{job_id}\", json={\"status\": \"queued\"})  # user's YES",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/test_pairing_live.py",
+    "line": 63,
+    "code": "mine = requests.get(JOBS, params={",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/test_pairing_live.py",
+    "line": 66,
+    "code": "stranger = requests.get(JOBS, params={",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/test_pairing_live.py",
+    "line": 75,
+    "code": "requests.patch(f\"{JOBS}/{job_id}\", json={",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/test_pairing_live.py",
+    "line": 77,
+    "code": "stale = requests.get(JOBS, params={\"filter\": 'status=\"running\"'}).json()[\"items\"]",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/test_pairing_live.py",
+    "line": 83,
+    "code": "requests.patch(f\"{JOBS}/{j['id']}\", json={\"status\": \"queued\", \"claimed_by\": \"\", \"claimed_at\": None})",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/test_pairing_live.py",
+    "line": 85,
+    "code": "assert requests.get(f\"{JOBS}/{job_id}\").json()[\"status\"] == \"queued\"",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/test_pairing_live.py",
+    "line": 89,
+    "code": "requests.delete(f\"{AGENTS}/{rec['id']}\")",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/test_pairing_live.py",
+    "line": 90,
+    "code": "requests.delete(f\"{JOBS}/{job_id}\")",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/test_supervisor_isolation_live.py",
+    "line": 35,
+    "code": "expect(requests.post(f\"{BASE}/api/collections/owners/records\", json={",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/test_supervisor_isolation_live.py",
+    "line": 39,
+    "code": "auth = expect(requests.post(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/test_supervisor_isolation_live.py",
+    "line": 45,
+    "code": "expect(requests.post(f\"{BASE}/api/collections/owner_profile/records\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/test_supervisor_isolation_live.py",
+    "line": 54,
+    "code": "return expect(requests.post(f\"{BASE}/api/collections/events/records\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/test_supervisor_isolation_live.py",
+    "line": 63,
+    "code": "return expect(requests.get(f\"{BASE}/api/collections/events/records\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/test_supervisor_isolation_live.py",
+    "line": 88,
+    "code": "expect(requests.get(f\"{BASE}/api/health\", timeout=5), 200, \"fresh backend is live\")",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/test_workflow_security_rig.py",
+    "line": 85,
+    "code": "expect(requests.post(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/test_workflow_security_rig.py",
+    "line": 90,
+    "code": "auth = expect(requests.post(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/test_workflow_security_rig.py",
+    "line": 99,
+    "code": "response = expect(requests.post(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/test_workflow_security_rig.py",
+    "line": 111,
+    "code": "rec = expect(requests.post(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/test_workflow_security_rig.py",
+    "line": 117,
+    "code": "expect(requests.patch(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/test_workflow_security_rig.py",
+    "line": 150,
+    "code": "expect(requests.get(f\"{BASE}/api/health\", timeout=5), 200, \"local backend is live\")",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/test_workflow_security_rig.py",
+    "line": 161,
+    "code": "expect(requests.post(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/test_workflow_security_rig.py",
+    "line": 165,
+    "code": "expect(requests.post(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/test_workflow_security_rig.py",
+    "line": 168,
+    "code": "sms_list = expect(requests.get(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/test_workflow_security_rig.py",
+    "line": 175,
+    "code": "expect(requests.post(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/test_workflow_security_rig.py",
+    "line": 178,
+    "code": "sms_list = requests.get(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/test_workflow_security_rig.py",
+    "line": 186,
+    "code": "expect(requests.patch(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/test_workflow_security_rig.py",
+    "line": 194,
+    "code": "expect(requests.post(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/test_workflow_security_rig.py",
+    "line": 199,
+    "code": "ambiguous = requests.get(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/test_workflow_security_rig.py",
+    "line": 208,
+    "code": "expect(requests.get(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/test_workflow_security_rig.py",
+    "line": 212,
+    "code": "expect(requests.post(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/test_workflow_security_rig.py",
+    "line": 217,
+    "code": "expect(requests.get(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/test_workflow_security_rig.py",
+    "line": 224,
+    "code": "expect(requests.get(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/test_workflow_security_rig.py",
+    "line": 228,
+    "code": "bundle = expect(requests.get(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/test_workflow_security_rig.py",
+    "line": 243,
+    "code": "expect(requests.post(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/test_workflow_security_rig.py",
+    "line": 249,
+    "code": "job = expect(requests.post(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/test_workflow_security_rig.py",
+    "line": 254,
+    "code": "expect(requests.get(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/test_workflow_security_rig.py",
+    "line": 258,
+    "code": "expect(requests.patch(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/test_workflow_security_rig.py",
+    "line": 263,
+    "code": "expect(requests.patch(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/test_workflow_security_rig.py",
+    "line": 270,
+    "code": "job = expect(requests.patch(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/test_workflow_security_rig.py",
+    "line": 276,
+    "code": "expect(requests.patch(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/test_workflow_security_rig.py",
+    "line": 287,
+    "code": "expect(requests.patch(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/test_workflow_security_rig.py",
+    "line": 299,
+    "code": "job = expect(requests.patch(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/test_workflow_security_rig.py",
+    "line": 304,
+    "code": "expect(requests.patch(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/test_workflow_security_rig.py",
+    "line": 315,
+    "code": "risky_job = expect(requests.post(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/test_workflow_security_rig.py",
+    "line": 320,
+    "code": "risky_job = expect(requests.patch(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/test_workflow_security_rig.py",
+    "line": 326,
+    "code": "expect(requests.patch(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/test_workflow_security_rig.py",
+    "line": 332,
+    "code": "expect(requests.patch(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/test_workflow_security_rig.py",
+    "line": 341,
+    "code": "expect(requests.patch(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/test_workflow_security_rig.py",
+    "line": 353,
+    "code": "risky_job = expect(requests.patch(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/test_workflow_security_rig.py",
+    "line": 360,
+    "code": "expect(requests.patch(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/test_workflow_security_rig.py",
+    "line": 373,
+    "code": "expect(requests.patch(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "proof/test_workflow_security_rig.py",
+    "line": 377,
+    "code": "expect(requests.patch(",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "spike/two-hands/src/connections/provider_composio.ts",
+    "line": 601,
+    "code": "res = await this.#fetch(`${this.#baseUrl}${path}`, {",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "spike/two-hands/src/provider_composio.ts",
+    "line": 422,
+    "code": "res = await this.#fetch(url, {",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "spike/two-hands/tasks/run_ten.ts",
+    "line": 303,
+    "code": "res = await fetch(MODEL_URL, {",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "tests/test_agent_model_proxy_security.py",
+    "line": 69,
+    "code": "assert \"fetch(url, { signal, method: \\\"POST\\\", headers, body })\" in loop",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "tests/test_evidence_host.py",
+    "line": 232,
+    "code": "def fetch(row=None, *, key=\"evidence\", headers=None, **over) -> dict:",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "tests/test_evidence_host.py",
+    "line": 432,
+    "code": "out = fetch(evidence_row())",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "tests/test_evidence_host.py",
+    "line": 440,
+    "code": "out = fetch(evidence_row(share_expires=FUTURE, fetches=0))",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "tests/test_evidence_host.py",
+    "line": 447,
+    "code": "out = fetch(evidence_row(share_expires=PAST))",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "tests/test_evidence_host.py",
+    "line": 455,
+    "code": "out = fetch(evidence_row(share_expires=\"soon\"))",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "tests/test_evidence_host.py",
+    "line": 463,
+    "code": "out = fetch(evidence_row(share_expires=FUTURE, fetches=99))",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "tests/test_evidence_host.py",
+    "line": 472,
+    "code": "json.dumps(fetch(None, path=\"/api/files/evidence/ev0000000000001/x.jpg\")[\"body\"]),",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "tests/test_evidence_host.py",
+    "line": 473,
+    "code": "json.dumps(fetch(evidence_row())[\"body\"]),",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "tests/test_evidence_host.py",
+    "line": 474,
+    "code": "json.dumps(fetch(evidence_row(share_expires=PAST))[\"body\"]),",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "tests/test_evidence_host.py",
+    "line": 475,
+    "code": "json.dumps(fetch(evidence_row(share_expires=FUTURE, fetches=99))[\"body\"]),",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "tests/test_evidence_host.py",
+    "line": 484,
+    "code": "out = fetch(evidence_row(), key=\"pbc_evidence001\")",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "tests/test_evidence_host.py",
+    "line": 492,
+    "code": "out = fetch(evidence_row(share_expires=FUTURE), lookupThrows=True)",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "tests/test_evidence_host.py",
+    "line": 500,
+    "code": "out = fetch(evidence_row(share_expires=FUTURE), saveFails=True)",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "tests/test_evidence_host.py",
+    "line": 507,
+    "code": "out = fetch(evidence_row(), auth={\"id\": \"own1\", \"collection\": \"owners\"})",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "tests/test_evidence_host.py",
+    "line": 514,
+    "code": "out = fetch(evidence_row(), auth={\"id\": \"own2\", \"collection\": \"owners\"})",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "tests/test_evidence_host.py",
+    "line": 521,
+    "code": "out = fetch(evidence_row(owner_ref=\"ag01\"),",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "tests/test_evidence_host.py",
+    "line": 527,
+    "code": "out = fetch(evidence_row(), headers={\"X-Anticipy-Token\": SERVICE_TOKEN})",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "tests/test_evidence_host.py",
+    "line": 532,
+    "code": "out = fetch(evidence_row(), headers={\"X-Anticipy-Token\": \"nope\"})",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "tests/test_evidence_host.py",
+    "line": 540,
+    "code": "out = fetch(evidence_row(), env={}, headers={})",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "tests/test_evidence_host.py",
+    "line": 542,
+    "code": "out = fetch(evidence_row(), env={}, headers={\"X-Anticipy-Token\": \"\"})",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "tests/test_evidence_host.py",
+    "line": 550,
+    "code": "out = fetch(None, key=\"events\", path=\"/api/files/events/rec1/leak.jpg\",",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "tests/test_phone_revocation_notification_boundary.py",
+    "line": 252,
+    "code": "def fetch(owner_ref=\"\"):",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "tests/test_research_procedure.py",
+    "line": 58,
+    "code": "def fetch(url):",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "tests/test_stranger_gate.py",
+    "line": 591,
+    "code": "\"            requests.post(\\n\"",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "tests/test_stranger_gate.py",
+    "line": 1088,
+    "code": "\"            requests.post(\\n\"",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "tests/test_stranger_gate.py",
+    "line": 1106,
+    "code": "\"            requests.post(\\n\"",
+    "review_status": "call_candidate",
+    "evidence": []
+  },
+  {
+    "path": "tests/test_stranger_gate.py",
+    "line": 1126,
+    "code": "\"            requests.post(\\n\"",
+    "review_status": "call_candidate",
+    "evidence": []
+  }
+]

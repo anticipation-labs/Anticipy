@@ -1,0 +1,49 @@
+{
+ "what": "PRE-FLIGHT, NOT THE EXPERIMENT. Can the reference decoder hear this script at all? Synthetic speech (macOS `say`, voice Samantha, 150 wpm) of proof/fixtures/read_aloud_script.txt, decoded by whisper-hosted:whisper-large-v3. No phone, no room, no human voice.",
+ "why": "proof/engine_or_audio.py voids the whole run if the reference decoder cannot clear CONTROL_CREDIBILITY_FLOOR on the clean control. That is a property of the DECODER and the SCRIPT, not of the phone, so it can be checked before anybody reads anything aloud. If it had failed, the twenty minutes of reading would have been wasted.",
+ "when": "2026-09-06",
+ "decoder": "whisper-hosted:whisper-large-v3",
+ "capture_rate": 0.9621621621621622,
+ "wer": 0.04054054054054054,
+ "insertion_rate": 0.002702702702702703,
+ "script_share": 0.978021978021978,
+ "covered_span": 1.0,
+ "control_credibility_floor": 0.85,
+ "clears_the_floor": true,
+ "names": {
+  "Anticipy": {
+   "mentions": 13,
+   "hits": 12,
+   "dropped": 1,
+   "heard_as": {}
+  },
+  "Tejas": {
+   "mentions": 4,
+   "hits": 4,
+   "dropped": 0,
+   "heard_as": {}
+  },
+  "OpenTrade": {
+   "mentions": 5,
+   "hits": 3,
+   "dropped": 0,
+   "heard_as": {
+    "open": 1,
+    "open trade": 1
+   }
+  },
+  "pendant": {
+   "mentions": 4,
+   "hits": 3,
+   "dropped": 0,
+   "heard_as": {
+    "dependent": 1
+   }
+  }
+ },
+ "what_this_does_NOT_say": [
+  "Nothing about the phone's microphone. Synthetic speech played into a file is not a room.",
+  "Nothing about Apple's recognizer. This is the reference decoder only.",
+  "Nothing about the ~33% word capture measured on the 2026-08-23 call. That number is still the only real one this product owns about its own audio."
+ ]
+}

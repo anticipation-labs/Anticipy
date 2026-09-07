@@ -1,0 +1,1638 @@
+[
+  {
+    "source": "migration/workers/src/pb/schema.ts",
+    "line": null,
+    "method": "DELETE",
+    "path": "/api/collections/agents/records/auditmissing001",
+    "status": 403,
+    "response": {
+      "error": "forbidden"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/pb/schema.ts",
+    "line": null,
+    "method": "DELETE",
+    "path": "/api/collections/events/records/auditmissing001",
+    "status": 403,
+    "response": {
+      "error": "forbidden"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/pb/schema.ts",
+    "line": null,
+    "method": "DELETE",
+    "path": "/api/collections/evidence/records/auditmissing001",
+    "status": 403,
+    "response": {
+      "error": "forbidden"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/pb/schema.ts",
+    "line": null,
+    "method": "DELETE",
+    "path": "/api/collections/jobs/records/auditmissing001",
+    "status": 403,
+    "response": {
+      "error": "forbidden"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/pb/schema.ts",
+    "line": null,
+    "method": "DELETE",
+    "path": "/api/collections/owner_profile/records/auditmissing001",
+    "status": 403,
+    "response": {
+      "error": "forbidden"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/pb/schema.ts",
+    "line": null,
+    "method": "DELETE",
+    "path": "/api/collections/owners/records/auditmissing001",
+    "status": 403,
+    "response": {
+      "error": "forbidden"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/pb/schema.ts",
+    "line": null,
+    "method": "DELETE",
+    "path": "/api/collections/pendants/records/auditmissing001",
+    "status": 403,
+    "response": {
+      "error": "forbidden"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/pb/schema.ts",
+    "line": null,
+    "method": "DELETE",
+    "path": "/api/collections/purges/records/auditmissing001",
+    "status": 403,
+    "response": {
+      "error": "forbidden"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/pb/schema.ts",
+    "line": null,
+    "method": "DELETE",
+    "path": "/api/collections/segments/records/auditmissing001",
+    "status": 403,
+    "response": {
+      "error": "forbidden"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": null,
+    "method": "DELETE",
+    "path": "/me/connections/audit-missing",
+    "status": 404,
+    "response": {
+      "ok": false,
+      "message": "There's nothing at this address."
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": 180,
+    "method": "GET",
+    "path": "/agent/key",
+    "status": 400,
+    "response": {
+      "error": "agent credentials required"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/pb/schema.ts",
+    "line": null,
+    "method": "GET",
+    "path": "/api/collections/agents/records",
+    "status": 403,
+    "response": {
+      "error": "forbidden"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/pb/schema.ts",
+    "line": null,
+    "method": "GET",
+    "path": "/api/collections/agents/records/auditmissing001",
+    "status": 403,
+    "response": {
+      "error": "forbidden"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/pb/schema.ts",
+    "line": null,
+    "method": "GET",
+    "path": "/api/collections/events/records",
+    "status": 403,
+    "response": {
+      "error": "forbidden"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/pb/schema.ts",
+    "line": null,
+    "method": "GET",
+    "path": "/api/collections/events/records/auditmissing001",
+    "status": 403,
+    "response": {
+      "error": "forbidden"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/pb/schema.ts",
+    "line": null,
+    "method": "GET",
+    "path": "/api/collections/evidence/records",
+    "status": 403,
+    "response": {
+      "error": "forbidden"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/pb/schema.ts",
+    "line": null,
+    "method": "GET",
+    "path": "/api/collections/evidence/records/auditmissing001",
+    "status": 403,
+    "response": {
+      "error": "forbidden"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/pb/schema.ts",
+    "line": null,
+    "method": "GET",
+    "path": "/api/collections/jobs/records",
+    "status": 403,
+    "response": {
+      "error": "forbidden"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/pb/schema.ts",
+    "line": null,
+    "method": "GET",
+    "path": "/api/collections/jobs/records/auditmissing001",
+    "status": 403,
+    "response": {
+      "error": "forbidden"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/pb/schema.ts",
+    "line": null,
+    "method": "GET",
+    "path": "/api/collections/owner_profile/records",
+    "status": 403,
+    "response": {
+      "error": "forbidden"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/pb/schema.ts",
+    "line": null,
+    "method": "GET",
+    "path": "/api/collections/owner_profile/records/auditmissing001",
+    "status": 403,
+    "response": {
+      "error": "forbidden"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/pb/schema.ts",
+    "line": null,
+    "method": "GET",
+    "path": "/api/collections/owners/records",
+    "status": 403,
+    "response": {
+      "error": "forbidden"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/pb/schema.ts",
+    "line": null,
+    "method": "GET",
+    "path": "/api/collections/owners/records/auditmissing001",
+    "status": 403,
+    "response": {
+      "error": "forbidden"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/pb/schema.ts",
+    "line": null,
+    "method": "GET",
+    "path": "/api/collections/pendants/records",
+    "status": 403,
+    "response": {
+      "error": "forbidden"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/pb/schema.ts",
+    "line": null,
+    "method": "GET",
+    "path": "/api/collections/pendants/records/auditmissing001",
+    "status": 403,
+    "response": {
+      "error": "forbidden"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/pb/schema.ts",
+    "line": null,
+    "method": "GET",
+    "path": "/api/collections/purges/records",
+    "status": 403,
+    "response": {
+      "error": "forbidden"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/pb/schema.ts",
+    "line": null,
+    "method": "GET",
+    "path": "/api/collections/purges/records/auditmissing001",
+    "status": 403,
+    "response": {
+      "error": "forbidden"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/pb/schema.ts",
+    "line": null,
+    "method": "GET",
+    "path": "/api/collections/segments/records",
+    "status": 403,
+    "response": {
+      "error": "forbidden"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/pb/schema.ts",
+    "line": null,
+    "method": "GET",
+    "path": "/api/collections/segments/records/auditmissing001",
+    "status": 403,
+    "response": {
+      "error": "forbidden"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": null,
+    "method": "GET",
+    "path": "/api/files/evidence/audit-missing/missing.png",
+    "status": 404,
+    "response": {
+      "error": "that evidence is not available"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": 160,
+    "method": "GET",
+    "path": "/api/health",
+    "status": 200,
+    "response": {
+      "code": 200,
+      "message": "API is healthy.",
+      "data": {}
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": null,
+    "method": "GET",
+    "path": "/api/realtime",
+    "status": 410,
+    "response": {
+      "error": "realtime is not served by this backend",
+      "detail": "no shipped client subscribes; the extension polls on a 30s alarm (extension/background.js:1721-1729). See migration/workers/ARCHITECTURE.md \u00a78."
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": null,
+    "method": "GET",
+    "path": "/c/audit-missing",
+    "status": 404,
+    "response": {
+      "bytes": 1480,
+      "sha256": "f921cf0679be49c4bed4ab6a112bb395c54f239fe8592e985fdce2563bf878a8"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": 342,
+    "method": "GET",
+    "path": "/fellows/confirm",
+    "status": 302,
+    "response": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": 350,
+    "method": "GET",
+    "path": "/fellows/guardian",
+    "status": 200,
+    "response": {
+      "bytes": 4049,
+      "sha256": "680da0cf4d8bb4e7dd45cb636e1319c943b2fe2b6fd2f777616a9439ab485496"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": 338,
+    "method": "GET",
+    "path": "/fellows/health",
+    "status": 200,
+    "response": {
+      "ok": true,
+      "can_email": false,
+      "can_review": false,
+      "ip_resolves": false
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": 371,
+    "method": "GET",
+    "path": "/fellows/hq",
+    "status": 200,
+    "response": {
+      "bytes": 136244,
+      "sha256": "1a250419087b784e631e12df3e4546d74662fe371155c6f4d60111f18fd75918"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": 343,
+    "method": "GET",
+    "path": "/fellows/me",
+    "status": 401,
+    "response": {
+      "reauth": true
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": null,
+    "method": "GET",
+    "path": "/internal/cal/audit-missing",
+    "status": 404,
+    "response": {
+      "error": "not found"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": 397,
+    "method": "GET",
+    "path": "/internal/fellows",
+    "status": 401,
+    "response": {
+      "error": "wrong key"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": 369,
+    "method": "GET",
+    "path": "/internal/health",
+    "status": 200,
+    "response": {
+      "ok": true,
+      "gated": true,
+      "version": "hq-2",
+      "channels": {
+        "email": false,
+        "sms": false
+      }
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": 386,
+    "method": "GET",
+    "path": "/internal/me",
+    "status": 401,
+    "response": {
+      "error": "wrong key"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": 392,
+    "method": "GET",
+    "path": "/internal/people/faces",
+    "status": 200,
+    "response": {
+      "people": []
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": 413,
+    "method": "GET",
+    "path": "/internal/state",
+    "status": 401,
+    "response": {
+      "error": "wrong key"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": null,
+    "method": "GET",
+    "path": "/me/connections",
+    "status": 401,
+    "response": {
+      "ok": false,
+      "message": "Sign in first."
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": null,
+    "method": "GET",
+    "path": "/r/audit-missing",
+    "status": 302,
+    "response": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": 195,
+    "method": "GET",
+    "path": "/worker/owners",
+    "status": 403,
+    "response": {
+      "error": "forbidden"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/pb/schema.ts",
+    "line": null,
+    "method": "PATCH",
+    "path": "/api/collections/agents/records/auditmissing001",
+    "status": 403,
+    "response": {
+      "error": "forbidden"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/pb/schema.ts",
+    "line": null,
+    "method": "PATCH",
+    "path": "/api/collections/events/records/auditmissing001",
+    "status": 403,
+    "response": {
+      "error": "forbidden"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/pb/schema.ts",
+    "line": null,
+    "method": "PATCH",
+    "path": "/api/collections/evidence/records/auditmissing001",
+    "status": 403,
+    "response": {
+      "error": "forbidden"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/pb/schema.ts",
+    "line": null,
+    "method": "PATCH",
+    "path": "/api/collections/jobs/records/auditmissing001",
+    "status": 403,
+    "response": {
+      "error": "forbidden"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/pb/schema.ts",
+    "line": null,
+    "method": "PATCH",
+    "path": "/api/collections/owner_profile/records/auditmissing001",
+    "status": 403,
+    "response": {
+      "error": "forbidden"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/pb/schema.ts",
+    "line": null,
+    "method": "PATCH",
+    "path": "/api/collections/owners/records/auditmissing001",
+    "status": 403,
+    "response": {
+      "error": "forbidden"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/pb/schema.ts",
+    "line": null,
+    "method": "PATCH",
+    "path": "/api/collections/pendants/records/auditmissing001",
+    "status": 403,
+    "response": {
+      "error": "forbidden"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/pb/schema.ts",
+    "line": null,
+    "method": "PATCH",
+    "path": "/api/collections/purges/records/auditmissing001",
+    "status": 403,
+    "response": {
+      "error": "forbidden"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/pb/schema.ts",
+    "line": null,
+    "method": "PATCH",
+    "path": "/api/collections/segments/records/auditmissing001",
+    "status": 403,
+    "response": {
+      "error": "forbidden"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": 434,
+    "method": "PATCH",
+    "path": "/internal/comments",
+    "status": 401,
+    "response": {
+      "error": "wrong key"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": 415,
+    "method": "PATCH",
+    "path": "/internal/people",
+    "status": 401,
+    "response": {
+      "error": "wrong key"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": 417,
+    "method": "PATCH",
+    "path": "/internal/todos",
+    "status": 401,
+    "response": {
+      "error": "wrong key"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/routes/admin_connect_link.ts",
+    "line": 33,
+    "method": "POST",
+    "path": "/admin/connect-link",
+    "status": 401,
+    "response": {
+      "error": "wrong key"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": 198,
+    "method": "POST",
+    "path": "/admin/purge-audit",
+    "status": 403,
+    "response": {
+      "error": "forbidden"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/routes/admin_sms_lines.ts",
+    "line": 17,
+    "method": "POST",
+    "path": "/admin/sms/lines",
+    "status": 405,
+    "response": {
+      "bytes": 18,
+      "sha256": "e3933184560739b70b60e2d0e48a6c7d7e18f76d95362e11f4155267700ac3a7"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": 183,
+    "method": "POST",
+    "path": "/agent/llm",
+    "status": 400,
+    "response": {
+      "error": "agent credentials required"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": 177,
+    "method": "POST",
+    "path": "/agent/register",
+    "status": 400,
+    "response": {
+      "error": "valid agent_id required"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": 189,
+    "method": "POST",
+    "path": "/agent/upgrade-credential",
+    "status": 403,
+    "response": {
+      "error": "upgrade not authorized"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/pb/schema.ts",
+    "line": null,
+    "method": "POST",
+    "path": "/api/collections/agents/records",
+    "status": 400,
+    "response": {
+      "data": {
+        "agent_id": {
+          "code": "validation_required",
+          "message": "Cannot be blank."
+        }
+      },
+      "message": "Failed to create record.",
+      "status": 400
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/pb/schema.ts",
+    "line": null,
+    "method": "POST",
+    "path": "/api/collections/events/records",
+    "status": 403,
+    "response": {
+      "error": "forbidden"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/pb/schema.ts",
+    "line": null,
+    "method": "POST",
+    "path": "/api/collections/evidence/records",
+    "status": 403,
+    "response": {
+      "error": "forbidden"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/pb/schema.ts",
+    "line": null,
+    "method": "POST",
+    "path": "/api/collections/jobs/records",
+    "status": 403,
+    "response": {
+      "error": "forbidden"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/pb/schema.ts",
+    "line": null,
+    "method": "POST",
+    "path": "/api/collections/owner_profile/records",
+    "status": 403,
+    "response": {
+      "error": "forbidden"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": 463,
+    "method": "POST",
+    "path": "/api/collections/owners/auth-refresh",
+    "status": 401,
+    "response": {
+      "error": "The request requires valid record authorization token."
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": 460,
+    "method": "POST",
+    "path": "/api/collections/owners/auth-with-password",
+    "status": 400,
+    "response": {
+      "code": 400,
+      "message": "Failed to authenticate.",
+      "data": {
+        "identity": {
+          "code": "validation_required",
+          "message": "Missing required value."
+        }
+      }
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": null,
+    "method": "POST",
+    "path": "/api/collections/owners/records",
+    "status": 400,
+    "response": {
+      "data": {
+        "password": {
+          "code": "validation_required",
+          "message": "Cannot be blank."
+        },
+        "passwordConfirm": {
+          "code": "validation_required",
+          "message": "Cannot be blank."
+        }
+      },
+      "message": "Failed to create record.",
+      "status": 400
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/pb/schema.ts",
+    "line": null,
+    "method": "POST",
+    "path": "/api/collections/pendants/records",
+    "status": 403,
+    "response": {
+      "error": "forbidden"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/pb/schema.ts",
+    "line": null,
+    "method": "POST",
+    "path": "/api/collections/purges/records",
+    "status": 403,
+    "response": {
+      "error": "forbidden"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/pb/schema.ts",
+    "line": null,
+    "method": "POST",
+    "path": "/api/collections/segments/records",
+    "status": 403,
+    "response": {
+      "error": "forbidden"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": null,
+    "method": "POST",
+    "path": "/api/realtime",
+    "status": 403,
+    "response": {
+      "error": "forbidden"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": 201,
+    "method": "POST",
+    "path": "/auth/claim",
+    "status": 401,
+    "response": {
+      "ok": false,
+      "message": "Sign in first."
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": 167,
+    "method": "POST",
+    "path": "/auth/reset/confirm",
+    "status": 400,
+    "response": {
+      "ok": false,
+      "message": "Pick a password with at least 8 characters."
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": 164,
+    "method": "POST",
+    "path": "/auth/reset/request",
+    "status": 200,
+    "response": {
+      "ok": true,
+      "message": "If that account exists and has a phone number, a code is on its way by text."
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": null,
+    "method": "POST",
+    "path": "/c/audit-missing/verify",
+    "status": 404,
+    "response": {
+      "bytes": 1480,
+      "sha256": "f921cf0679be49c4bed4ab6a112bb395c54f239fe8592e985fdce2563bf878a8"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/routes/connections_webhook.ts",
+    "line": 192,
+    "method": "POST",
+    "path": "/connections/events",
+    "status": 503,
+    "response": {
+      "ok": false,
+      "error": "connection events are not configured here"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": 515,
+    "method": "POST",
+    "path": "/evidence/share",
+    "status": 403,
+    "response": {
+      "error": "forbidden"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": 344,
+    "method": "POST",
+    "path": "/fellows/apply",
+    "status": 401,
+    "response": {
+      "reauth": true
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": 339,
+    "method": "POST",
+    "path": "/fellows/code",
+    "status": 200,
+    "response": {
+      "ok": false,
+      "message": "That email doesn't look right. Mind checking it?"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": 351,
+    "method": "POST",
+    "path": "/fellows/guardian",
+    "status": 200,
+    "response": {
+      "ok": false,
+      "message": "That link is missing something. Ask for a fresh one."
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": 349,
+    "method": "POST",
+    "path": "/fellows/guardian/link",
+    "status": 401,
+    "response": {
+      "reauth": true
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": 346,
+    "method": "POST",
+    "path": "/fellows/profile",
+    "status": 401,
+    "response": {
+      "reauth": true
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": 345,
+    "method": "POST",
+    "path": "/fellows/progress",
+    "status": 401,
+    "response": {
+      "reauth": true
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": 341,
+    "method": "POST",
+    "path": "/fellows/start",
+    "status": 200,
+    "response": {
+      "ok": false,
+      "field": "email",
+      "message": "That email doesn't look right."
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": 347,
+    "method": "POST",
+    "path": "/fellows/submissions",
+    "status": 401,
+    "response": {
+      "reauth": true
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": 348,
+    "method": "POST",
+    "path": "/fellows/submissions/remove",
+    "status": 401,
+    "response": {
+      "reauth": true
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": 340,
+    "method": "POST",
+    "path": "/fellows/verify",
+    "status": 200,
+    "response": {
+      "ok": false,
+      "message": "That code doesn't look right \u2014 it's the six digits from the email."
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/routes/hands_api.ts",
+    "line": 113,
+    "method": "POST",
+    "path": "/hands/api/run",
+    "status": 401,
+    "response": {
+      "ok": false,
+      "message": "service token required"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/routes/hands_api_tools.ts",
+    "line": 24,
+    "method": "POST",
+    "path": "/hands/api/tools",
+    "status": 405,
+    "response": {
+      "bytes": 18,
+      "sha256": "e3933184560739b70b60e2d0e48a6c7d7e18f76d95362e11f4155267700ac3a7"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": 438,
+    "method": "POST",
+    "path": "/internal/assistant",
+    "status": 401,
+    "response": {
+      "error": "wrong key"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": 445,
+    "method": "POST",
+    "path": "/internal/clerk/exchange",
+    "status": 503,
+    "response": {
+      "error": "Clerk sign-in is not configured"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": 433,
+    "method": "POST",
+    "path": "/internal/comments",
+    "status": 401,
+    "response": {
+      "error": "wrong key"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": 435,
+    "method": "POST",
+    "path": "/internal/comments/delete",
+    "status": 401,
+    "response": {
+      "error": "wrong key"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": 419,
+    "method": "POST",
+    "path": "/internal/events",
+    "status": 401,
+    "response": {
+      "error": "wrong key"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": 420,
+    "method": "POST",
+    "path": "/internal/events/delete",
+    "status": 401,
+    "response": {
+      "error": "wrong key"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": 423,
+    "method": "POST",
+    "path": "/internal/expenses",
+    "status": 401,
+    "response": {
+      "error": "wrong key"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": 424,
+    "method": "POST",
+    "path": "/internal/expenses/delete",
+    "status": 401,
+    "response": {
+      "error": "wrong key"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": 404,
+    "method": "POST",
+    "path": "/internal/fellows/remove",
+    "status": 401,
+    "response": {
+      "error": "wrong key"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": 410,
+    "method": "POST",
+    "path": "/internal/fellows/submissions/release",
+    "status": 401,
+    "response": {
+      "error": "wrong key"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": 407,
+    "method": "POST",
+    "path": "/internal/fellows/submissions/remove",
+    "status": 401,
+    "response": {
+      "error": "wrong key"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": 370,
+    "method": "POST",
+    "path": "/internal/login",
+    "status": 401,
+    "response": {
+      "error": "wrong key"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": 387,
+    "method": "POST",
+    "path": "/internal/me/password",
+    "status": 401,
+    "response": {
+      "error": "wrong key"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": 425,
+    "method": "POST",
+    "path": "/internal/notes",
+    "status": 401,
+    "response": {
+      "error": "wrong key"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": 426,
+    "method": "POST",
+    "path": "/internal/notes/delete",
+    "status": 401,
+    "response": {
+      "error": "wrong key"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": 431,
+    "method": "POST",
+    "path": "/internal/notifs/read",
+    "status": 401,
+    "response": {
+      "error": "wrong key"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": 427,
+    "method": "POST",
+    "path": "/internal/passwords",
+    "status": 503,
+    "response": {
+      "error": "the vault is not configured"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": 429,
+    "method": "POST",
+    "path": "/internal/passwords/delete",
+    "status": 401,
+    "response": {
+      "error": "wrong key"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": 428,
+    "method": "POST",
+    "path": "/internal/passwords/reveal",
+    "status": 503,
+    "response": {
+      "error": "the vault is not configured"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": 414,
+    "method": "POST",
+    "path": "/internal/people",
+    "status": 401,
+    "response": {
+      "error": "wrong key"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": 430,
+    "method": "POST",
+    "path": "/internal/people/code",
+    "status": 401,
+    "response": {
+      "error": "wrong key"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": 436,
+    "method": "POST",
+    "path": "/internal/reminders",
+    "status": 401,
+    "response": {
+      "error": "wrong key"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": 437,
+    "method": "POST",
+    "path": "/internal/reminders/delete",
+    "status": 401,
+    "response": {
+      "error": "wrong key"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": 381,
+    "method": "POST",
+    "path": "/internal/session",
+    "status": 200,
+    "response": {
+      "ok": false,
+      "message": "That code didn't match anyone. Check it and try again."
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": 382,
+    "method": "POST",
+    "path": "/internal/session/end",
+    "status": 200,
+    "response": {
+      "ok": true
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": 432,
+    "method": "POST",
+    "path": "/internal/settings",
+    "status": 401,
+    "response": {
+      "error": "wrong key"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": 416,
+    "method": "POST",
+    "path": "/internal/todos",
+    "status": 401,
+    "response": {
+      "error": "wrong key"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": 418,
+    "method": "POST",
+    "path": "/internal/todos/delete",
+    "status": 401,
+    "response": {
+      "error": "wrong key"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": 421,
+    "method": "POST",
+    "path": "/internal/tracks",
+    "status": 401,
+    "response": {
+      "error": "wrong key"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": 422,
+    "method": "POST",
+    "path": "/internal/tracks/delete",
+    "status": 401,
+    "response": {
+      "error": "wrong key"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": 171,
+    "method": "POST",
+    "path": "/me/delete",
+    "status": 401,
+    "response": {
+      "ok": false,
+      "message": "Sign in first."
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": 204,
+    "method": "POST",
+    "path": "/me/phone/remove",
+    "status": 401,
+    "response": {
+      "ok": false,
+      "message": "Sign in first."
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": 207,
+    "method": "POST",
+    "path": "/me/profile/upsert",
+    "status": 401,
+    "response": {
+      "ok": false,
+      "message": "Sign in first."
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": 234,
+    "method": "POST",
+    "path": "/sms/inbound",
+    "status": 503,
+    "response": {
+      "bytes": 29,
+      "sha256": "03fcab711c9411a2d336bf7931224da9f196306b8ef236efa842235b623ad010"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": 245,
+    "method": "POST",
+    "path": "/sms/sendblue",
+    "status": 503,
+    "response": {
+      "bytes": 34,
+      "sha256": "c8b38955220b6703ad09ec2ef5ac650e17e32f424f7f432b03af67c74e348bca"
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  },
+  {
+    "source": "migration/workers/src/index.ts",
+    "line": 248,
+    "method": "POST",
+    "path": "/transcription/token",
+    "status": 401,
+    "response": {
+      "ok": false,
+      "message": "Sign in first."
+    },
+    "scope": "local unauthenticated request with empty input",
+    "review_status": "observed_not_happy_path_verified"
+  }
+]

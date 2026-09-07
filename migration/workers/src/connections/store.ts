@@ -323,6 +323,8 @@ export interface ConnectionsStore {
   /** Insert or update. REFUSES a row whose `connected_account_id` already
    *  belongs to a different owner — see `CrossOwnerWrite`. */
   putConnection(row: StoredConnection): Promise<void>;
+  /** Update only permissions, atomically, only if every owner/account/toolkit still exists. */
+  updateWrites(user: OwnerId | string, rows: readonly StoredConnection[]): Promise<boolean>;
   /**
    * BOTH HALVES OF A FINISHED CONNECTION, IN ONE D1 BATCH: the `connections`
    * row upserted, and this owner's `connect_nudges` row for that toolkit
@@ -1123,6 +1125,36 @@ export function createD1Store(env: StoreEnv): ConnectionsStore {
       }
     },
 
+    async updateWrites(user, rows) {
+      const owner = checkedOwner(user);
+      const values = rows.map(checkedConnection);
+      if (!values.length) return true;
+      if (values.some(row => row.user_id !== owner)
+          || new Set(values.map(row => row.connected_account_id)).size !== values.length) {
+        throw new Error("permission batch must name distinct accounts of one owner");
+      }
+      await requireColumns(env, "connections");
+      // One statement: a disconnect or expiry cannot be overwritten by a
+      // stale upsert. JSON keeps 50 rows below D1's bind-parameter limit.
+      const desired = JSON.stringify(values.map(row => ({
+        id: row.connected_account_id, toolkit: row.toolkit, enabled: row.writes_enabled ? 1 : 0,
+      })));
+      const result = await env.DB.prepare(`
+        WITH requested AS (
+          SELECT json_extract(value,'$.id') AS id,
+                 json_extract(value,'$.toolkit') AS toolkit,
+                 json_extract(value,'$.enabled') AS enabled FROM json_each(?1)
+        )
+        UPDATE connections SET writes_enabled = (
+          SELECT enabled FROM requested WHERE requested.id = connections.connected_account_id
+        ) WHERE user_id = ?2 AND connected_account_id IN (SELECT id FROM requested)
+          AND (SELECT count(*) FROM connections c JOIN requested r
+               ON c.connected_account_id = r.id AND c.toolkit = r.toolkit
+               WHERE c.user_id = ?2) = ?3
+      `).bind(desired, owner, values.length).run();
+      return Number(result.meta.changes ?? 0) === values.length;
+    },
+
     async recordConnection(row, connectedAt) {
       const conn = checkedConnection(row);
       const at = checkedTime(connectedAt, "connectedAt");
@@ -1398,6 +1430,24 @@ export function createMemoryStore(): ConnectionsStore {
         throw new CrossOwnerWrite("connections", conn.connected_account_id);
       }
       connections.set(conn.connected_account_id, { ...conn });
+    },
+
+    async updateWrites(user, rows) {
+      const owner = checkedOwner(user);
+      const values = rows.map(checkedConnection);
+      if (values.some(row => row.user_id !== owner)
+          || new Set(values.map(row => row.connected_account_id)).size !== values.length) {
+        throw new Error("permission batch must name distinct accounts of one owner");
+      }
+      if (values.some(row => {
+        const current = connections.get(row.connected_account_id);
+        return !current || current.user_id !== owner || current.toolkit !== row.toolkit;
+      })) return false;
+      for (const row of values) {
+        const current = connections.get(row.connected_account_id)!;
+        connections.set(row.connected_account_id, { ...current, writes_enabled: row.writes_enabled });
+      }
+      return true;
     },
 
     async recordConnection(row, connectedAt) {

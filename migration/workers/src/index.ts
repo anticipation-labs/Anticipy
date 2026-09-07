@@ -62,6 +62,7 @@ import { workerOwners, purgeAudit, authClaim, phoneRemove, profileUpsert, type S
 import { handsApiRun, HANDS_API_RUN_PATH, type HandsApiEnv } from "./routes/hands_api.ts";
 import { handsApiTools, HANDS_API_TOOLS_PATH, type HandsApiToolsEnv } from "./routes/hands_api_tools.ts";
 import { adminConnectLink, ADMIN_CONNECT_LINK_PATH, type AdminConnectLinkEnv } from "./routes/admin_connect_link.ts";
+import { adminSmsLines, ADMIN_SMS_LINES_PATH, type AdminSmsLinesEnv } from "./routes/admin_sms_lines.ts";
 import { agentRegister, agentKey, agentLlm, agentCaptcha, agentUpgradeCredential, type AgentEnv } from "./routes/agent.ts";
 import {
   serveFile, shareEvidence, depositEvidenceImage, discardEvidenceImage, type AssetEnv,
@@ -81,6 +82,7 @@ export { PairCodeCounter } from "./do/PairCodeCounter.ts";
 
 export interface Env extends CronEnv {
   DB: D1Database;
+  WORKER_VERSION?: { id: string; tag?: string };
   EVIDENCE: R2Bucket;
   ASSETS: Fetcher;
   PAIR_CODE_COUNTER: DurableObjectNamespace;
@@ -156,7 +158,13 @@ export default {
     const path = url.pathname;
     const method = request.method;
 
-    if (path === "/api/health" && method === "GET") return health();
+    if (path === "/api/health" && method === "GET") {
+      const response = health();
+      if (env.WORKER_VERSION?.id) response.headers.set("x-anticipy-version", env.WORKER_VERSION.id);
+      if (env.WORKER_VERSION?.tag) response.headers.set("x-anticipy-revision", env.WORKER_VERSION.tag);
+      response.headers.set("cache-control", "no-store");
+      return response;
+    }
 
     // The front door. Outside /api/collections/, so the data-API guard never
     // sees these -- they defend themselves. See routes/password_reset.ts.
@@ -223,6 +231,9 @@ export default {
     // text it. Internal-key only; see routes/admin_connect_link.ts.
     if (path === ADMIN_CONNECT_LINK_PATH) {
       return adminConnectLink(request, env as unknown as AdminConnectLinkEnv);
+    }
+    if (path === ADMIN_SMS_LINES_PATH) {
+      return adminSmsLines(request, env as unknown as AdminSmsLinesEnv);
     }
 
     // Twilio's inbound webhook. TWILIO_AUTH_TOKEN is the only thing that can

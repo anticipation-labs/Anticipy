@@ -381,9 +381,28 @@ function failedToCreate(data: Record<string, unknown>): Response {
 const REQUIRED = { code: "validation_required", message: "Cannot be blank." };
 const NOT_UNIQUE = { code: "validation_not_unique", message: "Value must be unique." };
 
+/** Parse database constraint syntax only; operational failures still propagate. */
+function constraintResponse(message: string): Response | null {
+  if (message.includes("ACCOUNT_ERASURE_IN_PROGRESS")) {
+    return json(409, { code: 409, message: "Account deletion is in progress. New changes cannot be saved." });
+  }
+  const required = /CHECK constraint failed:\s*length\("([A-Za-z0-9_]+)"\)\s*>\s*0/.exec(message)
+    ?? /NOT NULL constraint failed:\s*[A-Za-z0-9_]+\.([A-Za-z0-9_]+)/.exec(message);
+  if (required) return failedToCreate({ [required[1]]: REQUIRED });
+  const unique = uniqueViolationColumn(message);
+  if (unique) return failedToCreate({ [unique]: NOT_UNIQUE });
+  if (/CHECK constraint failed:/.test(message)) {
+    return badRequest("Record values do not satisfy the collection's constraints.");
+  }
+  return null;
+}
+
 async function createOwner(env: Env, req: RecordsRequest): Promise<Response> {
   const def = req.collection;
   const body = req.body ?? {};
+  if (body.id && req.principal.kind !== "service" && req.principal.kind !== "superuser") {
+    return failedToCreate({ id: { code: "validation_readonly", message: "Account identifiers are assigned by the server." } });
+  }
   const str = (k: string) => String(body[k] ?? "").trim();
 
   const email = str("email").toLowerCase();
@@ -512,13 +531,9 @@ export async function create(env: Env, req: RecordsRequest): Promise<Response> {
         [missing]: { code: "unknown_field", message: `${def.name} has no column ${missing} on this database` },
       });
     }
-    const column = uniqueViolationColumn(msg);
-    if (!column) throw e;
-    return json(400, {
-      data: { [column]: NOT_UNIQUE },
-      message: "Failed to create record.",
-      status: 400,
-    });
+    const validation = constraintResponse(msg);
+    if (validation) return validation;
+    throw e;
   }
 
   const row = await fetchOne(env, def, id, null);
@@ -585,8 +600,13 @@ export async function update(env: Env, req: RecordsRequest): Promise<Response> {
     // The map knows a column the live table lacks: a 400 that names it, the
     // shape an unknown field already gets above — not a 1101. See
     // missingColumn for the day this was a ten-minute duplicate-job loop.
-    const missing = missingColumn((e as Error)?.message ?? String(e));
-    if (!missing) throw e;
+    const message = (e as Error)?.message ?? String(e);
+    const missing = missingColumn(message);
+    if (!missing) {
+      const validation = constraintResponse(message);
+      if (validation) return validation;
+      throw e;
+    }
     return badRequest("failed to update record", {
       [missing]: { code: "unknown_field", message: `${def.name} has no column ${missing} on this database` },
     });
@@ -604,6 +624,12 @@ export async function update(env: Env, req: RecordsRequest): Promise<Response> {
 
 export async function remove(env: Env, req: RecordsRequest): Promise<Response> {
   const def = req.collection;
+  // Account erasure must revoke integrations, remove evidence, atomically
+  // remove product rows and schedule durable-memory cleanup. No principal,
+  // including an internal service, may bypass that lifecycle with a row DELETE.
+  if (def.name === "owners") {
+    return json(405, { code: 405, message: "Delete your account through /me/delete with explicit confirmation.", data: {} });
+  }
   const vals: unknown[] = [req.recordId as string];
   let where = `${quoteIdent("id")} = ?1`;
   if (req.forcedScope) {

@@ -214,21 +214,119 @@ struct CaptureControls: View {
 /// conversation on this phone sets the reader's own words.
 struct OwnerTurn: View {
     var text: String
+    /// The tagger's verdict: "owner", "other", or nil when the phone could not
+    /// say. Every line used to render on the right in the owner's own bubble
+    /// regardless of who spoke it, so a meeting with three people read back as
+    /// one person's monologue with everybody else's words in their mouth.
+    var speaker: String? = nil
+
+    /// Only an explicit "other" moves a line across. nil is NOT other — it is
+    /// the phone saying it could not tell, and guessing in either direction
+    /// would put words in somebody's mouth. An untagged line stays where the
+    /// app has always drawn it, and says nothing about who spoke.
+    private var isSomebodyElse: Bool { speaker == "other" }
 
     var body: some View {
         HStack {
-            Spacer(minLength: 48)
-            Text(text)
-                .font(.system(size: 16))
-                .foregroundStyle(OnboardTheme.ink)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 11)
-                .background(RoundedRectangle(cornerRadius: DashMetric.bubbleRadius, style: .continuous)
-                    .fill(OnboardTheme.field))
+            if !isSomebodyElse { Spacer(minLength: 48) }
+            VStack(alignment: isSomebodyElse ? .leading : .trailing, spacing: 3) {
+                if isSomebodyElse {
+                    // NOT A NAME. The tagger says "owner" or "other" and the
+                    // roster holds no names, so this says exactly what is
+                    // known and no more. Claiming a name the product does not
+                    // have would be worse than saying nothing.
+                    Text("Someone else")
+                        .font(.system(size: 11, weight: .semibold))
+                        .tracking(0.6)
+                        .foregroundStyle(OnboardTheme.muted)
+                }
+                Text(text)
+                    .font(.system(size: 16))
+                    .foregroundStyle(OnboardTheme.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 11)
+                    .background(RoundedRectangle(cornerRadius: DashMetric.bubbleRadius,
+                                                 style: .continuous)
+                        .fill(isSomebodyElse ? OnboardTheme.card : OnboardTheme.field))
+            }
+            if isSomebodyElse { Spacer(minLength: 48) }
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("You said: \(text)")
+        .accessibilityLabel(isSomebodyElse ? "Someone else said: \(text)"
+                                           : "You said: \(text)")
+    }
+}
+
+/// SPEECH SHE HAS NOT COME BACK ON — a count, never the words.
+///
+/// The owner asked for this on 2026-09-06: "hide the transcript and only show
+/// the task." Between a sentence leaving the phone and the brain stamping a
+/// goal there are at least five seconds, and this row is what stands in that
+/// window. It says what the PHONE knows — how many, and that nothing has come
+/// back — and nothing about what was said, because the phone does not know
+/// that and is not allowed to guess.
+///
+/// Deliberately the quietest thing on the thread. It is not news; it is the
+/// absence of news, and a row that shouted would make every ordinary pause
+/// look like a problem.
+struct PendingTurn: View {
+    var count: Int
+
+    private var line: String {
+        count == 1 ? "Heard you. Nothing back on it yet."
+                   : "Heard \(count) things. Nothing back on them yet."
+    }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Circle()
+                .fill(OnboardTheme.muted.opacity(0.5))
+                .frame(width: 5, height: 5)
+            Text(line)
+                .font(.system(size: 13))
+                .foregroundStyle(OnboardTheme.muted)
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, 2)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(line)
+    }
+}
+
+/// SPEECH SHE HEARD AND LEFT ALONE — the count, and the way to the words.
+///
+/// Separate from `PendingTurn` because they are opposite facts wearing the
+/// same silence: one is still coming, this one is finished. Tapping opens
+/// `ListeningHistoryView`, which is where the transcript moved to — so this row
+/// is also the promise that nothing was thrown away, which is the only thing
+/// that makes hiding the words honest rather than lossy.
+struct QuietTurn: View {
+    var count: Int
+    var open: () -> Void
+
+    private var line: String {
+        count == 1 ? "1 thing heard, nothing needed"
+                   : "\(count) things heard, nothing needed"
+    }
+
+    var body: some View {
+        Button(action: open) {
+            HStack(spacing: 8) {
+                Text(line)
+                    .font(.system(size: 13))
+                    .foregroundStyle(OnboardTheme.muted)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(OnboardTheme.muted.opacity(0.7))
+                Spacer(minLength: 0)
+            }
+            .padding(.vertical, 4)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(line)
+        .accessibilityHint("Opens everything she heard")
     }
 }
 

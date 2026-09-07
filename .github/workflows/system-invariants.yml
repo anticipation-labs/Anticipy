@@ -53,6 +53,10 @@ jobs:
           node-version: '24'
       - name: Install runtime test dependencies
         run: python -m pip install pytest requests httpx tzdata boto3 playwright numpy
+      - name: Install the local Worker runtime used by database tests
+        run: |
+          npm ci --prefix migration/workers
+          ln -s migration/workers/node_modules node_modules
       - name: Prove brain and storage invariants
         run: pytest -q
       - name: Prove browser invariants
@@ -77,6 +81,11 @@ jobs:
           node-version: '24'
       - name: Prove Worker invariants and types
         run: cd migration/workers && npm ci && npm test && npx tsc --noEmit
+      - name: Prove brain fleet lifecycle and erasure
+        run: |
+          npm ci --prefix migration/workers/brain
+          npm test --prefix migration/workers/brain
+          npm run typecheck --prefix migration/workers/brain
 
   # The Mac recorder's suites (app/macos/Tests/run_all.sh: capture core,
   # meeting archive, transcript wire). Every one compiles the real production

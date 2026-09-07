@@ -306,6 +306,10 @@ struct SupervisedReadView: View {
     /// content closure being re-evaluated — which Home does every three
     /// seconds, on every poll. An `@ObservedObject` over a freshly built read
     /// would wipe her narration mid-sentence.
+    /// MOTION SENSITIVITY. Read so the animations below can stand down; the
+    /// beat is kept either way, so a flow under Reduce Motion takes the same
+    /// time and simply shows its finished frame rather than travelling to it.
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @StateObject private var read: SupervisedRead
     @Environment(\.dismiss) private var dismiss
     /// Whether the app is FRONTMOST. Half of `driveKey`, and therefore half of
@@ -481,7 +485,7 @@ struct SupervisedReadView: View {
             }
             if facts.count > shownFacts {
                 for fact in facts[shownFacts...] {
-                    withAnimation(Theme.spring) { read.found(fact) }
+                    withAnimation(reduceMotion ? nil : Theme.spring) { read.found(fact) }
                 }
                 shownFacts = facts.count
             }
@@ -605,7 +609,7 @@ struct SupervisedReadView: View {
             // a veto on a fact does not yank the log.
             .onChange(of: read.lines.count) { _ in
                 guard let last = read.lines.last else { return }
-                withAnimation(Theme.spring) { proxy.scrollTo(last.id, anchor: .bottom) }
+                withAnimation(reduceMotion ? nil : Theme.spring) { proxy.scrollTo(last.id, anchor: .bottom) }
             }
         }
     }
@@ -661,7 +665,7 @@ struct SupervisedReadView: View {
                 VStack(alignment: .leading, spacing: Theme.Space.tight) {
                     Button {
                         Haptics.engage()
-                        withAnimation(Theme.spring) { read.forget(fact) }
+                        withAnimation(reduceMotion ? nil : Theme.spring) { read.forget(fact) }
                     } label: {
                         HStack(alignment: .top, spacing: Theme.Space.snug) {
                             // Serif and 19pt: this is a conclusion, not a log

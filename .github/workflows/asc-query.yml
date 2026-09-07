@@ -1,0 +1,102 @@
+# Ask App Store Connect a question. READ ONLY, and manual only.
+#
+# WHY THIS EXISTS. On 2026-09-06 build 153 was VALID and the owner's phone was
+# on build 88. "VALID" is Apple's verdict on the BYTES — processing finished,
+# the archive is installable — and says nothing about whether any human can see
+# the build in TestFlight. That needs a tester group, and an external group
+# needs a review as well. Nothing in this repo could ask, because the App Store
+# Connect credentials live only in CI: there is no signing identity and no .p8
+# on the development Mac, which is the same reason iOS ships from here rather
+# than from a laptop.
+#
+# WHAT IT WILL NEVER DO ON ITS OWN. It does not attach a build to a group and
+# does not submit anything for review. It CAN add one named person to one named
+# tester group, and that is the only write it has: it is dispatched by hand,
+# with the address typed in, and it refuses unless `confirm` is the literal
+# word INVITE. Apple emails a real human being the moment it succeeds, which is
+# why the confirmation is a typed word rather than a checkbox somebody can
+# leave ticked from last time.
+name: Ask App Store Connect
+
+on:
+  workflow_dispatch:
+    inputs:
+      build:
+        description: "Build number to ask about (e.g. 153)"
+        required: true
+        type: string
+      bundle:
+        description: "Bundle id"
+        required: false
+        default: "ai.anticipy.app"
+        type: string
+      email:
+        description: "Tester to add (leave blank to only ask, never write)"
+        required: false
+        default: ""
+        type: string
+      first:
+        description: "Tester first name"
+        required: false
+        default: ""
+        type: string
+      last:
+        description: "Tester last name"
+        required: false
+        default: ""
+        type: string
+      group:
+        description: "Tester group to add them to"
+        required: false
+        default: "Internal"
+        type: string
+      confirm:
+        description: "Type INVITE to actually send the invitation email"
+        required: false
+        default: ""
+        type: string
+
+concurrency:
+  group: asc-query-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  ask:
+    runs-on: macos-15
+    timeout-minutes: 10
+    env:
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # Same shape as the TestFlight workflow's key step, so there is one way
+      # this credential is materialised rather than two.
+      - name: Put the App Store Connect key where the helper looks
+        env:
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          mkdir -p $RUNNER_TEMP/asc
+          echo -n "$ASC_KEY_P8" | base64 --decode -o $RUNNER_TEMP/asc/AuthKey.p8
+          chmod 600 $RUNNER_TEMP/asc/AuthKey.p8
+
+      - name: Invite a tester
+        if: inputs.confirm == 'INVITE' && inputs.email != ''
+        env:
+          ASC_KEY_PATH: ${{ runner.temp }}/asc/AuthKey.p8
+        run: |
+          python3 app/ios/scripts/app_store_connect.py invite-tester \
+            --bundle "${{ inputs.bundle }}" --group "${{ inputs.group }}" \
+            --email "${{ inputs.email }}" \
+            --first "${{ inputs.first }}" --last "${{ inputs.last }}" \
+            --confirm INVITE
+
+      - name: Who can install this build
+        env:
+          ASC_KEY_PATH: ${{ runner.temp }}/asc/AuthKey.p8
+        run: |
+          python3 app/ios/scripts/app_store_connect.py who-can-install \
+            --bundle "${{ inputs.bundle }}" --build "${{ inputs.build }}"
