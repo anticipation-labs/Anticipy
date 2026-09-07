@@ -1229,15 +1229,42 @@ def browser_reachable(owner_ref: str = "") -> bool:
         return True
 
 
+def publish_stall_notice(anticipy, job: dict, situation: str, fallback: str) -> None:
+    """Keep a blocker visible in-app; quiet hours defer only the optional text."""
+    local_key = f'stalled:{job["id"]}:{job.get("status")}'
+    existing = delivered_stall_notice(job)
+    if existing:
+        said = str(existing.get("text") or "").strip()
+    else:
+        if sent_moments_ago(local_key):
+            return
+        said = anticipy._voice({"situation": situation,
+                               "task": str(job.get("goal") or "")}) or fallback
+        saved = persist_stall_notice(job, said)
+        if not saved:
+            return
+        said = str(saved.get("text") or "").strip() or said
+        mark_sent(local_key)
+    hour = datetime.now(CLOCK_TZ).hour
+    if CLOCK_QUIET_START <= hour or hour < CLOCK_QUIET_END:
+        record_stall_notification_status(job, "sms_deferred")
+        return
+    if not can_reach_owner_fresh(anticipy):
+        record_stall_notification_status(job, "sms_skipped")
+        return
+    if claim_stall_notification_attempt(job) is not True:
+        return
+    told = anticipy.notify_owner(said)
+    skipped = isinstance(told, dict) and bool(told.get("skipped"))
+    state = "sms_sent" if told and not skipped else (
+        "sms_skipped" if skipped else "sms_failed")
+    record_stall_notification_status(job, state)
+
+
 def report_stalled_work(anticipy) -> None:
     """Say so when work cannot start because his browser is not there."""
     try:
-        if browser_reachable():
-            return
-        # Nothing here is urgent enough to wake him. Same quiet hours the
-        # clock respects — a stalled task at 3am can wait until morning.
-        hour = datetime.now(CLOCK_TZ).hour
-        if CLOCK_QUIET_START <= hour or hour < CLOCK_QUIET_END:
+        if browser_reachable(owner_ref=getattr(anticipy, "owner_ref", "")):
             return
         since = (datetime.now(timezone.utc) - timedelta(minutes=STALL_MINUTES)
                  ).strftime("%Y-%m-%d %H:%M:%S")
@@ -1258,7 +1285,7 @@ def report_stalled_work(anticipy) -> None:
         # The api lane is excluded for the research lane's reason exactly:
         # run_api_jobs below runs it in THIS process, through the Worker's
         # /hands/api/run door, and his browser is not what it waits on.
-        filt = (f'(status="queued" || status="running") && updated<="{since}"'
+        filt = (f'(status="queued" || (status="running" && updated<="{since}"))'
                 f' && lane!="research" && lane!="{DEVICE_CALENDAR_LANE}"'
                 f' && lane!="{LANE_API}"')
         scope = owner_filter(anticipy)
@@ -1285,66 +1312,14 @@ def report_stalled_work(anticipy) -> None:
             # worth his attention — it was never something he asked her for.
             if ambient_job(job):
                 continue
-            # The app notice is the delivery.  It is keyed to this exact job
-            # and observed status; fuzzy goal matching made two separate
-            # errands with the same words silence each other.  It is persisted
-            # before any optional phone effect, so no phone/Twilio outage can
-            # recreate the reported Go -> no browser -> indefinite silence.
-            local_key = f'stalled:{job["id"]}:{job.get("status")}'
-            try:
-                existing_notice = delivered_stall_notice(job)
-            except Exception as exc:
-                print(f"stall notice for {job['id']} could not be verified: "
-                      f"{exc}")
-                continue
-            if existing_notice:
-                said = str(existing_notice.get("text") or "").strip()
-            else:
-                # A successful app write whose fake/read replica has not yet
-                # caught up must not become a second SMS in the same process.
-                if sent_moments_ago(local_key):
-                    continue
-                midway = job.get("status") == "running"
-                said = anticipy._voice({
-                    "situation": (
-                        "this stopped partway because their browser closed — "
-                        "say so plainly, no alarm, and that you will pick it "
-                        "up when it is open again" if midway else
-                        "you are ready to do this but their browser is not "
-                        "open, so nothing can run — tell them plainly, no "
-                        "alarm, and that it will go as soon as it is"),
-                    "task": goal,
-                }) or (
-                    f"{goal} stopped partway — your Chrome closed. I'll pick "
-                    f"it up when it's open." if midway else
-                    f"I'm ready to finish {goal} — I just need your Chrome open.")
-                saved_notice = persist_stall_notice(job, said)
-                if not saved_notice:
-                    # No external side effect without the primary app result.
-                    # A later sweep remains free to retry the feed write.
-                    continue
-                said = str(saved_notice.get("text") or "").strip() or said
-                mark_sent(local_key)
-
-            if not can_reach_owner_fresh(anticipy):
-                record_stall_notification_status(job, "sms_skipped")
-                print(f"stalled (no browser): {job['id']} — visible in the "
-                      "app; no verified SMS route")
-                continue
-            attempt_claim = claim_stall_notification_attempt(job)
-            if attempt_claim is not True:
-                print(f"stalled (no browser): {job['id']} — visible in the "
-                      "app; optional text was not repeated")
-                continue
-            # The installed effect guard resolves canonical state once more
-            # inside this call, immediately before the transport is touched.
-            told = anticipy.notify_owner(said)
-            skipped = isinstance(told, dict) and bool(told.get("skipped"))
-            sms_state = "sms_sent" if told and not skipped else (
-                "sms_skipped" if skipped else "sms_failed")
-            record_stall_notification_status(job, sms_state)
-            print(f"stalled (no browser): {job['id']} — visible in the app; "
-                  f"text {sms_state.removeprefix('sms_')}")
+            publish_stall_notice(anticipy, job,
+                "This task cannot run because their Chrome browser is not "
+                "connected and online. You do not know whether Chrome is "
+                "closed or has never been paired. Explain the missing access, "
+                "and point them to Settings → Browser in Anticipy to check "
+                "the connection. Nothing has finished; do not promise a time.",
+                f"{goal} is waiting for your browser. Open Chrome and check "
+                "Settings → Browser in Anticipy to connect it.")
     except Exception as e:
         print(f"stalled-work report failed: {e}")
 
@@ -1395,11 +1370,6 @@ def report_unclaimed_device_work(anticipy) -> None:
     honest move is to say so and keep waiting.
     """
     try:
-        # Nothing here is urgent enough to wake him — same quiet hours the
-        # clock and the browser stall notice respect.
-        hour = datetime.now(CLOCK_TZ).hour
-        if CLOCK_QUIET_START <= hour or hour < CLOCK_QUIET_END:
-            return
         since = (datetime.now(timezone.utc)
                  - timedelta(minutes=DEVICE_UNCLAIMED_MINUTES)
                  ).strftime("%Y-%m-%d %H:%M:%S")
@@ -1449,76 +1419,10 @@ def report_unclaimed_device_work(anticipy) -> None:
             # ambient errand that cannot run was never something he asked for.
             if ambient_job(job):
                 continue
-            if already_raised(goal, decision="stalled"):
-                continue
-            # ...and the same again when the durable record could not be
-            # written. `already_raised` reads the event `post_event` writes
-            # AFTER the text has gone out, so a write outage made every pass
-            # believe nothing had been said and re-sent the notice every two
-            # seconds.
-            local_key = f'device-stalled:{job["id"]}:{job.get("status")}'
-            if sent_moments_ago(local_key):
-                continue
             midway = job.get("status") == "running"
-            # WHAT THIS FUNCTION IS ALLOWED TO CLAIM, and it is less than the
-            # first draft claimed. "It goes the moment the app is open" is a
-            # statement about the PHONE'S FUTURE BEHAVIOUR, and the brain
-            # cannot see the phone at all — the comment above this function
-            # spends a paragraph on exactly that: there is no heartbeat row,
-            # which is why "sitting at queued" is the only observation there
-            # is. `CalendarHandPolicy.decide` refuses on twenty-four
-            # enumerated causes (CalendarHandPolicy.swift:303-347). The mint
-            # point compares the three the routing key can see — act_type,
-            # reach and executor — so a row delivered here agrees with the
-            # phone about the ACT. The other twenty are invisible from this
-            # process: `.noWritableCalendar`, `.startAlreadyPast`,
-            # `.factsIncomplete`, `.approvalNotOnTheRow`, and so on. Every one
-            # of them produces the same picture — the app IS open, it IS
-            # refusing, and she is texting him that it is about to run.
-            # So the sentence says what was OBSERVED (it is still queued,
-            # nothing has happened) and promises nothing. An owner who is told
-            # the truth opens the app and sees a refusal; an owner promised it
-            # would run waits, and the promise is what makes the wait a lie.
-            said = anticipy._voice({
-                "situation": ("this stopped partway on their phone — say so "
-                              "plainly, no alarm, and that you are still "
-                              "holding it. You cannot see their phone, so you "
-                              "do not know why it stopped: make no promise "
-                              "about when it finishes, do not tell them that "
-                              "opening the app is enough, and never say it is "
-                              "done"
-                              if midway
-                              else "this is queued for their PHONE, not their "
-                              "computer, and the Anticipy app has not picked "
-                              "it up — tell them plainly, no alarm, that "
-                              "nothing has happened yet and you are still "
-                              "holding it. You cannot see their phone: it "
-                              "may be closed, or open and refusing this "
-                              "errand for a reason only it can see. So make "
-                              "no promise about whether or when it runs, do "
-                              "not tell them that opening the app is enough, "
-                              "do not give a time, and never say it is "
-                              "done"),
-                "task": goal,
-            # The goal is a free-form phrase, so the template wraps it rather
-            # than reading it as a noun: "I'm ready to put {goal} in your
-            # calendar" turns "put dinner Thursday 7pm in my calendar" into
-            # a sentence with two calendars in it. Same shape the browser
-            # fallback next door already uses.
-            }) or (f"{goal} stopped partway on your phone. It hasn't "
-                   f"finished, and I'm still holding it." if midway else
-                   f"{goal} — still waiting on your phone. The Anticipy app "
-                   f"hasn't picked it up, and nothing has changed yet.")
-            # A send that did not happen is not a send. `notify_owner` has
-            # returned truthy with no transport before and she stamped his
-            # questions delivered for ten hours.
-            if not anticipy.notify_owner(said):
-                print(f"device stall notice for {job['id']}: send failed, "
-                      f"not recording it")
-                continue
-            mark_sent(local_key)
-            post_event("anticipy_says", said, decision="stalled", goal=goal)
-            print(f"unclaimed on the device lane: {job['id']} — told him")
+            publish_stall_notice(anticipy, job,
+                'this stopped partway on their phone — say so plainly, no alarm, and that you are still holding it. You cannot see their phone, so you do not know why it stopped: make no promise about when it finishes, do not tell them that opening the app is enough, and never say it is done' if midway else 'this is queued for their PHONE, not their computer, and the Anticipy app has not picked it up — tell them plainly, no alarm, that nothing has happened yet and you are still holding it. You cannot see their phone: it may be closed, or open and refusing this errand for a reason only it can see. So make no promise about whether or when it runs, do not tell them that opening the app is enough, do not give a time, and never say it is done',
+                f"{goal} stopped partway on your phone. It hasn't finished, and I'm still holding it." if midway else f"{goal} — still waiting on your phone. The Anticipy app hasn't picked it up, and nothing has changed yet.")
     except Exception as e:
         print(f"device-lane report failed: {e}")
 
@@ -2604,7 +2508,7 @@ def record_stall_notification_status(job: dict, state: str) -> bool:
     job_id = str(job.get("id") or "").strip()
     job_status = str(job.get("status") or "").strip().lower()
     if not job_id or not job_status or state not in {
-            "sms_sent", "sms_failed", "sms_skipped"}:
+            "sms_sent", "sms_failed", "sms_skipped", "sms_deferred"}:
         return False
     owner_ref = str(job.get("owner_ref") or "")
     owner_id = str(job.get("owner") or "")

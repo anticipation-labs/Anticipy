@@ -37,3 +37,32 @@ Evidence: work/audit/overnight-sendblue-api-full-3.log (entire Worker suite),
 overnight-sendblue-typecheck-2.log, overnight-sendblue-final-focused-2.log
 (98 passed). Final full Python and deployment evidence are recorded in STATE.md.
 No messages were sent to real people by these tests.
+
+## Live configuration defect and repair
+
+API deploy34130412469 passed34 account/ownership checks and matched3273270.
+An additional live request found POST /sms/sendblue returning503: the API's
+SENDBLUE_WEBHOOK_SECRET binding was missing. The SendBlue dashboard already had
+an inbound URL at https://api.anticipy.ai/sms/sendblue and an existing masked
+secret. A masked field was initially misread as empty; that interpretation was
+corrected after reading the dashboard's own Copy control. The API503 is the
+confirmed defect. This can prevent incoming replies from reaching the brain.
+
+Configured a fresh shared secret in GitHub's encrypted secret store, the API
+Worker binding, and the authenticated SendBlue anticipationlabs dashboard.
+CI34131481917 verified unsigned403 and signed-invalid-JSON400, without creating
+any customer event or sending a message. Refreshed the provider dashboard and
+verified its stored secret equals the prepared value and the endpoint is still
+the intended API URL. The secret is never included in repository evidence.
+
+Commit998fca6 adds a repeatable narrow configuration operation and makes API
+release verification reject an unconfigured modern webhook or active retired
+endpoint. No message was sent from a real phone in this check: carrier-origin
+end-to-end receipt remains distinct from verified configuration/authentication.
+
+The provider account UI reports Free API Mode,1of10 contacts. This is an
+operational limit for new testers, not a claim of unlimited production texting.
+
+Provider contract: https://docs.sendblue.com/getting-started/webhooks/
+Evidence: overnight-sendblue-secret-install.log,overnight-sendblue-live-auth.json
+in work/audit. The first failed live probe is preserved, not overwritten.

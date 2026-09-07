@@ -1,26 +1,33 @@
 # Anticipy overnight repair — 7 September 2026
 
-## Latest checkpoint — 2026-09-07 14:03 UTC
+## Latest checkpoint — 2026-09-07 14:18 UTC
 
-- Effect repair 9a624068 is LIVE: brain run34128094202 verified8/8 runtime
-  sources b8b8ffa1ac81a79eff829eb6e01cc71e2bb67f15533028df9b525dcfdfcec6d5.
-- SendBlue-only runtime candidate verified: full Python3099passed2skipped
-  (overnight-sendblue-full-final.log),98 targetedpassed, full WorkerAPI suite
-  passed (overnight-sendblue-api-full-3.log), TypeScript check passed.
-  Old provider fallback/direct-arm attachment and webhook rewriting removed;
-  old POST/sms/inbound now410. Documentation: sendblue-retirement.md.
-  Commit and deploy API, verify old410/modern auth plus34 live checks, then
-  brain cap100 and verify8/8 live source. Candidate not yet live at checkpoint.
-- Next: immediate and accurate missing-browser/access explanation in app,
-  missing connection guidance, compound preparation, full50 current-model
-  transcript review, updatedPDF and honest shipped/tested/blocked matrix.
-- iOS164 remains VALID/InternalIN_BETA_TESTING. Sanket164 attached but Apple
-  blocks submission while159is in review. Personal installed extension0.15
-  remains unchanged because chrome://extensions was policy-blocked; do not
-  use alternate tooling to bypass that restriction.
-- Budget: gateway observed$10.6412 plus native reserved upperbound$4.1317.
-  Operating caps25+10 remain below user-authorized50. No real-person test SMS.
-- Simulator Today/mic stopped. Active local services89202/60349/UIbrain54948.
+- SendBlue-only API3273270 LIVE via34130412469,34accountchecks passed.
+  Added live probe found MISSING SENDBLUE_WEBHOOK_SECRET on API (503).
+  Provider already had a masked secret; initial empty-field interpretation
+  corrected.998fca6adds narrow CI secret operation and mandatory API auth probe.
+  CI34131481917 installed fresh secret; unsigned403/signed-invalid-JSON400.
+  Same secret saved in SendBlue anticipationlabs dashboard; refreshed readback
+  matched. Provider URL remains api.anticipy.ai/sms/sendblue. No real SMS sent.
+  Evidence sendblue-retirement.md,sendblue-live-auth.json. Provider Free API Mode
+  shows1of10contacts, so unlimited investor onboarding is not proven.
+- SendBlue-only brain998fca6 LIVE:34131571344 verified8/8 at14:16:37UTC,
+  source a8240bbebf4111303fcf2b2669321e83b4cffce24d9895d65cb682e7951aaeec.
+- Shared browser/phone stall-notice candidate: app first even at night,
+  daytime optional SMS exact-id dedup, immediate queued-browser explanation,
+  no unpaired→closed assumption.136targetedpassed; full3101passed2skipped.
+  Commit/deploy this next, then LIVE synthetic no-phone notice proof.
+-40development personas RUNNING session36647 in frozen detached checkout
+  /private/tmp/anticipy-overnight-998fca6; auditwork symlink points to mainwork.
+  Labelovernight-final-development-998; gateway observed10.64beforethisrun.
+  Do not edit the frozen checkout.10held-out cases not yet started.
+- iOS164 VALID/InternalIN_BETA_TESTING; Sanket164 attached, Apple159review
+  blocks further external submission. Personalextension0.15 notupdated because
+  chrome://extensions policyblocked; no bypass. SimulatorToday/micstopped.
+- New secret private0600filework/audit/sendblue-webhook-secret.txt and encrypted
+  GitHubsecret. Never print/stage it. Both OS/browser clipboards cleared.
+- More work: proactive connection offers, compound preparation, readable browser
+  results, general meaning shortcuts, final50review, updatedPDF/visual/audio.
 
 ## Previous checkpoint — 2026-09-07 13:39 UTC
 

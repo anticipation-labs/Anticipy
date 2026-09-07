@@ -285,7 +285,7 @@ def test_browser_lane_results_still_get_texted(monkeypatch):
 def test_stalled_work_never_flags_the_research_lane(monkeypatch):
     """'I just need your Chrome open' about a research job would be a false
     alarm — this same process runs that lane."""
-    monkeypatch.setattr(W, "browser_reachable", lambda: False)
+    monkeypatch.setattr(W, "browser_reachable", lambda *a, **k: False)
     # Disable quiet hours so the test does not depend on the wall clock.
     monkeypatch.setattr(W, "CLOCK_QUIET_START", 25)
     monkeypatch.setattr(W, "CLOCK_QUIET_END", 0)

@@ -310,7 +310,7 @@ def test_the_sweep_runs_before_the_poll(monkeypatch):
 
 # ------------------------------------------------------------ the neighbours
 def _no_quiet_hours(monkeypatch):
-    monkeypatch.setattr(W, "browser_reachable", lambda: False)
+    monkeypatch.setattr(W, "browser_reachable", lambda *a, **k: False)
     monkeypatch.setattr(W, "CLOCK_QUIET_START", 25)
     monkeypatch.setattr(W, "CLOCK_QUIET_END", 0)
 

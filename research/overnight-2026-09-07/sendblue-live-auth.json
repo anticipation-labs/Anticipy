@@ -1,0 +1,12 @@
+{
+  "checked_at": "2026-09-07T14:13:00Z",
+  "api_commit": "32732707f427dfa8a9c5446697f3a795347eb3c8",
+  "configuration_commit": "998fca62f1e46248455796da22b3614ede2ee144",
+  "configuration_run": 34131481917,
+  "unsigned_http": 403,
+  "signed_invalid_json_http": 400,
+  "provider_saved_secret_readback_matches": true,
+  "provider_url": "https://api.anticipy.ai/sms/sendblue",
+  "real_messages_sent": 0,
+  "carrier_origin_end_to_end_tested": false
+}
