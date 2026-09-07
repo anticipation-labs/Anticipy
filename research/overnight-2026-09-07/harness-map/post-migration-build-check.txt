@@ -1,0 +1,19 @@
+The iOS source has changed since build 165 was set, and the build
+number has not moved:
+ app/ios/Anticipy/AnticipyApp.swift                 | 26 +++++++++++-----------
+ app/ios/Anticipy/Audio/CaptureSourcePolicy.swift   |  4 ++--
+ app/ios/Anticipy/Audio/ListenJournal.swift         |  8 +++----
+ app/ios/Anticipy/Backend/AnticipyBackend.swift     | 16 ++++++-------
+ app/ios/Anticipy/Backend/JobReceipt.swift          |  4 ++--
+ .../Backend/RetryReconciliationPolicy.swift        |  2 +-
+ app/ios/Anticipy/ContextGrant.swift                |  2 +-
+ app/ios/Anticipy/DashboardPolicy.swift             |  2 +-
+ app/ios/Anticipy/Views/ContentView.swift           |  4 ++--
+ .../Anticipy/Views/SettingsPrivacyDataView.swift   |  2 +-
+ 10 files changed, 35 insertions(+), 35 deletions(-)
+
+Two different apps would call themselves build 165. That is how
+nineteen commits shipped as build 76 and 'which build are you holding'
+stopped having an answer. Bump CURRENT_PROJECT_VERSION in
+app/ios/project.yml, say in its comment what changed, then run:
+  cd app/ios && xcodegen generate

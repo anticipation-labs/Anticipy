@@ -2,6 +2,14 @@
 
 ## Latest harness source audit — approximately 19:00 UTC
 
+- Publication update: the team merged PR #61 as `5ef2a96a` during this audit.
+  The report has an eighth-page delta; earlier OPEN/CONFLICTING statements are
+  historical. Audit commits rebased onto that merge. Local asset path changed
+  to `migration/workers/public`, and the local API was restarted.
+- Repeated 132 targeted tests pass on the merged tree. The new iOS build check
+  FAILS because ten source files changed while the build stayed 165. No new
+  build was authored here. This is a release blocker, preserved in evidence.
+
 - User requested a fast, evidence-based explanation, not another repair run.
   Source snapshot `e370340e`; full 2,723 tracked-file census, 20-feature matrix,
   static imports and route-dispatch evidence: `harness-map/REPORT.md`,

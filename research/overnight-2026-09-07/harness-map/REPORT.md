@@ -10,6 +10,8 @@ and a pair of hands
 ## A helper with a notebook
 and a pair of hands
 
+Late update: the team merged PocketBase removal as 5ef2a96a during publication. Page 8 explains the new paths and a newly failing build-number check.
+
 The AI model supplies judgment. The harness is the surrounding software that gives it your words, memory and tools, keeps track of work, checks permission, and records what happened.
 
 Flow: input -> saved event -> context and memory -> model judgment -> tracked task -> permitted hand -> checked result -> app/text.
@@ -156,3 +158,35 @@ Scope you can trust
 This was a repository-wide inventory and source-path audit at e370340e, not a line-by-line correctness review of 2,723 files. Binary contents, every third-party service and every possible user journey were not re-tested. Historical comments were checked against executable code where findings depended on them. All gaps are source findings unless specifically labeled live proof.
 
 Entry points: migration/workers/src/index.ts:166; brain/container_entry.py:328; brain/worker.py:5097; extension/manifest.json:26. Reproduce the map by following those entry points and the stored inventory.
+
+ANTICIPY / HARNESS MAP / 08
+
+Migration update during this audit
+
+## Migration update during this audit
+
+The team merged PocketBase-removal PR #61 as 5ef2a96a while this report was being saved. Pages 1-7 describe the pinned e370340e inspection; this page records the subsequent delta. The earlier assertion that PR #61 was still open is now historical.
+
+| Before | Current merged path |
+| --- | --- |
+| brain/pb.py | brain/backend.py |
+| migration/workers/src/pb/ | migration/workers/src/api/ |
+| backend/pb_public/ | migration/workers/public/ |
+| app/macos/AnticipyMac/PocketBase.swift | app/macos/AnticipyMac/MacBackend.swift |
+| PocketBase hooks, migrations and old rigs | Removed from the current tree; available in Git history. |
+
+What the merge changes
+
+The merge changes 409 paths and leaves 2,601 tracked paths before this audit is added. Core changes inspected are import/client renames and historical wording cleanup. Removing the old files does not supply the missing calendar executor, pendant decoder or whole-conversation execution funnel.
+
+Those findings were checked again on the merged tree: the sorter still forces on to shadow, pendant audio callbacks are still nil, native EventKit writes are still absent from the app search, and the checked-in API schedule still contains only the nightly tick. All 132 selected wiring checks passed again on the merged source.
+
+A new release blocker
+
+The iOS build-number check now fails: ten iOS source files changed during the migration while the number remains 165. These changes are predominantly comments, but the repository rule tracks source identity. A synchronized new build number in both project files is needed before the next release. This audit did not create or upload a new phone build.
+
+Local environment and evidence
+
+The audit commits were rebased onto the team merge without overwriting it. The local development asset directory was updated to migration/workers/public and the current-source API restarted. This only adjusts the local development configuration; it is not a production deployment.
+
+The original census and frozen GitHub source links remain valid for e370340e. The migration delta, repeated test output and failing build-identity output are stored beside the report. Live fleet a4f4871a was observed before publication; a Git merge alone does not replace that running image.
