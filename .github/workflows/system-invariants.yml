@@ -122,4 +122,7 @@ jobs:
           /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$app/Contents/Info.plist"
           # The binary must carry the brain's address and not the retired one.
           strings "$app/Contents/MacOS/AnticipyMac" | grep -q 'https://api.anticipy.ai'
-          ! strings "$app/Contents/MacOS/AnticipyMac" | grep -q 'railway.app'
+          if strings "$app/Contents/MacOS/AnticipyMac" | grep -q 'railway.app'; then
+            echo "::error::the binary still names the retired Railway backend"
+            exit 1
+          fi

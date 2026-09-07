@@ -130,7 +130,10 @@ jobs:
           xcrun stapler validate "$app"
           spctl -a -vvv -t exec "$app"
           strings "$app/Contents/MacOS/AnticipyMac" | grep -q 'https://api.anticipy.ai'
-          ! strings "$app/Contents/MacOS/AnticipyMac" | grep -q 'railway.app'
+          if strings "$app/Contents/MacOS/AnticipyMac" | grep -q 'railway.app'; then
+            echo "::error::the binary still names the retired Railway backend"
+            exit 1
+          fi
           echo "MAC_BUILD=$build" >> "$GITHUB_ENV"
           echo "MAC_VERSION=$version" >> "$GITHUB_ENV"
           shasum -a 256 "$zip"
