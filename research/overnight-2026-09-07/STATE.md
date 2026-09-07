@@ -1,5 +1,21 @@
 # Anticipy overnight repair — 7 September 2026
 
+## Latest workspace sync — after the 18:32 UTC Mac merge
+
+- User requested local/cloud synchronization. Fast-forwarded the main checkout
+  to `776cbab5`, including the team's PR #59 merge. PR #61 is OPEN/CONFLICTING
+  against cloudflare-backend and was not merged.
+- Stopped the identified audit UI brain, old frozen-source API and model gateway.
+  Normal local API now runs current source on 8787 with `work/mac-dev/state`;
+  inspector 9239. Do not restart the frozen audit server or old model workers
+  automatically. They would undo the user's environment cleanup.
+- Backed up local development state and applied the missing connection-command
+  migration locally. All data and frozen evidence were preserved.
+- Baseline iOS suites pass; merged Mac suites and 118 related Python tests pass;
+  iOS build identity 165 passes; local API health and SQLite integrity pass.
+- Full receipt and environment ownership: `docs/WORKSPACE-SYNC-2026-09-07.md`.
+  No production deployment or phone build was initiated by this sync.
+
 ## Latest checkpoint — 2026-09-07 14:55 UTC
 
 - Brain0800b2a LIVE via34132224974;8/8 workers verified. Designated, phone-disabled

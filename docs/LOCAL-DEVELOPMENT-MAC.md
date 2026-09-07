@@ -1,5 +1,9 @@
 # Anticipy development on Omar's Mac
 
+**Latest workspace state:** [7 September sync](WORKSPACE-SYNC-2026-09-07.md).
+The current-source local API is restored; the old audit API and model workers
+are stopped. The setup versions below describe the original baseline.
+
 Prepared 2026-09-06 from `cloudflare-backend` at
 `d93682f80b14c40d5d4ba445ea6333e4a5a58e33`. The governing files are
 `HARNESS-LAWS.md`, `CLAUDE.md`, and `AGENTS.md`.
