@@ -98,6 +98,7 @@ jobs:
           cap="$DEPLOY_CAP"
           [[ "$cap" =~ ^[0-9]+$ ]] && [ "$cap" -le 100 ] || { echo "Invalid capacity"; exit 1; }
           echo "Deploying anticipy-brain with discovery cap = $cap"
+          runtime_source=$(python3 -c 'from brain.runtime_status import source_hash; print(source_hash())')
           # wrangler builds the image from brain/Dockerfile remotely and deploys
           # OwnerBrain + BrainSupervisor. --containers-rollout gradual is the safe
           # default; the first run should be cap=1.
@@ -106,6 +107,7 @@ jobs:
             --keep-vars \
             --tag "$GITHUB_SHA" \
             --var ANTICIPY_MAX_OWNER_WORKERS:"$cap" \
+            --var ANTICIPY_EXPECTED_RUNTIME_SOURCE:"$runtime_source" \
             --containers-rollout immediate
 
       - name: Verify the active fleet, running source and current memory snapshots

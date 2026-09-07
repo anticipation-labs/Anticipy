@@ -21,6 +21,7 @@
  */
 import { planFleet, parseCap } from "./plan";
 import { OwnerLifecycle } from "./owner_lifecycle";
+import { requireRuntimeSource } from "./runtime_refresh";
 import { fleetStatus, type FleetObservation, type WorkerObservation } from "./fleet_status";
 import { drainMemoryPurges, type PurgeEnv } from "./purge";
 import { Container, getContainer } from "@cloudflare/containers";
@@ -96,7 +97,15 @@ export class OwnerBrain extends Container<BrainEnv> {
       // must never auto-start a container after a crash or erasure.
       if (!this.ctx.container) throw new Error("container runtime unavailable");
       const response = await this.ctx.container.getTcpPort(8731).fetch("http://container/health");
-      await this.ctx.storage.put("last_health", await response.json());
+      const health = await response.json() as WorkerObservation;
+      await this.ctx.storage.put("last_health", health);
+      if (this.env.ANTICIPY_EXPECTED_RUNTIME_SOURCE) {
+        const prefix = String(this.env.ANTICIPY_STATE_R2_PREFIX || "owners").replace(/^\/+|\/+$/g, "");
+        await requireRuntimeSource(String(this.env.ANTICIPY_EXPECTED_RUNTIME_SOURCE),
+          health.source_sha256, this.ctx.storage,
+          () => this.env.OWNER_STATE.head(`${prefix}/${owner.id}/memory.db`),
+          () => this.stop());
+      }
     },
     async () => { await this.destroy(); },
   );

@@ -290,3 +290,19 @@ archives are not product-account stores and are excluded from this reset.
 
 The PDF was regenerated with these current outcomes, all 50 exemplars and explicit
 coverage limitations; all 13 pages were rendered and visually reviewed.
+
+Read-only inspection 34085906704 reports the latest container rollout completed
+and five instances on the new image. Three account DOs have no deployment link in
+that listing yet still answer with the old runtime response. This contradicts
+the assumption that more waiting alone will converge. A recovery now compares the
+expected runtime source supplied by CI, checks a recent nonempty R2 memory object,
+and signals an old image once with SIGTERM. It does not use SIGKILL, does not
+restart a matching image waiting for its first snapshot, and cannot repeatedly
+interrupt a flush. Missing/stale snapshots refuse automatic restart. Unit checks
+cover these conditions; live recovery remains to be observed.
+
+Composio's project Users page was inspected through the actual dashboard. It
+shows only the synthetic probe account, with one expired Google Calendar
+connection and no active account. The unused temporary API-key form was
+cancelled without creating a key. No real Google connection is available for
+authenticated integration execution yet.
