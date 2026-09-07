@@ -38,6 +38,9 @@ catalog access leave the existing browser explanation available.
 
 This covers explicit queued browser tasks. It does not yet supply arbitrary
 multi-step API execution or a provider choice the owner never identified.
-Production deployment and a phone-disabled live worker observation are required
-before claiming the new path is live. An in-app connection link must also be
-tappable; that UI verification is being handled separately.
+The API and brain deployed f988aa8 successfully. The actual live worker saved a
+Gmail connection offer in9.37seconds on the designated phone-disabled probe:
+`work/audit/overnight-task-access-live-1.json`. It asked to connect Gmail, kept the
+job queued, then the test cancelled the task and restored its fictional phone.
+No real message was sent. Build165 makes the resulting HTTP/HTTPS links tappable;
+its simulator test opened the exact test URL and returned to the conversation.

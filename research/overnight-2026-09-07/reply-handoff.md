@@ -30,3 +30,12 @@ actual identity evidence. No phrase classifier or wordlist was added.
   verdict. The observed question is evidence, not a claim of full task completion.
 - Live source rollout and phone-disabled production reply observation remain
   required. Compound preparation can still be held before useful reads.
+
+## Live release verified at15:58UTC
+Commit05e5ed2, CI34140365066:8/8 current processes and fresh durable snapshots,
+source197e8cf1883680cc8fd11262fbb274644e55c4732f80743c04e61fe4f82725ae.
+The actual probe reply preserved the Avery Chen/Avery Diaz question. The
+subsequent task falsely completed with a web how-to response instead of a draft;
+that distinct downstream failure is OPEN in morning-status.md. The first probe's
+empty reply list was a harness attribution error: ordinary replies omit
+parent_line. A later owner-scoped read recovered the actual outputs.

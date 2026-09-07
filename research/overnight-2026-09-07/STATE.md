@@ -504,3 +504,56 @@ and held-out/API-connection tests, clean synthetic accounts, update visual PDF.
 -Next commit/deploy the speech fix; verify8/8 live source/snapshots again.
   Then memory/source retrieval before questions, remaining active semantic
   shortcuts, browser response formatting, full queue/API execution and UI QA.
+
+## 2026-09-07 15:48 UTC — morning status, unfinished work explicit
+- User awake and asking for exact status. Reported concrete live repairs and
+  limits, not a completion claim. Full audit and end-to-end acceptance unfinished.
+- API and brain f988aa8 deployed; brain CI34137279242 passed all8 current workers.
+  Live missing-Gmail offer passed9.37s on designated phone-disabled probe,
+  overnight-task-access-live-1.json. Seven-row backlog probe also passed.
+- iOS165 commit844c8a3, CI34138060603 succeeded. ASC query34139816700 succeeded;
+  read actual output before calling it installable. Tappable URLs verified in
+  simulator, plus full iOS tests and simulator build.
+- Fifty fictional-person planning observations complete after four infrastructure
+  recovery runs:36 development +4 recovery +10 heldout. Not50 completed tasks.
+  Manual review found lost goal-less questions, discarded memory answers, and
+  assumed ambiguous contact identity. Candidate repair dirty in core/conversation/
+  readiness; full3105+2skipped plus26 focused passed. Persona35 and43 live-model
+  regressions correct;10 rerunning with local service-token config corrected.
+- Ambient12-case set: onlycase10 ran in first attempt because runner defaults
+  --ids10. Remaining11 now explicit in overnight-ambient-full-998b. Earlier
+  -full-998/-10b fixture setup403 due omitted local service-token override,
+  before brain/model calls. Preserve failures, do not count them as model fails.
+- Metered model gateway port8790 operating ceiling35, native reservation ceiling10;
+  combined ceiling45 below authorized50. Observed gateway spend16.78.
+  Current localAPI frozen998 port8787, token overnight-local-service-only.
+- Final PDF builder exists but stale164; update release/evidence/limitations,
+  render allpages, and generate current short audio before handing off.
+- Open: full carrier roundtrip, per-task delivery receipts, personal extension
+  update blocked by browser security policy, external Apple review, compound
+  action prep/execution, three registered legacy meaning shortcuts and others.
+
+## 2026-09-07 16:00 UTC — morning deliverable and next repair
+- Latest brain05e5ed2, CI34140365066 SUCCESS:8/8 source/process/fresh-snapshot
+  verified at15:58UTC, source197e8cf1883680cc8fd11262fbb274644e55c4732f80743c04e61fe4f82725ae.
+  Earlier designated-probe startup gap resolved. Inspect34140861796 had0
+  lifecycle failures in23 observed events.
+- iOS165 available Internal; ASC34139816700/34140480094. Sanket165attached,
+  testerNOT_INVITED, externalREADY_FOR_BETA_SUBMISSION. Apple refuses submission
+  while another train build is in review. Do not claim external installable.
+- All12 ambient replays finished:11 planning outcomes; case9 private volunteer
+  draft wrongly ignored as dictation. Preserve/fix via context/model, no rules.
+- LIVE FALSE COMPLETION found: same production probe returned the Avery
+  clarification, then jobdone contained SharePoint how-to web results instead
+  of the requested draft. See overnight-reply-live-1-followup.json. Primary
+  next repair is routing/outcome verification, not polishing the acknowledgement.
+  Probe original falsely said no replies because ordinary replies omitparent_line;
+  owner-scoped read recovered them. Code probe attribution corrected. Phone
+  restored, createdjobcancelled; secondcontext-answercaseNOTRUN.
+- Final fullPython3109passed2skipped. Budgetgatewayobserved~18; operating35.
+  Native reserved11.631602, ceiling12. Combinedceilings47within50. Do notreset.
+- PDF20pages and89-second synthetic voice explanation prepared. morning-status.md
+  is user-readable currenttruth. persona-planning-review containsall50 and
+  ambient-review all12. No zero-defect/full50-execution claim.
+- RepairheartbeatACTIVE; workNOTCOMPLETE. Next: false completion, ambientdictation
+  miss, carrierroundtrip/receipts, realaccount/browserexecution, legacyshortcuts.

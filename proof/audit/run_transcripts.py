@@ -147,7 +147,8 @@ def run_person(person, label, timeout):
                 row = request("GET", "/api/collections/events/records/" + transcript["id"])
                 if row.get("decision") not in ("", "hearing", "processing", "claimed"):
                     result["transcript"] = row
-                    result["state"] = "observed_needs_semantic_review"
+                    result["state"] = ("model_unavailable" if row.get("decision") == "unavailable"
+                                       else "observed_needs_semantic_review")
                     break
                 if process.poll() is not None:
                     raise RuntimeError("brain worker exited before a decision")

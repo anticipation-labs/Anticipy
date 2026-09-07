@@ -51,3 +51,9 @@ full Python suite (3103 passed,2 skipped) pass. The PocketBase runtime fixture
 now provisions its own temporary test administrator before startup, avoiding an
 unwanted installer tab on the developer's Mac. Live seven-task verification is
 required after deployment; none of these checks sends to a real phone.
+
+## Backlog proof after pagination repair
+Live seven-job probe overnight-stall-backlog-1.json passed in67.7seconds: each
+still-queued job received exactly one app notice, including rows beyond the old
+first-five limit. All seven were cancelled and the fictional phone restored.
+The designated production probe had phone delivery disabled throughout.

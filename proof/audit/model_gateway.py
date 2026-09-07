@@ -166,10 +166,13 @@ def prepare(payload, pricing):
 
 
 class Gateway:
-    def __init__(self, directory: Path):
+    def __init__(self, directory: Path, operating_limit=25.0):
         self.directory = directory
         self.pricing = json.loads((directory / "model-pricing.json").read_text())
-        self.budget = Budget(directory / "spend.json")
+        authorized = float(json.loads((directory / "spend.json").read_text())["budget_usd"])
+        if not math.isfinite(operating_limit) or not 0 < operating_limit <= authorized:
+            raise ValueError("Operating ceiling must fit inside the authorized ledger budget")
+        self.budget = Budget(directory / "spend.json", operating_limit=operating_limit)
         self.key = json.loads((directory / "secrets.json").read_text())["OPENROUTER_API_KEY"]
         token_file = directory / "gateway-token"
         if not token_file.exists():
@@ -202,8 +205,8 @@ class Gateway:
             raise
 
 
-def serve(directory, port):
-    gateway = Gateway(directory)
+def serve(directory, port, operating_limit=25.0):
+    gateway = Gateway(directory, operating_limit=operating_limit)
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *_):
@@ -248,7 +251,7 @@ def serve(directory, port):
             self.answer(200, result)
 
     server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
-    print(f"Audit model transport listening on 127.0.0.1:{port}; US$25 operating ceiling inside US$50 authorized total", flush=True)
+    print(f"Audit model transport listening on 127.0.0.1:{port}; US${operating_limit:g} operating ceiling; authorized ledger budget unchanged", flush=True)
     server.serve_forever()
 
 
@@ -256,5 +259,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--state", type=Path, default=DEFAULT_STATE)
     parser.add_argument("--port", type=int, default=8790)
+    parser.add_argument("--operating-limit", type=float, default=25.0)
     args = parser.parse_args()
-    serve(args.state, args.port)
+    serve(args.state, args.port, args.operating_limit)

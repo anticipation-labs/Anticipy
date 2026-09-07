@@ -1,0 +1,740 @@
+{
+  "scope": "50 fictional people; real models and whole local ingestion/planning worker, external execution arms disabled. Manual outcome review, not blanket pass.",
+  "cases": [
+    {
+      "person": 1,
+      "trace": "overnight-final-development-998/auditperson0001",
+      "source_sha256": "aaa9929a82a4cb46c985a17039b6e5e0d003c145b46a1b34aa08b167a842841c",
+      "decision": "new_request",
+      "jobs": [
+        {
+          "status": "queued",
+          "goal": "draft a note to Alex Kim with two site-visit times next week"
+        }
+      ],
+      "review": "Planning observed; complete requested outcome not executed by this harness.",
+      "reply_excerpt": "Drafting the site-visit note is queued. I assumed you meant Alex Kim, so let me know if it's a different Alex.",
+      "complete_real_task_proven": false
+    },
+    {
+      "person": 2,
+      "trace": "overnight-final-development-998/auditperson0002",
+      "source_sha256": "aaa9929a82a4cb46c985a17039b6e5e0d003c145b46a1b34aa08b167a842841c",
+      "decision": "new_request",
+      "jobs": [
+        {
+          "status": "queued",
+          "goal": "check the school pickup calendar and draft a message to your sister Sam about covering Wednesday pickup"
+        }
+      ],
+      "review": "Planning observed; complete requested outcome not executed by this harness.",
+      "reply_excerpt": "The calendar check and message draft for Wednesday, Sept 9 are queued. I'm assuming the sister you mean is Sam.",
+      "complete_real_task_proven": false
+    },
+    {
+      "person": 3,
+      "trace": "overnight-final-development-998/auditperson0003",
+      "source_sha256": "aaa9929a82a4cb46c985a17039b6e5e0d003c145b46a1b34aa08b167a842841c",
+      "decision": "new_request",
+      "jobs": [
+        {
+          "status": "awaiting_confirm",
+          "goal": "find the paper discussed with Alex yesterday, add its citation to your thesis notes, and schedule an afternoon reading block"
+        }
+      ],
+      "review": "Planning observed; complete requested outcome not executed by this harness.",
+      "reply_excerpt": "Assuming you mean Alex Kim, I can track down yesterday's paper, add the citation to your thesis notes, and block out a free afternoon for reading. Shall I start?",
+      "complete_real_task_proven": false
+    },
+    {
+      "person": 4,
+      "trace": "overnight-final-development-998/auditperson0004",
+      "source_sha256": "aaa9929a82a4cb46c985a17039b6e5e0d003c145b46a1b34aa08b167a842841c",
+      "decision": "new_request",
+      "jobs": [
+        {
+          "status": "queued",
+          "goal": "compare the two supplier quotes against the garden plan and draft the cheaper compliant option for the client"
+        }
+      ],
+      "review": "Planning observed; complete requested outcome not executed by this harness.",
+      "reply_excerpt": "Comparing the two supplier quotes against the garden plan is queued. I'll draft the cheaper compliant option for the client once it runs.",
+      "complete_real_task_proven": false
+    },
+    {
+      "person": 5,
+      "trace": "overnight-final-development-998/auditperson0005",
+      "source_sha256": "aaa9929a82a4cb46c985a17039b6e5e0d003c145b46a1b34aa08b167a842841c",
+      "decision": "new_request",
+      "jobs": [
+        {
+          "status": "queued",
+          "goal": "organize your appointment letter and transport booking to check pickup timing, and draft a question about the missing clinic location"
+        }
+      ],
+      "review": "Planning observed; complete requested outcome not executed by this harness.",
+      "reply_excerpt": "the request to organize your appointment letter and transport booking is queued. it hasn't started checking the pickup timing or drafting the question about the missing clinic location yet.",
+      "complete_real_task_proven": false
+    },
+    {
+      "person": 6,
+      "trace": "overnight-final-development-998/auditperson0006",
+      "source_sha256": "aaa9929a82a4cb46c985a17039b6e5e0d003c145b46a1b34aa08b167a842841c",
+      "decision": "new_request",
+      "jobs": [
+        {
+          "status": "awaiting_confirm",
+          "goal": "reconcile the client payment email with invoice 204 and update your project tracker if paid"
+        }
+      ],
+      "review": "Planning observed; complete requested outcome not executed by this harness.",
+      "reply_excerpt": "i can reconcile the payment email with invoice 204 and update your project tracker. shall i start?",
+      "complete_real_task_proven": false
+    },
+    {
+      "person": 7,
+      "trace": "overnight-final-heldout-998/auditperson0007",
+      "source_sha256": "aaa9929a82a4cb46c985a17039b6e5e0d003c145b46a1b34aa08b167a842841c",
+      "decision": "new_request",
+      "jobs": [
+        {
+          "status": "awaiting_confirm",
+          "goal": "add deadlines from the case checklist to calendar and draft a summary for the team"
+        }
+      ],
+      "review": "Planning observed; complete requested outcome not executed by this harness.",
+      "reply_excerpt": "I can pull the deadlines from the case checklist for your calendar and draft the team summary. Shall I start?",
+      "complete_real_task_proven": false
+    },
+    {
+      "person": 8,
+      "trace": "overnight-final-development-998/auditperson0008",
+      "source_sha256": "aaa9929a82a4cb46c985a17039b6e5e0d003c145b46a1b34aa08b167a842841c",
+      "decision": "new_request",
+      "jobs": [
+        {
+          "status": "queued",
+          "goal": "draft a short reminder to the opted-in parent group using the approved trip notice and class calendar"
+        }
+      ],
+      "review": "Planning observed; complete requested outcome not executed by this harness.",
+      "reply_excerpt": "the request to draft the reminder for the opted-in parent group using the trip notice and class calendar is queued.",
+      "complete_real_task_proven": false
+    },
+    {
+      "person": 9,
+      "trace": "overnight-final-development-998/auditperson0009",
+      "source_sha256": "aaa9929a82a4cb46c985a17039b6e5e0d003c145b46a1b34aa08b167a842841c",
+      "decision": "new_request",
+      "jobs": [
+        {
+          "status": "queued",
+          "goal": "draft an investor update using the metrics sheet and product channel decisions"
+        }
+      ],
+      "review": "Planning observed; complete requested outcome not executed by this harness.",
+      "reply_excerpt": "Drafting the investor update from the metrics sheet and product channel is queued. I will hold the draft for your okay before anything goes out.",
+      "complete_real_task_proven": false
+    },
+    {
+      "person": 10,
+      "trace": "overnight-final-development-998/auditperson0010",
+      "source_sha256": "aaa9929a82a4cb46c985a17039b6e5e0d003c145b46a1b34aa08b167a842841c",
+      "decision": "new_request",
+      "jobs": [],
+      "review": "DEFECT: useful ambiguous-Alex question discarded at reply handoff; candidate correction under regression.",
+      "reply_excerpt": "on it. i'll check the notes and get a draft ready for you to review.",
+      "complete_real_task_proven": false
+    },
+    {
+      "person": 11,
+      "trace": "overnight-final-development-998/auditperson0011",
+      "source_sha256": "aaa9929a82a4cb46c985a17039b6e5e0d003c145b46a1b34aa08b167a842841c",
+      "decision": "new_request",
+      "jobs": [
+        {
+          "status": "awaiting_confirm",
+          "goal": "check the parts order and supplier's latest message, then update the repair schedule if delivery changed"
+        }
+      ],
+      "review": "Planning observed; complete requested outcome not executed by this harness.",
+      "reply_excerpt": "i can check the parts order and the supplier's latest message, then update the repair schedule if the delivery changed. should i start?",
+      "complete_real_task_proven": false
+    },
+    {
+      "person": 12,
+      "trace": "overnight-final-heldout-998/auditperson0012",
+      "source_sha256": "aaa9929a82a4cb46c985a17039b6e5e0d003c145b46a1b34aa08b167a842841c",
+      "decision": "new_request",
+      "jobs": [
+        {
+          "status": "awaiting_confirm",
+          "goal": "compare the room offer with the event brief and calendar, and prepare a booking draft if it fits"
+        }
+      ],
+      "review": "OPEN: requests approval before private comparison/booking preparation.",
+      "reply_excerpt": "i can compare the room offer with your event brief and calendar, and draft the booking if it fits. shall i start?",
+      "complete_real_task_proven": false
+    },
+    {
+      "person": 13,
+      "trace": "overnight-final-development-998/auditperson0013",
+      "source_sha256": "aaa9929a82a4cb46c985a17039b6e5e0d003c145b46a1b34aa08b167a842841c",
+      "decision": "new_request",
+      "jobs": [
+        {
+          "status": "awaiting_confirm",
+          "goal": "summarize the experiment notes and create agreed follow-up tasks in the lab tracker"
+        }
+      ],
+      "review": "Planning observed; complete requested outcome not executed by this harness.",
+      "reply_excerpt": "I can summarize the experiment notes and draft the follow-up tasks for the lab tracker. Should I get started so you can review before anything is actually created?",
+      "complete_real_task_proven": false
+    },
+    {
+      "person": 14,
+      "trace": "overnight-final-development-998/auditperson0014",
+      "source_sha256": "aaa9929a82a4cb46c985a17039b6e5e0d003c145b46a1b34aa08b167a842841c",
+      "decision": "new_request",
+      "jobs": [
+        {
+          "status": "awaiting_confirm",
+          "goal": "turn approved design-review decisions into tasks and draft a reply in the project thread"
+        }
+      ],
+      "review": "Planning observed; complete requested outcome not executed by this harness.",
+      "reply_excerpt": "I can pull the approved design-review decisions into tasks and draft a reply, assuming you mean the project thread we discussed earlier. Should I get started on a draft for you to check before anything sends?",
+      "complete_real_task_proven": false
+    },
+    {
+      "person": 15,
+      "trace": "overnight-final-development-998/auditperson0015",
+      "source_sha256": "aaa9929a82a4cb46c985a17039b6e5e0d003c145b46a1b34aa08b167a842841c",
+      "decision": "new_request",
+      "jobs": [
+        {
+          "status": "queued",
+          "goal": "compare guest dietary notes with the caterer's menu and draft outstanding questions"
+        }
+      ],
+      "review": "Planning observed; complete requested outcome not executed by this harness.",
+      "reply_excerpt": "the request to compare the guest dietary notes with the caterer's menu is queued. i'll draft the outstanding questions once it runs.",
+      "complete_real_task_proven": false
+    },
+    {
+      "person": 16,
+      "trace": "overnight-final-development-998/auditperson0016",
+      "source_sha256": "aaa9929a82a4cb46c985a17039b6e5e0d003c145b46a1b34aa08b167a842841c",
+      "decision": "new_request",
+      "jobs": [
+        {
+          "status": "queued",
+          "goal": "find a rehearsal slot for the band, check the studio calendar, and prepare a booking"
+        }
+      ],
+      "review": "Planning observed; complete requested outcome not executed by this harness.",
+      "reply_excerpt": "the request to find a rehearsal slot is queued. i'm assuming friday evening and saturday are still out for the band and studio, but let me know if that changed.",
+      "complete_real_task_proven": false
+    },
+    {
+      "person": 17,
+      "trace": "overnight-final-development-998/auditperson0017",
+      "source_sha256": "aaa9929a82a4cb46c985a17039b6e5e0d003c145b46a1b34aa08b167a842841c",
+      "decision": "new_request",
+      "jobs": [
+        {
+          "status": "queued",
+          "goal": "draft a shopping list comparing pantry inventory to volunteer requests"
+        }
+      ],
+      "review": "Planning observed; complete requested outcome not executed by this harness.",
+      "reply_excerpt": "the request to draft a shopping list comparing the pantry inventory to the volunteer requests is queued.",
+      "complete_real_task_proven": false
+    },
+    {
+      "person": 18,
+      "trace": "overnight-final-heldout-998/auditperson0018",
+      "source_sha256": "aaa9929a82a4cb46c985a17039b6e5e0d003c145b46a1b34aa08b167a842841c",
+      "decision": "new_request",
+      "jobs": [
+        {
+          "status": "queued",
+          "goal": "prepare a private updated client draft using the revised quote and agreed scope"
+        }
+      ],
+      "review": "Planning observed; complete requested outcome not executed by this harness.",
+      "reply_excerpt": "The client draft update is queued. I'm assuming this relates to the scope that removed the garage, so let me know if I have that wrong.",
+      "complete_real_task_proven": false
+    },
+    {
+      "person": 19,
+      "trace": "overnight-final-development-998/auditperson0019",
+      "source_sha256": "aaa9929a82a4cb46c985a17039b6e5e0d003c145b46a1b34aa08b167a842841c",
+      "decision": "new_request",
+      "jobs": [
+        {
+          "status": "queued",
+          "goal": "check the airline update against the trip calendar and draft a message to the pickup contact with the new arrival time"
+        }
+      ],
+      "review": "Planning observed; complete requested outcome not executed by this harness.",
+      "reply_excerpt": "That's queued to check the airline update and draft the new arrival time, and nothing will send until you give the word. Is the pickup contact Sam Reed or Alex Kim?",
+      "complete_real_task_proven": false
+    },
+    {
+      "person": 20,
+      "trace": "overnight-final-development-998/auditperson0020",
+      "source_sha256": "aaa9929a82a4cb46c985a17039b6e5e0d003c145b46a1b34aa08b167a842841c",
+      "decision": "new_request",
+      "jobs": [
+        {
+          "status": "awaiting_confirm",
+          "goal": "move tomorrow's pickup reminder to partner's calendar if free, and report changes"
+        }
+      ],
+      "review": "Planning observed; complete requested outcome not executed by this harness.",
+      "reply_excerpt": "i can check your partner's calendar and move tomorrow's pickup reminder if they're free. shall i start?",
+      "complete_real_task_proven": false
+    },
+    {
+      "person": 21,
+      "trace": "overnight-final-development-998/auditperson0021",
+      "source_sha256": "aaa9929a82a4cb46c985a17039b6e5e0d003c145b46a1b34aa08b167a842841c",
+      "decision": "new_request",
+      "jobs": [
+        {
+          "status": "queued",
+          "goal": "draft interview time options for the candidate in London based on the Tokyo panel calendar"
+        }
+      ],
+      "review": "Planning observed; complete requested outcome not executed by this harness.",
+      "reply_excerpt": "I have the request to draft interview options queued up. I'm assuming the candidate is in London and the panel is in Tokyo, so let me know if that's off.",
+      "complete_real_task_proven": false
+    },
+    {
+      "person": 22,
+      "trace": "overnight-final-development-998/auditperson0022",
+      "source_sha256": "aaa9929a82a4cb46c985a17039b6e5e0d003c145b46a1b34aa08b167a842841c",
+      "decision": "new_request",
+      "jobs": [
+        {
+          "status": "queued",
+          "goal": "prepare a private draft of the gallery delivery email using the client folder and sharing instructions"
+        }
+      ],
+      "review": "Planning observed; complete requested outcome not executed by this harness.",
+      "reply_excerpt": "drafting the gallery delivery email is queued. i'll use the client folder and sharing instructions once it starts.",
+      "complete_real_task_proven": false
+    },
+    {
+      "person": 23,
+      "trace": "overnight-final-heldout-998/auditperson0023",
+      "source_sha256": "aaa9929a82a4cb46c985a17039b6e5e0d003c145b46a1b34aa08b167a842841c",
+      "decision": "new_request",
+      "jobs": [
+        {
+          "status": "queued",
+          "goal": "match receipts to the project ledger and flag unclassified ones"
+        }
+      ],
+      "review": "OPEN: assumes source access without proving it; task-access repair only resolves a named app.",
+      "reply_excerpt": "matching those receipts to the project ledger is queued. i'm assuming both are already accessible in the system.",
+      "complete_real_task_proven": false
+    },
+    {
+      "person": 24,
+      "trace": "overnight-final-development-998/auditperson0024",
+      "source_sha256": "aaa9929a82a4cb46c985a17039b6e5e0d003c145b46a1b34aa08b167a842841c",
+      "decision": "new_request",
+      "jobs": [
+        {
+          "status": "queued",
+          "goal": "compare proposed rides with the club calendar and route-closure notice to draft an updated plan"
+        }
+      ],
+      "review": "Planning observed; complete requested outcome not executed by this harness.",
+      "reply_excerpt": "The request to compare the proposed rides with the club calendar and route-closure notice is queued.",
+      "complete_real_task_proven": false
+    },
+    {
+      "person": 25,
+      "trace": "overnight-final-development-998/auditperson0025",
+      "source_sha256": "aaa9929a82a4cb46c985a17039b6e5e0d003c145b46a1b34aa08b167a842841c",
+      "decision": "new_request",
+      "jobs": [
+        {
+          "status": "queued",
+          "goal": "draft a reminder for the available appointment slot using only scheduling details"
+        }
+      ],
+      "review": "Planning observed; complete requested outcome not executed by this harness.",
+      "reply_excerpt": "The appointment reminder draft is queued. I'm assuming it's for a patient and you only want the date, time, and location without any clinical notes, but let me know if that's wrong.",
+      "complete_real_task_proven": false
+    },
+    {
+      "person": 26,
+      "trace": "overnight-final-development-998/auditperson0026",
+      "source_sha256": "aaa9929a82a4cb46c985a17039b6e5e0d003c145b46a1b34aa08b167a842841c",
+      "decision": "new_request",
+      "jobs": [
+        {
+          "status": "awaiting_confirm",
+          "goal": "update the private-dining draft with the final headcount from the customer thread"
+        }
+      ],
+      "review": "OPEN: private-draft update held; useful preparation before a later write needs review.",
+      "reply_excerpt": "I can check the customer thread for the final headcount and update the private-dining draft. Shall I start drafting, holding it until you give the word for it to go out?",
+      "complete_real_task_proven": false
+    },
+    {
+      "person": 27,
+      "trace": "overnight-final-development-998/auditperson0027",
+      "source_sha256": "aaa9929a82a4cb46c985a17039b6e5e0d003c145b46a1b34aa08b167a842841c",
+      "decision": "new_request",
+      "jobs": [
+        {
+          "status": "awaiting_confirm",
+          "goal": "check your seminar calendar and schedule a study session for next Wednesday, September 16"
+        }
+      ],
+      "review": "UNVERIFIED: relative-date interpretation and calendar effect not executed.",
+      "reply_excerpt": "I can check your seminar calendar and schedule the study session for September 16, assuming your usual free time is the afternoon. Shall I start?",
+      "complete_real_task_proven": false
+    },
+    {
+      "person": 28,
+      "trace": "overnight-final-development-998/auditperson0028",
+      "source_sha256": "aaa9929a82a4cb46c985a17039b6e5e0d003c145b46a1b34aa08b167a842841c",
+      "decision": "new_request",
+      "jobs": [
+        {
+          "status": "queued",
+          "goal": "prepare a private draft of the source follow-up using your interview notes"
+        }
+      ],
+      "review": "Planning observed; complete requested outcome not executed by this harness.",
+      "reply_excerpt": "drafting the source follow-up from your interview notes is queued. nothing goes out until you say the embargo is lifted.",
+      "complete_real_task_proven": false
+    },
+    {
+      "person": 29,
+      "trace": "overnight-final-heldout-998/auditperson0029",
+      "source_sha256": "aaa9929a82a4cb46c985a17039b6e5e0d003c145b46a1b34aa08b167a842841c",
+      "decision": "new_request",
+      "jobs": [
+        {
+          "status": "queued",
+          "goal": "prepare a draft tracker update about the checkout issue"
+        }
+      ],
+      "review": "UNVERIFIED: browser reproduction and tracker update not executed.",
+      "reply_excerpt": "the draft tracker update is queued. i'm assuming this is about the checkout bug, so let me know if you meant a different issue.",
+      "complete_real_task_proven": false
+    },
+    {
+      "person": 30,
+      "trace": "overnight-final-development-998/auditperson0030",
+      "source_sha256": "aaa9929a82a4cb46c985a17039b6e5e0d003c145b46a1b34aa08b167a842841c",
+      "decision": "new_request",
+      "jobs": [
+        {
+          "status": "queued",
+          "goal": "prepare an updated customer draft for the delayed order using the supplier event and tracking page"
+        }
+      ],
+      "review": "Planning observed; complete requested outcome not executed by this harness.",
+      "reply_excerpt": "the request to draft the customer update for the delayed order is queued. it hasn't started yet.",
+      "complete_real_task_proven": false
+    },
+    {
+      "person": 31,
+      "trace": "overnight-final-development-998/auditperson0031",
+      "source_sha256": "aaa9929a82a4cb46c985a17039b6e5e0d003c145b46a1b34aa08b167a842841c",
+      "decision": "new_request",
+      "jobs": [
+        {
+          "status": "awaiting_confirm",
+          "goal": "find the venue confirmation in your work mail and add it to the work events calendar"
+        }
+      ],
+      "review": "Planning observed; complete requested outcome not executed by this harness.",
+      "reply_excerpt": "i can find the venue confirmation in your work mail and add it to the work events calendar. shall i start?",
+      "complete_real_task_proven": false
+    },
+    {
+      "person": 32,
+      "trace": "overnight-final-development-998/auditperson0032",
+      "source_sha256": "aaa9929a82a4cb46c985a17039b6e5e0d003c145b46a1b34aa08b167a842841c",
+      "decision": "new_request",
+      "jobs": [
+        {
+          "status": "queued",
+          "goal": "compare the tool rental offer with next week's site schedule and draft the request within the limit"
+        }
+      ],
+      "review": "Planning observed; complete requested outcome not executed by this harness.",
+      "reply_excerpt": "The comparison of the tool rental offer with next week's site schedule is queued.",
+      "complete_real_task_proven": false
+    },
+    {
+      "person": 33,
+      "trace": "overnight-final-development-998/auditperson0033",
+      "source_sha256": "aaa9929a82a4cb46c985a17039b6e5e0d003c145b46a1b34aa08b167a842841c",
+      "decision": "new_request",
+      "jobs": [
+        {
+          "status": "queued",
+          "goal": "draft the corrected delivery schedule using the Korean client thread and English project notes"
+        }
+      ],
+      "review": "Planning observed; complete requested outcome not executed by this harness.",
+      "reply_excerpt": "the delivery schedule draft is queued. i'll use the korean thread and your english notes once it starts.",
+      "complete_real_task_proven": false
+    },
+    {
+      "person": 34,
+      "trace": "overnight-final-heldout-998/auditperson0034",
+      "source_sha256": "aaa9929a82a4cb46c985a17039b6e5e0d003c145b46a1b34aa08b167a842841c",
+      "decision": "new_request",
+      "jobs": [
+        {
+          "status": "queued",
+          "goal": "prepare a new starter's onboarding checklist from the approved template and their team's calendar"
+        }
+      ],
+      "review": "OPEN: assumes source access without proving it; task-access repair only resolves a named app.",
+      "reply_excerpt": "The request to prep the new starter's onboarding checklist is queued. I'm assuming the approved template and their team's calendar are already accessible to me.",
+      "complete_real_task_proven": false
+    },
+    {
+      "person": 35,
+      "trace": "overnight-final-development-998/auditperson0035",
+      "source_sha256": "aaa9929a82a4cb46c985a17039b6e5e0d003c145b46a1b34aa08b167a842841c",
+      "decision": "new_request",
+      "jobs": [
+        {
+          "status": "queued",
+          "goal": "text Sam Reed that Gita will be late to the appointment \u2014 prepare draft for approval"
+        }
+      ],
+      "review": "DEFECT: Sam Reed selected despite two possible Sams; candidate now asks which Sam.",
+      "reply_excerpt": "The draft text about you being late is queued, assuming you meant Sam Reed.",
+      "complete_real_task_proven": false
+    },
+    {
+      "person": 36,
+      "trace": "overnight-final-development-998/auditperson0036",
+      "source_sha256": "aaa9929a82a4cb46c985a17039b6e5e0d003c145b46a1b34aa08b167a842841c",
+      "decision": "new_request",
+      "jobs": [
+        {
+          "status": "queued",
+          "goal": "compare your revised roster with the family calendar and draft changes affecting dinner plans"
+        }
+      ],
+      "review": "Planning observed; complete requested outcome not executed by this harness.",
+      "reply_excerpt": "The comparison of your revised roster and the family calendar is queued; the dinner plan changes haven't been drafted yet.",
+      "complete_real_task_proven": false
+    },
+    {
+      "person": 37,
+      "trace": "overnight-final-heldout-998/auditperson0037",
+      "source_sha256": "aaa9929a82a4cb46c985a17039b6e5e0d003c145b46a1b34aa08b167a842841c",
+      "decision": "new_request",
+      "jobs": [
+        {
+          "status": "queued",
+          "goal": "prepare the gallery inventory draft from the accepted works email and studio catalog"
+        }
+      ],
+      "review": "Planning observed; complete requested outcome not executed by this harness.",
+      "reply_excerpt": "the request to prepare the gallery inventory draft from the accepted works email and your studio catalog is queued.",
+      "complete_real_task_proven": false
+    },
+    {
+      "person": 38,
+      "trace": "overnight-final-development-998/auditperson0038",
+      "source_sha256": "aaa9929a82a4cb46c985a17039b6e5e0d003c145b46a1b34aa08b167a842841c",
+      "decision": "new_request",
+      "jobs": [
+        {
+          "status": "queued",
+          "goal": "prepare a private draft of the event update using the approved program and opt-in supporter list"
+        }
+      ],
+      "review": "Planning observed; complete requested outcome not executed by this harness.",
+      "reply_excerpt": "the request to draft the event update using the approved program and opt-in list is queued; it has not been written yet.",
+      "complete_real_task_proven": false
+    },
+    {
+      "person": 39,
+      "trace": "overnight-final-development-998/auditperson0039",
+      "source_sha256": "aaa9929a82a4cb46c985a17039b6e5e0d003c145b46a1b34aa08b167a842841c",
+      "decision": "new_request",
+      "jobs": [],
+      "review": "Planning observed; complete requested outcome not executed by this harness.",
+      "reply_excerpt": "on it. which restaurant are we looking at?",
+      "complete_real_task_proven": false
+    },
+    {
+      "person": 40,
+      "trace": "overnight-final-development-998/auditperson0040",
+      "source_sha256": "aaa9929a82a4cb46c985a17039b6e5e0d003c145b46a1b34aa08b167a842841c",
+      "decision": "new_request",
+      "jobs": [
+        {
+          "status": "awaiting_confirm",
+          "goal": "set a reminder to send Alex the release notes tomorrow after checking the final changelog"
+        }
+      ],
+      "review": "UNVERIFIED: future reminder/restart behavior not executed.",
+      "reply_excerpt": "i can set a reminder for tomorrow to check the changelog and send the release notes. assuming you mean alex kim, should i go ahead?",
+      "complete_real_task_proven": false
+    },
+    {
+      "person": 41,
+      "trace": "overnight-final-development-998/auditperson0041",
+      "source_sha256": "aaa9929a82a4cb46c985a17039b6e5e0d003c145b46a1b34aa08b167a842841c",
+      "decision": "new_request",
+      "jobs": [
+        {
+          "status": "queued",
+          "goal": "look up opening hours for the local branch S-4 in Seattle and draft a plan around Alina's afternoon calls"
+        }
+      ],
+      "review": "Planning observed; complete requested outcome not executed by this harness.",
+      "reply_excerpt": "The search for branch S-4 in Seattle is queued, and I will draft a plan around your afternoon calls once it runs. Let me know if you meant a different location.",
+      "complete_real_task_proven": false
+    },
+    {
+      "person": 42,
+      "trace": "overnight-final-development-998/auditperson0042",
+      "source_sha256": "aaa9929a82a4cb46c985a17039b6e5e0d003c145b46a1b34aa08b167a842841c",
+      "decision": "new_request",
+      "jobs": [
+        {
+          "status": "awaiting_confirm",
+          "goal": "use the confirmed visitor count and the venue calendar to complete the approved group hold"
+        }
+      ],
+      "review": "UNVERIFIED: final group-hold execution and duplicate protection not exercised by this runner.",
+      "reply_excerpt": "Assuming this is for the venue booking we discussed earlier, I can use the visitor count and calendar to complete the group hold. Should I start?",
+      "complete_real_task_proven": false
+    },
+    {
+      "person": 43,
+      "trace": "overnight-final-heldout-998/auditperson0043",
+      "source_sha256": "aaa9929a82a4cb46c985a17039b6e5e0d003c145b46a1b34aa08b167a842841c",
+      "decision": "new_request",
+      "jobs": [],
+      "review": "DEFECT: generated memory answer discarded at reply handoff; candidate returns actual answer.",
+      "reply_excerpt": "on it. i'll pull the summary and get those follow-ups drafted for you.",
+      "complete_real_task_proven": false
+    },
+    {
+      "person": 44,
+      "trace": "overnight-final-development-998/auditperson0044",
+      "source_sha256": "aaa9929a82a4cb46c985a17039b6e5e0d003c145b46a1b34aa08b167a842841c",
+      "decision": "new_request",
+      "jobs": [
+        {
+          "status": "awaiting_confirm",
+          "goal": "update the session reminder from the latest room assignment and the instructor's calendar"
+        }
+      ],
+      "review": "Planning observed; complete requested outcome not executed by this harness.",
+      "reply_excerpt": "I can update the session reminder from the latest room assignment and the instructor's calendar. Shall I start?",
+      "complete_real_task_proven": false
+    },
+    {
+      "person": 45,
+      "trace": "overnight-final-development-recovery-998/auditperson0045",
+      "source_sha256": "aaa9929a82a4cb46c985a17039b6e5e0d003c145b46a1b34aa08b167a842841c",
+      "decision": "new_request",
+      "jobs": [
+        {
+          "status": "queued",
+          "goal": "compare the project handoff with the current catalog and prepare the missing-record list"
+        }
+      ],
+      "review": "Planning observed; complete requested outcome not executed by this harness.",
+      "reply_excerpt": "the comparison between the project handoff and the current catalog is queued. the missing-record list hasn't been drafted yet.",
+      "complete_real_task_proven": false
+    },
+    {
+      "person": 46,
+      "trace": "overnight-final-heldout-998/auditperson0046",
+      "source_sha256": "aaa9929a82a4cb46c985a17039b6e5e0d003c145b46a1b34aa08b167a842841c",
+      "decision": "new_request",
+      "jobs": [
+        {
+          "status": "queued",
+          "goal": "prepare next week's meeting update using the club minutes and contact list"
+        }
+      ],
+      "review": "Planning observed; complete requested outcome not executed by this harness.",
+      "reply_excerpt": "the request to prepare next week's meeting update is queued; it hasn't been drafted yet.",
+      "complete_real_task_proven": false
+    },
+    {
+      "person": 47,
+      "trace": "overnight-final-development-recovery-998/auditperson0047",
+      "source_sha256": "aaa9929a82a4cb46c985a17039b6e5e0d003c145b46a1b34aa08b167a842841c",
+      "decision": "new_request",
+      "jobs": [
+        {
+          "status": "queued",
+          "goal": "match the sample pickup confirmation to the lab calendar and draft courier instructions"
+        }
+      ],
+      "review": "Planning observed; complete requested outcome not executed by this harness.",
+      "reply_excerpt": "matching the sample pickup confirmation to the lab calendar and drafting the courier instructions is in the queue.",
+      "complete_real_task_proven": false
+    },
+    {
+      "person": 48,
+      "trace": "overnight-final-development-recovery-998/auditperson0048",
+      "source_sha256": "aaa9929a82a4cb46c985a17039b6e5e0d003c145b46a1b34aa08b167a842841c",
+      "decision": "new_request",
+      "jobs": [
+        {
+          "status": "queued",
+          "goal": "find the software renewal email and prepare a cancellation draft"
+        }
+      ],
+      "review": "UNVERIFIED: cancellation approval/retry execution not exercised.",
+      "reply_excerpt": "The request to find the software renewal email and draft your cancellation is queued. It hasn't started yet.",
+      "complete_real_task_proven": false
+    },
+    {
+      "person": 49,
+      "trace": "overnight-final-heldout-998/auditperson0049",
+      "source_sha256": "aaa9929a82a4cb46c985a17039b6e5e0d003c145b46a1b34aa08b167a842841c",
+      "decision": "new_request",
+      "jobs": [
+        {
+          "status": "awaiting_confirm",
+          "goal": "log the completed repair from the contractor's receipt and update the shared maintenance calendar"
+        }
+      ],
+      "review": "UNVERIFIED: cross-app completion and restart not exercised.",
+      "reply_excerpt": "I can take this on: log the completed repair from the contractor's receipt and update the shared maintenance calendar. Want me to start?",
+      "complete_real_task_proven": false
+    },
+    {
+      "person": 50,
+      "trace": "overnight-final-development-recovery-998/auditperson0050",
+      "source_sha256": "aaa9929a82a4cb46c985a17039b6e5e0d003c145b46a1b34aa08b167a842841c",
+      "decision": "new_request",
+      "jobs": [
+        {
+          "status": "awaiting_confirm",
+          "goal": "close the current Anticipy test account and prepare to re-create it with the same email and phone as a new user"
+        }
+      ],
+      "review": "UNVERIFIED: real deletion/recreation is not executed by this planning corpus.",
+      "reply_excerpt": "I can close this test account and prep the restart, assuming we're using the email and phone currently on file. Nothing closes until you give the word\u2014shall I begin?",
+      "complete_real_task_proven": false
+    }
+  ]
+}
