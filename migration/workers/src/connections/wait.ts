@@ -257,7 +257,7 @@ export function linkFingerprint(handle: unknown): string {
   return isHandle(handle) ? `link:${handle.slice(0, 12)}` : "link:none";
 }
 
-/** 15 lowercase alphanumerics — src/pb/wire.ts ID_ALPHABET, the same guard
+/** 15 lowercase alphanumerics — src/api/wire.ts ID_ALPHABET, the same guard
  *  routes/connect.ts applies. An email or a display name in an owner slot is
  *  the wrong-person failure with extra steps. */
 function isOwnerRowId(raw: unknown): raw is OwnerId {

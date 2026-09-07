@@ -21,7 +21,7 @@
  * The assistant gets NO MORE POWER than the person talking to it: delete is
  * creator-or-admin, creating a project is admin-only.
  */
-import { newRecordId, pbNow } from "../pb/wire.ts";
+import { newRecordId, pbNow } from "../api/wire.ts";
 import { hqCors, type HqEnv } from "./hq.ts";
 import { boolDefaultFalse, isoNow, resolveActor, type Person } from "./hq_data.ts";
 

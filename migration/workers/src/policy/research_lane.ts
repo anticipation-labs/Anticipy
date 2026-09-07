@@ -28,7 +28,7 @@
  *   claim. Ported below with their file:line anchors.
  */
 import { parseFilter, andNot, mentionsField, FilterError, type Node } from "../../filter-dsl.ts";
-import { refuse, badRequest, stillInTheFuture } from "../pb/wire.ts";
+import { refuse, badRequest, stillInTheFuture } from "../api/wire.ts";
 import type { Ctx, Policy } from "./chain.ts";
 
 const JOBS_BASE = "/api/collections/jobs/records";

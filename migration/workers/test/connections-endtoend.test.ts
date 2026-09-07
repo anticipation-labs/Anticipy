@@ -425,7 +425,7 @@ function seedConnection(
 
 /**
  * One line this owner said TO US, for the phrasing history — either a text they
- * sent this number (`sms_reply`, which is what src/pb/sender.ts lands) or a
+ * sent this number (`sms_reply`, which is what src/api/sender.ts lands) or a
  * spoken line the sense layer marked as addressed to the assistant.
  */
 function seedSaidLine(

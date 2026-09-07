@@ -23,7 +23,7 @@
  *                           whose browser to drive
  *   routing uncertain       500 "temporary routing failure" -- Sendblue retries
  *   the row                 the identical events row Twilio lands, through the
- *                           identical code (src/pb/sender.ts): device_id "sms",
+ *                           identical code (src/api/sender.ts): device_id "sms",
  *                           kind "sms_reply", text, decision "", goal = the
  *                           sender, owner_ref, external_event_id = message_handle
  *
@@ -32,7 +32,7 @@
  * sendblue_number, content, media_url, group_id, participants. Nothing else
  * is looked at; nothing is logged but the ids and the last six digits.
  */
-import { landInboundText, last6, type Landing } from "../pb/sender.ts";
+import { landInboundText, last6, type Landing } from "../api/sender.ts";
 import { handleInboundText, type TextCommandEnv } from "../connections/wiring.ts";
 
 const json = (status: number, body: unknown) =>
@@ -177,7 +177,7 @@ export async function sendblueInbound(
   // THE TEXT TWIN, the identical call routes/sms.ts makes and for the identical
   // reasons — after the row and never instead of it, the owner from the stored
   // row `landInboundText` resolved, the message verbatim with no pre-filter in
-  // front of it. Both carriers land the same events row (src/pb/sender.ts), and
+  // front of it. Both carriers land the same events row (src/api/sender.ts), and
   // this is what stops them landing in different products.
   if (landed.kind === "written") {
     const run = handleInboundText(

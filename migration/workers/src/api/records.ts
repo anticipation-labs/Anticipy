@@ -1,5 +1,5 @@
 /**
- * src/pb/records.ts — the generic records API, on D1.
+ * src/api/records.ts — the generic records API, on D1.
  *
  *   GET    /api/collections/{name}/records          list
  *   GET    /api/collections/{name}/records/{id}     view
@@ -456,7 +456,7 @@ async function createOwner(env: Env, req: RecordsRequest): Promise<Response> {
   if (Object.keys(dupes).length) return failedToCreate(dupes);
 
   // $2a$ at cost 10 — Go's bcrypt.DefaultCost, so a digest written here is one
-  // PocketBase would also accept if traffic ever moves back. src/pb/auth.ts.
+  // PocketBase would also accept if traffic ever moves back. src/api/auth.ts.
   const digest = await bcrypt.hash(password, 10);
   const tokenKey = newRecordId() + newRecordId();   // 30 chars, per-record salt
 

@@ -41,7 +41,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { FakeD1, asD1 } from "./fake-d1.ts";
-import { issueToken } from "../src/pb/auth.ts";
+import { issueToken } from "../src/api/auth.ts";
 import {
   connectRoute, connectPageDone, tokenHandle, LINK_TTL_MS, SESSION_COOKIE,
   type ClaimOutcome, type ConnectDeps, type ConnectEnv, type ConnectLinkStore,

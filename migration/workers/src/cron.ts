@@ -26,7 +26,7 @@
  *    A tick that has 200 reminders due makes 200 of them.
  *    See ARCHITECTURE.md §7 for the limit and the batching this needs.
  */
-import { newRecordId, pbNow } from "./pb/wire.ts";
+import { newRecordId, pbNow } from "./api/wire.ts";
 import { sendText, type MessagingEnv } from "./messaging.ts";
 import { connectNudgeSweep, installNudgeWiring } from "./connections/nudge.ts";
 import { nudgeWiring } from "./connections/wiring.ts";

@@ -103,7 +103,7 @@ import {
   type MarkOutcome,
   type WebhookConnectionStore,
 } from "./connections_webhook.ts";
-import { json, pbNow } from "../pb/wire.ts";
+import { json, pbNow } from "../api/wire.ts";
 
 // ---------------------------------------------------------------------------
 // THE CONSTANTS THE BRAIN SHARES. Each is pinned to its Python twin by test.

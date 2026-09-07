@@ -48,7 +48,7 @@ import worker from "../src/index.ts";
 import * as lanePolicy from "../src/policy/research_lane.ts";
 import type { Ctx, Principal } from "../src/policy/chain.ts";
 import { compileFilter, parseFilter, mentionsField, type Node } from "../filter-dsl.ts";
-import { COLLECTIONS } from "../src/pb/schema.ts";
+import { COLLECTIONS } from "../src/api/schema.ts";
 import { FakeD1, asD1 } from "./fake-d1.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));

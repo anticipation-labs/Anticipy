@@ -4,7 +4,7 @@
  */
 import assert from "node:assert/strict";
 import { FakeD1, asD1 } from "./fake-d1.ts";
-import { issueToken } from "../src/pb/auth.ts";
+import { issueToken } from "../src/api/auth.ts";
 import { accountDelete, ACCOUNT_TABLES } from "../src/routes/account_delete.ts";
 import { ComposioConnections } from "../src/connections/provider.ts";
 

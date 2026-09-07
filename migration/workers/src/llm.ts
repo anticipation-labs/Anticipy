@@ -80,7 +80,7 @@
  * │ is a named constant precisely so it can be lowered from a number.    │
  * └──────────────────────────────────────────────────────────────────────┘
  */
-import { json, newRecordId, pbNow, pbTime } from "./pb/wire.ts";
+import { json, newRecordId, pbNow, pbTime } from "./api/wire.ts";
 
 /** agent_key.pb.js:337,389. Kept as a named constant so it can be measured. */
 export const UPSTREAM_TIMEOUT_MS = 95_000;

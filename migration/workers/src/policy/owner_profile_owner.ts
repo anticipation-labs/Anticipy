@@ -28,7 +28,7 @@
  * the only copy of a phone number and must stay patchable, because patching
  * them is how they get adopted (claim_legacy.pb.js:73-84).
  */
-import { json } from "../pb/wire.ts";
+import { json } from "../api/wire.ts";
 import type { Ctx, Policy } from "./chain.ts";
 
 const BASE = "/api/collections/owner_profile/records";

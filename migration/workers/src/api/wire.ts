@@ -1,5 +1,5 @@
 /**
- * src/pb/wire.ts — PocketBase's response shapes, reproduced byte-for-byte.
+ * src/api/wire.ts — PocketBase's response shapes, reproduced byte-for-byte.
  *
  * These are not internal conveniences. They are the contract five shipped
  * clients parse. Every shape here is pinned to the code that reads it:

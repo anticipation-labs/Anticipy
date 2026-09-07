@@ -26,8 +26,8 @@
  * polarity inverted so an ACTIVE status releases the key instead.
  */
 import assert from "node:assert/strict";
-import { create, update, releasesCommitment, type RecordsRequest } from "../src/pb/records.ts";
-import { COLLECTIONS } from "../src/pb/schema.ts";
+import { create, update, releasesCommitment, type RecordsRequest } from "../src/api/records.ts";
+import { COLLECTIONS } from "../src/api/schema.ts";
 import { openTestD1, type TestDb } from "./sqlite-d1.ts";
 
 let failures = 0;

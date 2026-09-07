@@ -1,10 +1,10 @@
 /** Real auth + records handler + real SQLite: bypass and malformed-wire regressions. */
 import assert from "node:assert/strict";
 import { FakeD1, asD1 } from "./fake-d1.ts";
-import { issueToken, verifyToken } from "../src/pb/auth.ts";
-import { remove } from "../src/pb/records.ts";
-import { COLLECTIONS } from "../src/pb/schema.ts";
-import type { RecordsRequest } from "../src/pb/records.ts";
+import { issueToken, verifyToken } from "../src/api/auth.ts";
+import { remove } from "../src/api/records.ts";
+import { COLLECTIONS } from "../src/api/schema.ts";
+import type { RecordsRequest } from "../src/api/records.ts";
 
 const ref = "auditowner00001";
 let failed = 0;

@@ -29,7 +29,7 @@
  *     CONTRACT.md §1.2 — and porting it as fail-closed would refuse every
  *     pre-workflow row in production.
  */
-import { refuse, json, pbTime } from "../pb/wire.ts";
+import { refuse, json, pbTime } from "../api/wire.ts";
 import type { Ctx, Policy } from "./chain.ts";
 
 const BASE = "/api/collections/jobs/records";

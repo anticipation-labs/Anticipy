@@ -39,7 +39,7 @@
  * THE 1101 THIS FILE IS BUILT AROUND. On 2026-09-05 the live `events` table
  * was missing two columns migration/d1/schema.sql declared, and every create
  * turned into a D1 1101 for two minutes — a Worker that INSERTs a column the
- * live table lacks fails EVERY write, not the one column. src/pb/records.ts
+ * live table lacks fails EVERY write, not the one column. src/api/records.ts
  * answered that with `liveColumns()` (pragma_table_info) + `fillEmpties()`
  * (fill only what exists). This file follows the same pattern with one
  * difference, stated because it is a difference and not an oversight:
@@ -693,7 +693,7 @@ function refuseMixedOwners<T extends { user_id: string }>(
 }
 
 // ---------------------------------------------------------------------------
-// LIVE COLUMNS — the 1101 guard, ported from src/pb/records.ts.
+// LIVE COLUMNS — the 1101 guard, ported from src/api/records.ts.
 // ---------------------------------------------------------------------------
 
 /** Columns without which a SAFETY property of this feature silently fails. A

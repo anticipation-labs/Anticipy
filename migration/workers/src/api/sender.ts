@@ -1,5 +1,5 @@
 /**
- * src/pb/sender.ts — an inbound text becomes ONE events row, whoever carried it.
+ * src/api/sender.ts — an inbound text becomes ONE events row, whoever carried it.
  *
  * Shared by routes/sms.ts (Twilio) and routes/sendblue.ts (Sendblue), and
  * deliberately carrier-blind: the brain (brain/worker.py handle_inbound, which

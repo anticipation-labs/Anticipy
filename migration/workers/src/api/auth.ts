@@ -1,5 +1,5 @@
 /**
- * src/pb/auth.ts — the `owners` auth collection, reimplemented.
+ * src/api/auth.ts — the `owners` auth collection, reimplemented.
  *
  * WHAT MUST NOT BREAK
  * -------------------

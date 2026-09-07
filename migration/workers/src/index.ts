@@ -4,8 +4,8 @@
  * Replaces the PocketBase binary at backend/Dockerfile. It serves, in order:
  *
  *   /api/health                       PocketBase's liveness probe (CONTRACT.md §0.5)
- *   /api/collections/{n}/records[...] the generic records API   (src/pb/records.ts)
- *   /api/collections/owners/auth-*    the auth endpoints        (src/pb/auth.ts)
+ *   /api/collections/{n}/records[...] the generic records API   (src/api/records.ts)
+ *   /api/collections/owners/auth-*    the auth endpoints        (src/api/auth.ts)
  *   /api/files/{c}/{id}/{name}        evidence, from R2         (src/assets.ts)
  *   the 55 routerAdd routes                                     (Phase 5)
  *   /internal.html, /*.zip, /mac/*    static assets             (src/assets.ts)
@@ -67,10 +67,10 @@ import { agentRegister, agentKey, agentLlm, agentCaptcha, agentUpgradeCredential
 import {
   serveFile, shareEvidence, depositEvidenceImage, discardEvidenceImage, type AssetEnv,
 } from "./assets.ts";
-import { COLLECTIONS } from "./pb/schema.ts";
-import { health, notFound, refuse, json } from "./pb/wire.ts";
-import * as records from "./pb/records.ts";
-import { authWithPassword, authRefresh, verifyToken } from "./pb/auth.ts";
+import { COLLECTIONS } from "./api/schema.ts";
+import { health, notFound, refuse, json } from "./api/wire.ts";
+import * as records from "./api/records.ts";
+import { authWithPassword, authRefresh, verifyToken } from "./api/auth.ts";
 import { runChain, type Ctx, type Principal } from "./policy/chain.ts";
 import { guard } from "./policy/guard.ts";
 import { ownerProfileOwner } from "./policy/owner_profile_owner.ts";
@@ -247,7 +247,7 @@ export default {
     }
     // Sendblue's webhook: inbound iMessage/SMS AND status updates for texts we
     // sent, on one URL, proven by the dashboard's secret in sb-signing-secret.
-    // It lands the same events row /sms/inbound lands (src/pb/sender.ts), so
+    // It lands the same events row /sms/inbound lands (src/api/sender.ts), so
     // the brain cannot tell the carriers apart.
     if (path === "/sms/sendblue" && method === "POST") {
       return sendblueInbound(request, env as unknown as SendblueEnv, ctx);

@@ -19,7 +19,7 @@
  * the browser also holds the phone number on the owner's account. That is
  * enough to finish ONE connect link and nothing else. So the session this file
  * mints is NOT a login: it is an HMAC over (owner, expiry, THIS token's handle),
- * it is refused by src/pb/auth.ts `verifyToken` on sight (four dot-separated
+ * it is refused by src/api/auth.ts `verifyToken` on sight (four dot-separated
  * fields, not three, and a different key), and the cookie is Path-scoped to the
  * one link. A code texted to a phone that could read the owner's whole account
  * would be a password reset with none of the ceremony — and the number is a
@@ -546,7 +546,7 @@ export function connectAuthWiringInstalled(): boolean {
 // SHAPE CHECKS — structure and transport, never meaning
 // ---------------------------------------------------------------------------
 
-/** 15 lowercase alphanumerics, src/pb/wire.ts ID_ALPHABET. */
+/** 15 lowercase alphanumerics, src/api/wire.ts ID_ALPHABET. */
 function isOwnerRowId(raw: unknown): raw is OwnerId {
   return typeof raw === "string" && /^[a-z0-9]{15}$/.test(raw);
 }
@@ -632,7 +632,7 @@ function tokenFromPath(pathname: string): string | null {
  * The signing key.
  *
  * FAILS CLOSED ON AN UNSET SECRET, and that is not the same choice
- * src/pb/auth.ts makes. An `owners` token is signed with
+ * src/api/auth.ts makes. An `owners` token is signed with
  * `ANTICIPY_AUTH_SECRET ‖ tokenKey`, so even an unset secret leaves a
  * per-record random half and forging one still needs that row. This blob has no
  * such half: with the secret unset the key would be a constant anybody reading
@@ -671,7 +671,7 @@ async function sessionMac(
 }
 
 /** `1.<owner>.<expiry ms>.<mac>` — FOUR dot-separated fields, deliberately.
- *  src/pb/auth.ts `verifyToken` refuses anything that is not three, so this
+ *  src/api/auth.ts `verifyToken` refuses anything that is not three, so this
  *  value can never be mistaken for an account token even if somebody pasted it
  *  into the `anticipy_session` cookie. */
 export async function mintCodeSession(

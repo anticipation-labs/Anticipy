@@ -55,7 +55,7 @@
  *   curl -sI https://<worker>/anticipy-extension.zip   | head -1   # 200
  * -------------------------------------------------------------------------
  */
-import { json, newRecordId, pbNow, stillInTheFuture } from "./pb/wire.ts";
+import { json, newRecordId, pbNow, stillInTheFuture } from "./api/wire.ts";
 
 export interface AssetEnv {
   DB: D1Database;

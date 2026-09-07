@@ -5,7 +5,7 @@
  *
  * WHAT IS REAL HERE AND WHAT IS NOT. The handler, the routing, the session
  * check, the HTML, the status codes and the whole four-state core are the
- * shipped code. The account token is a real HMAC-signed one from src/pb/auth.ts
+ * shipped code. The account token is a real HMAC-signed one from src/api/auth.ts
  * against a real `owners` row in a real SQLite loaded from migration/d1/
  * schema.sql — so "signed in" here means what it means in production, and a
  * stranger's token is a stranger's token rather than a string a fake believed.
@@ -95,7 +95,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { FakeD1, asD1 } from "./fake-d1.ts";
-import { issueToken } from "../src/pb/auth.ts";
+import { issueToken } from "../src/api/auth.ts";
 import {
   connectRoute, tokenHandle, callbackUrl, connectWiringInstalled, connectPageGo,
   installConnectSessionReader, pageHandle, promiseTermIn, whoIsSignedIn,

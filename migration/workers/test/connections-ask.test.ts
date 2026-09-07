@@ -764,7 +764,7 @@ await check("an owner Anticipy has finished nothing for lately is not asked", as
 });
 
 await check("both spellings of a timestamp are read, because this tree holds both", async () => {
-  // src/pb/wire.ts pbNow writes "2026-09-06 12:00:00.000Z" (a SPACE) and
+  // src/api/wire.ts pbNow writes "2026-09-06 12:00:00.000Z" (a SPACE) and
   // Date#toISOString writes "2026-09-06T12:00:00.000Z" (a T), and this database
   // holds rows from both. A recency window that answered differently for the
   // two would make "has Anticipy finished anything for them lately" depend on

@@ -119,7 +119,7 @@
  * Spec: "Connections: how Anticipy asks, learns, and never says Composio",
  * 2026-09-05, page 26.
  */
-import { verifyToken, type AuthEnv } from "../pb/auth.ts";
+import { verifyToken, type AuthEnv } from "../api/auth.ts";
 import { FORBIDDEN_TERMS, forbiddenTermIn } from "../connections/words.ts";
 import {
   waitBudgetMs, waitForConnection, type WaitEnv,
@@ -257,7 +257,7 @@ const APP_STATUS_CANCELLED = "cancelled";
 // would be the wrong-person failure with extra steps.
 
 /** The owner's row id as stored in D1's `owners` table: 15 lowercase
- *  alphanumerics (src/pb/wire.ts newRecordId). NOT an email, NOT a name. */
+ *  alphanumerics (src/api/wire.ts newRecordId). NOT an email, NOT a name. */
 export type OwnerId = string;
 
 export type AccountAlias = "work" | "personal";
@@ -472,7 +472,7 @@ function isWellFormedToken(token: unknown): token is string {
   return typeof token === "string" && /^[A-Za-z0-9_-]{43}$/.test(token);
 }
 
-/** 15 lowercase alphanumerics — src/pb/wire.ts ID_ALPHABET. An email or a human
+/** 15 lowercase alphanumerics — src/api/wire.ts ID_ALPHABET. An email or a human
  *  name reaching an owner slot means a caller has confused "who is this" with
  *  "what do we call them", and the connection would bind to the wrong person. */
 function isOwnerRowId(raw: unknown): raw is OwnerId {

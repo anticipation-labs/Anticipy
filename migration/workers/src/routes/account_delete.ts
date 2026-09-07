@@ -6,7 +6,7 @@
  * handles, and durably request memory erasure before closing the account.
  * Client-provided legacy_uuid is a claim, never deletion authority.
  */
-import { verifyToken, type AuthEnv } from "../pb/auth.ts";
+import { verifyToken, type AuthEnv } from "../api/auth.ts";
 import {
   connectionsFromEnv, requireOwner, type ComposioConnections, type ConnectionsEnv,
 } from "../connections/provider.ts";
