@@ -2465,7 +2465,7 @@ struct ConfirmJobCard: View {
     private var sending: Bool { session.inFlight.contains(job.id) }
     private var failed: Bool { session.failedWrites.contains(job.id) }
     private var unverified: Bool { session.unverifiedWrites.contains(job.id) }
-    private enum NotificationRoute {
+    private enum NotificationRoute: Equatable {
         case textAndApp, appOnly, checking, phoneNeedsAttention
     }
     private var notificationRoute: NotificationRoute {
@@ -2536,8 +2536,12 @@ struct ConfirmJobCard: View {
                     .foregroundStyle(Theme.text2)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            VStack(alignment: .leading, spacing: 3) {
-                Label(notificationLabel, systemImage: "bell")
+            TimelineView(.periodic(from: .now, by: 30)) { context in
+              let caption = DashboardPolicy.notificationCaption(
+                policy: session.notificationPolicy, now: context.date)
+              VStack(alignment: .leading, spacing: 3) {
+                Label(notificationRoute == .textAndApp ? caption.title : notificationLabel,
+                      systemImage: notificationRoute == .textAndApp ? caption.icon : "bell")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(Theme.text2)
                 switch notificationRoute {
@@ -2557,11 +2561,12 @@ struct ConfirmJobCard: View {
                         .foregroundStyle(Theme.muted)
                         .fixedSize(horizontal: false, vertical: true)
                 case .textAndApp:
-                    Text("The result is saved in the app first. I'll also try your saved number; carrier delivery can still fail.")
+                    Text(caption.detail)
                         .font(.caption2)
                         .foregroundStyle(Theme.muted)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+              }
             }
             HStack(spacing: 10) {
                 Button {
@@ -2623,7 +2628,7 @@ struct ConfirmJobCard: View {
 
     private var notificationLabel: String {
         switch notificationRoute {
-        case .textAndApp: return "Updates: In app · I'll also try text"
+        case .textAndApp: return "Text delivery unconfirmed"
         case .appOnly: return "Updates: In app"
         case .checking: return "Updates: In app · checking text setup"
         case .phoneNeedsAttention: return "Updates: In app"

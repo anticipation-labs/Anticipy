@@ -882,6 +882,7 @@ final class AnticipySession: ObservableObject {
     /// account. This is deliberately not persisted: after a process launch the
     /// account must be read before any screen promises that texts can arrive.
     @Published private(set) var canonicalOwnerPhoneState: OwnerMirror.PhoneState = .unknown
+    @Published private(set) var notificationPolicy: DashboardPolicy.NotificationPolicy?
     private var canonicalOwnerRefreshGeneration = 0
 
     private var currentOwnerMirror: OwnerMirror.Values {
@@ -922,6 +923,7 @@ final class AnticipySession: ObservableObject {
     func refreshCanonicalOwner() async -> Bool {
         guard isSignedIn else {
             canonicalOwnerPhoneState = .unknown
+            notificationPolicy = nil
             return false
         }
         let requestedAccount = accountID
@@ -1337,6 +1339,11 @@ final class AnticipySession: ObservableObject {
         }
         let fetchedEvents = try? await b.fetchEvents()
         guard refreshLeaseIsCurrent(lease) else { return }
+        let fetchedNotificationPolicy = try? await b.fetchNotificationPolicy()
+        guard refreshLeaseIsCurrent(lease) else { return }
+        notificationPolicy = fetchedNotificationPolicy.flatMap {
+            try? JSONDecoder().decode(DashboardPolicy.NotificationPolicy.self, from: $0)
+        }
         if let events = fetchedEvents {
             // Server view of the stream: heard lines with the brain's verdict,
             // plus everything Anticipy said/texted back.
@@ -2315,6 +2322,7 @@ final class AnticipySession: ObservableObject {
         // in OwnerMirror so this line cannot fall behind the one in Settings.
         OwnerMirror.clear()
         canonicalOwnerPhoneState = .unknown
+        notificationPolicy = nil
         canonicalOwnerRefreshGeneration += 1
         // Raw and derived account state is just as identifying as the profile
         // mirrors. In particular, Developer Speech Stream makes these arrays

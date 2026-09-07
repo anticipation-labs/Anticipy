@@ -33,6 +33,52 @@ import Foundation
 /// product's promise; a design that buries it is a design that broke it.
 enum DashboardPolicy {
 
+    /// Server-observed outreach timing. This is not a delivery receipt.
+    struct NotificationPolicy: Decodable, Equatable {
+        let quietHoursActive: Bool
+        let startHour: Int
+        let endHour: Int
+        let timeZone: String
+        let observedAt: Double
+        let expiresAt: Double
+
+        func isCurrent(at now: Date) -> Bool {
+            let time = now.timeIntervalSince1970
+            return observedAt <= time + 5 && time < expiresAt
+                && expiresAt > observedAt && expiresAt - observedAt <= 60
+                && (0...23).contains(startHour) && (0...23).contains(endHour)
+                && TimeZone(identifier: timeZone) != nil
+        }
+
+        var endTime: String {
+            let formatter = DateFormatter()
+            formatter.timeZone = TimeZone(secondsFromGMT: 0)
+            formatter.timeStyle = .short
+            return formatter.string(from: Date(timeIntervalSince1970: Double(endHour * 3600)))
+        }
+    }
+
+    struct NotificationCaption: Equatable {
+        let title: String
+        let detail: String
+        let icon: String
+    }
+
+    static func notificationCaption(policy: NotificationPolicy?, now: Date) -> NotificationCaption {
+        guard let policy, policy.isCurrent(at: now) else {
+            return NotificationCaption(title: "Text status unavailable",
+                detail: "I couldn't check the texting schedule. You can answer here now.",
+                icon: "questionmark.circle")
+        }
+        if policy.quietHoursActive {
+            return NotificationCaption(title: "Quiet hours · proactive texts paused",
+                detail: "Until \(policy.endTime) in your account’s time zone. You can answer here now.",
+                icon: "moon.fill")
+        }
+        return NotificationCaption(title: "Text delivery unconfirmed",
+            detail: "Check Messages for a text, or answer here now.", icon: "message")
+    }
+
     // MARK: - Which face is up
 
     enum Mode: String, Equatable, CaseIterable {

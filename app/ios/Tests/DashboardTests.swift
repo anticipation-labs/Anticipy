@@ -11,6 +11,31 @@ func check(_ ok: Bool, _ name: String, _ detail: @autoclosure () -> String = "")
 
 typealias P = DashboardPolicy
 
+// A saved number cannot establish whether a message was sent. The night badge
+// follows an authenticated server snapshot, and disappears when that expires.
+let policyTime = Date(timeIntervalSince1970: 1_788_764_999)
+let nightPolicy = P.NotificationPolicy(quietHoursActive: true, startHour: 22,
+    endHour: 8, timeZone: "America/Vancouver", observedAt: 1_788_764_999,
+    expiresAt: 1_788_765_000)
+let moon = P.notificationCaption(policy: nightPolicy, now: policyTime)
+check(moon.icon == "moon.fill" && moon.title == "Quiet hours · proactive texts paused",
+      "nighttime has an explicit moon and pause explanation")
+check(moon.detail.contains("You can answer here now."), "nighttime offers an immediate way to answer")
+check(P.notificationCaption(policy: nightPolicy,
+    now: Date(timeIntervalSince1970: 1_788_765_000)).icon == "questionmark.circle",
+    "a stale night snapshot cannot claim texting is still paused after its boundary")
+let dayPolicy = P.NotificationPolicy(quietHoursActive: false, startHour: 22,
+    endHour: 8, timeZone: "America/Vancouver", observedAt: 1_788_764_999,
+    expiresAt: 1_788_765_059)
+check(P.notificationCaption(policy: dayPolicy, now: policyTime).title == "Text delivery unconfirmed",
+      "daytime is not a message delivery receipt")
+check(P.notificationCaption(policy: nil, now: policyTime).icon == "questionmark.circle",
+      "failed policy reads remain unknown")
+let invalidPolicy = P.NotificationPolicy(quietHoursActive: true, startHour: 22,
+    endHour: 8, timeZone: "unknown/zone", observedAt: 1_788_764_999,
+    expiresAt: 1_788_765_059)
+check(!invalidPolicy.isCurrent(at: policyTime), "invalid server time zones do not produce a night badge")
+
 // ---------------------------------------------------------------- capture
 // The order is the point: a phone with the microphone switched off in iOS is
 // not "paused", and saying "Listening…" over a dead microphone is the one

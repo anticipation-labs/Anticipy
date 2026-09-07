@@ -841,7 +841,7 @@ settings:
     #      who types a sentence and watches it vanish has had no
     #      acknowledgement at all, which is a send with no receipt and a
     #      different bug from this one.
-    CURRENT_PROJECT_VERSION: "158"
+    CURRENT_PROJECT_VERSION: "160"
     DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: NO
@@ -893,7 +893,7 @@ targets:
         # literal from a Mac one, and two products answering "which build
         # are you holding" with different numbers is the exact disease this
         # gate exists to prevent.
-        CURRENT_PROJECT_VERSION: "158"
+        CURRENT_PROJECT_VERSION: "160"
         DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_ENTITLEMENTS: ../macos/AnticipyMac/AnticipyMac.entitlements

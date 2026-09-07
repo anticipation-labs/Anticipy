@@ -291,6 +291,10 @@ final class AnticipyBackend {
     /// caller's decision turns on the difference: "" means the account has no
     /// number and the phone should stop claiming one, and a thrown error means
     /// nothing has been learned and nothing should change.
+    func fetchNotificationPolicy() async throws -> Data {
+        try await readData(from: baseURL.appendingPathComponent("me/notification-policy"))
+    }
+
     func fetchOwner(id: String) async throws -> Owner {
         let data = try await readData(
             from: baseURL.appendingPathComponent("api/collections/owners/records/\(id)"))

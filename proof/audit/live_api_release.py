@@ -82,6 +82,19 @@ def prove(base, verify_deployment=False):
         status, _, _ = request(base, "POST", "/me/profile/upsert", {
             "name": "Release verification", "timezone": "America/Vancouver"}, owner["token"])
         check(status == 200, "Profile saved through the phone route")
+        status, policy, _ = request(base, "GET", "/me/notification-policy", token=owner["token"])
+        check(status == 200 and policy.get("timeZone") == "America/Vancouver"
+              and policy.get("startHour") == 22 and policy.get("endHour") == 8
+              and isinstance(policy.get("quietHoursActive"), bool)
+              and 0 < policy.get("expiresAt", 0) - policy.get("observedAt", 0) <= 60,
+              "Phone receives current account-scoped quiet-hours policy")
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+        observed_hour = datetime.fromtimestamp(policy["observedAt"], ZoneInfo(policy["timeZone"])).hour
+        check(policy["quietHoursActive"] == (observed_hour >= 22 or observed_hour < 8),
+              "Live quiet-hours answer agrees with the account clock")
+        status, _, _ = request(base, "GET", "/me/notification-policy")
+        check(status == 401, "Quiet-hours profile information requires sign-in")
         status, event, _ = request(base, "POST", "/api/collections/events/records", {
             "owner_ref": owner["id"], "kind": "profile", "source": "import",
             "text": "Synthetic API release check", "device_id": "release-proof"}, owner["token"])
