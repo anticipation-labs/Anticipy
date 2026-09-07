@@ -9,17 +9,37 @@ name: iOS TestFlight
 #     Validation failed (409) Upload limit reached. The upload limit for your
 #     application has been reached. Please wait 1 day and try again.
 #
-# Four consecutive runs then failed at the same step. Build 156 stayed the
-# newest thing any tester could install while the fix they had reported --
-# "stop actually stops" -- sat finished in the tree, unshippable for a day.
-# A per-commit upload spends a scarce daily allowance on intermediate commits
-# and then has none left for the one that matters.
+# WHAT THAT LIMIT IS, AND WHAT IT IS NOT (owner, 2026-09-06 -- an earlier
+# version of this note got it wrong and the wrong version is worse than none):
+#
+#   * It is the BINARY UPLOAD THROTTLE (ITMS-90382 / ITMS-90383), on a rolling
+#     24-hour window measured from the first upload in it. Not a daily quota
+#     that resets at midnight.
+#   * It is NOT the six-per-day TestFlight App Review submission cap. Internal
+#     testers skip review entirely, so that cap does not apply to this app at
+#     all: an internal build is installable the moment processing finishes.
+#   * BURSTS TRIP IT FASTER THAN THE RAW COUNT. Space uploads 10-15 minutes
+#     apart when several go out in a row.
+#   * Bumping the MARKETING version (not just the build number) and retrying
+#     is the documented way through when it does bite. Failing that it is a
+#     wait, or a ticket with Apple Developer Support, who can reset it.
+#   * Internal builds expire after 90 days, and an expired build frees no
+#     upload headroom.
+#
+# Four consecutive runs failed at the same step. Build 156 stayed the newest
+# thing any tester could install while the fix they had reported -- "stop
+# actually stops" -- sat finished in the tree, unshippable. A per-commit
+# upload spends the window on intermediate commits and has nothing left for
+# the one somebody is waiting on.
 #
 # So a push BUILDS and runs the logic gate, which is what catches a broken
 # tree; it uploads only when somebody asks for a build, either by dispatching
-# this workflow by hand or by putting [ship] in the commit message. The final
-# step says plainly which of the two happened, so a push that deliberately did
-# not ship never reads as a build that silently vanished.
+# this workflow by hand or by putting [ship] in the commit message. Two or
+# three internal builds a day is plenty. For a tight iteration loop, run to a
+# device from Xcode instead -- that touches no counter at all.
+#
+# The final step says plainly which of the two happened, so a push that
+# deliberately did not ship never reads as a build that silently vanished.
 on:
   push:
     # The iOS source of record is cloudflare-backend. This used to fire on
@@ -119,8 +139,30 @@ jobs:
           ASC_KEY_PATH: ${{ runner.temp }}/asc/AuthKey.p8
         run: |
           source=$(xcrun agvtool what-version -terse | head -1)
+          # READ, NEVER REMEMBERED. This was the literal 1.1.0 while the
+          # project carried whatever it carried, and the two only have to
+          # disagree once: next-build asks Apple which build numbers are taken
+          # UNDER A MARKETING VERSION, so a stale literal here asks about the
+          # wrong train and answers "nothing collides" about a version nobody
+          # is uploading. Bumping the marketing version is also the documented
+          # way past an upload throttle, which makes drift here likely rather
+          # than theoretical.
+          # NOT agvtool. `agvtool what-marketing-version -terse1` reads
+          # CFBundleShortVersionString out of the Info.plist, and this project
+          # sets that to the literal "$(MARKETING_VERSION)" -- agvtool answers
+          # with the unexpanded reference, which would be passed to Apple as a
+          # version string and match nothing. xcodebuild resolves it.
+          marketing=$(xcodebuild -project Anticipy.xcodeproj -scheme Anticipy \
+            -configuration Release -showBuildSettings 2>/dev/null \
+            | awk -F' = ' '/^ *MARKETING_VERSION = /{print $2; exit}')
+          case "$marketing" in
+            ""|*'$('*)
+              echo "::error::could not resolve MARKETING_VERSION (got '$marketing')"
+              exit 1 ;;
+          esac
+          echo "marketing version $marketing, source build $source"
           next=$(python3 scripts/app_store_connect.py next-build \
-            --bundle ai.anticipy.app --marketing 1.1.0 --source "$source")
+            --bundle ai.anticipy.app --marketing "$marketing" --source "$source")
           echo "ANTICIPY_UPLOAD_BUILD=$next" >> "$GITHUB_ENV"
           # The tree's number is what device_id iphone-b<CFBundleVersion> and
           # the ledgers name, so it is rewritten only on a collision (audit
@@ -171,7 +213,7 @@ jobs:
             # another attempt. Saying "Apple refused the upload" for it sent
             # four runs' worth of people looking for a signing problem.
             if printf '%s' "$out" | grep -q "Upload limit reached"; then
-              echo "::error::Apple's DAILY UPLOAD LIMIT is reached for ai.anticipy.app. The archive is fine and this is not a code defect. Wait for the window to reset (Apple says one day) and re-run this workflow by hand; pushing more commits only spends more attempts."
+              echo "::error::Apple's BINARY UPLOAD THROTTLE (ITMS-90382/90383) is tripped for ai.anticipy.app. The archive is fine and this is not a code defect, and it is not the TestFlight review cap - internal testers skip review. It is a rolling 24-hour window from the first upload in it. Bump MARKETING_VERSION and re-run this workflow by hand, or wait the window out; pushing more commits only spends more attempts, and bursts trip it faster than the count does."
             else
               echo "::error::Apple refused the upload — see the validation error above"
             fi
