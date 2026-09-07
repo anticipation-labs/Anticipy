@@ -325,3 +325,9 @@ nonzero exits. All 94 real suites passed locally in 72.51 seconds. An isolated
 fixture confirmed every suite executes once and one exit-7 child causes the
 parent to exit 1 without skipping the other children. The timing comparison is
 across CI and the Mac, so the next CI run is the comparable measurement.
+
+Comparable CI result: run 34086802463 passed the full system checks at 7267a72.
+Its browser step ran from 05:28:01 to 05:29:14 UTC: 73 seconds for all 94 suites,
+versus 458 seconds in the preceding serial baseline, approximately 6.3 times
+faster. The worker checks and Python suite also passed. No production runtime
+changed for this runner optimization.

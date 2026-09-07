@@ -44,6 +44,14 @@
     "concurrency": 8,
     "previous_ci_seconds": 458,
     "previous_ci_run": 34085067621,
-    "failure_injection_detected": true
+    "failure_injection_detected": true,
+    "ci_seconds": 73,
+    "ci_run": 34086802463,
+    "ci_status": "success"
+  },
+  "system_invariants_ci": {
+    "run": 34086802463,
+    "status": "success",
+    "source": "7267a728d553ec47af31bb56ecc2d3711d65f912"
   }
 }
