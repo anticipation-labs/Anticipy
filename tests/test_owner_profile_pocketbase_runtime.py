@@ -13,6 +13,7 @@ import hashlib
 import json
 import os
 import platform
+import secrets
 import shutil
 import socket
 import sqlite3
@@ -148,6 +149,15 @@ def test_exact_pocketbase_migrates_and_serializes_simultaneous_partial_first_wri
     ]
     assert "CREATE UNIQUE INDEX" in index_sql
     database.close()
+
+    # A fresh PocketBase database otherwise opens its installer in the user's
+    # browser on every test run. Provision only this temporary fixture locally.
+    subprocess.run(
+        [str(binary), "superuser", "upsert", "fixture-admin@example.invalid",
+         secrets.token_urlsafe(32), "--dir", str(data),
+         "--migrationsDir", str(migrations), "--hooksDir", str(hooks)],
+        check=True, capture_output=True, text=True,
+    )
 
     port = _free_port()
     base = f"http://127.0.0.1:{port}"

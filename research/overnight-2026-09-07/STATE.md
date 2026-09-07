@@ -1,6 +1,26 @@
 # Anticipy overnight repair — 7 September 2026
 
-## Latest checkpoint — 2026-09-07 14:18 UTC
+## Latest checkpoint — 2026-09-07 14:55 UTC
+
+- Brain0800b2a LIVE via34132224974;8/8 workers verified. Designated, phone-disabled
+  probe produced exactly one app blocker notice in12.31seconds; task cancelled,
+  fictional phone restored. Failed earlier unserved fixtures preserved.
+- Pagination repair ready: both stall reporters page beyond oldest5/10 tasks.
+  138focused, full3103passed2skipped. Temporary PocketBase admin prevents test
+  browser installer tabs. Commit/deploy next, then seven-task LIVE backlog probe.
+- 40-person frozen replay still running, latest completed31 (26development
+  profiles).10held-out not yet started. Preserve both budget ledgers.
+- New PDF draft20pages at output/pdf/Anticipy-harness-audit-2026-09-07.pdf includes
+  50fictional exemplars, actual screenshot, architecture, evidence and gaps.
+  PDFskill artifact marker ALREADY USED; do not call it again. All first draft
+  pages inspected; orphan caption fixed. Final regeneration/review after results.
+- Still open: proactive connection offer wiring, compound preparation/multi-step
+  API execution, per-task text receipt, legacy semantic shortcuts, final corpus
+  semantic review and updated audio. No universal production/20-day claim.
+- iOS164/internal available; external164 attached but159Apple review blocks
+  submission. Personalextension0.15 unchanged after browser security refusal.
+
+## Previous checkpoint — 2026-09-07 14:18 UTC
 
 - SendBlue-only API3273270 LIVE via34130412469,34accountchecks passed.
   Added live probe found MISSING SENDBLUE_WEBHOOK_SECRET on API (503).

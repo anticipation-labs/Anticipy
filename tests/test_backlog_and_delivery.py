@@ -486,3 +486,22 @@ def test_the_local_suppression_expires(monkeypatch):
     W.mark_sent("k", now=1000.0)
     assert W.sent_moments_ago("k", now=1000.0 + W.SEND_SUPPRESS_SECONDS - 1)
     assert not W.sent_moments_ago("k", now=1000.0 + W.SEND_SUPPRESS_SECONDS + 1)
+
+
+@pytest.mark.parametrize("lane,reporter", [
+    ("", W.report_stalled_work),
+    (W.DEVICE_CALENDAR_LANE, W.report_unclaimed_device_work),
+])
+def test_stalled_work_visits_pages_after_already_waiting_jobs(monkeypatch, lane, reporter):
+    """The oldest five or ten waiting jobs must not hide newer blockers forever."""
+    jobs = a_backlog(25)
+    for job in jobs:
+        job.update(status="queued", lane=lane)
+    monkeypatch.setattr(W, "FINISHED_PER_PAGE", 3)
+    pages = paged_jobs(monkeypatch, jobs)
+    monkeypatch.setattr(W, "browser_reachable", lambda *a, **k: False)
+    seen = []
+    monkeypatch.setattr(W, "publish_stall_notice", lambda _, job, *args: seen.append(job["id"]))
+    reporter(anticipy([]))
+    assert seen == [job["id"] for job in jobs]
+    assert pages == list(range(1, 10))

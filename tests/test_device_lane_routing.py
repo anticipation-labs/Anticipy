@@ -427,9 +427,8 @@ def test_the_device_stall_notice_respects_quiet_hours(monkeypatch):
 
 
 def test_an_uncertain_device_text_is_not_repeated(monkeypatch):
-    """`notify_owner` returning falsy means it did not go. Recording it
-    anyway is how she stamped his questions delivered and sent nothing for
-    ten hours."""
+    """An ambiguous send result must not authorize a second phone effect.
+    The durable app notice stays available regardless of that result."""
     said = []
     _stall_backend(monkeypatch, [_device_row()])
     a = _anticipy(said)

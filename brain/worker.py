@@ -1291,12 +1291,7 @@ def report_stalled_work(anticipy) -> None:
         scope = owner_filter(anticipy)
         if scope:
             filt = f"({filt}) && {scope}"
-        r = pb.get(f"{PB}/api/collections/jobs/records",
-                   params={"filter": filt, "perPage": 5, "sort": "updated"},
-                   timeout=10)
-        if not r.ok:
-            return
-        for job in r.json().get("items", []):
+        for job in _finished_jobs(filt):
             goal = (job.get("goal") or "").strip()
             # THE FILTER ABOVE IS AN OPTIMISATION; THIS IS THE DECISION.
             # `lane!="device_calendar"` is SQLite's `=`, which is
@@ -1402,14 +1397,7 @@ def report_unclaimed_device_work(anticipy) -> None:
         scope = owner_filter(anticipy)
         if scope:
             filt = f"({filt}) && {scope}"
-        # Ten, not five: the page is now a superset, and a page filled by rows
-        # this function will discard is silence again by another route.
-        r = pb.get(f"{anticipy.backend_url}/api/collections/jobs/records",
-                   params={"filter": filt, "perPage": 10, "sort": "updated"},
-                   timeout=10)
-        if not getattr(r, "ok", False):
-            return
-        for job in r.json().get("items", []):
+        for job in _finished_jobs(filt, base=anticipy.backend_url):
             goal = (job.get("goal") or "").strip()
             # The filter above is the superset; this is the lane decision,
             # read the way the hook and the phone read it.
@@ -2092,8 +2080,8 @@ FINISHED_PER_PAGE = 200
 FINISHED_MAX_PAGES = 10
 
 
-def _finished_jobs(filt: str) -> list[dict]:
-    """Every finished job in the window, oldest first.
+def _finished_jobs(filt: str, *, base: str | None = None) -> list[dict]:
+    """Paged owner-scoped work, also used for questions and stalled tasks.
 
     This was one page of the ten NEWEST rows. A finished job's `updated`
     never moves again, so after a burst of more than ten done/failed jobs —
@@ -2107,7 +2095,7 @@ def _finished_jobs(filt: str) -> list[dict]:
     rows: list[dict] = []
     page = 1
     while page <= FINISHED_MAX_PAGES:
-        r = pb.get(f"{PB}/api/collections/jobs/records",
+        r = pb.get(f"{base or PB}/api/collections/jobs/records",
                    params={"filter": filt, "perPage": FINISHED_PER_PAGE,
                            "page": page, "sort": "updated"},
                    timeout=10)
