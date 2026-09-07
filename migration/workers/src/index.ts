@@ -82,6 +82,7 @@ export { PairCodeCounter } from "./do/PairCodeCounter.ts";
 
 export interface Env extends CronEnv {
   DB: D1Database;
+  WORKER_VERSION?: { id: string; tag?: string };
   EVIDENCE: R2Bucket;
   ASSETS: Fetcher;
   PAIR_CODE_COUNTER: DurableObjectNamespace;
@@ -157,7 +158,13 @@ export default {
     const path = url.pathname;
     const method = request.method;
 
-    if (path === "/api/health" && method === "GET") return health();
+    if (path === "/api/health" && method === "GET") {
+      const response = health();
+      if (env.WORKER_VERSION?.id) response.headers.set("x-anticipy-version", env.WORKER_VERSION.id);
+      if (env.WORKER_VERSION?.tag) response.headers.set("x-anticipy-revision", env.WORKER_VERSION.tag);
+      response.headers.set("cache-control", "no-store");
+      return response;
+    }
 
     // The front door. Outside /api/collections/, so the data-API guard never
     // sees these -- they defend themselves. See routes/password_reset.ts.

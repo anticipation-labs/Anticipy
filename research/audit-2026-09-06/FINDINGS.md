@@ -184,3 +184,18 @@ event insertion 409 (`local-erasure-wire.json`). The paid model gateway was
 stopped at $0.537237884 observed, with no unresolved reservations. The PDF's
 12 pages were rendered; every page was checked in the overview and the opening
 page at larger scale, with all 50 case numbers and text extraction verified.
+
+
+## Resumed delivery: deploy verification
+
+The premature partial handoff was a process failure; the owner requested the
+complete original outcome. The backend workflow now has a separate API deployment
+choice with its own tests, the non-destructive erasure migration, and live account
+and ownership checks. Deployments preserve separately configured provider variables.
+The health response retains its client contract and adds immutable Cloudflare
+version metadata; the verifier compares both the active deployment and the exact
+workflow commit. Local HTTP proof passed 14 checks, including cross-account
+read/write refusal, account cleanup, invalid tokens and revoked login. This is
+local evidence until the deployment runs. Source: Cloudflare
+[version metadata binding](https://developers.cloudflare.com/workers/runtime-apis/bindings/version-metadata/)
+and [deployments API](https://developers.cloudflare.com/api/resources/workers/subresources/scripts/subresources/deployments/).

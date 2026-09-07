@@ -17,6 +17,7 @@
   // ==========================================================================
   "$schema": "../../node_modules/wrangler/config-schema.json",
   "name": "anticipy-api",
+  "version_metadata": { "binding": "WORKER_VERSION" },
   // api.anticipy.ai routes to this Worker (the iOS app + future backend origin).
   "routes": [
     { "pattern": "api.anticipy.ai", "custom_domain": true },

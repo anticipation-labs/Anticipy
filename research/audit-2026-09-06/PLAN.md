@@ -66,10 +66,11 @@ limited to evidence gathering and do not edit or deploy the project.
 
 ## September 7 checkpoint
 
-The owner subsequently imposed 3-, 6- and 10-minute checkpoints. Scope expansion
-stopped; delivery is the current PDF, tested local repair set, and explicit
-release blockers. The original exhaustive audit/reset/release objective remains
-incomplete and must not be described as completed by this handoff.
+The owner imposed 3-, 6- and 10-minute self-checks to accelerate the full task.
+A partial handoff was incorrectly treated as completion; the owner explicitly
+rejected that on September 7. The full audit, repair, reset and phone delivery
+remain active. Finish deployment and live verification dependencies before
+expanding the research. The elapsed timer automation has been paused.
 
 Primary-source research is integrated in RESEARCH.md. Inventory candidates cover
 2,518 tracked files and 365 documents; this is enumeration, not complete review.
