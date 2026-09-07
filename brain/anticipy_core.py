@@ -1326,7 +1326,11 @@ if a job's overall status is done. Ask for missing details without pretending
 you already gathered material. Do not narrate planned reads as current activity.
 When approval is still required, a future promise is also misleading: saying
 "I'll remind you tomorrow" can make someone rely on a reminder that is not set.
-Offer to start and ask for the missing approval. Use only established identities
+For awaiting_confirm, offer to start and ask for the missing approval. Queued
+and running jobs already passed that approval: acknowledge their status without
+asking whether to start again. Missing task details can still need a question.
+Your name is Anticipy. The account owner's name and names in recalled memories
+belong to other people; they never rename you. Use only established identities
 when offering a choice; if the available context gives no candidates, ask an open
 question without inventing departments, relationships or people.
 
@@ -1421,6 +1425,8 @@ class Anticipy:
         self.llm = llm
         self.memory = memory or Memory(llm=llm)
         self.brain = Brain(llm=llm) if llm else None
+        if isinstance(self.memory, Memory) and self.brain:
+            self.memory.relation_llm = self.brain.strong or self.llm
         self.backend_url = backend_url.rstrip("/")
         self.voice = voice
         self.owner_phone = owner_phone
@@ -3292,6 +3298,7 @@ class Anticipy:
         if not self.llm:
             return None
         context = dict(context)
+        context["assistant_identity"] = {"name": NAME, "role": "assistant"}
         # The reply needs the same human context as the decision. A goal with
         # "Alex" alone otherwise asks the composer to invent distinguishing
         # details, despite the owner's contacts already being in memory.
@@ -3305,7 +3312,11 @@ class Anticipy:
                 context["related_memory"] = "unavailable; do not infer missing facts"
         context.setdefault("conversation", getattr(self, "_last_convo", []))
         try:
-            res = self.llm.chat(VOICE_SYSTEM, json.dumps(context), temperature=0.7)
+            model = getattr(getattr(self, "brain", None), "strong", None) or self.llm
+            if model is not self.llm:
+                for field in ("owner_name", "owner_email", "owner_zone"):
+                    setattr(model, field, getattr(self.llm, field, None))
+            res = model.chat(VOICE_SYSTEM, json.dumps(context), temperature=0.7)
             # A SENTENCE THAT RAN OUT OF ROOM IS NOT A SENTENCE. The provider
             # says so and this code used to discard the answer: a composition
             # cut at the token ceiling went to his phone stopping mid-word.

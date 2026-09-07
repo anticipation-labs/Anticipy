@@ -1,0 +1,139 @@
+{
+  "verified_at": "2026-09-07T05:45:34.160519+00:00",
+  "scope": "real model; local production memory store; synthetic facts",
+  "cases": [
+    {
+      "case": "separate-people",
+      "passed": true,
+      "expected": "different",
+      "models": [
+        "google/gemini-3.1-pro-preview"
+      ]
+    },
+    {
+      "case": "reversed-roles",
+      "passed": true,
+      "expected": "different",
+      "models": [
+        "google/gemini-3.1-pro-preview"
+      ]
+    },
+    {
+      "case": "case-sensitive-code",
+      "passed": true,
+      "expected": "replaces",
+      "models": [
+        "google/gemini-3.1-pro-preview"
+      ]
+    },
+    {
+      "case": "time-correction",
+      "passed": true,
+      "expected": "replaces",
+      "models": [
+        "google/gemini-3.1-pro-preview"
+      ]
+    },
+    {
+      "case": "denial",
+      "passed": true,
+      "expected": "replaces",
+      "models": [
+        "google/gemini-3.1-pro-preview"
+      ]
+    },
+    {
+      "case": "address-change",
+      "passed": true,
+      "expected": "replaces",
+      "models": [
+        "google/gemini-3.1-pro-preview"
+      ]
+    },
+    {
+      "case": "equivalent",
+      "passed": true,
+      "expected": "same",
+      "models": [
+        "google/gemini-3.1-pro-preview"
+      ]
+    },
+    {
+      "case": "new-owner-name",
+      "passed": true,
+      "expected": "replaces",
+      "models": [
+        "google/gemini-3.1-pro-preview"
+      ]
+    },
+    {
+      "case": "short-name",
+      "passed": true,
+      "expected": "replaces",
+      "models": [
+        "google/gemini-3.1-pro-preview"
+      ]
+    },
+    {
+      "case": "independent-preferences",
+      "passed": true,
+      "expected": "different",
+      "models": [
+        "google/gemini-3.1-pro-preview"
+      ]
+    },
+    {
+      "case": "forget-separate-person",
+      "passed": true,
+      "expected": false,
+      "models": [
+        "google/gemini-3.1-pro-preview"
+      ]
+    },
+    {
+      "case": "forget-paraphrase",
+      "passed": true,
+      "expected": true,
+      "models": [
+        "google/gemini-3.1-pro-preview"
+      ]
+    },
+    {
+      "case": "forget-unrelated-project",
+      "passed": true,
+      "expected": false,
+      "models": [
+        "google/gemini-3.1-pro-preview"
+      ]
+    },
+    {
+      "case": "completed-wrong-recipient",
+      "passed": true,
+      "expected": false,
+      "models": [
+        "google/gemini-3.1-pro-preview"
+      ]
+    },
+    {
+      "case": "completed-paraphrase",
+      "passed": true,
+      "expected": true,
+      "models": [
+        "google/gemini-3.1-pro-preview"
+      ]
+    },
+    {
+      "case": "planned-is-not-done",
+      "passed": true,
+      "expected": false,
+      "models": [
+        "google/gemini-3.1-pro-preview"
+      ]
+    }
+  ],
+  "baseline": "Deterministic identity/word-order/case/time merges and veto/closure failures reproduced before repairs. Initial default-model runs failed identity and case changes; stronger-model run passed all 16 cases.",
+  "local_python": "3003 passed, 2 skipped before subsequent voice composition adjustment",
+  "live_verification": "pending deployment",
+  "memory_source_sha256": "123f5c5d444fcd082be4b4a2cdc8102202a946eafe5166667fd0135da4f14854",
+  "candidate_runtime_source_sha256": "1d07ca7b87b3cc9643381bab0fcce962354474e0b53f33a34b94708259bfc405"
+}

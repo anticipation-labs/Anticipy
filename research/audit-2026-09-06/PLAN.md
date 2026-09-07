@@ -106,3 +106,18 @@ erased and no complete-audit verdict has been issued.
 1.1.1, build 158. Prior setup evidence is in
 `research/2026-09-06-mac-development-setup.md`; it is a starting measurement,
 not evidence that this audit is complete.
+
+## Memory and voice repair, 05:49 UTC September 7
+
+Reproduced and removed the deterministic fact-merge, veto-coverage and
+commitment-resolution shortcuts. Stronger contextual judgments passed all
+16 real-model memory cases. Historical/veto uncertainty defers writes rather
+than inferring permission; retired notes cannot be resurrected by an unknown
+judgment. Full Python suite: 3,003 passed, two skipped. Subsequent voice changes
+passed 46 focused checks and 12 real-model compositions, reviewed in
+voice-state-repair-results.json. Correct assistant identity and persisted
+execution status reach the stronger composer. Runtime deployment is next.
+Paid observed/reserved spend is US$2.339278.
+The earlier report is a checkpoint; erasure, real connected-provider tests and
+the wider legacy meaning audit remain incomplete. No real account reset has
+been executed.

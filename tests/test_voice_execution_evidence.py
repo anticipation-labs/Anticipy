@@ -34,3 +34,19 @@ def test_held_fallback_describes_a_proposal_not_a_ready_artifact():
     a = Anticipy.__new__(Anticipy)
     assert a.say_handling("prepare the renewal summary", True) == (
         "I can take this on: prepare the renewal summary. Want me to start?")
+
+
+def test_voice_uses_stronger_model_and_keeps_assistant_identity_separate():
+    from brain.memory import Memory
+    captured = []
+    class Strong:
+        def chat(self, system, user, **kwargs):
+            captured.append(json.loads(user))
+            return SimpleNamespace(text="the comparison is queued", truncated=False)
+    a = Anticipy.__new__(Anticipy)
+    a.llm = SimpleNamespace(owner_name="Amira", owner_email="amira@example.invalid", owner_zone="UTC")
+    a.brain = SimpleNamespace(strong=Strong())
+    a.memory = Memory()
+    assert a._voice({"goal": "compare the proposals", "execution": {"status": "queued"}}) == "the comparison is queued"
+    assert captured[0]["assistant_identity"] == {"name": "Anticipy", "role": "assistant"}
+    assert a.brain.strong.owner_name == "Amira"

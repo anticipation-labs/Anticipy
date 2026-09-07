@@ -331,3 +331,39 @@ Its browser step ran from 05:28:01 to 05:29:14 UTC: 73 seconds for all 94 suites
 versus 458 seconds in the preceding serial baseline, approximately 6.3 times
 faster. The worker checks and Python suite also passed. No production runtime
 changed for this runner optimization.
+
+## September 7 — memory meaning repair
+
+The old 0.8 overlap shortcut merged different people, reversed roles, changed
+case-sensitive values and numerical corrections without a model call. Its
+dropped-word guard and older tests incorrectly defended this as structural.
+The same family could delete another person’s fact through a veto, collapse
+non-Latin veto keys, or close a task for the wrong recipient. New regressions
+reproduced these failures before edits. All nonidentical fact relations, veto
+coverage and commitment targets now require contextual model judgments. Only
+identical stored bytes use deterministic replay. Corrections preserve the old
+row as retired history; old paraphrases are judged with retirement metadata.
+Unanswered historical or veto comparisons defer writes, preserving retryable
+events. Unknown completion targets leave commitments open.
+
+The default DeepSeek model still failed identity/case distinctions with complete
+notes. Examples improved this but a name correction remained inconsistent. The
+configured stronger model passed all 16 real-model synthetic scenarios; it now
+handles durable memory reconciliation, vetoes, and commitment targets through
+the normal Anticipy initialization path. Extraction retains its existing model.
+Source grounding refreshes on each judgment. See memory-repair-results.json and
+proof/audit/run_memory_relations.py. These runs exercise real model calls and the
+production memory store locally; deployment verification is still pending.
+
+The Python suite passed 3,003 tests with two skips. An unrelated clock test had
+asserted that the substring “0.6” could never appear, then failed on the valid
+age “120.6h”; it now checks the complete age token while retaining its positive
+real-device and elapsed-time assertions.
+
+Voice repair: the composer now uses the configured stronger model with fresh
+owner grounding and a separate Anticipy identity. The prompt distinguishes
+awaiting_confirm from already queued/running work. Twelve real compositions
+passed semantic review; no test messages were sent. Initial six-way execution
+hit the audit gateway’s conservative reservation ceiling after five calls, so
+the incomplete run remains private evidence and the runner uses four concurrent
+calls. Completed results are in voice-state-repair-results.json.

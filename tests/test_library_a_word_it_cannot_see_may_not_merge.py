@@ -29,16 +29,10 @@ function words a SEARCH must ignore. Tense is the difference between a live
 fact and a dead one, exactly as negation is. The family is not "negation
 words"; it is EVERY word the comparator cannot see.
 
-THE FIX IS STRUCTURAL, NOT A WORD LIST. `_near_identical_wording` is now the
-only route from a word score to a modelless "same", and it refuses whenever
-the two texts differ in the tokens the filter REMOVED. A difference the tier
-cannot see is a difference it may not rule on — it falls through to the model,
-which is where HARNESS-LAW 1 puts the question anyway. No word is classified;
-nothing here reads what a sentence means.
-
-`test_no_stopword_alone_may_decide_two_facts_are_one` is the general leg: it
-walks `_STOP` itself, so a word added to that list later arrives already
-covered instead of re-opening the hole.
+The old dropped-word guard was insufficient: visible names, reordered roles,
+case-sensitive values and changed numbers still bypassed the model. Every
+nonidentical pair now needs a model verdict. These regressions retain the
+original denial and tense cases and no longer require the forbidden shortcut.
 """
 from __future__ import annotations
 
@@ -134,7 +128,7 @@ def test_the_instance_fix_would_have_left_the_class_open():
 def test_no_stopword_alone_may_decide_two_facts_are_one():
     """THE GENERAL LEG. For every word `_compare_words` throws away, two facts
     differing by exactly that word must not be called the same one without a
-    model. With `llm=None` the honest answer is (None, "different") — no
+    model. With `llm=None` the honest answer is (None, "unknown") — no
     verdict, so no merge.
 
     The base sentence deliberately contains no stopword of its own, so the
@@ -147,39 +141,35 @@ def test_no_stopword_alone_may_decide_two_facts_are_one():
     for w in sorted(Memory._STOP):
         m = _store_holding(base, now - 10 * DAY)
         rid, relation = m._relate_fact(f"devon renewal {w} signed", ts=now)
-        if relation != "different":
+        if (rid, relation) != (None, "unknown"):
             failures.append((w, rid, relation))
     assert not failures, failures
 
 
-# --------------------------------------------- and the shortcut still works
+# Restatements and corrections are judgments, including near-verbatim ones.
 
-def test_wording_that_differs_only_where_the_tier_can_see_still_merges():
-    """The mutation guard. The `>= 0.8` shortcut exists so a near-verbatim
-    restatement does not cost a model call, and that must survive: same
-    dropped words on both sides, one extra visible word, still "same" with no
-    model in the store at all."""
+
+def test_similar_wording_still_requires_a_positive_model_verdict():
     now = time.time()
     m = _store_holding("devon renewal closes friday", now - 10 * DAY)
-    rid, relation = m._relate_fact("devon renewal closes friday soon", ts=now)
-    assert (rid, relation) == (1, "same"), (rid, relation)
+    assert m._relate_fact("devon renewal closes friday soon", ts=now) == (None, "unknown")
+    m.llm = FakeLLM(relations=["same"])
+    assert m._relate_fact("devon renewal closes friday soon", ts=now) == (1, "same")
+    assert len(m.llm.relation_calls()) == 1
 
 
-def test_a_changed_number_is_still_reported_as_a_changed_detail():
-    """The other deterministic shortcut — same subject, different number —
-    also still fires when the dropped words match on both sides."""
+def test_a_changed_number_is_corrected_only_after_a_model_verdict():
     now = time.time()
     m = _store_holding("dinner with sarah at 6", now - 10 * DAY)
-    rid, relation = m._relate_fact("dinner with sarah at 8", ts=now)
-    assert (rid, relation) == (1, "same"), (rid, relation)
-    assert m._last_match_changed_detail is True
+    assert m._relate_fact("dinner with sarah at 8", ts=now) == (None, "unknown")
+    m.llm = FakeLLM(relations=["replaces"])
+    m.remember_fact("dinner with sarah at 8", source="consolidation", ts=now)
+    assert [f["fact"] for f in m.profile_facts()] == ["dinner with sarah at 8"]
+    assert m.db.execute("SELECT retired_ts FROM profile_facts WHERE id=1").fetchone()[0] == now
+    assert len(m.llm.relation_calls()) == 1
 
 
-def test_the_changed_number_shortcut_cannot_cross_an_invisible_word_either():
-    """Both deterministic tiers go through the same guard, so the hole cannot
-    be reopened by walking in through the numbers branch."""
+def test_a_changed_number_and_negation_cannot_be_guessed_without_a_model():
     now = time.time()
     m = _store_holding("dinner with sarah at 6", now - 10 * DAY)
-    rid, relation = m._relate_fact("dinner with sarah is not at 8", ts=now)
-    assert relation == "different", (rid, relation)
-    assert m._last_match_changed_detail is False
+    assert m._relate_fact("dinner with sarah is not at 8", ts=now) == (None, "unknown")

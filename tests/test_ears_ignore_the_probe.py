@@ -140,7 +140,8 @@ def test_a_probe_cannot_reset_the_silence_clock(live_day, capsys):
     # nothing else. Reading the probe instead would print well under an hour.
     assert any(str(h) in out for h in (hours - 1, hours, hours + 1)), (
         f"the silence is {hours}h since 2026-09-01, not an hour: {out}")
-    assert "0.6" not in out, "that is the probe's age, which is the whole bug"
+    # Match the complete age token: "120.6h ago" is real elapsed time.
+    assert "(0.6h ago)" not in out, "the probe cannot stand in for real speech"
 
 
 def test_a_real_phone_still_proves_the_ears(monkeypatch, capsys):

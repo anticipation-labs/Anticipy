@@ -279,7 +279,8 @@ def test_a_vetoed_fact_does_not_come_back_after_a_second_ingest(monkeypatch):
 def test_a_veto_survives_a_reword(monkeypatch):
     """A veto that only catches character-identical text is defeated by the
     model wording it slightly differently on the second read."""
-    m = Memory()
+    from llm_fakes import FakeLLM
+    m = Memory(llm=FakeLLM(relations=["replaces"], vetoes=['covered']))
     m.forget_fact(FACT)
     _worker_events(monkeypatch, [
         _Event(id="a", text="Marcus Bell is a client; a $40k proposal is in flight."),
@@ -291,7 +292,8 @@ def test_a_veto_survives_a_reword(monkeypatch):
 def test_a_veto_does_not_swallow_unrelated_facts(monkeypatch):
     """Over-blocking what they asked her to forget is the safe direction;
     forgetting things they never touched is not."""
-    m = Memory()
+    from llm_fakes import FakeLLM
+    m = Memory(llm=FakeLLM(relations=["replaces"], vetoes=['outside']))
     m.forget_fact(FACT)
     _worker_events(monkeypatch, [
         _Event(id="a", text="Priya Nayar runs the renewal desk.")])
@@ -305,7 +307,8 @@ def test_a_veto_takes_the_restatement_it_is_a_restatement_of():
     the owner said not to keep the dinner, and a veto that let the same fact
     back wearing one new digit would be defeated by the next read wording it
     slightly differently."""
-    m = Memory()
+    from llm_fakes import FakeLLM
+    m = Memory(llm=FakeLLM(relations=["replaces"], vetoes=['covered']))
     m.remember_fact("dinner with Sarah at 6", importance=3, source="interview")
     assert m.forget_fact("dinner with Sarah at 8") == 1
     assert m.profile_facts() == []
@@ -321,7 +324,8 @@ def test_a_merge_cannot_reinstall_vetoed_wording():
 
     Both rows are untrusted here on purpose, so this isolates the veto guard
     from the provenance guard below it."""
-    m = Memory()
+    from llm_fakes import FakeLLM
+    m = Memory(llm=FakeLLM(relations=["replaces"], vetoes=['outside', 'covered']))
     m.remember_fact("the Devon renewal closes in 3 weeks", importance=4,
                     source="supervised_mail")
     # Survives: too far from the row to be the same fact.
@@ -431,20 +435,23 @@ def test_untrusted_text_cannot_rewrite_an_owner_told_row():
     provenance — after which every consumer of _UNTRUSTED_SOURCES reads them as
     the owner's own and fill_gaps_from_memory may promote them into a plan
     value."""
-    m = Memory()
+    from llm_fakes import FakeLLM
+    m = Memory(llm=FakeLLM(relations=["replaces"]))
     m.remember_fact("the table is booked for 2", importance=4,
                     source="interview")
     m.remember_fact("the table is booked for 8", importance=4,
                     source="supervised_mail")
     rows = m.profile_facts()
-    assert [r["fact"] for r in rows] == ["the table is booked for 2"], rows
-    assert rows[0]["source"] == "interview"
+    owner_rows = [r for r in rows if r["source"] == "interview"]
+    assert [r["fact"] for r in owner_rows] == ["the table is booked for 2"]
+    assert any(r["fact"] == "the table is booked for 8" and r["source"] == "supervised_mail" for r in rows)
 
 
 def test_the_owner_can_still_correct_their_own_fact():
     """The guard must not break the feature it protects: a moved dinner is
     still the owner's own update to keep."""
-    m = Memory()
+    from llm_fakes import FakeLLM
+    m = Memory(llm=FakeLLM(relations=["replaces"]))
     m.remember_fact("dinner with Sarah at 6", importance=3, source="interview")
     m.remember_fact("dinner with Sarah at 8", importance=3, source="interview")
     facts = [f["fact"] for f in m.profile_facts()]
