@@ -12,13 +12,23 @@ def main():
     deadline = time.monotonic() + 1800
     while time.monotonic() < deadline:
         request = urllib.request.Request("https://api.anticipy.ai/admin/brain/status",
-            headers={"X-Internal-Key": os.environ["ANTICIPY_INTERNAL_KEY"]})
+            headers={"X-Internal-Key": os.environ["ANTICIPY_INTERNAL_KEY"],
+                     "User-Agent": "Anticipy-release-proof/1", "Accept": "application/json"})
         try:
             response = urllib.request.urlopen(request, timeout=30)
         except urllib.error.HTTPError as error:
             response = error
         with response:
-            body = json.loads(response.read())
+            raw = response.read()
+            try:
+                body = json.loads(raw)
+            except ValueError:
+                print(json.dumps({"verification_http_status": response.status,
+                                  "error": "fleet did not return JSON"}), flush=True)
+                if response.status in (401, 403):
+                    raise SystemExit("Verification request was refused; no fleet verdict is available")
+                time.sleep(15)
+                continue
         workers = body.get("workers", [])
         matching = [w for w in workers if w.get("source_sha256") == expected
                     and w.get("child_running") is True and w.get("snapshot_current") is True]

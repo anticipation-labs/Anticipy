@@ -268,7 +268,7 @@ export class BrainSupervisor extends DurableObject<BrainEnv> {
         const brain = getContainer(this.env.OWNER_BRAIN, String(owner.id));
         const health = await brain.ensure({ id: String(owner.id), legacy_uuid: String(owner.legacy_uuid ?? "") });
         workers.push({ ...health, owner: String(owner.id) });
-        if (health.ok === true && health.child_running === true) served += 1;
+        if (health.ok === true && health.child_running === true && health.snapshot_current === true) served += 1;
         else failed.push(String(owner.id));
       } catch (err) {
         // One owner failing to start must not stop the fleet. Log and continue,

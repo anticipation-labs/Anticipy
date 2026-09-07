@@ -137,13 +137,14 @@
         "regions": ["WNAM"]
       },
 
-      // A rollout must not kill a brain mid-conversation. 25% at a time, and
-      // one hour of grace for an instance that is actively serving before it is
-      // shut down. The container's SIGTERM handler flushes memory.db to R2
-      // (brain/container_entry.py, BRAIN.md §4.3) — the grace period is what
-      // gives that flush somewhere to happen.
-      "rollout_step_percentage": 25,
-      "rollout_active_grace_period": 3600
+      // Start with 25%, then explicitly reach the whole fleet. This is the
+      // minimum connection age before replacement, NOT the shutdown budget.
+      // Cloudflare separately gives SIGTERM handlers 15 minutes to flush.
+      // A one-hour connection age kept the previous image serving after a
+      // successful deploy. Five minutes protects a fresh boot without hiding
+      // the release for an hour. See the 2026-09-07 audit and CF rollout docs.
+      "rollout_step_percentage": [25, 100],
+      "rollout_active_grace_period": 300
     }
   ],
 
