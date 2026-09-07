@@ -187,6 +187,7 @@ if __name__ == "__main__":
     parser.add_argument("--label", default="pilot-1")
     parser.add_argument("--timeout", type=int, default=150)
     parser.add_argument("--parallel", type=int, choices=range(1, 9), default=1)
+    parser.add_argument("--evaluate-held-out", action="store_true", help="Final evaluation of the frozen held-out people")
     args = parser.parse_args()
     if args.child:
         child()
@@ -195,8 +196,10 @@ if __name__ == "__main__":
         selected = [int(i) for i in args.ids.split(",")]
         for index in selected:
             person = people[index - 1]
-            if person["split"] == "held_out":
+            if person["split"] == "held_out" and not args.evaluate_held_out:
                 raise SystemExit("held-out scenarios stay closed until development checks are complete")
+            if args.evaluate_held_out and person["split"] != "held_out":
+                raise SystemExit("final held-out evaluation accepts only the frozen held-out people")
         failed = False
         with ThreadPoolExecutor(max_workers=args.parallel) as pool:
             futures = [pool.submit(run_person, people[index - 1], args.label, args.timeout) for index in selected]

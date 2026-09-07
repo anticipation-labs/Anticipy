@@ -1,9 +1,10 @@
 {
-  "checkpoint": "2026-09-07T03:52Z",
+  "checkpoint": "2026-09-07T04:46:50.151222+00:00",
   "branch": "cloudflare-backend",
   "python": {
-    "passed": 2986,
-    "skipped": 2
+    "passed": 2989,
+    "skipped": 2,
+    "scope": "full suite before runtime-status repair; runtime and affected tests additionally pass"
   },
   "ios_baseline_suites": 63,
   "worker_chained_files": 34,
@@ -11,11 +12,16 @@
   "local_route_probe_requests": 131,
   "corpus_people": 50,
   "corpus_contacts": 101,
-  "distinct_transcript_people_observed": 14,
+  "distinct_transcript_people_observed": 50,
   "composer_replay_outputs": 30,
-  "model_observed_usd": 0.5372378839999999,
-  "model_reserved_plus_observed_usd": 0.5372378839999999,
-  "deployed": false,
+  "model_observed_usd": 1.8967032629999998,
+  "model_reserved_plus_observed_usd": 1.8967032629999998,
+  "deployed": true,
   "owner_reset_executed": false,
-  "phone_release_executed": false
+  "phone_release_executed": false,
+  "deployed_scope": "API at b2a61f9 verified live; brain repairs pending deployment",
+  "held_out_cases_observed": 10,
+  "live_api_checks": 17,
+  "real_sms_delivery": "connection link and code visible in user-supplied Messages screenshots",
+  "google_calendar_oauth": "not confirmed"
 }

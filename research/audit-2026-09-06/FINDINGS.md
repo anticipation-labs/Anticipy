@@ -240,3 +240,11 @@ for every person. It now runs up to eight isolated people concurrently (six in
 the current cohort) with a distinct run tag recorded at the model-budget proxy.
 Twelve budget tests pass, including racing reservations and attribution of
 out-of-order completions. Provider requests still share one locked dollar cap.
+
+## 2026-09-07: completed 50-person ingestion evaluation and release verification repair
+
+All 50 fictional people now have real-model transcript observations; ten held-out cases were opened once after the identity-context correction. See held-out-results.json. This proves ingestion and persisted proposed work, not browser/provider outcomes. Observed paid model cost is US$1.896704, with no unresolved reservations at this checkpoint.
+
+The canonical account email now reaches both model tiers with explicit ownership. The pickup-contact and client-recipient failures no longer substitute the owner in two fresh full-path replays. Some responses still ask to start already-queued work; most preparation remains held. These are recorded defects, not passed tasks.
+
+Adversarial review found that GET /health reconciled the fleet and always asserted success, while the container also said ok:true with a dead child. The repair makes GET read a stored observation only, coalesces overlapping scheduled reconciliations, reads actual container process/snapshot status under the lifecycle lock using raw port transport (no implicit restart), and fingerprints the image source. A private internal-key API route relays only that fixed read. CI now refuses to call the brain verified until the active Worker revision and every observed runtime fingerprint match and their snapshots are current. Unit checks exercise dead process, missing/stale/failed snapshots, stale fleet status and unauthorized transport.

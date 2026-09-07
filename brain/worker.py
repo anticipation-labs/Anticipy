@@ -5064,7 +5064,8 @@ def main() -> None:
     # server-default behaviour.
     owner_zone = fetch_owner_timezone(owner_ref)
     llm = LLM(owner_zone=owner_zone,
-              owner_name=fetch_owner_first_name(owner_ref))
+              owner_name=fetch_owner_first_name(owner_ref),
+              owner_email=(_latest_profile(owner_ref) or {}).get("email"))
     if owner_zone:
         try:
             CLOCK_TZ = ZoneInfo(owner_zone)
@@ -5260,6 +5261,9 @@ def main() -> None:
                 # worker that started before onboarding finished otherwise
                 # composes for the whole day without knowing who it is
                 # writing to.
+                identity_profile = _latest_profile(anticipy.owner_ref)
+                if identity_profile is not None:
+                    llm.owner_email = str(identity_profile.get("email") or "").strip()
                 first = fetch_owner_first_name(anticipy.owner_ref)
                 if first and first != llm.owner_name:
                     llm.owner_name = first

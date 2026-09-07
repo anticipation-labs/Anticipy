@@ -21,6 +21,7 @@
  */
 import { planFleet, parseCap } from "./plan";
 import { OwnerLifecycle } from "./owner_lifecycle";
+import { fleetStatus, type FleetObservation, type WorkerObservation } from "./fleet_status";
 import { drainMemoryPurges, type PurgeEnv } from "./purge";
 import { Container, getContainer } from "@cloudflare/containers";
 import { DurableObject } from "cloudflare:workers";
@@ -89,7 +90,14 @@ export class OwnerBrain extends Container<BrainEnv> {
   private lifecycle = new OwnerLifecycle(
     this.ctx.storage,
     async (ref) => !!await this.env.DB.prepare("SELECT id FROM owners WHERE id = ?").bind(ref).first(),
-    async (owner) => { await this.startAndWaitForPorts({ startOptions: { envVars: this.envFor(owner) } }); },
+    async (owner) => {
+      await this.startAndWaitForPorts({ startOptions: { envVars: this.envFor(owner) } });
+      // Inside the lifecycle lock, and raw port transport: this observation
+      // must never auto-start a container after a crash or erasure.
+      if (!this.ctx.container) throw new Error("container runtime unavailable");
+      const response = await this.ctx.container.getTcpPort(8731).fetch("http://container/health");
+      await this.ctx.storage.put("last_health", await response.json());
+    },
     async () => { await this.destroy(); },
   );
 
@@ -105,8 +113,9 @@ export class OwnerBrain extends Container<BrainEnv> {
    * child_environment() computes. Idempotent: the SDK no-ops start() on an
    * already-running container.
    */
-  async ensure(owner: Owner): Promise<void> {
+  async ensure(owner: Owner): Promise<WorkerObservation> {
     await this.lifecycle.ensure(owner);
+    return await this.ctx.storage.get<WorkerObservation>("last_health") ?? { ok: false, child_running: false, owner: owner.id };
   }
 
   async eraseMemory(ref: string): Promise<void> {
@@ -169,6 +178,19 @@ export class OwnerBrain extends Container<BrainEnv> {
  * supervisor.py's infinite reconcile loop with one D1 read per tick.
  */
 export class BrainSupervisor extends DurableObject<BrainEnv> {
+  private activeTick?: Promise<{ served: number; unserved: string[] }>;
+
+  async status() {
+    return fleetStatus(await this.ctx.storage.get<FleetObservation>("last_observation"));
+  }
+
+  tick(): Promise<{ served: number; unserved: string[] }> {
+    // Durable Object calls may interleave at await; one name alone is not a
+    // mutex. Coalesce overlapping cron requests until reconciliation ends.
+    if (this.activeTick) return this.activeTick;
+    this.activeTick = this.reconcile().finally(() => { this.activeTick = undefined; });
+    return this.activeTick;
+  }
   /**
    * brain/supervisor.py discover_owners() + reconcile_children(), together.
    *
@@ -179,7 +201,7 @@ export class BrainSupervisor extends DurableObject<BrainEnv> {
    *     and SIGTERM a live owner whose random id happened to sort low.
    *   - over-capacity PRINTS EVERY PASS, so going over the cap is visible.
    */
-  async tick(): Promise<{ served: number; unserved: string[] }> {
+  private async reconcile(): Promise<{ served: number; unserved: string[] }> {
     // Deletion removes owners from discovery, so an ordinary retirement loop
     // never sees them. Drain their durable requests before starting this fleet.
     const cleanup = await drainMemoryPurges(this.env as unknown as PurgeEnv,
@@ -239,15 +261,20 @@ export class BrainSupervisor extends DurableObject<BrainEnv> {
     const { serve, unserved } = planFleet(discovered, always, cap);
 
     let served = 0;
+    const failed: string[] = [];
+    const workers: WorkerObservation[] = [];
     for (const owner of serve) {
       try {
         const brain = getContainer(this.env.OWNER_BRAIN, String(owner.id));
-        await brain.ensure({ id: String(owner.id), legacy_uuid: String(owner.legacy_uuid ?? "") });
-        served += 1;
+        const health = await brain.ensure({ id: String(owner.id), legacy_uuid: String(owner.legacy_uuid ?? "") });
+        workers.push({ ...health, owner: String(owner.id) });
+        if (health.ok === true && health.child_running === true) served += 1;
+        else failed.push(String(owner.id));
       } catch (err) {
         // One owner failing to start must not stop the fleet. Log and continue,
         // exactly as reconcile_children keeps going past a dead child.
         console.log(`owner worker failed to start · owner=${owner.id} · ${err}`);
+        failed.push(String(owner.id));
       }
     }
     if (unserved.length) {
@@ -277,6 +304,9 @@ export class BrainSupervisor extends DurableObject<BrainEnv> {
       }
     }
     if (retired) console.log(`brain fleet retired ${retired} unserved owner(s) (cap ${cap})`);
+    await this.ctx.storage.put("last_observation", {
+      checked_at: Date.now(), served, unserved, failed, workers, cleanup_failed: cleanup.failed,
+    } satisfies FleetObservation);
     return { served, unserved };
   }
 }
@@ -298,11 +328,12 @@ export default {
   // A minimal fetch so the Worker is valid even though the fleet is
   // cron-driven. Returns the supervisor's current view for a health probe.
   async fetch(request: Request, env: BrainEnv): Promise<Response> {
-    if (new URL(request.url).pathname === "/health") {
+    if (new URL(request.url).pathname === "/health" && request.method === "GET") {
       const supervisor = env.BRAIN_SUPERVISOR.get(env.BRAIN_SUPERVISOR.idFromName("fleet"));
-      const r = await supervisor.tick();
-      return new Response(JSON.stringify({ ok: true, ...r }), {
-        headers: { "content-type": "application/json" },
+      const r = await supervisor.status();
+      return new Response(JSON.stringify({ ...r, version: env.WORKER_VERSION }), {
+        status: r.ok ? 200 : 503,
+        headers: { "content-type": "application/json", "cache-control": "no-store" },
       });
     }
     return new Response("brain fleet — cron-driven; POST nothing here", { status: 404 });

@@ -104,17 +104,14 @@ jobs:
           wrangler deploy \
             --config migration/config/wrangler.brain.jsonc \
             --keep-vars \
+            --tag "$GITHUB_SHA" \
             --var ANTICIPY_MAX_OWNER_WORKERS:"$cap" \
             --containers-rollout gradual
 
-      - name: Post-deploy checks
-        run: |
-          echo "Watch for, per §10.6:"
-          echo "  * the container reaches healthy on :8731"
-          echo "  * 'state pulled' then 'state snapshot ok' within ~90s"
-          echo "  * the brain answers a real text for the ONE test owner"
-          echo "Do NOT raise the cap to 100 until the single owner is proven."
-          echo "Leave the Railway volume in place, unmounted, for two weeks (§10.9)."
+      - name: Verify the active fleet, running source and current memory snapshots
+        env:
+          ANTICIPY_INTERNAL_KEY: ${{ secrets.ANTICIPY_INTERNAL_KEY }}
+        run: python3 -m proof.audit.live_brain_release
 
   api:
     if: ${{ github.ref == 'refs/heads/cloudflare-backend' && github.event.inputs.confirm == 'DEPLOY' && github.event.inputs.component == 'api' }}

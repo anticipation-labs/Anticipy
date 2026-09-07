@@ -63,6 +63,7 @@ import { handsApiRun, HANDS_API_RUN_PATH, type HandsApiEnv } from "./routes/hand
 import { handsApiTools, HANDS_API_TOOLS_PATH, type HandsApiToolsEnv } from "./routes/hands_api_tools.ts";
 import { adminConnectLink, ADMIN_CONNECT_LINK_PATH, type AdminConnectLinkEnv } from "./routes/admin_connect_link.ts";
 import { adminSmsLines, ADMIN_SMS_LINES_PATH, type AdminSmsLinesEnv } from "./routes/admin_sms_lines.ts";
+import { adminBrainStatus } from "./routes/admin_brain_status.ts";
 import { agentRegister, agentKey, agentLlm, agentCaptcha, agentUpgradeCredential, type AgentEnv } from "./routes/agent.ts";
 import {
   serveFile, shareEvidence, depositEvidenceImage, discardEvidenceImage, type AssetEnv,
@@ -83,6 +84,7 @@ export { PairCodeCounter } from "./do/PairCodeCounter.ts";
 export interface Env extends CronEnv {
   DB: D1Database;
   WORKER_VERSION?: { id: string; tag?: string };
+  BRAIN?: Fetcher;
   EVIDENCE: R2Bucket;
   ASSETS: Fetcher;
   PAIR_CODE_COUNTER: DurableObjectNamespace;
@@ -199,6 +201,7 @@ export default {
 
     // The small service routes. /worker/owners returns two fields and nothing
     // else -- it is authorised by a shared token every worker carries.
+    if (path === "/admin/brain/status") return adminBrainStatus(request, env);
     if (path === "/worker/owners" && method === "GET") {
       return workerOwners(request, env as unknown as ServiceEnv);
     }

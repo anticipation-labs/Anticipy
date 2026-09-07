@@ -4,7 +4,7 @@
   "type": "module",
   "description": "Per-owner brain fleet on Cloudflare Containers. SEPARATE deploy from the API Worker (config/wrangler.brain.jsonc) so the API bundle stays lean. UNTESTED \u2014 see src/index.ts header.",
   "scripts": {
-    "test": "node --experimental-strip-types test/plan-fleet.test.ts && node --experimental-strip-types test/erasure.test.ts",
+    "test": "node --experimental-strip-types test/plan-fleet.test.ts && node --experimental-strip-types test/erasure.test.ts && node --experimental-strip-types test/status.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

@@ -435,7 +435,8 @@ class Brain:
         if strong_id and strong_id != getattr(self.llm, "model", ""):
             s = LLM(model=strong_id,
                     owner_zone=getattr(self.llm, "owner_zone", None),
-                    owner_name=getattr(self.llm, "owner_name", None))
+                    owner_name=getattr(self.llm, "owner_name", None),
+                    owner_email=getattr(self.llm, "owner_email", None))
             # The Gemini-first provider precedence would silently serve the
             # CHEAP gemini_model default and make this a no-op wearing a
             # strong model's name — pin both fields to the strong id.
@@ -546,6 +547,10 @@ Reply ONLY with compact JSON: {"owner_committed": true|false}"""
             # which is a floor lifting itself.
             re_raw = None
             try:
+                # Onboarding can finish after this client was constructed.
+                # The second opinion must see the same current account identity.
+                for field in ("owner_name", "owner_email", "owner_zone"):
+                    setattr(self.strong, field, getattr(self.llm, field, None))
                 second = self.strong.chat(TRIAGE_SYSTEM, transcript_line,
                                           temperature=0.0)
                 re_raw = json.loads(_extract_json(second.text))

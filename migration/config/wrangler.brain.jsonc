@@ -40,6 +40,7 @@
   // ==========================================================================
   "$schema": "../../node_modules/wrangler/config-schema.json",
   "name": "anticipy-brain",
+  "version_metadata": { "binding": "WORKER_VERSION" },
   "main": "../workers/brain/src/index.ts",
 
   // Matched to the site Worker (repo-root wrangler.jsonc) on purpose: two

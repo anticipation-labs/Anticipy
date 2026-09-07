@@ -101,3 +101,23 @@ def test_a_foreign_aux_slug_is_refused_not_forwarded(monkeypatch):
     result = llm.chat("Extract facts.", "hello", temperature=0, aux=True)
 
     assert result.used_model == "gemini-2.5-flash"
+
+
+def test_account_email_reaches_the_model_with_explicit_ownership(monkeypatch):
+    llm = _system_sent(monkeypatch)
+    llm.owner_email = "owner@audit.invalid"
+    llm.chat("Prepare a client draft.", "Use the signed sharing instructions.", temperature=0)
+    system = _Client.request[2]["systemInstruction"]["parts"][0]["text"]
+    assert 'ACCOUNT OWNER IDENTITY: {"name": "Omar", "email": "owner@audit.invalid"}' in system
+    assert "preserve an unresolved role" in system
+    assert "owner@audit.invalid" not in _Client.request[2]["contents"][0]["parts"][0]["text"]
+
+
+def test_strong_second_opinion_inherits_account_identity(monkeypatch):
+    from brain.orchestrator import Brain
+    monkeypatch.setenv("ANTICIPY_STRONG_MODEL", "google/gemini-3.1-pro-preview")
+    llm = LLM(api_key="fake", model="test/primary", owner_name="Evan",
+              owner_email="evan@audit.invalid")
+    brain = Brain(llm)
+    assert brain.strong.owner_email == "evan@audit.invalid"
+    assert brain.strong.owner_name == "Evan"

@@ -1,0 +1,22 @@
+{
+  "scope": "40 development people observed through local HTTP, real models and persisted brain state; browser/provider outcomes remain unproven",
+  "source_repair": "Explicit account identity supplied to both model tiers; former generic Their email memory was misread as client email",
+  "recorded_failures": [
+    {
+      "person": 19,
+      "before": "pickup recipient silently became account owner",
+      "replay": "pickup contact remains unresolved; voice asks which contact"
+    },
+    {
+      "person": 22,
+      "before": "gallery email addressed to account owner without evidence",
+      "replay": "client role preserved; owner email is not inserted"
+    }
+  ],
+  "additional_observations": [
+    "Some queued jobs still receive wording asking to start; no claim of provider completion is made",
+    "One welcome introduced the assistant with an incorrect name",
+    "Author-supplied scenario histories are abstract; no final browser state is established by these runs"
+  ],
+  "held_out_release": "Run the ten untouched cases after this context repair; report their outcomes without labelling ingestion as completed work"
+}

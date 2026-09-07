@@ -41,6 +41,7 @@ import time
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from brain.runtime_status import health as runtime_health
 
 # Reuse the TESTED routines rather than rewriting the dangerous parts. §5.3.4
 # is explicit: use state_backup._snapshot_sqlite (SQLite online backup API +
@@ -75,6 +76,8 @@ _child: subprocess.Popen | None = None
 # the snapshot and upload together: a mutex over the local copy alone still
 # permits an older upload to complete last and overwrite newer memory in R2.
 _snapshot_lock = threading.RLock()
+_last_snapshot_at: float | None = None
+_snapshot_error = False
 
 
 def _log(msg: str) -> None:
@@ -201,8 +204,16 @@ def snapshot_once(s3) -> None:
     """One consistent snapshot of both files, uploaded. THE SNAPSHOT INTERVAL IS
     THE CRASH-LOSS WINDOW: a container lost without SIGTERM costs this owner up
     to SNAPSHOT_SECONDS of memory. That number was chosen at 60s knowingly."""
+    global _last_snapshot_at, _snapshot_error
     with _snapshot_lock:
-        _snapshot_once(s3)
+        try:
+            _snapshot_once(s3)
+            if (_owner_dir / "memory.db").exists():
+                _last_snapshot_at = time.time()
+            _snapshot_error = False
+        except Exception:
+            _snapshot_error = True
+            raise
 
 
 def _snapshot_once(s3) -> None:
@@ -283,14 +294,17 @@ class _Control(BaseHTTPRequestHandler):
             # invisible otherwise (§4.3).
             def present(n: str) -> bool:
                 return bool(str(os.environ.get(n) or "").strip())
-            body = (
-                b'{"ok":true,"owner":"' + OWNER_REF.encode() + b'",'
-                b'"child_running":' + (b"true" if _child and _child.poll() is None else b"false") + b','
-                b'"has_pb":' + (b"true" if present("ANTICIPY_PB") else b"false") + b','
-                b'"has_service_token":' + (b"true" if present("ANTICIPY_SERVICE_TOKEN") else b"false") + b','
-                b'"has_s3":' + (b"true" if present("ANTICIPY_BACKUP_S3_BUCKET") else b"false") + b"}"
-            )
-            self.send_response(200)
+            status = runtime_health(running=bool(_child and _child.poll() is None),
+                                    snapshot_at=_last_snapshot_at, snapshot_error=_snapshot_error,
+                                    now=time.time(), interval=SNAPSHOT_SECONDS)
+            status.update(owner=OWNER_REF, has_pb=present("ANTICIPY_PB"),
+                          has_service_token=present("ANTICIPY_SERVICE_TOKEN"),
+                          has_s3=present("ANTICIPY_BACKUP_S3_BUCKET"),
+                          models={key: os.environ.get(key) for key in
+                                  ("ANTICIPY_MODEL", "ANTICIPY_GEMINI_MODEL", "ANTICIPY_STRONG_MODEL")},
+                          gemini_configured=present("GEMINI_API_KEY"))
+            body = json.dumps(status).encode()
+            self.send_response(200 if status["ok"] else 503)
             self.send_header("content-type", "application/json")
             self.end_headers()
             self.wfile.write(body)
