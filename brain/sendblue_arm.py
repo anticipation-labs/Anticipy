@@ -224,6 +224,34 @@ class SendblueArm:
 
     # ------------------------------------------------------------------ text
 
+    def message_status(self, handle: str) -> dict:
+        """Read one already-saved provider receipt; never send or list messages.
+
+        The status endpoint has returned both a flat message record and the
+        nested ``{"status": {"status": "DELIVERED"}}`` envelope in production.
+        Return only receipt facts, never the provider's message/account content.
+        """
+        if not self.key_id or not self._secret:
+            raise SendblueNotConfigured("Sendblue receipt credentials are missing")
+        if not isinstance(handle, str) or not handle.strip():
+            raise ValueError("A saved provider message handle is required")
+        response = requests.get(f"{self.base}/api/status", params={"handle": handle},
+                                headers=self._headers(), timeout=TIMEOUT_SECONDS)
+        if not response.ok:
+            raise va.SendFailed(f"Sendblue receipt lookup failed: HTTP {response.status_code}")
+        payload = response.json()
+        if not isinstance(payload, dict):
+            raise va.SendFailed("Sendblue receipt was not an object")
+        record = payload.get("status") if isinstance(payload.get("status"), dict) else payload
+        echoed = record.get("message_handle") or payload.get("message_handle")
+        if echoed and echoed != handle:
+            raise va.SendFailed("Sendblue receipt did not match the requested handle")
+        status = record.get("status")
+        if not isinstance(status, str):
+            raise va.SendFailed("Sendblue receipt had no status")
+        state = status.lower()
+        return {"sid": handle, "status": state, "delivered": state in ("delivered", "read")}
+
     def text(self, to: str, body: str, media=None) -> dict:
         """The words, and the picture if this channel can carry one.
 

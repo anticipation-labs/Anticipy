@@ -529,3 +529,56 @@ def test_the_owners_real_number_appears_in_no_test_and_no_proof():
         body = path.read_text()
         for digits in radioactive:
             assert digits not in body, f"{path.name} names the owner's number"
+
+
+@pytest.mark.parametrize('payload,status,delivered', [
+    ({'status': {'status': 'DELIVERED'}}, 'delivered', True),
+    ({'status': 'READ', 'message_handle': HANDLE}, 'read', True),
+    ({'status': 'QUEUED'}, 'queued', False),
+    ({'status': 'SENT'}, 'sent', False),
+    ({'status': {'status': 'ERROR'}}, 'error', False),
+])
+def test_receipt_lookup_is_read_only_and_accepts_live_nested_shape(monkeypatch, payload, status, delivered):
+    arm, posts, _ = _arm(monkeypatch)
+    calls = []
+    def get(url, **kwargs):
+        calls.append((url, kwargs))
+        return _Response(payload)
+    monkeypatch.setattr(sb.requests, 'get', get)
+    assert arm.message_status(HANDLE) == {'sid': HANDLE, 'status': status, 'delivered': delivered}
+    assert posts == []
+    assert calls == [(arm.base + '/api/status', {
+        'params': {'handle': HANDLE}, 'headers': arm._headers(), 'timeout': sb.TIMEOUT_SECONDS,
+    })]
+
+
+@pytest.mark.parametrize('payload,http', [
+    ({'status': {'status': 'DELIVERED'}, 'message_handle': 'another-message'}, 200),
+    ({'status': {}}, 200),
+    ([], 200),
+    ({'error': SECRET}, 403),
+])
+def test_receipt_errors_do_not_claim_delivery_or_expose_provider_body(monkeypatch, payload, http):
+    arm, posts, _ = _arm(monkeypatch)
+    monkeypatch.setattr(sb.requests, 'get', lambda *a, **k: _Response(payload, http))
+    with pytest.raises(va.SendFailed) as caught:
+        arm.message_status(HANDLE)
+    assert SECRET not in str(caught.value)
+    assert posts == []
+
+
+def test_receipt_missing_handle_credentials_and_timeout_never_send(monkeypatch):
+    arm, posts, _ = _arm(monkeypatch)
+    from unittest.mock import Mock
+    get = Mock(side_effect=sb.requests.Timeout())
+    monkeypatch.setattr(sb.requests, 'get', get)
+    with pytest.raises(ValueError):
+        arm.message_status('')
+    assert not get.called
+    with pytest.raises(sb.requests.Timeout):
+        arm.message_status(HANDLE)
+    arm._secret = ''
+    with pytest.raises(sb.SendblueNotConfigured):
+        arm.message_status(HANDLE)
+    assert get.call_count == 1
+    assert posts == []

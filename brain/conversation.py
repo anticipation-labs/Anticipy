@@ -272,6 +272,11 @@ class TwilioTransport:
             return self.voice.text(to, body, media=media)
         return self.voice.text(to, body)
 
+    def message_status(self, handle: str) -> Optional[dict]:
+        """Receipt-only lookup for transports that support it; no send fallback."""
+        lookup = getattr(self.voice, "message_status", None)
+        return lookup(handle) if callable(lookup) else None
+
 
 # THE CLASS IS PROVIDER-NEUTRAL AND ALWAYS WAS: it calls `arm.text(to, body,
 # media)` and propagates whatever the arm raises. brain/sendblue_arm.py gives

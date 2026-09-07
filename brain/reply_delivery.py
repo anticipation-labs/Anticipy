@@ -7,6 +7,8 @@ provider response remains unconfirmed instead of authorizing a duplicate.
 from __future__ import annotations
 
 import json
+import time
+from datetime import datetime, timedelta, timezone
 from . import backend
 
 
@@ -16,15 +18,16 @@ class ReplyDelivery:
         self.owner = owner_ref
         self.transport = transport
         self.phone = phone  # Re-read the canonical profile at delivery time.
+        self._next_receipt_scan = 0
 
     @property
     def url(self):
         return f'{self.base}/api/collections/events/records'
 
-    def rows(self, expression, limit=100):
+    def rows(self, expression, limit=100, sort='created'):
         response = backend.get(self.url, params={
             'filter': f'owner_ref={json.dumps(self.owner)} && ({expression})',
-            'sort': 'created', 'perPage': limit,
+            'sort': sort, 'perPage': limit,
         })
         response.raise_for_status()
         return response.json().get('items', [])
@@ -143,3 +146,71 @@ class ReplyDelivery:
             except Exception:
                 # One malformed/orphaned reply cannot stop later answers.
                 continue
+        self.reconcile_receipt()
+
+    def reconcile_receipt(self):
+        """Recover a lost/early callback with one read-only provider lookup.
+
+        Only positive terminal receipts advance the saved state. A queued,
+        negative, or failed lookup cannot downgrade a concurrently delivered
+        callback, and this path never resends a message.
+        """
+        lookup = getattr(self.transport, 'message_status', None)
+        now_tick = time.monotonic()
+        if not callable(lookup) or now_tick < self._next_receipt_scan:
+            return
+        self._next_receipt_scan = now_tick + 30
+        now = datetime.now(timezone.utc)
+        stamp = lambda value: value.isoformat(timespec='milliseconds').replace('T', ' ')
+        cutoff = stamp(now - timedelta(days=7))
+        attempts = self.rows('kind="notification_status" && '
+            '(decision="sms_accepted" || decision="sms_unconfirmed") && '
+            f'created>={json.dumps(cutoff)}', 100, sort='-created')
+        candidates = []
+        for attempt in attempts:
+            if (attempt.get('owner_ref') != self.owner
+                    or attempt.get('external_event_id') != f'reply-sms:{attempt.get("goal")}'):
+                continue
+            try:
+                metadata = json.loads(attempt.get('text') or '{}')
+                handle = metadata.get('provider_id')
+                if not isinstance(handle, str) or not handle.strip():
+                    continue
+                last = datetime.fromisoformat(metadata['receipt_checked_at'].replace('Z', '+00:00')) \
+                    if metadata.get('receipt_checked_at') else datetime.min.replace(tzinfo=timezone.utc)
+                if last.tzinfo is None:
+                    continue
+                if (now - last).total_seconds() < 60:
+                    continue
+            except (ValueError, TypeError, AttributeError):
+                continue
+            candidates.append((last, attempt, metadata, handle))
+        # Oldest checked first, so one slow provider receipt cannot monopolize
+        # every sweep. The scan and metadata persist the resource bounds.
+        for _, attempt, metadata, handle in sorted(candidates, key=lambda item: item[0]):
+            metadata['receipt_checked_at'] = stamp(now)
+            try:
+                response = backend.patch(f'{self.url}/{attempt["id"]}',
+                                         json={'text': json.dumps(metadata)})
+                response.raise_for_status()
+                messages = self.rows(f'id={json.dumps(attempt["goal"])} && kind="anticipy_text"', 1)
+                if not messages or messages[0].get('owner_ref') != self.owner:
+                    return
+                receipt = lookup(handle)
+                if not isinstance(receipt, dict) or receipt.get('sid') != handle:
+                    return
+                if receipt.get('status') not in ('delivered', 'read'):
+                    return
+                metadata.update(state='sms_delivered', provider_status=receipt['status'])
+                response = backend.patch(f'{self.url}/{attempt["id"]}', json={
+                    'decision': 'sms_delivered', 'text': json.dumps(metadata),
+                })
+                response.raise_for_status()
+                for outbox in self.rows(f'external_event_id={json.dumps("reply-outbox:" + attempt["goal"])}', 1):
+                    if outbox.get('owner_ref') == self.owner:
+                        self.finish(outbox, 'sms_delivered')
+            except Exception:
+                # A read timeout says nothing about delivery. Keep the existing
+                # acceptance/uncertainty fence and never call send from here.
+                pass
+            return  # At most one provider request per sweep.
