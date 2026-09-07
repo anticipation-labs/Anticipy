@@ -33,3 +33,19 @@ Live deployment and App Store Connect readbacks are recorded after release.
 This implements the owner's immediate request to expose nighttime suppression.
 The separate interpretation and durable per-question delivery work described
 in GENERAL-REPAIR-CONTRACT.md remains open.
+
+## Release verified
+
+- Source commit: `9f0c015722e8fd421520140b5953ce2ad139647c`.
+- API deployment 34097698408 passed 32 live checks. The public URL serves
+  that commit and version `94471851-061f-4f82-8b59-80c55d4df227`.
+- iOS release 34097685571 uploaded 1.1.1 build 160 successfully.
+- Independent App Store Connect query 34099052668 reports `VALID`, not
+  expired, and `IN_BETA_TESTING` internally. Internal can install the build;
+  the owner's previously verified tester membership is present. Installation
+  of the new build on the physical phone has not been observed.
+- The first query ran before Apple indexed the upload and found no build;
+  it is superseded by the successful readback above.
+- Local synthetic accounts were removed and the local test server stopped.
+
+Structured evidence: `quiet-release-results.json`.
