@@ -238,6 +238,19 @@ enum DashboardPolicy {
         }
     }
 
+    /// A new capture keeps unfinished work visible, but does not replay old
+    /// answers. Record identity supplies the session boundary, so server clock
+    /// differences cannot hide a newly arrived answer. Pausing retains it.
+    static func captureTurns(_ turns: [Turn], existingIDs: Set<String>) -> [Turn] {
+        Array(turns.filter { turn in
+            switch turn {
+            case .owner, .pending, .quiet: return false
+            case .said: return !existingIDs.contains(turn.id)
+            case .working, .approval, .question: return true
+            }
+        }.suffix(4))
+    }
+
     /// The rows as they arrive, already decided, with the fields this screen
     /// reads named explicitly. A struct rather than the app's own types so the
     /// suite can build a thread without a backend.

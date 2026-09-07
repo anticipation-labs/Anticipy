@@ -339,6 +339,17 @@ let finishedTurns = P.thread(heard: [finishedInput], said: [], jobs: [],
 check(finishedTurns.count == 1, "terminal provenance suppresses ghost work and keeps the owner's words")
 if case .owner = finishedTurns.first {} else { check(false, "typed terminal request remains visible") }
 
+let captureHistory: [P.Turn] = [
+    .said(id: "old", text: "That task was cancelled.", at: "later-clock", done: true),
+    .owner(id: "heard", text: "Some speech", at: "now", speaker: "owner"),
+    .question(id: "waiting", text: "When does it end?", at: "earlier-clock"),
+    .said(id: "new", text: "Here is the new result.", at: "earlier-clock", done: true)
+]
+check(P.captureTurns(captureHistory, existingIDs: ["old", "waiting"]).map(\.id) == ["waiting", "new"],
+      "new capture hides old answers, keeps unfinished work and new replies despite clock skew")
+check(P.captureTurns(captureHistory, existingIDs: ["old", "waiting", "new"]).map(\.id) == ["waiting"],
+      "a later capture does not replay the previous session's result")
+
 if failures == 0 {
     print("DashboardTests: all passed")
 } else {

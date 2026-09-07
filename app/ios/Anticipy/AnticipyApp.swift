@@ -643,6 +643,9 @@ final class AnticipySession: ObservableObject {
     @Published var transcript: [TranscriptLine] = []
     @Published var sessionLines: [SessionLine] = []
     @Published var anticipySays: [BrainEvent] = []
+    /// The first successful read is history, including when listening resumes
+    /// before that read returns. Later polls must not move this boundary.
+    @Published var initialHistoryReplyIDs: Set<String>?
     @Published var jobs: [AgentJob] = []
     /// The only way this product can reach someone whose phone is in their
     /// pocket. See Notifier — until it existed, a booking waiting on an OK
@@ -1394,6 +1397,7 @@ final class AnticipySession: ObservableObject {
             })
             if transcript != serverLines { transcript = serverLines }
             let said = events.filter { $0.kind == "anticipy_says" || $0.kind == "anticipy_text" }
+            if initialHistoryReplyIDs == nil { initialHistoryReplyIDs = Set(said.map(\.id)) }
             if anticipySays != said { anticipySays = said }
             // His replies, so a question that is already settled stops
             // offering a box to settle it again. Both lanes: he may answer the
@@ -2337,6 +2341,7 @@ final class AnticipySession: ObservableObject {
         transcript = []
         sessionLines = []
         anticipySays = []
+        initialHistoryReplyIDs = nil
         jobs = []
         ownerReplies = []
         failedWrites = []

@@ -40,6 +40,7 @@ struct ConversationDashboard<Notices: View, Approval: View, Deck: View, Settings
 
     // What to draw
     let turns: [DashboardPolicy.Turn]
+    var initialHistoryReplyIDs: Set<String> = []
     let captureState: DashboardPolicy.CaptureState
     let listening: Bool
     /// Whether iOS has taken the microphone away. Passed in rather than read
@@ -94,6 +95,7 @@ struct ConversationDashboard<Notices: View, Approval: View, Deck: View, Settings
     @State private var expandedTurn: DashboardPolicy.Turn?
     @State private var hasNewReply = false
     @State private var followSentReply = false
+    @State private var captureExistingTurnIDs: Set<String> = []
     @FocusState private var writing: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -115,6 +117,9 @@ struct ConversationDashboard<Notices: View, Approval: View, Deck: View, Settings
         // The capture face is what the thread BECOMES: entering it is a state
         // change on one screen, not a sheet sliding over another one.
         .onChange(of: listening) { on in
+            if on && mode != .capture {
+                captureExistingTurnIDs = Set(turns.map(\.id))
+            }
             withAnimation(Theme.springSlow) {
                 if on { held = false; mode = .capture }
                 else if mode == .capture, !held { mode = .thread }
@@ -132,7 +137,10 @@ struct ConversationDashboard<Notices: View, Approval: View, Deck: View, Settings
         // shape: the face must know she is hearing somebody even while there
         // is nothing to show.
         DashboardPolicy.captureFace(held ? .paused : captureState,
-                                    heardAnything: !turns.isEmpty)
+                                    heardAnything: turns.contains {
+                                        !captureExistingTurnIDs.contains($0.id)
+                                            && !initialHistoryReplyIDs.contains($0.id)
+                                    })
     }
 
     // MARK: - The thread
@@ -421,7 +429,8 @@ struct ConversationDashboard<Notices: View, Approval: View, Deck: View, Settings
         // It still does NOT decide which lines mattered. That is law 1 and it
         // belongs to the brain: a card appears here because the brain gave the
         // line a goal, never because this file recognised a word.
-        Array(turns.filter(isTask).suffix(4))
+        DashboardPolicy.captureTurns(turns.filter(isTask),
+                                     existingIDs: captureExistingTurnIDs.union(initialHistoryReplyIDs))
     }
 
     /// Whether a turn is something she is DOING rather than something she

@@ -218,7 +218,7 @@ fi
 # turns: asking the FILTERED cards would tell the face "nothing yet" all
 # through a sentence she is transcribing perfectly well, which is the
 # empty-screen incident the first version of this screen caused.
-if ! code "$dash" | grep -q 'heardAnything: !turns.isEmpty'; then
+if ! code "$dash" | grep -q 'heardAnything: turns.contains'; then
     echo "The capture face asks the filtered cards whether anything was heard."
     echo
     echo "That is the empty-screen incident in a new shape: somebody talking to"

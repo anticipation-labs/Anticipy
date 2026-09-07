@@ -1283,6 +1283,7 @@ struct HomeView: View {
                 // run_home_copy_tests.sh reads them.
                 ConversationDashboard(
                     turns: dashboardTurns,
+                    initialHistoryReplyIDs: session.initialHistoryReplyIDs ?? [],
                     captureState: dashboardCaptureState,
                     listening: session.listener.isListening,
                     micBlocked: micNeedsHelp,
