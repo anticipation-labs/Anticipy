@@ -420,16 +420,15 @@ def test_control_what_did_i_promise_is_research(monkeypatch, offline):
     assert params["_hand"]["hand"] == HAND_RESEARCH
 
 
-def test_a_computable_goal_needs_no_hand(monkeypatch, offline):
-    """Capability, not wording: the calculator can answer it, so it is the
-    server's and the model is not spent on it."""
-    llm = ScriptedLLM()
+@pytest.mark.parametrize("hand,lane", [(HAND_RESEARCH, "research"), (HAND_BROWSER, "")])
+def test_computable_wording_does_not_override_the_requested_hand(monkeypatch, offline, hand, lane):
+    llm = ScriptedLLM(says(hand))
     monkeypatch.setattr(hands, "_default_llm", lambda: llm)
     params = {"source": "t"}
-    assert job_lane("5 PM CST is what in PST", params) == "research"
-    assert params["_hand"]["hand"] == HAND_RESEARCH
-    assert params["_hand"]["asked"] == 0
-    assert llm.asked == []
+    assert job_lane("5 PM CST is what in PST", params) == lane
+    assert params["_hand"]["hand"] == hand
+    assert params["_hand"]["asked"] == 1
+    assert len(llm.asked) == 1
 
 
 # ------------------------------------------------------------- the facts

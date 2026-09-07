@@ -1118,13 +1118,6 @@ def job_lane(goal: str, params: dict | None = None, *, owner_ref: str = "",
     # import this module — cannot be pulled into a cycle by it.
     from . import hands
     g = (goal or "").strip()
-    # A computable goal that somehow reaches the queue anyway (the hear()
-    # path answers most of them before a job exists) belongs on the server
-    # arm, never in his browser — a CAPABILITY test, the same one
-    # is_consequential runs, and no model is spent on it.
-    if compute_answer(g):
-        verdict = hands.HandVerdict(hands.HAND_RESEARCH,
-                                    "computable on the server; no hand needed")
     # A DECLARED lane is not a meaning question. The brain's own research arm
     # prefixes its goals "research:", and a source of "browser" is the owner
     # saying "in my browser" through a typed field -- both are stored
@@ -1132,7 +1125,7 @@ def job_lane(goal: str, params: dict | None = None, *, owner_ref: str = "",
     # about wording, not fields. Honouring them here is what keeps the six
     # pre-existing lane tests true without a word list: no model is asked
     # about a goal that already carries its lane.
-    elif g.lower().startswith("research:"):
+    if g.lower().startswith("research:"):
         verdict = hands.HandVerdict(hands.HAND_RESEARCH, "declared by the research arm")
     elif str((params or {}).get("source") or "").lower() == "browser":
         verdict = hands.HandVerdict(hands.HAND_BROWSER, "declared: the owner asked for the browser")
