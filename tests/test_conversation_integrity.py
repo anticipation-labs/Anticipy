@@ -68,6 +68,26 @@ def _spoken(monkeypatch, parsed):
     return c
 
 
+def test_a_computed_memory_answer_replaces_the_classifiers_acknowledgement(monkeypatch):
+    from brain.orchestrator import Decision
+    _pb(monkeypatch, [])
+    c = _spoken(monkeypatch, {"intent": "new_request", "reply": "On it. I'll look it up."})
+    answer = "Alex promised to send the deck. You agreed to review it after it arrives."
+    monkeypatch.setattr(c.anticipy, "hear", lambda *a, **k: {
+        "decision": Decision(decision="answer", goal=None, reason="memory answer"), "anticipy_says": answer})
+    out = c.on_reply("+15550001", "What did I promise Alex?")
+    assert out["reply"] == answer
+
+
+def test_a_request_that_did_not_start_cannot_reuse_a_premature_acknowledgement(monkeypatch):
+    _pb(monkeypatch, [])
+    c = _spoken(monkeypatch, {"intent": "new_request", "reply": "On it. I'll get that done."})
+    monkeypatch.setattr(c, "_think", lambda *a, **k: None)
+    out = c.on_reply("+15550001", "Prepare the comparison")
+    assert out["reply"] == "I couldn't start that request. Please try again."
+    assert out["acted"] is None
+
+
 def _two_held():
     return [{"id": "dinner", "goal": "Book dinner at Earls",
              "status": "awaiting_confirm",

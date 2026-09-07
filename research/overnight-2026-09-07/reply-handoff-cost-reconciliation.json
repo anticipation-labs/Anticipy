@@ -1,0 +1,8 @@
+{
+  "run": "overnight-reply-handoff-regression-10c",
+  "original_result_preserved": true,
+  "calls": 22,
+  "all_returned": true,
+  "observed_cost_usd": 0.153708979,
+  "unresolved_usd": 0
+}

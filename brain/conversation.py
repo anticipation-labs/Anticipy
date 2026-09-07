@@ -599,8 +599,9 @@ class Conversation:
                 intent = "answer"
         elif intent == "new_request":
             spoken = self._think(text, phone)
-            if spoken:
-                parsed["reply"] = spoken
+            # The classifier writes before the core tries the request. Its
+            # optimistic acknowledgement is not evidence that anything began.
+            parsed["reply"] = spoken or "I couldn't start that request. Please try again."
 
         # An answer that answers nothing is not an answer. On 2026-08-02 she
         # asked for his name, email and phone to finish a booking; he replied
@@ -1133,7 +1134,7 @@ Use {"facts": {}} when there is nothing durable."""
         if out is None:
             return None
         decision = getattr(out.get("decision"), "decision", "")
-        if decision in ("act", "ask"):
+        if decision in ("act", "ask", "answer"):
             return out.get("anticipy_says") or None
         return None
 

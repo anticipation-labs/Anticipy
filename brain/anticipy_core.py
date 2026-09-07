@@ -2661,8 +2661,7 @@ class Anticipy:
                         "anticipy_says": None}
         # Both triage outcomes must consult the same record. A triage "ask"
         # used to skip memory entirely; the later check then saw only a title.
-        if (decision.decision in ("act", "ask") and decision.goal and not already
-                and (not explicit or decision.missing)):
+        if decision.decision in ("act", "ask") and decision.goal and not already:
             decision = self._review_readiness(decision, line, context, prev_line)
             if decision.missing:
                 try:
@@ -2912,7 +2911,7 @@ class Anticipy:
                     handled = "I couldn't save that task. Please try again."
             elif self._may_say(may_say, handled, None, "ask"):
                 self.notify_owner(handled)
-            else:
+            elif not explicit:
                 handled = None
 
         return {
