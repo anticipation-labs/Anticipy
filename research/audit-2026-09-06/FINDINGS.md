@@ -1,7 +1,13 @@
-# Findings under investigation
+# Findings and historical investigation log
 
-This is an active audit ledger. Source observations are not reproduced runtime
-defects until their experiment is recorded. No release verdict has been issued.
+**Current handoff state is in PLAN.md; current deployment evidence is in
+verification.json and BACKEND-CONSENT-REPAIR.md.** The dated entries below preserve
+the investigation history. Statements such as "not deployed" describe those
+checkpoints and must not be read as current status. API and eight brain runtimes
+were verified at 1682d69; the whole audit and fresh-user handoff remain incomplete.
+
+Source observations are not reproduced runtime defects until their experiment is
+recorded.
 
 | Finding | Evidence so far | State / next experiment |
 | --- | --- | --- |

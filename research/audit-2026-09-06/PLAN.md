@@ -16,8 +16,7 @@ Requested by the owner on 2026-09-06. This is ongoing work, not a completion cla
 - Paid model and live integration testing: **US$50 maximum total**. Record usage;
   stop paid requests before crossing the cap. Provider unavailability is not a
   passing test. Paid runs are underway; the private durable spend ledger is
-  `work/audit/spend.json` (US$2.017588 observed with no unresolved reservations
-  at 05:10 UTC on September 7).
+  `work/audit/spend.json`; current totals are in the handoff status below.
 - Synthetic contacts and users belong to isolated test environments. Live test
   messages may go only to the phone the owner specified, never invented people
   or unrelated real contacts.
@@ -32,23 +31,47 @@ Requested by the owner on 2026-09-06. This is ongoing work, not a completion cla
 The update_plan tool is unavailable in this session; this file is the durable
 plan. Exactly one top-level phase is marked in progress.
 
-## Phases
+## Current handoff status — 06:37 UTC, 7 September 2026
 
-1. PARTIAL — Inventory and research. Establish source baseline, enumerate
-   HTTP/client/integration surfaces and documents, inspect access and account
-   relationships read-only, reconcile primary-source research with code.
-2. PARTIAL — Build the 50-person corpus and isolated full-path harness, including
-   independent state assertions, hostile content, restart/retry/timeout cases,
-   and privacy boundaries. Freeze a held-out set before repairing behavior.
-3. **IN PROGRESS — Execute, diagnose, repair, and rerun affected tests.** Record concrete
-   inputs, traces, persisted outputs, spend, and why each result is valid.
-4. PARTIAL — Validate deployment behavior, Composio/provider boundaries, and
-   controlled live messaging. Resolve material failures and coverage gaps.
-5. PARTIAL — Synthesize the PDF and repository audit; independently review
-   release candidates against the recorded failures and source of record.
-6. PENDING — Reset the authorized owner account across product stores and
-   connected-account state; verify erasure; ship via CI, confirm App Store
-   Connect availability, and guide the genuinely fresh phone test.
+The requested outcome is an audited, repaired app on the owner's phone with a
+verified fresh product account. **That outcome has not been delivered.**
+Backend fixes and a PDF are completed parts of the work, not the final handoff.
+
+| Deliverable | Verified state | Remaining work |
+| --- | --- | --- |
+| Mac workspace | Correct branch; tools, simulator and isolated API prepared | Keep existing checkout and explicit-path commits |
+| iOS availability | TestFlight 159 is valid and in beta; app/ios tree matches the source used for that upload | Installation and fresh-user handset observation |
+| Backend deployment | API and all eight brain runtimes at source 1682d69; running processes and current durable snapshots verified | Repair remaining material decision-rule defects and expand authenticated integration coverage |
+| Consent behavior | 18 real-model cases and 18 complete model/HTTP/database paths passed; live API rejects stale approval | Other approval/execution paths remain in the wider audit |
+| Research and examples | Primary-source research, 50 fictional people, 101 contacts, all transcript observations and five browser simulations recorded | These are not 50 completed real-provider tasks |
+| Google Calendar | Connection-link/code delivery observed | Google authorization and a verified provider operation; the previous connection browser tab is now closed |
+| Owner erasure | Live public/operator cleanup verified on synthetic accounts; historical DB recovery cross-checked | Selective historical cleanup and deletion of the actual owner's product account, after audit/repair readiness |
+| Audit report | Current 14-page PDF and repository evidence committed at 4773267 | Complete the remaining coverage and fresh-user handoff |
+
+Current source release evidence: API run 34090499964 (29 live checks), brain run
+34090592279 (all eight sources/processes/snapshots), CI run 34090500689 (3,017
+Python tests passed, seven skipped, all 94 browser suites and Worker checks).
+See BACKEND-CONSENT-REPAIR.md and verification.json for exact evidence.
+
+Paid audit usage: **US$2.548762**, zero unresolved model reservations; the gateway
+is stopped. The authorized maximum remains US$50. No iOS source was changed and
+no redundant Apple upload is needed for the current source. No real owner data
+has been erased. No complete-audit or production-perfection verdict is issued.
+
+## Execution order
+
+1. **IN PROGRESS:** close the remaining material backend behavior and integration
+   failures, with concrete persisted outcomes and live source/behavior evidence.
+2. Prepare and verify selective real-account erasure across current and historical
+   product stores, preserving unrelated people and company/source archives.
+3. Once readiness is established, execute the already-authorized product reset,
+   verify that the old identity and data are gone, and complete fresh-phone testing
+   on the current TestFlight build.
+
+The calendar UI is one unfinished dependency; it is not an explanation for all
+remaining backend work. The exhaustive audit remains incomplete. Do not silently
+reduce the user's required audit-before-reset order to obtain a quicker handoff.
+Do not produce another partial report as though it completes the requested job.
 
 ## Evidence standard
 
@@ -65,7 +88,7 @@ evaluation papers; memory architectures and original memory benchmarks;
 official Composio and messaging integration documentation. Research agents are
 limited to evidence gathering and do not edit or deploy the project.
 
-## September 7 checkpoint
+## Historical September 7 checkpoints (superseded by current status above)
 
 The owner imposed 3-, 6- and 10-minute self-checks to accelerate the full task.
 A partial handoff was incorrectly treated as completion; the owner explicitly
