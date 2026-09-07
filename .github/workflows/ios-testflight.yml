@@ -1,4 +1,25 @@
 name: iOS TestFlight
+#
+# THE UPLOAD IS ASKED FOR, NOT AUTOMATIC (2026-09-06).
+#
+# Every push touching app/ios/** used to upload a build. On 2026-09-06 five
+# such pushes landed inside fifty minutes, and the fifth one got Apple's
+# answer for all of them:
+#
+#     Validation failed (409) Upload limit reached. The upload limit for your
+#     application has been reached. Please wait 1 day and try again.
+#
+# Four consecutive runs then failed at the same step. Build 156 stayed the
+# newest thing any tester could install while the fix they had reported --
+# "stop actually stops" -- sat finished in the tree, unshippable for a day.
+# A per-commit upload spends a scarce daily allowance on intermediate commits
+# and then has none left for the one that matters.
+#
+# So a push BUILDS and runs the logic gate, which is what catches a broken
+# tree; it uploads only when somebody asks for a build, either by dispatching
+# this workflow by hand or by putting [ship] in the commit message. The final
+# step says plainly which of the two happened, so a push that deliberately did
+# not ship never reads as a build that silently vanished.
 on:
   push:
     # The iOS source of record is cloudflare-backend. This used to fire on
@@ -38,6 +59,34 @@ jobs:
           echo "Selected: $X26"
           sudo xcode-select -s "$X26"
           xcodebuild -version
+      - name: Is this a ship?
+        id: ship
+        env:
+          # THROUGH THE ENVIRONMENT, NEVER INTERPOLATED INTO THE SCRIPT. A
+          # commit message is attacker-controlled text; `${{ }}` pasted into a
+          # `run:` body is command injection with a push as the delivery.
+          HEAD_COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+          EVENT_NAME: ${{ github.event_name }}
+        # ONE ANSWER, READ BY EVERY STEP BELOW. A condition repeated on four
+        # steps is four chances for them to disagree, and the disagreement
+        # that matters here -- archiving but not uploading, or uploading a
+        # tree the gate never checked -- is invisible until a tester is stuck
+        # on an old build.
+        run: |
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "ship=yes" >> "$GITHUB_OUTPUT"
+            echo "This run was dispatched by hand: it will upload."
+          elif printf '%s' "$HEAD_COMMIT_MESSAGE" | grep -q '\[ship\]'; then
+            echo "ship=yes" >> "$GITHUB_OUTPUT"
+            echo "The commit message carries [ship]: it will upload."
+          else
+            echo "ship=no" >> "$GITHUB_OUTPUT"
+            echo "No [ship] in the commit message and not a manual dispatch:"
+            echo "this run builds and tests, and uploads NOTHING. Apple's daily"
+            echo "upload limit is small enough that spending it on every commit"
+            echo "leaves none for the commit somebody is waiting on."
+          fi
+
       - name: iOS logic gate — the suites, and that the build number still names these bytes
         # Nothing ran app/ios/Tests/run_all.sh before an upload: it was a
         # hand step, and the tree carried its last leg red into a release
@@ -50,6 +99,7 @@ jobs:
         working-directory: app/ios
         run: xcodegen generate
       - name: Write App Store Connect API key
+        if: steps.ship.outputs.ship == 'yes'
         env:
           ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
         run: |
@@ -57,11 +107,13 @@ jobs:
           echo -n "$ASC_KEY_P8" | base64 --decode -o $RUNNER_TEMP/asc/AuthKey.p8
           cp $RUNNER_TEMP/asc/AuthKey.p8 $HOME/.appstoreconnect/private_keys/AuthKey_${ASC_KEY_ID}.p8
       - name: Clear orphaned cloud-signing certificates
+        if: steps.ship.outputs.ship == 'yes'
         env:
           ASC_KEY_PATH: ${{ runner.temp }}/asc/AuthKey.p8
         run: |
           python3 app/ios/scripts/app_store_connect.py free-signing-slot
       - name: Build number — the source's, unless Apple already holds it
+        if: steps.ship.outputs.ship == 'yes'
         working-directory: app/ios
         env:
           ASC_KEY_PATH: ${{ runner.temp }}/asc/AuthKey.p8
@@ -80,6 +132,7 @@ jobs:
             xcrun agvtool new-version -all "$next"
           fi
       - name: Archive (cloud signing — Apple holds the key)
+        if: steps.ship.outputs.ship == 'yes'
         working-directory: app/ios
         run: |
           xcodebuild archive \
@@ -91,6 +144,7 @@ jobs:
             -authenticationKeyPath $RUNNER_TEMP/asc/AuthKey.p8 \
             -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID"
       - name: Export and upload to TestFlight
+        if: steps.ship.outputs.ship == 'yes'
         working-directory: app/ios
         run: |
           xcodebuild -exportArchive \
@@ -111,12 +165,32 @@ jobs:
             --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID" 2>&1) || true
           echo "$out"
           echo "$out" | grep -q "UPLOAD SUCCEEDED" || {
-            echo "::error::Apple refused the upload — see the validation error above"
+            # NAME THE ONE REFUSAL THAT IS NOT A DEFECT. A 409 "Upload limit
+            # reached" is Apple rate-limiting the account, not a bad archive:
+            # nothing in the tree can fix it and re-running only spends
+            # another attempt. Saying "Apple refused the upload" for it sent
+            # four runs' worth of people looking for a signing problem.
+            if printf '%s' "$out" | grep -q "Upload limit reached"; then
+              echo "::error::Apple's DAILY UPLOAD LIMIT is reached for ai.anticipy.app. The archive is fine and this is not a code defect. Wait for the window to reset (Apple says one day) and re-run this workflow by hand; pushing more commits only spends more attempts."
+            else
+              echo "::error::Apple refused the upload — see the validation error above"
+            fi
             exit 1
           }
       - name: Wait for Apple's TestFlight processing verdict
+        if: steps.ship.outputs.ship == 'yes'
         env:
           ASC_KEY_PATH: ${{ runner.temp }}/asc/AuthKey.p8
         run: |
           python3 app/ios/scripts/app_store_connect.py wait-build \
             --bundle ai.anticipy.app --build "$ANTICIPY_UPLOAD_BUILD"
+
+      - name: Say what this run did
+        if: always()
+        run: |
+          if [ "${{ steps.ship.outputs.ship }}" = "yes" ]; then
+            echo "Shipped: build $ANTICIPY_UPLOAD_BUILD was offered to App Store Connect."
+          else
+            echo "Built and tested only. Nothing was uploaded."
+            echo "To ship this tree: gh workflow run ios-testflight.yml --ref ${{ github.ref_name }}"
+          fi
