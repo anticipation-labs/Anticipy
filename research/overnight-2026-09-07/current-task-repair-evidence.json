@@ -1,0 +1,12 @@
+{
+  "record_version": 3,
+  "workflow_state": "draft",
+  "old_approval_removed": true,
+  "required_questions": [
+    "What time should I schedule the dinner for?"
+  ],
+  "question": "I still need: What time should I schedule the dinner for?",
+  "executor_lane": "",
+  "matching_text_pause": "text_daily_limit",
+  "observed_at": "2026-09-07 22:18:20.522Z"
+}

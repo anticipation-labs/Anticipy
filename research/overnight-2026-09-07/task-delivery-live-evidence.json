@@ -5,6 +5,8 @@
     "Question saved once with matching durable outbox and no phone send",
     "Signed-in phone can read its task receipt metadata",
     "Cancelled question suppressed by fresh live task read",
+    "Old blocked research task safely re-held with required question and no approval",
+    "Concurrent or repeated repair refused by live version precondition",
     "Disposable account and records removed"
   ],
   "provider_calls": 0
