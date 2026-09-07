@@ -213,3 +213,30 @@ writes only requested_at/purged_at, the ledger's actual timestamp contract, in
 both the API and memory consumer. A regression now runs against this exact
 column shape. Three phone-less diagnostic accounts remain until cleanup passes.
 The owner account was not changed.
+
+
+### Live SMS receipt and code-screen clarity
+
+The authorized connection text went to the verified reset subject's recorded
+number only. Sendblue accepted the request; the owner then supplied a screenshot
+showing both the connection message and its separate one-time code in Messages.
+This is actual delivery evidence, not an inference from an HTTP 200. Google
+Calendar consent/execution is still unverified. No password-reset message was
+sent by this test (the older reset message visible in the screenshot predates it).
+
+The screenshot exposed an unclear verification page. It now explains why the code
+is needed and what follows, labels the code field visibly, requires six digits,
+and gives Continue a distinct primary-button style. Removing automatic focus
+avoids opening an autofill popup before the person interacts. The browser's
+password-manager prompt and debugging banner are browser UI, not Anticipy steps.
+The 61 existing connection-auth checks pass; the actual rendered code form was
+inspected in a local Chrome preview. No real verification code was entered by the
+audit agent.
+
+### Faster isolated transcript execution
+
+The transcript runner previously serialized a production startup/profile cadence
+for every person. It now runs up to eight isolated people concurrently (six in
+the current cohort) with a distinct run tag recorded at the model-budget proxy.
+Twelve budget tests pass, including racing reservations and attribution of
+out-of-order completions. Provider requests still share one locked dollar cap.

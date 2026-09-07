@@ -223,12 +223,12 @@ const ASK_LINE =
   "Anticipy will text a 6-digit code to the phone number on your account, so it knows "
   + "it's you before it sets anything up.";
 const ASK_BUTTON = "Text me a code";
-const SENT_HEADING = "Check your phone";
+const SENT_HEADING = "Enter your Anticipy code";
 /** Note what this does NOT say: not "we sent one", which would be a yes/no
  *  about the token. It is the same sentence for every token there is. */
 const SENT_LINE =
-  "If this link is still good, a 6-digit code is on its way to the phone number on your "
-  + "Anticipy account. It works for 10 minutes.";
+  "Enter the 6-digit code from Anticipy’s latest text. This checks it’s you before "
+  + "you choose the account to connect. The code expires after 10 minutes.";
 const SENT_BUTTON = "Continue";
 const NOPE_LINE = "That code isn't right, or it has expired. Ask for a new one.";
 const OPTIONAL_LINE =
@@ -812,10 +812,13 @@ function page(status: number, title: string, bodyHtml: string,
   h1 { font-size: 1.4rem; line-height: 1.25; margin: 0 0 .75rem; }
   p.fine { opacity: .7; font-size: .9rem; }
   p.wrong { font-weight: 600; }
+  label { display: block; margin-bottom: .5rem; font-weight: 600; }
   input { font: inherit; padding: .85rem 1rem; width: 100%; box-sizing: border-box;
           border-radius: 12px; border: 1px solid; letter-spacing: .35em; }
   button { font: inherit; font-weight: 600; padding: .85rem 1.25rem; width: 100%;
-           border: 0; border-radius: 12px; cursor: pointer; margin-top: 1rem; }
+           border: 0; border-radius: 12px; cursor: pointer; margin-top: 1rem;
+           background: #3868df; color: #fff; }
+  button:focus-visible, input:focus-visible { outline: 3px solid #87b2ff; outline-offset: 3px; }
   a.later { display: inline-block; margin-top: 1rem; }
 </style>
 ${bodyHtml}
@@ -894,8 +897,9 @@ function enterCodePage(token: string, wrong: boolean, state: string | null): Res
 <h1>${esc(SENT_HEADING)}</h1>
 ${wrong ? `<p class="wrong">${esc(NOPE_LINE)}</p>\n` : ""}<p>${esc(SENT_LINE)}</p>
 <form method="post" action="/c/${esc(token)}/verify">
-${state ? `  <input type="hidden" name="state" value="${esc(state)}">\n` : ""}  <input type="text" name="code" inputmode="numeric" autocomplete="one-time-code"
-         maxlength="6" pattern="[0-9]*" aria-label="6-digit code" autofocus>
+${state ? `  <input type="hidden" name="state" value="${esc(state)}">\n` : ""}  <label for="anticipy-code">6-digit code</label>
+  <input id="anticipy-code" type="text" name="code" inputmode="numeric" autocomplete="one-time-code"
+         maxlength="6" minlength="6" pattern="[0-9]{6}" placeholder="000000" required>
   <button type="submit">${esc(SENT_BUTTON)}</button>
 </form>
 <p class="fine">Didn't get one? <a href="${esc(codePath(token, state))}">Ask for another</a>. ${esc(OPTIONAL_LINE)}</p>

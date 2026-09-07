@@ -28,6 +28,17 @@ def test_racing_requests_cannot_each_spend_the_same_balance(tmp_path):
     assert Budget.committed(json.loads(budget.path.read_text())) == 3
 
 
+def test_concurrent_people_keep_distinct_cost_attribution(tmp_path):
+    budget = ledger(tmp_path, 50)
+    with ThreadPoolExecutor(4) as pool:
+        calls = list(pool.map(lambda n: budget.reserve(1, "test", b"same input", f"cohort/{n}"), range(4)))
+    for i, call in enumerate(reversed(calls)):
+        budget.finish(call, {"usage": {"cost": (i + 1) / 10}}, "returned")
+    state = json.loads(budget.path.read_text())
+    by_person = {c["audit_run"]: c["cost_usd"] for c in state["calls"]}
+    assert by_person == {"cohort/0": 0.4, "cohort/1": 0.3, "cohort/2": 0.2, "cohort/3": 0.1}
+
+
 def test_crash_and_unknown_usage_do_not_release_money(tmp_path):
     budget = ledger(tmp_path)
     first = budget.reserve(3, "test", b"body")

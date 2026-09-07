@@ -21,6 +21,7 @@ import threading
 import time
 import urllib.error
 import urllib.request
+import urllib.parse
 from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -72,7 +73,7 @@ class Budget:
         return sum(c.get("cost_usd") if c.get("cost_usd") is not None
                    else c["reserved_usd"] for c in state["calls"])
 
-    def reserve(self, dollars, model, body):
+    def reserve(self, dollars, model, body, audit_run=None):
         if not math.isfinite(dollars) or dollars <= 0:
             raise Refused("invalid reservation")
         with self.locked() as state:
@@ -81,7 +82,7 @@ class Budget:
                 raise Refused("audit spending limit reached or ledger halted")
             request_id = secrets.token_hex(12)
             state["calls"].append({
-                "id": request_id, "at": time.time(), "model": model,
+                "id": request_id, "at": time.time(), "model": model, "audit_run": audit_run,
                 "request_sha256": hashlib.sha256(body).hexdigest(),
                 "reserved_usd": dollars, "cost_usd": None, "state": "reserved",
             })
@@ -179,10 +180,10 @@ class Gateway:
         self.traces = directory / "model-traces"
         self.traces.mkdir(mode=0o700, exist_ok=True)
 
-    def handle(self, payload):
+    def handle(self, payload, audit_run=None):
         data, reservation = prepare(payload, self.pricing)
         body = json.dumps(data).encode()
-        request_id = self.budget.reserve(reservation, data["model"], body)
+        request_id = self.budget.reserve(reservation, data["model"], body, audit_run)
         atomic_json(self.traces / (request_id + "-request.json"), data)
         request = urllib.request.Request(UPSTREAM, body, headers={
             "Authorization": "Bearer " + self.key, "Content-Type": "application/json",
@@ -220,7 +221,15 @@ def serve(directory, port):
                 pass
 
         def do_POST(self):
-            if self.path != "/api/v1/chat/completions":
+            url = urllib.parse.urlsplit(self.path)
+            query = urllib.parse.parse_qs(url.query)
+            tags = query.get("audit_run", [])
+            if set(query) - {"audit_run"} or len(tags) > 1:
+                return self.answer(400, {"error": "invalid audit attribution"})
+            audit_run = tags[0] if tags else None
+            if audit_run and (len(audit_run) > 120 or any(c not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-/" for c in audit_run)):
+                return self.answer(400, {"error": "invalid audit attribution"})
+            if url.path != "/api/v1/chat/completions":
                 return self.answer(404, {"error": "unknown route"})
             if not hmac.compare_digest(self.headers.get("Authorization", ""), "Bearer " + gateway.token):
                 return self.answer(401, {"error": "invalid audit credential"})
@@ -229,7 +238,7 @@ def serve(directory, port):
                 if length < 1 or length > 4_000_000:
                     raise Refused("invalid request size")
                 payload = json.loads(self.rfile.read(length))
-                result = gateway.handle(payload)
+                result = gateway.handle(payload, audit_run)
             except Refused as error:
                 return self.answer(402, {"error": str(error)})
             except urllib.error.HTTPError as error:

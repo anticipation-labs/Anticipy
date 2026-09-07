@@ -17,7 +17,8 @@ import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import urlparse, quote
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
@@ -41,7 +42,7 @@ def isolated_network(event, args):
 def child():
     sys.addaudithook(isolated_network)
     from brain import llm, worker
-    llm.OPENROUTER_URL = "http://127.0.0.1:8790/api/v1/chat/completions"
+    llm.OPENROUTER_URL = "http://127.0.0.1:8790/api/v1/chat/completions?audit_run=" + quote(os.environ["ANTICIPY_AUDIT_RUN"], safe="")
     # This is the production entry point, with its own polling, attribution,
     # segmentation, budgets, retry behavior, persistence and model decisions.
     worker.main()
@@ -102,10 +103,10 @@ def run_person(person, label, timeout):
     imports += [event("Imported address-book contact: " + json.dumps(contact), "profile", "import")
                 for contact in person["contacts"]]
     imports += [event(person["history"][1]["text"], "profile", "import")]
-    baseline_calls = {c["id"] for c in json.loads((STATE / "spend.json").read_text())["calls"]}
+    audit_run = label + "/" + person["id"]
     env = {key: os.environ[key] for key in ("PATH", "HOME", "LANG", "TMPDIR") if key in os.environ}
     env.update({
-        "PYTHONPATH": str(ROOT), "PYTHONUNBUFFERED": "1",
+        "PYTHONPATH": str(ROOT), "PYTHONUNBUFFERED": "1", "ANTICIPY_AUDIT_RUN": audit_run,
         "OPENROUTER_API_KEY": (STATE / "gateway-token").read_text().strip(),
         "ANTICIPY_PB": BASE, "ANTICIPY_OWNER_REF": ref, "ANTICIPY_OWNER_ID": ref,
         "ANTICIPY_SERVICE_TOKEN": "local-development-service-token",
@@ -167,7 +168,7 @@ def run_person(person, label, timeout):
             })
             atomic_json(run_dir / (collection + ".json"), data)
         ledger = json.loads((STATE / "spend.json").read_text())
-        calls = [c for c in ledger["calls"] if c["id"] not in baseline_calls]
+        calls = [c for c in ledger["calls"] if c.get("audit_run") == audit_run]
         result.update(elapsed_seconds=round(time.monotonic() - started, 2),
                       model_calls=len(calls), call_ids=[c["id"] for c in calls],
                       observed_cost_usd=sum(c.get("cost_usd") or 0 for c in calls),
@@ -185,6 +186,7 @@ if __name__ == "__main__":
     parser.add_argument("--ids", default="10")
     parser.add_argument("--label", default="pilot-1")
     parser.add_argument("--timeout", type=int, default=150)
+    parser.add_argument("--parallel", type=int, choices=range(1, 9), default=1)
     args = parser.parse_args()
     if args.child:
         child()
@@ -195,6 +197,11 @@ if __name__ == "__main__":
             person = people[index - 1]
             if person["split"] == "held_out":
                 raise SystemExit("held-out scenarios stay closed until development checks are complete")
-            result = run_person(person, args.label, args.timeout)
-            if result["state"] == "infrastructure_or_runtime_failure":
-                raise SystemExit(2)
+        failed = False
+        with ThreadPoolExecutor(max_workers=args.parallel) as pool:
+            futures = [pool.submit(run_person, people[index - 1], args.label, args.timeout) for index in selected]
+            for future in as_completed(futures):
+                result = future.result()
+                failed |= result["state"] == "infrastructure_or_runtime_failure"
+        if failed:
+            raise SystemExit(2)
