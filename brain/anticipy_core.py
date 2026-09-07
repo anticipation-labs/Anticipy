@@ -4021,16 +4021,9 @@ class Anticipy:
         lane = device or job_lane(goal, params, owner_ref=self.owner_ref or self.owner_id,
                                  backend_url=self.backend_url,
                                  llm=getattr(getattr(self, "brain", None), "strong", None) or self.llm)
-        if lane == RESEARCH_LANE and not os.environ.get("BRAVE_API_KEY"):
-            hand = params.get("_hand") or {}
-            # Only an actual research verdict licenses this executor fallback.
-            # A missing model verdict stays unlicensed; it cannot acquire the
-            # owner's browser merely because a search secret is absent.
-            if hand.get("hand") == "research":
-                lane = ""
-                params["_hand"] = dict(hand, lane=lane,
-                    reason=str(hand.get("reason") or "")
-                           + " — server search unavailable; browser fallback")
+        # Server work can compose from supplied facts without a search key.
+        # Its executor judges the required evidence and available capability;
+        # a missing search credential must not force a private draft into Chrome.
         # AND THEN THE DEVICE LANE, WHICH OUTRANKS BOTH OF THE ABOVE.
         #
         # Deliberately OUTSIDE the Brave-key conditional. Brave is what the

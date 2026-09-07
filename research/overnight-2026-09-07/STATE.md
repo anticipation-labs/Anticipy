@@ -557,3 +557,23 @@ and held-out/API-connection tests, clean synthetic accounts, update visual PDF.
   ambient-review all12. No zero-defect/full50-execution claim.
 - RepairheartbeatACTIVE; workNOTCOMPLETE. Next: false completion, ambientdictation
   miss, carrierroundtrip/receipts, realaccount/browserexecution, legacyshortcuts.
+
+## 2026-09-07 16:43 UTC — false-completion candidate
+- New brain/server_work.py plans compose/research/needs_access/unavailable from
+  actual task/source/memory, composes real artifacts, and independently judges
+  fulfilment. One bounded correction for bad composition. Actual search source
+  content retained; URLs alone cannot complete. Stored text hashed after bound.
+- Consequential workflows and unlicensed hand notes cannot complete as server
+  text. Private-source blockers persist needs_user. Core no longer forces every
+  server task into Chrome when a search key is absent; composition needs none.
+- Real-model corpus secondrun15/15 (9execution+6adversarialreview). First14/15:
+  gallery fixture omitted whichgallery; correctclarification, fixedfixture.
+  Scopefictionalpublicsources, actualstrongmodel throughmeteredgateway.
+- Fulltestsfirst3124pass; afteradding2workercontracts+1effectfloor test,3125pass
+  and2source-introspectionfailures because worker.py docstring lines were edited
+  during test execution. No providerbehaviorchange. Frozen full rerun now running
+  logfalse-completion-frozen-python.log; DO NOT edit brain source during it.
+- Candidate NOTCOMMITTED/NOTLIVE yet. Needcommit+CI+8source/snapshots then actual
+  app-input→queuedjob→artifactreceipt repeat on designatedphone-disabledprobe.
+- Gateway observed17.61, cap35; native reserved11.631602cap12. Nextliveproof may
+  raise nativeceiling14 and reserve2;35+14=49 remainswithinuser50. Neverreset.

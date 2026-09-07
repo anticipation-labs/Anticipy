@@ -11,6 +11,7 @@ import types
 import pytest
 
 import brain.worker as W
+from brain import server_work
 from brain.workflow import (Consequence, from_params, new_plan, put_in_params)
 
 
@@ -33,10 +34,24 @@ class Resp:
         pass
 
 
-def make_anticipy(notified, owner_ref=""):
+class ResearchModel:
+    live = True
+
+    def __init__(self, verdict="satisfied"):
+        self.verdict = verdict
+
+    def chat(self, system, user, **kwargs):
+        if system == server_work.PLAN_SYSTEM:
+            return types.SimpleNamespace(text=json.dumps({"verdict": "research", "reason": "Public source lookup."}))
+        if system == server_work.VERIFY_SYSTEM:
+            return types.SimpleNamespace(text=json.dumps({"verdict": self.verdict, "reason": "Independent result review."}))
+        raise AssertionError("Unexpected model operation")
+
+
+def make_anticipy(notified, owner_ref="", verdict="satisfied"):
     return types.SimpleNamespace(
         owner_id="own1", owner_ref=owner_ref,
-        backend_url="http://pb", llm=None,
+        backend_url="http://pb", llm=ResearchModel(verdict),
         _voice=lambda ctx: None,
         notify_owner=lambda msg, channel="sms": (notified.append(msg), {"ok": 1})[1])
 
@@ -101,7 +116,8 @@ def test_claims_like_the_extension_then_writes_the_answer(monkeypatch):
 
     def runner(goal, params, llm=None, api_key=None):
         ran.append((goal, api_key))
-        return {"ok": True, "result": "Open 9:30-5:30 [1]\n\nSources:\n[1] x"}
+        return {"ok": True, "result": "Open 9:30-5:30 [1]\n\nSources:\n[1] x",
+                "sources": [{"url": "https://example.test/hours", "content": "Open 9:30-5:30"}]}
 
     W.run_research_jobs(make_anticipy([]), runner=runner)
     # Owner-scoped, lane-scoped poll — identical scoping to every other job.
@@ -130,13 +146,14 @@ def test_a_lost_claim_race_means_walking_away(monkeypatch):
     assert len(patches) == 1             # only the claim attempt
 
 
-def test_no_key_hands_the_job_to_the_browser_lane(monkeypatch):
+def test_missing_search_access_is_visible_and_not_a_completed_task(monkeypatch):
     patches, posts, ran = [], [], []
     wire(monkeypatch, QUEUED, patches, posts, key=None)
     W.run_research_jobs(make_anticipy([]),
                         runner=lambda *a, **k: ran.append(1) or {"ok": True, "result": "x"})
-    assert not ran                       # graceful fallback, not a crash
-    assert patches == [{"lane": ""}]     # the extension will pick it up
+    assert not ran
+    assert patches[-1]["status"] == "needs_user"
+    assert "Public search is unavailable" in patches[-1]["result"]
 
 
 def test_tavily_only_keeps_research_on_the_server(monkeypatch):
@@ -147,7 +164,8 @@ def test_tavily_only_keeps_research_on_the_server(monkeypatch):
     def fake_run(goal, params, **kw):
         ran.append(kw)
         return {"ok": True,
-                "result": "Answer [1].\n\nSources:\n[1] https://example.test"}
+                "result": "Answer [1].\n\nSources:\n[1] https://example.test",
+                "sources": [{"url": "https://example.test", "content": "Answer"}]}
 
     monkeypatch.setattr(W.research, "run_research", fake_run)
     W.run_research_jobs(make_anticipy([]))
@@ -182,6 +200,7 @@ def test_modern_research_uses_lease_and_verified_receipt(monkeypatch):
         runner=lambda *a, **k: {
             "ok": True,
             "result": "Open daily [1].\n\nSources:\n[1] Hours — https://example.test/hours",
+            "sources": [{"url": "https://example.test/hours", "content": "Open daily"}],
         })
 
     poll = next(f for f in fake_get.filters if 'status="queued"' in f)
@@ -192,11 +211,12 @@ def test_modern_research_uses_lease_and_verified_receipt(monkeypatch):
     succeeded = from_params(json.loads(patches[1]["params"]))
     assert succeeded.state.value == "succeeded"
     assert succeeded.receipt and succeeded.receipt.verified
-    assert succeeded.receipt.evidence == ("https://example.test/hours",)
+    assert succeeded.receipt.evidence[0].startswith("text-sha256:")
+    assert succeeded.receipt.evidence[1:] == ("https://example.test/hours",)
     assert patches[1]["receipt"]
 
 
-def test_modern_research_cannot_call_uncited_output_done(monkeypatch):
+def test_modern_research_cannot_call_a_rejected_result_done(monkeypatch):
     plan = new_plan(owner_ref="owner-a", lineage_key="conversation-a",
                     goal="research: aquarium hours",
                     consequence=Consequence.READ_ONLY,
@@ -208,13 +228,52 @@ def test_modern_research_cannot_call_uncited_output_done(monkeypatch):
     wire(monkeypatch, modern, patches, posts)
 
     W.run_research_jobs(
-        make_anticipy([], owner_ref="owner-a"),
-        runner=lambda *a, **k: {"ok": True, "result": "Open daily."})
+        make_anticipy([], owner_ref="owner-a", verdict="incomplete"),
+        runner=lambda *a, **k: {"ok": True, "result": "Open daily.",
+            "sources": [{"url": "https://example.test", "content": "Appointment instructions, not hours."}]})
 
     failed = from_params(json.loads(patches[1]["params"]))
     assert patches[1]["status"] == "failed"
     assert failed.state.value == "failed"
     assert not failed.receipt
+
+
+def test_private_composition_completes_without_a_search_key_or_web_url(monkeypatch):
+    plan = new_plan(owner_ref="owner-a", lineage_key="private-draft",
+                    goal="prepare a private note", consequence=Consequence.READ_ONLY,
+                    source_event_id="source-a")
+    row = dict(QUEUED, owner_ref="owner-a", goal=plan.goal,
+               params=json.dumps(put_in_params({"source": "Ask the team to review the folder."}, plan)))
+    patches, posts = [], []
+    wire(monkeypatch, row, patches, posts, key=None)
+    a = make_anticipy([], owner_ref="owner-a")
+    draft = "Hi team, could you review the folder? This is a private draft."
+    responses = iter([json.dumps({"verdict": "compose", "reason": "All drafting facts supplied."}),
+                      draft, json.dumps({"verdict": "satisfied", "reason": "Actual draft present."})])
+    a.llm.chat = lambda *args, **kw: types.SimpleNamespace(text=next(responses))
+    W.run_research_jobs(a, runner=lambda *args, **kw: pytest.fail("Drafting must not search"))
+    saved = from_params(json.loads(patches[-1]["params"]))
+    assert saved.state.value == "succeeded" and saved.receipt.verified
+    assert patches[-1]["result"] == draft
+    assert saved.receipt.evidence[0].startswith("text-sha256:")
+    assert json.loads(patches[-1]["params"])["_server_work"]["verification"]["verdict"] == "satisfied"
+
+
+def test_unread_private_sources_park_the_same_workflow_without_a_receipt(monkeypatch):
+    plan = new_plan(owner_ref="owner-a", lineage_key="unread-source",
+                    goal="compare private quotes", consequence=Consequence.READ_ONLY,
+                    source_event_id="source-a")
+    row = dict(QUEUED, owner_ref="owner-a", goal=plan.goal,
+               params=json.dumps(put_in_params({}, plan)))
+    patches, posts = [], []
+    wire(monkeypatch, row, patches, posts)
+    a = make_anticipy([], owner_ref="owner-a")
+    a.llm.chat = lambda *args, **kw: types.SimpleNamespace(text=json.dumps({
+        "verdict": "needs_access", "reason": "I need access to the two private quotes."}))
+    W.run_research_jobs(a, runner=lambda *args, **kw: pytest.fail("Private quotes must not become public search"))
+    saved = from_params(json.loads(patches[-1]["params"]))
+    assert saved.state.value == "needs_user" and not saved.receipt
+    assert saved.lease is None and patches[-1]["status"] == "needs_user"
 
 
 DONE = {"id": "r1", "goal": "research: opening hours of the aquarium",

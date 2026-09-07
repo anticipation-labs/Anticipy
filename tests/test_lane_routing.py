@@ -153,11 +153,11 @@ def test_queue_holds_consequential_goals_in_the_browser_lane(monkeypatch):
     assert posted["status"] == "awaiting_confirm"
 
 
-def test_no_brave_key_falls_back_to_the_browser_lane(monkeypatch):
+def test_server_executor_decides_whether_a_search_key_is_actually_required(monkeypatch):
     posted = _queue(monkeypatch,
                     "research: opening hours of the Vancouver aquarium",
                     key=None)
-    assert posted["lane"] == ""              # graceful: extension runs it
+    assert posted["lane"] == "research"  # composition itself needs no search key
     assert posted["status"] == "queued"
 
 

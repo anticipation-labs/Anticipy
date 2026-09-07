@@ -4,6 +4,7 @@ This records actual replies for semantic review. It never asserts that receiving
 any text proves the right answer, and never exercises a real person's account.
 """
 import argparse
+import hashlib
 import json
 import os
 import time
@@ -20,6 +21,8 @@ OWNER = "qeuy6sv1raof9rw"
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--label", required=True)
+    parser.add_argument("--artifact", action="store_true",
+                        help="Require a completed server artifact, its verified receipt and app delivery")
     args = parser.parse_args()
     assert Path(args.label).name == args.label and args.label not in (".", "..")
     output = ROOT / "work/audit" / (args.label + ".json")
@@ -58,6 +61,8 @@ def main():
             ("ambiguous-contact", "For this isolated test, Avery Chen and Avery Diaz are two different contacts. Neither is preferred and there is no earlier context choosing one. Please draft a message to Avery about reviewing the blue folder. Do not send anything."),
             ("context-answer", "In this isolated example, Morgan promised to send me the red folder, and I promised to review it after it arrives. What did I promise to do? Please answer here; no task or external action is needed."),
         ]
+        if args.artifact:
+            cases = [("private-artifact", "Please write a short private note asking the team to review the green folder by Friday. Keep it here for my review and do not send or save it in another app.")]
         for name, text in cases:
             # Ordinary conversation replies currently omit parent_line. Use
             # this isolated owner's new rows and retain that attribution limit
@@ -71,11 +76,36 @@ def main():
             events.append(event["id"])
             started = time.monotonic()
             replies = []
+            artifact = None
+            artifact_params = {}
+            delivered = False
+            def from_this_event(job):
+                params = job.get("params") or {}
+                if isinstance(params, str):
+                    try:
+                        params = json.loads(params)
+                    except ValueError:
+                        return False
+                workflow = params.get("_workflow") if isinstance(params, dict) else None
+                return isinstance(workflow, dict) and event["id"] in (workflow.get("source_event_ids") or [])
             while time.monotonic() - started < 240:
                 replies = api.list("events", f'owner_ref="{OWNER}" && created>="{event["created"]}"')
                 replies = [r for r in replies if r["id"] not in prior_reply_ids
                     and r.get("kind") in ("anticipy_text", "anticipy_says")]
                 current = api.record("events", event["id"])
+                if args.artifact:
+                    own = [j for j in api.list("jobs", f'owner_ref="{OWNER}"') if from_this_event(j)]
+                    completed = [j for j in own if j.get("status") == "done"]
+                    if completed:
+                        artifact = completed[0]
+                        artifact_params = artifact.get("params") or {}
+                        if isinstance(artifact_params, str):
+                            artifact_params = json.loads(artifact_params)
+                        delivered = any(r.get("external_event_id") == "job-result:" + artifact["id"] for r in replies)
+                        if delivered:
+                            break
+                    time.sleep(3)
+                    continue
                 if replies and current.get("decision") not in (None, "", "processing"):
                     break
                 time.sleep(3)
@@ -85,6 +115,20 @@ def main():
                 "attribution": "new owner-scoped reply rows during one isolated request; ordinary replies have no parent_line",
                 "semantic_review_required": True})
             atomic_json(output, evidence)
+            if args.artifact:
+                execution = artifact_params.get("_server_work") or {}
+                receipt = (artifact_params.get("_workflow") or {}).get("receipt") or {}
+                result = str((artifact or {}).get("result") or "")
+                expected_digest = "text-sha256:" + hashlib.sha256(result.encode()).hexdigest()
+                passed = bool(artifact and result and delivered
+                    and (execution.get("approach") or {}).get("verdict") == "compose"
+                    and (execution.get("verification") or {}).get("verdict") == "satisfied"
+                    and receipt.get("verified") is True and expected_digest in receipt.get("evidence", []))
+                evidence["artifact"] = {"passed": passed, "result": result, "execution": execution,
+                    "receipt": receipt, "app_result_delivered": bool(artifact and delivered)}
+                atomic_json(output, evidence)
+                if not passed:
+                    raise RuntimeError("The requested verified server artifact and app receipt were not observed")
             if not replies:
                 raise RuntimeError("No persisted reply observed; this is not a passing result")
     finally:

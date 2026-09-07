@@ -32,7 +32,9 @@ never on the browser and never on the api hand. That is the trade Law 1 asks
 for and its cost is written down here: a write the model never got to judge
 becomes a read-only lookup rather than a browser errand, visible in the row's
 `_hand` note and in the log line this module prints, instead of a job that
-acts without a verdict.
+acts without a verdict. The server executor now refuses hold/unasked/unanswered
+notes: using the research lane to keep a row away from the browser does not license
+a public lookup or a fabricated completion.
 
 THE FACTS ARE HANDED TO THE MODEL, NOT GUESSED FROM WORDS. `gather_context`
 reads which apps this owner has connected and whether writes are switched on
@@ -402,7 +404,8 @@ only reads, and the choice to touch nothing. Pick the one that takes this step.
              it exists only for an app in the CONNECTED list below, and it may
              change things in that app only when that row says writes are ON.
   research — read-only, on the server: look something up, read pages, or
-             recall what the assistant itself heard him say, and tell him.
+             produce a private draft/summary/comparison from the supplied
+             context, or recall what the assistant itself heard him say.
              Needs no account and no app. Changes nothing anywhere.
   hold     — no hand should touch this: it is not a step anyone can run, or it
              must wait for the owner's own word (money, deleting things,
@@ -446,6 +449,9 @@ And two from the house:
   require an email app and does not write one. Choose the hand needed to read
   its sources. Saving a draft in an external account or sending it does change
   that account. Never invent such a save/send step merely because it is a draft.
+  When the needed facts are already supplied, research can compose the actual
+  draft on the server without a web lookup. It must not substitute instructions
+  about drafting for the requested draft itself.
 - An offline browser is an unavailable access path, not permission to substitute
   memory or public search for a private source. Keep private-source work on
   browser when no suitable app is connected, so the owner can supply access.

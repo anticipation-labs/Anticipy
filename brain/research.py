@@ -334,8 +334,9 @@ def run_research(goal: str, params: Optional[dict] = None, llm=None,
                  api_key: Optional[str] = None,
                  tavily_api_key: Optional[str] = None) -> dict:
     """One research job, end to end: search -> read -> summarize with
-    citations. Returns {"ok": bool, "result": str} and never raises — a
-    crashed pass would leave the job stuck at `running` forever."""
+    citations. Returns a candidate result and the actual source content.
+    `ok` means retrieval produced an answer, not that the user's task is done;
+    server_work performs the separate fulfilment check before completion."""
     query = query_from_goal(goal)
     # THE SEARCH STRING AND THE QUESTION ARE NOT THE SAME OBJECT.
     #
@@ -405,7 +406,8 @@ def run_research(goal: str, params: Optional[dict] = None, llm=None,
                         "content": content or res["description"]})
     summary = _summarize(asked, sources, llm=llm)
     listed = "\n".join(f"[{s['n']}] {s['title']} — {s['url']}" for s in sources)
-    return {"ok": True, "result": f"{summary}\n\nSources:\n{listed}"}
+    return {"ok": True, "result": f"{summary}\n\nSources:\n{listed}",
+            "sources": sources}
 
 
 # ===========================================================================

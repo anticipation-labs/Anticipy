@@ -26,9 +26,10 @@ import requests
 
 from . import pb
 from . import research
+from . import server_work
 
 from .anticipy_core import (DEVICE_CALENDAR_LANE, RESEARCH_LANE, Anticipy,
-                            goal_tokens, is_device_lane, needs_no_browser)
+                            goal_tokens, is_device_lane, needs_no_browser, memory_notes)
 from .hands import LANE_API
 from .evidence import picture_for_done_text
 from .memory import Memory
@@ -40,6 +41,7 @@ from . import sendblue_arm
 from .llm import (LLM, TZ as TZ_FALLBACK, DECISION_CALL_CEILING,
                   DECISION_DEADLINE_SECONDS, budget_spent_last)
 from .workflow import (claim as claim_plan, fail as fail_plan,
+                       needs_user as needs_user_plan,
                        from_params as workflow_from_params,
                        put_in_params, recover_expired as recover_expired_plan,
                        succeed as succeed_plan)
@@ -1638,11 +1640,12 @@ def run_preflight_research(anticipy, learner=None) -> None:
 
 
 def run_research_jobs(anticipy, runner=None) -> None:
-    """Run the research lane HERE, in the worker — never in his Chrome.
+    """Compose or research on the server, then verify the actual task result.
 
     Read-only goals are queued with lane="research" (anticipy_core.job_lane);
     the extension's claim filter and the backend's research_lane hook keep
-    every browser agent away from them. Claiming follows the extension's own
+    every browser agent away from them. Composition needs no search key;
+    unread private sources need access, not a web how-to answer. Claiming follows the extension's own
     doctrine — stamp, read back, only run if the stamp survived — so two
     workers can never run the same job. Owner scoping is identical to every
     other job read this file does."""
@@ -1680,17 +1683,6 @@ def run_research_jobs(anticipy, runner=None) -> None:
             # second layer, so one of the two failing does not reopen the hole.
             if held_for_research(job):
                 continue
-            if not api_key and not tavily_api_key:
-                # Graceful fallback: no key means no research arm, and a job
-                # queued for an executor that does not exist would sit
-                # forever. Hand it to the browser lane — slower and noisier,
-                # but it runs. Queue-time routing already does this; this
-                # catches rows queued before the key went away.
-                pb.patch(f"{base}/api/collections/jobs/records/{job['id']}",
-                         json={"lane": ""}, timeout=10)
-                print(f"research: no search-provider key — {job['id']} handed "
-                      "to the browser lane")
-                continue
             try:
                 params = json.loads(job.get("params") or "{}") or {}
             except Exception:
@@ -1727,31 +1719,43 @@ def run_research_jobs(anticipy, runner=None) -> None:
                     or fresh.get("status") != "running" \
                     or (lease_token and fresh.get("lease_token") != lease_token):
                 continue
-            if runner is not None:
-                # Keep the injected executor seam deliberately small: tests
-                # and local proofs implement the original contract and should
-                # not need to impersonate every production provider.
-                out = runner(job.get("goal", ""), params,
-                             llm=anticipy.llm, api_key=api_key)
-            else:
-                out = research.run_research(
-                    job.get("goal", ""), params, llm=anticipy.llm,
+            model = getattr(getattr(anticipy, "brain", None), "strong", None) or anticipy.llm
+            try:
+                from .memory import RETIRED_QUOTED
+                related = memory_notes(anticipy.memory.recall(job.get("goal", ""),
+                    limit=8, retired=RETIRED_QUOTED), budget=4000)
+            except Exception:
+                related = "No related memory is available; do not invent it."
+            def public_read(goal, record):
+                if not api_key and not tavily_api_key:
+                    return {"ok": False, "needs_user": True,
+                        "result": "Public search is unavailable right now. I need a usable browser or search connection to finish this lookup."}
+                if runner is not None:
+                    return runner(goal, record, llm=model, api_key=api_key)
+                return research.run_research(goal, record, llm=model,
                     api_key=api_key, tavily_api_key=tavily_api_key)
-            ok = bool(out.get("ok"))
+            out = server_work.run(job.get("goal", ""), params, model=model,
+                research_runner=public_read, context={"related_memory": related})
+            ok = out.get("ok") is True and out.get("verified") is True
             result = (out.get("result") or "")[:6000]
-            finish_body = {"status": "done" if ok else "failed",
+            needs_user = out.get("needs_user") is True
+            params["_server_work"] = {k: out[k] for k in
+                ("approach", "verification", "candidate") if k in out}
+            finish_body = {"status": "done" if ok else "needs_user" if needs_user else "failed",
                            "result": result}
             finish_headers = None
             if workflow:
-                # A cited URL is independently inspectable evidence.  An
-                # executor saying "ok" without one is not proof of research.
-                evidence = [u.rstrip(".,);]") for u in
-                            re.findall(r"https?://[^\s]+", result)]
+                # The stored artifact or retrieved evidence must fulfil this
+                # task. URLs and an executor's own `ok` no longer prove that.
+                evidence = out.get("evidence") or []
                 try:
                     if ok and evidence:
                         workflow = succeed_plan(
                             workflow, lease_token=lease_token,
                             summary=result, evidence=evidence, verified=True)
+                    elif needs_user:
+                        workflow = needs_user_plan(workflow, lease_token=lease_token,
+                            reason=result or "This task needs access before it can continue.")
                     else:
                         workflow = fail_plan(
                             workflow, lease_token=lease_token,
@@ -1763,6 +1767,8 @@ def run_research_jobs(anticipy, runner=None) -> None:
                     finish_headers = {"X-Anticipy-Lease": lease_token}
                 except Exception:
                     continue
+            else:
+                finish_body["params"] = json.dumps(params)
             finished = pb.patch(
                 f"{base}/api/collections/jobs/records/{job['id']}",
                 json=finish_body, headers=finish_headers, timeout=10)
