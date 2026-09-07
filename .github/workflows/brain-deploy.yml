@@ -25,7 +25,7 @@ on:
         description: 'Backend component to deploy'
         required: true
         type: choice
-        options: [brain, api, inspect, messaging-secret]
+        options: [brain, api, inspect, inspect-api, messaging-secret]
         default: brain
       confirm:
         description: 'Type DEPLOY to deploy the selected component'
@@ -190,3 +190,28 @@ jobs:
             exit "$result"
           fi
           python3 proof/audit/container_log_summary.py "$RUNNER_TEMP/brain-tail.json"
+
+  inspect-api:
+    if: ${{ github.ref == 'refs/heads/cloudflare-backend' && github.event.inputs.component == 'inspect-api' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '24' }
+      - name: Install the existing deployment CLI
+        run: npm ci --prefix migration/workers --ignore-scripts
+      - name: Observe webhook response codes without message content
+        run: |
+          set +e
+          timeout 125s migration/workers/node_modules/.bin/wrangler tail anticipy-api --format json > "$RUNNER_TEMP/api-tail.json" 2> "$RUNNER_TEMP/api-tail-stderr.txt"
+          result=$?
+          set -e
+          if [ "$result" != 0 ] && [ "$result" != 124 ]; then
+            echo "Read-only API observation failed with exit $result"
+            exit "$result"
+          fi
+          python3 proof/audit/messaging_log_summary.py "$RUNNER_TEMP/api-tail.json"
