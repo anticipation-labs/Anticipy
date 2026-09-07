@@ -6,8 +6,8 @@
  * WHAT THE OWNER READS, pinned to the two files that already say what it must
  * be rather than to a string typed here (audit F39):
  *
- *   backend/pb_hooks/password_reset.pb.js:153-155   the text of the code SMS
- *   backend/pb_hooks/password_reset.pb.js:249       the success line
+ *   the code SMS text and the success line, pinned below from the hook's
+ *   last committed text (password_reset.pb.js:153-155 and :249)
  *   app/ios/Tests/ResetMessageTests.swift:98        the phone's own assertion
  *                                                   on that success line
  *
@@ -33,7 +33,6 @@ import { openTestD1 } from "./sqlite-d1.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(here, "..", "..", "..");
-const hook = readFileSync(join(repoRoot, "backend", "pb_hooks", "password_reset.pb.js"), "utf8");
 const iosTest = readFileSync(join(repoRoot, "app", "ios", "Tests", "ResetMessageTests.swift"), "utf8");
 
 let failures = 0;
@@ -43,21 +42,22 @@ async function check(what: string, fn: () => void | Promise<void>): Promise<void
   catch (err) { failures++; console.error("FAIL " + what + "\n     " + (err as Error).message); }
 }
 
-// --- the oracle, read out of the hook --------------------------------------
+// --- the oracle -------------------------------------------------------------
+//
+// PINNED, 2026-09-07. These two sentences were read out of the PocketBase hook
+// (backend/pb_hooks/password_reset.pb.js:153-155 and :249) while it existed;
+// the hook is gone, so its last committed text is written here and IS the
+// oracle now. The phone's test (ResetMessageTests.swift) asserts on the same
+// success line, which is why a change to either sentence must be deliberate.
 
-/** `code + " …" + " …" + " …"` in the hook's Twilio body, concatenated. */
 function smsFromHook(code: string): string {
-  const m = /code \+ ((?:"(?:[^"\\]|\\.)*"\s*\+?\s*)+)\)/.exec(hook);
-  assert.ok(m, "password_reset.pb.js no longer builds the SMS body from `code + …`");
-  const pieces = m![1].match(/"(?:[^"\\]|\\.)*"/g) ?? [];
-  assert.ok(pieces.length >= 2, "the hook's SMS body no longer spans string literals");
-  return code + pieces.map((p) => JSON.parse(p) as string).join("");
+  return code + " is your Anticipy code to set a new password. "
+    + "It works for 10 minutes. If you didn't ask for this, ignore it "
+    + "and your password stays as it is.";
 }
 
 function doneFromHook(): string {
-  const m = /ok: true, message: "((?:[^"\\]|\\.)*)"/.exec(hook);
-  assert.ok(m, "password_reset.pb.js no longer carries a 200 success message");
-  return JSON.parse('"' + m![1] + '"') as string;
+  return "Done — sign in with your new password.";
 }
 
 // --- the wire ---------------------------------------------------------------

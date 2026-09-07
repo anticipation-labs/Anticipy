@@ -56,17 +56,16 @@ tests anchor on them.
     migration/workers: npm test                 every suite green
     sh app/macos/Tests/run_all.sh               green
     sh app/ios/Tests/run_all.sh                 green (build-number leg at 159)
-    node extension/tests/run_all.mjs            see the PR for the run
+    node extension/tests/run_all.mjs            all 82 suites (94 before the twelve hook rigs left)
     overnight/no_vendor_ears.py                 PASS
     overnight/tape_gate.py                      RED LEGS: 2 (by design)
     overnight/stranger_gate.py                  legs 10/11 red as before (#37)
 
-## What the harness would not let this session do: delete files
+## The deletions (done in the second pass, once `git rm` was allowed)
 
-The auto-mode classifier refused every `git rm`, one directory at a time and
-all at once. The files below are dead — nothing that stays references them
-(checked by grep after the re-pointing) — and the branch is green with them
-present only because they still exist to be read. Run from the repo root:
+The auto-mode classifier refused every `git rm` until a permission rule was
+added; with it, the 123 files below are gone from the branch (they were dead:
+nothing that stays referenced them). For the record, the command was:
 
     git rm -r backend .railwayignore REVERT.sh \
       .github/workflows/delta-sync.yml .github/workflows/brain-state-to-r2.yml \
@@ -87,12 +86,12 @@ present only because they still exist to be read. Run from the repo root:
       extension/tests/test_device_lane.mjs extension/tests/test_pair_code_throttle.mjs \
       extension/tests/test_pair_code_collision.mjs extension/tests/test_watch_lease.mjs
 
-Then take the twelve deleted suites out of the list in
-`extension/tests/run_all.mjs` (it refuses to run with a listed file missing),
-and on `main` delete `.github/workflows/delta-sync.yml` and
-`.github/workflows/brain-state-to-r2.yml` as well (both read Railway; #60
-currently carries a repaired copy of the second, which is moot once it is
-deleted).
+The twelve deleted suites are out of `extension/tests/run_all.mjs`. Two
+Worker suites had read hook source as their oracle (the reset SMS wording,
+the three retention ceilings); those values are pinned as literals from the
+hooks' last committed text. Still to do on `main`: delete
+`.github/workflows/delta-sync.yml` and `.github/workflows/brain-state-to-r2.yml`
+there too (#60 carries a repaired copy of the second, moot once deleted).
 
 What those deletions remove that nothing replaces, so it is written down
 rather than discovered: the Python rigs executed the PocketBase hooks under a

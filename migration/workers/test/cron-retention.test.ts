@@ -26,27 +26,20 @@
  * while the row still points at them).
  */
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
 import { scheduled, type CronEnv } from "../src/cron.ts";
 import { openTestD1, fakeR2, type TestDb, type FakeR2 } from "./sqlite-d1.ts";
 
-// THE THREE NUMBERS ARE READ OUT OF THE HOOKS, not typed here. They are the
+// THE THREE NUMBERS WERE READ OUT OF THE HOOKS while the hooks existed: the
 // ceilings the original authors chose against a volume that had already filled
-// once, with the arithmetic written beside them (evidence.pb.js:226-243). A
-// test that typed them would pass while the Worker and the oracle disagreed.
-const here = dirname(fileURLToPath(import.meta.url));
-const hooks = join(here, "..", "..", "..", "backend", "pb_hooks");
-function constFromHook(file: string, name: string): number {
-  const src = readFileSync(join(hooks, file), "utf8");
-  const m = new RegExp("const " + name + " = (\\d+)").exec(src);
-  assert.ok(m, `${file} no longer declares ${name}`);
-  return Number(m![1]);
-}
-const AUDIT_KEEP = constFromHook("audit_retention.pb.js", "AUDIT_KEEP");
-const EVIDENCE_PER_OWNER = constFromHook("evidence.pb.js", "KEEP_PER_OWNER");
-const EVIDENCE_TOTAL = constFromHook("evidence.pb.js", "KEEP_TOTAL");
+// once, with the arithmetic written beside them (evidence.pb.js:226-243). The
+// hooks are gone (2026-09-07), so their last committed values are PINNED here
+// and are the oracle now — audit_retention.pb.js AUDIT_KEEP = 300;
+// evidence.pb.js KEEP_PER_OWNER = 20, KEEP_TOTAL = 60. A test that merely
+// re-read the Worker's own constants would pass while the ceilings drifted;
+// this one fails until somebody changes these three numbers on purpose.
+const AUDIT_KEEP = 300;
+const EVIDENCE_PER_OWNER = 20;
+const EVIDENCE_TOTAL = 60;
 
 let failures = 0;
 let passes = 0;

@@ -161,9 +161,15 @@ def test_a_real_phone_still_proves_the_ears(monkeypatch, capsys):
 def test_both_halves_quiet_is_still_unproven_not_deaf(monkeypatch, capsys):
     """The design the file rests on: a silent night is silent on both sides.
     Excluding probes must not turn an idle day into an incident."""
+    # The newest speech is NINE HOURS ago, derived from the clock rather than
+    # written as a date: a fixed date crossed the gate's two-cycle rule on
+    # 2026-09-07 and this test began reporting DEAF for a quiet night — the
+    # exact widening-until-it-stops-complaining trap the file above warns of.
+    from datetime import timedelta
+    recent = (datetime.now(timezone.utc) - timedelta(hours=9)).strftime("%Y-%m-%d %H:%M:%S.000Z")
     backend = Backend(
         real=0, probe=0, server=0,
-        newest_real=_row("2026-09-05 09:00:00.000Z", "iphone-b124"),
+        newest_real=_row(recent, "iphone-b124"),
         newest_server=None)
     monkeypatch.setattr(M.requests, "get", backend.get)
     monkeypatch.setattr(sys, "argv", ["are_the_ears_live.py"])

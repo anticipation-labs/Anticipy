@@ -20,7 +20,7 @@
 //
 // extension/config.js:12 defaults to PRODUCTION:
 //
-//     export const DEFAULT_BASE = "https://backend-production-61e0a.up.railway.app";
+//     export const DEFAULT_BASE = "https://api.anticipy.ai";
 //
 // A fresh profile has no `backendUrl` override, and chrome.runtime.onInstalled
 // (background.js:1358) calls ensureRegistered() immediately — before any
