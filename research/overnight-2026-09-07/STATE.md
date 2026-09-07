@@ -626,3 +626,38 @@ and held-out/API-connection tests, clean synthetic accounts, update visual PDF.
   native reserved16.631602, gateway actual approximately18.5. Preserve ledgers.
 - iOS165 unchanged. Personal browser pairing and full carrier reply/task/result
   remain open. Prior PDF is stale on this latest native test finding.
+
+
+## 2026-09-07 18:25 UTC - user redirected to cloud/local repository audit
+- Latest explicit priority: explain cloud vs local, migration state, developer
+  collisions and memory ownership; stop following individual messaging bugs.
+- Product source a4f4871a equals origin/cloudflare-backend. Two preserved
+  untracked audit outputs only. GitHub defaults to unrelated main; integration
+  branch unprotected. Fetch refspec was cloudflare-only; other branches now
+  fetched explicitly for read-only comparison.
+- PR59 Mac branch: current-only49 / branch-only11; merge-tree preview clean.
+  PR61 retirement branch: current-only49 / branch-only21; 12 exact conflicts.
+  PR61 is CLEAN only against its older Mac base;404files,26814 deletions.
+  jose_anticipy_system is current-only357 / branch-only2. No branch merged/reset.
+- Current Mac client Railway URL returns404. /download GET ends at old1.0.0
+  DMG2516712351bytes. Local port8787 still serves frozen998 from tmp worktree
+  with main migration/.wrangler/state, unlike the prepared local launcher.
+  Preserve this state; stop only our audit server when switching to current
+  launcher work/mac-dev/start-worker.sh and isolated work/mac-dev/state.
+- New4page PDF/codebase report visually inspected; Markdown and sanitized JSON
+  alongside this STATE. Next engineering work should use isolated integration
+  worktree, bring PR59 forward, restack/reconcile PR61, preserve new brain/iOS
+  behavior and rerun deployed-path proofs. Do not blindly accept one merge side.
+- Native messaging now verified: inbound secret matched provider, sender
+  aligned to verified line via34150210215, brain release34150343842 succeeded.
+  Natural draft request -> actual question -> owner deadline/go-ahead -> actual
+  draft, both provider handles DELIVERED. Four test inbound messages total plus
+  one explicit delivery diagnostic. No messages sent to team/other contacts.
+  Exact sanitized native proof can be copied from native-draft-delivery-confirmation.
+- Live brain a4f4871a all8 healthy/current source/current snapshots as of18:19Z.
+  Runtime source1f390d01715748ba48ed8401df407237049f4a45d1af56937f38177c23b1b80c.
+  Ambient real-production task still unproven. iOS165 unchanged.
+- Do not claim everything fixed. Reply persistence before provider failure,
+  arbitrary API work, actual personal browser pairing and latency remain open.
+  Budget: gatewaycap30/nativecap19; native16.631602 reserved; no new model calls
+  during repo comparison. Local gateway observed all reservations returned.
