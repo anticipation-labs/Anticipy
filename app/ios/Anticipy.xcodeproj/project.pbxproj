@@ -43,7 +43,7 @@
 		58D4754CC27965D6D4E9F986 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C0E01BACE08AB40DAA1B77B /* OnboardingView.swift */; };
 		5B7D702B926CB81B51978B95 /* CaptureStreamHealth.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE8B7CF6DBBEFF9A3B65B788 /* CaptureStreamHealth.swift */; };
 		5C20EAC439DF3EF45ED23FE9 /* SupervisedReadView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 714D2B06ED11248D1924DC9A /* SupervisedReadView.swift */; };
-		5FA2179643C000C7B5FF7E6D /* PocketBase.swift in Sources */ = {isa = PBXBuildFile; fileRef = A58D936A5FA96EE7F5165FA7 /* PocketBase.swift */; };
+		5FA2179643C000C7B5FF7E6D /* MacBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = A58D936A5FA96EE7F5165FA7 /* MacBackend.swift */; };
 		644DB43B78A19265EFFC8F0D /* AnticipyVocabulary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9EA3914C2F3E611680CF7A63 /* AnticipyVocabulary.swift */; };
 		652358C223E8B0119E4D5AAF /* CaptureEnvelope.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36BD88F8F6F1384E8D4C3850 /* CaptureEnvelope.swift */; };
 		65B4D71BC118D11316A825FB /* JobReceiptPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1277C9D57923BEE65E84A60 /* JobReceiptPolicy.swift */; };
@@ -262,7 +262,7 @@
 		99A9BF6F68B0B98758AC9E53 /* AudioTapExceptionShield.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = AudioTapExceptionShield.m; sourceTree = "<group>"; };
 		9CD1CE1C9359C9DF75AA38DE /* TranscriptCursor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptCursor.swift; sourceTree = "<group>"; };
 		9EA3914C2F3E611680CF7A63 /* AnticipyVocabulary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnticipyVocabulary.swift; sourceTree = "<group>"; };
-		A58D936A5FA96EE7F5165FA7 /* PocketBase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PocketBase.swift; sourceTree = "<group>"; };
+		A58D936A5FA96EE7F5165FA7 /* MacBackend.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacBackend.swift; sourceTree = "<group>"; };
 		A66BCAC2FE553220A46D105D /* ListenJournal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListenJournal.swift; sourceTree = "<group>"; };
 		A935B05F51033496D5EF92C9 /* HapticEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HapticEngine.swift; sourceTree = "<group>"; };
 		AB53FC7FD0743B8C3127032A /* SettingsPrivacyDataView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsPrivacyDataView.swift; sourceTree = "<group>"; };
@@ -548,7 +548,7 @@
 				6BCCB7A2DFDAA24296594034 /* MacSpeechPipeline.swift */,
 				DEEECB8F1CF1EE154576228B /* MeetingArchive.swift */,
 				4DF24B489F9AF85E2D2C05BB /* MeetingWatcher.swift */,
-				A58D936A5FA96EE7F5165FA7 /* PocketBase.swift */,
+				A58D936A5FA96EE7F5165FA7 /* MacBackend.swift */,
 				44EE6D586B100AA327DF8117 /* SystemAudioCapture.swift */,
 			);
 			name = AnticipyMac;
@@ -844,7 +844,7 @@
 				444749701931829B70DB9768 /* TranscriptWire.swift in Sources */,
 				45260835F08B4BDC1BB2C7A4 /* MeetingOfferPolicy.swift in Sources */,
 				FAF29E8319FA1B25021EE947 /* MeetingWatcher.swift in Sources */,
-				5FA2179643C000C7B5FF7E6D /* PocketBase.swift in Sources */,
+				5FA2179643C000C7B5FF7E6D /* MacBackend.swift in Sources */,
 				730A5684F1E30D15AEE90090 /* SystemAudioCapture.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
