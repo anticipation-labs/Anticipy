@@ -64,7 +64,7 @@ So this gate does not claim to detect tape. It makes silence expensive instead,
 by requiring THREE INDEPENDENT BOOKS TO AGREE:
 
   1. THE TREE      — `TAPE:` markers in the shipped organs (brain/, extension/,
-                     app/, backend/, proof/, firmware/).
+                     app/, proof/, firmware/).
   2. THE REGISTRY  — KNOWN_TAPE below, which carries a real expiry PREDICATE
                      per entry, not a promise to edit a gate later.
   3. THE LEDGER    — the "Known standing tape" section of HARNESS-LAWS.md.

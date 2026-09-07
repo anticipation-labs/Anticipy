@@ -21,7 +21,7 @@ WHAT IT SENDS, and why it is shaped like this:
 
   That is the app's own payload (app/ios/Anticipy/AnticipyApp.swift:249-275,
   mirrored in proof/local_rig.sh:308-310) with ONE deliberate difference:
-  local_rig.sh sends explicit=true because a human typed the line into a test
+  a local rig sends explicit=true because a human typed the line into a test
   harness. Ambient speech is never explicit — the owner is not addressing the
   device — and explicit rides all the way into the consequential-action gate
   (brain/anticipy_core.py:1708). Sending true would quietly hand the brain the

@@ -1538,8 +1538,8 @@ def leg_7_receipt_is_what_is_shown(root: str = ROOT) -> str:
 # Say that precisely, because the loose version of it was WRONG by 2026-08-25
 # and an audit caught it: "MediaUrl appears nowhere in any .py, .js or .swift"
 # is false — the string is in five files across two languages. Every one of
-# them is a test fixture or a comment (tests/test_evidence_host.py,
-# tests/test_stranger_gate.py, migration/workers/src/assets.ts), and none is a
+# them is a test fixture or a comment (tests/test_stranger_gate.py,
+# migration/workers/src/assets.ts), and none is a
 # send path, so the LEG was right the whole time and only this sentence was
 # not. A gate whose prose is refutable teaches the next reader that its
 # verdicts are too, which is expensive in a repo where the gates are the only
