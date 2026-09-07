@@ -48,6 +48,7 @@ import type { FellowsEnv } from "./routes/fellows_base.ts";
 import { transcriptionToken, type SmsEnv } from "./routes/sms.ts";
 import { sendblueInbound, type SendblueEnv } from "./routes/sendblue.ts";
 import { connectionCommand } from "./routes/connection_command.ts";
+import { taskAccess } from "./routes/task_access.ts";
 import { contextRequest } from "./routes/context_request.ts";
 import { notificationPolicy } from "./routes/notification_policy.ts";
 import { connectRoute, installConnectWiring, type ConnectEnv } from "./routes/connect.ts";
@@ -208,6 +209,7 @@ export default {
     if (path === "/admin/brain/status") return adminBrainStatus(request, env);
     if (path === "/admin/account-reset") return adminAccountReset(request, env as never);
     if (path === "/worker/connection-command") return connectionCommand(request, env);
+    if (path === "/worker/task-access") return taskAccess(request, env);
     if (path === "/worker/owners" && method === "GET") {
       return workerOwners(request, env as unknown as ServiceEnv);
     }

@@ -1229,7 +1229,22 @@ def browser_reachable(owner_ref: str = "") -> bool:
         return True
 
 
-def publish_stall_notice(anticipy, job: dict, situation: str, fallback: str) -> None:
+def task_access_offer(anticipy, job: dict) -> str | None:
+    """Ask the API about the stored task; it owns the real account catalog."""
+    try:
+        reply = pb.post(f"{anticipy.backend_url}/worker/task-access", json={
+            "owner_ref": anticipy.owner_ref, "job_id": job["id"],
+        }, timeout=45)
+        if reply.status_code == 200:
+            line = reply.json().get("line")
+            return line.strip() if isinstance(line, str) and line.strip() else None
+    except Exception:
+        pass
+    return None
+
+
+def publish_stall_notice(anticipy, job: dict, situation: str, fallback: str,
+                         *, offer_access: bool = False) -> None:
     """Keep a blocker visible in-app; quiet hours defer only the optional text."""
     local_key = f'stalled:{job["id"]}:{job.get("status")}'
     existing = delivered_stall_notice(job)
@@ -1238,7 +1253,8 @@ def publish_stall_notice(anticipy, job: dict, situation: str, fallback: str) -> 
     else:
         if sent_moments_ago(local_key):
             return
-        said = anticipy._voice({"situation": situation,
+        access = task_access_offer(anticipy, job) if offer_access else None
+        said = access or anticipy._voice({"situation": situation,
                                "task": str(job.get("goal") or "")}) or fallback
         saved = persist_stall_notice(job, said)
         if not saved:
@@ -1314,7 +1330,8 @@ def report_stalled_work(anticipy) -> None:
                 "and point them to Settings → Browser in Anticipy to check "
                 "the connection. Nothing has finished; do not promise a time.",
                 f"{goal} is waiting for your browser. Open Chrome and check "
-                "Settings → Browser in Anticipy to connect it.")
+                "Settings → Browser in Anticipy to connect it.",
+                offer_access=job.get("status") == "queued")
     except Exception as e:
         print(f"stalled-work report failed: {e}")
 

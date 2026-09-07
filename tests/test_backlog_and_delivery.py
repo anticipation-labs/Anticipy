@@ -501,7 +501,7 @@ def test_stalled_work_visits_pages_after_already_waiting_jobs(monkeypatch, lane,
     pages = paged_jobs(monkeypatch, jobs)
     monkeypatch.setattr(W, "browser_reachable", lambda *a, **k: False)
     seen = []
-    monkeypatch.setattr(W, "publish_stall_notice", lambda _, job, *args: seen.append(job["id"]))
+    monkeypatch.setattr(W, "publish_stall_notice", lambda _, job, *args, **kwargs: seen.append(job["id"]))
     reporter(anticipy([]))
     assert seen == [job["id"] for job in jobs]
     assert pages == list(range(1, 10))

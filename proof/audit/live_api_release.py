@@ -47,6 +47,8 @@ def prove(base, verify_deployment=False):
         check(status == 403, "SendBlue webhook is configured and rejects unsigned input")
         status, _, _ = request(base, "POST", "/sms/inbound", {})
         check(status == 410, "Retired texting endpoint cannot accept input")
+        status, _, _ = request(base, "POST", "/worker/task-access", {})
+        check(status == 401, "Task connection planning requires the internal service identity")
     status, body, headers = request(base, "GET", "/api/health")
     check(status == 200 and body.get("code") == 200, "API liveness")
     if verify_deployment:
