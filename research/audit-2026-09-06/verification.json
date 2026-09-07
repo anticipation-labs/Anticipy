@@ -1,5 +1,5 @@
 {
-  "checkpoint": "2026-09-07T05:09:15.697118+00:00",
+  "checkpoint": "2026-09-07T05:22:31.383610+00:00",
   "branch": "cloudflare-backend",
   "python": {
     "passed": 2990,
@@ -18,11 +18,11 @@
   "deployed": true,
   "owner_reset_executed": false,
   "phone_release_executed": false,
-  "deployed_scope": "API at ec42707 verified live; brain image rollout under verification",
+  "deployed_scope": "API at ec42707 passed 22 live checks; brain at ebbac06 passed all eight runtime checks",
   "held_out_cases_observed": 10,
   "live_api_checks": 22,
   "real_sms_delivery": "connection link and code visible in user-supplied Messages screenshots",
-  "google_calendar_oauth": "not confirmed",
+  "google_calendar_oauth": "Not connected: the actual Composio project Users page shows only the synthetic probe, whose Calendar connection is expired.",
   "ios_testflight": {
     "build": 159,
     "processing": "VALID",
@@ -34,7 +34,16 @@
   },
   "account_erasure_tests": 17,
   "browser_simulations_completed": 5,
-  "brain_live_summary": "5 of 8 observed instances have the updated runtime, configured strong model and current snapshots. The fleet is not fully verified until all instances pass.",
-  "brain_runtime_verified": 5,
-  "brain_runtime_observed": 8
+  "brain_live_summary": "All eight observed instances pass exact runtime-source, running-process, configured-model and recent-memory-snapshot checks. The deployed brain is verified at ebbac06; CI run 34086177008 completed successfully.",
+  "brain_runtime_verified": 8,
+  "brain_runtime_observed": 8,
+  "brain_deploy_run": 34086177008,
+  "browser_runner": {
+    "suites_passed": 94,
+    "local_seconds": 72.51,
+    "concurrency": 8,
+    "previous_ci_seconds": 458,
+    "previous_ci_run": 34085067621,
+    "failure_injection_detected": true
+  }
 }

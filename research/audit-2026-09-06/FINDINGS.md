@@ -306,3 +306,22 @@ shows only the synthetic probe account, with one expired Google Calendar
 connection and no active account. The unused temporary API-key form was
 cancelled without creating a key. No real Google connection is available for
 authenticated integration execution yet.
+
+### Live runtime verification completed
+
+At 05:21 UTC, brain deployment 34086177008 at ebbac06 passed all eight running
+instances against the expected source hash, running process, configured strong
+model and current snapshot. The owner's instance is included. A separate direct
+read returned current:true and ok:true with eight verified instances. The paid
+test gateway was stopped at US$2.017588; there are no outstanding reservations.
+This establishes deployed runtime health, not untested provider outcomes or
+completion of the account reset.
+
+The browser runner was a measurable source of avoidable delay: its 94 isolated
+Node processes ran serially. The successful CI baseline's browser step took
+458 seconds (34085067621). The runner now starts at most eight processes, retains
+the duplicate/unregistered-suite checks and per-suite timeout, and preserves
+nonzero exits. All 94 real suites passed locally in 72.51 seconds. An isolated
+fixture confirmed every suite executes once and one exit-7 child causes the
+parent to exit 1 without skipping the other children. The timing comparison is
+across CI and the Mac, so the next CI run is the comparable measurement.

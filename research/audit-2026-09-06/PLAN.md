@@ -76,9 +76,9 @@ expanding the research. The elapsed timer automation has been paused.
 Latest verification: all 50 transcript cases have observations, including ten
 held-out cases; five actual-extension/real-model browser simulations completed.
 The API at ec42707 passed 22 live checks. SMS delivery is visible in the owner's
-screenshot, but Google consent is pending owner interaction. Five of eight brain
-images currently pass source/process/snapshot/model checks; inspect the platform
-rollout rather than dispatching another replacement blindly. The 13-page PDF is
+screenshot, but Google consent is pending owner interaction. All eight brain
+images now pass source/process/snapshot/model checks in release 34086177008 at
+ebbac06. A graceful recovery resolved the stale runtimes. The 13-page PDF is
 updated and rendered. Apple confirms build 159 is available internally and its
 entire iOS tree matches the current checkout. No additional upload is needed for
 the current iOS source. The real account reset has not been executed.
@@ -91,15 +91,15 @@ the product data. Source/git/company archives are outside product-account scope.
 
 Primary-source research is integrated in RESEARCH.md. Inventory candidates cover
 2,518 tracked files and 365 documents; this is enumeration, not complete review.
-The frozen corpus contains 50 fictional people and 101 contacts. Ten held-out
-cases remain excluded from development runs. Real-model transcript ingestion is
-running through the production worker against isolated local HTTP/database state.
-Browser and provider execution, multi-turn cancellation/restart sequences, and
-independent final-world assertions are still required. Full local Worker checks
-pass after the current repairs. No audit source has been deployed, no owner data
-has been erased, and no release verdict has been issued.
+The frozen corpus contains 50 fictional people and 101 contacts. All ten held-out
+cases were observed after development repairs without tuning to those results.
+Five simulated browser read tasks completed with real models; actual connected
+provider operations and broader multi-turn cancellation/restart coverage remain
+unfinished. Both API and brain repairs are deployed and verified as described
+above. The paid gateway is stopped at US$2.017588. No real owner data has been
+erased and no complete-audit verdict has been issued.
 
-## Current source baseline
+## Initial source baseline
 
 `d93682f80b14c40d5d4ba445ea6333e4a5a58e33` plus local setup-documentation commit
 `fe04ee5`. No remote advance at the start of this audit. App source version:
