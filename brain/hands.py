@@ -330,6 +330,7 @@ class HandContext:
     # Catalogs already in hand, toolkit -> rows, for a caller that read them
     # itself (the tests, the live probe). None means read over backend_url.
     catalogs: Optional[dict] = None
+    effect_channel: str = ""
 
     def connected(self, toolkit: str) -> Optional[ConnectedApp]:
         want = (toolkit or "").strip().lower()
@@ -514,6 +515,7 @@ def facts_block(ctx: HandContext) -> str:
         mac = "yes" if ctx.browser_online else "no"
     return (f"CONNECTED APPS:\n{apps}\n"
             f"MAC ONLINE: {mac}\n"
+            f"DECLARED EFFECT CHANNEL: {ctx.effect_channel or 'unknown'}\n"
             f"LEDGER: rung {ctx.rung} of 4 for this kind of step"
             + (" — no track record yet" if ctx.rung <= NO_LEDGER_RUNG else ""))
 
@@ -593,6 +595,11 @@ def choose_hand(goal: str, context: Optional[HandContext] = None,
     user = (f"STEP: {goal}\n"
             f"HEARD: {ctx.source.strip() if ctx.source else '(nothing recorded)'}\n"
             + facts_block(ctx))
+    if ctx.effect_channel == "world":
+        user += ("\nThis entire task has a declared external effect. Research can only "
+                 "read/compose; it cannot carry out this task's external action. "
+                 "Choose a capable hand for the actual task, not just its first lookup. "
+                 "If none is available, hold. Do not invent a connection.")
     asked = 0
     for attempt in range(2):
         asked += 1
@@ -617,6 +624,10 @@ def choose_hand(goal: str, context: Optional[HandContext] = None,
         read = _read_reply(raw)
         if read is not None:
             hand, app, effect, reason = read
+            if hand == HAND_RESEARCH and ctx.effect_channel == "world":
+                # Capability validation of a declared effect, never goal wording.
+                user += "\nThe research selection cannot perform the declared effect. Reconsider the hand."
+                continue
             verdict = _floors(hand, app, effect, reason, ctx, asked)
             # THE FOURTH QUESTION, only for a hand the floors licensed, and
             # asked exactly once here (the mutation literal).
@@ -1170,4 +1181,6 @@ def gather_context(params: Optional[dict] = None, owner_ref: str = "",
         source=str(p.get("source") or ""),
         rung=NO_LEDGER_RUNG,
         backend_url=base,
+        effect_channel=str((p.get("_effect") or {}).get("touches") or "")
+            if isinstance(p.get("_effect"), dict) else "",
     )

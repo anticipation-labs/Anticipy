@@ -2597,8 +2597,10 @@ struct ConfirmJobCard: View {
             }
             if !editingAnswer {
             TimelineView(.periodic(from: .now, by: 30)) { context in
-              let caption = DashboardPolicy.notificationCaption(
+              let schedule = DashboardPolicy.notificationCaption(
                 policy: session.notificationPolicy, now: context.date)
+              let caption = session.taskTextDelivery[job.id] ?? ReplyTextDeliveryPolicy.TaskCaption(
+                title: schedule.title, detail: schedule.detail, icon: schedule.icon)
               VStack(alignment: .leading, spacing: 3) {
                 Label(notificationRoute == .textAndApp ? caption.title : notificationLabel,
                       systemImage: notificationRoute == .textAndApp ? caption.icon : "bell")

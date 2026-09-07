@@ -27,7 +27,7 @@ check(P.notificationCaption(policy: nightPolicy,
 let dayPolicy = P.NotificationPolicy(quietHoursActive: false, startHour: 22,
     endHour: 8, timeZone: "America/Vancouver", observedAt: 1_788_764_999,
     expiresAt: 1_788_765_059)
-check(P.notificationCaption(policy: dayPolicy, now: policyTime).title == "Text delivery unconfirmed",
+check(P.notificationCaption(policy: dayPolicy, now: policyTime).title == "Text status unavailable",
       "daytime is not a message delivery receipt")
 check(P.notificationCaption(policy: nil, now: policyTime).icon == "questionmark.circle",
       "failed policy reads remain unknown")

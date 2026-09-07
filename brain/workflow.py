@@ -1096,6 +1096,7 @@ def _undo_with_owner_facts(undo: Optional[UndoPlan],
 
 def merge(plan: Plan, *, expected_version: int, goal: Optional[str] = None,
           facts: Optional[Mapping[str, Any]] = None,
+          required: Optional[Iterable[str]] = None,
           authority_text: Optional[str] = None,
           source_event_id: str = "", now: Optional[datetime] = None) -> Plan:
     """Atomically improve/correct one plan and invalidate stale authority."""
@@ -1109,6 +1110,8 @@ def merge(plan: Plan, *, expected_version: int, goal: Optional[str] = None,
     at = _at(now)
     next_facts = dict(plan.facts)
     next_facts.update(_clean_facts(facts))
+    next_required = (plan.required if required is None else
+                     tuple(dict.fromkeys(str(key).strip() for key in required if str(key).strip())))
     next_goal = (goal or plan.goal).strip()
     next_authority = (plan.authority_text if authority_text is None
                       else authority_text.strip())
@@ -1118,7 +1121,7 @@ def merge(plan: Plan, *, expected_version: int, goal: Optional[str] = None,
         events.append(source_event_id.strip())
     next_state = (PlanState.DRAFT if any(
         name not in next_facts or next_facts[name] in (None, "")
-        for name in plan.required)
+        for name in next_required)
         else (PlanState.QUEUED
               if plan.consequence in (Consequence.READ_ONLY,
                                       Consequence.REVERSIBLE_LOCAL)
@@ -1129,6 +1132,7 @@ def merge(plan: Plan, *, expected_version: int, goal: Optional[str] = None,
         goal=next_goal,
         authority_text=next_authority,
         facts=next_facts,
+        required=next_required,
         undo=next_undo,
         source_event_ids=tuple(events),
         state=next_state,

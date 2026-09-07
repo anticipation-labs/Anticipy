@@ -1,0 +1,64 @@
+{
+  "checked_at": "2026-09-07T21:05:50.132286+00:00",
+  "job_reference": "dinner task shown in supplied screenshots",
+  "before_approval": {
+    "status": "awaiting_confirm",
+    "lane": "research",
+    "workflow_required_count": 0,
+    "params_missing_count": 1,
+    "question_invited": false
+  },
+  "after_approval": {
+    "status": "needs_user",
+    "lane": "research",
+    "consequence": "consequential",
+    "receipt_present": false,
+    "approved_at": "2026-09-07T21:01:10.606000+00:00",
+    "blocked_at": "2026-09-07T21:01:15.319986+00:00",
+    "reason": "This task needs an account or device action. I haven't performed that action here."
+  },
+  "provider": {
+    "status": "DELIVERED",
+    "service": "iMessage",
+    "date_sent": "2026-09-07T21:01:34.597Z",
+    "date_updated": "2026-09-07T21:01:36.309Z",
+    "error_code": null,
+    "error_message": null
+  },
+  "provider_rows_in_owner_window": 1,
+  "provider_pagination_total": 1,
+  "notification_status_records": [
+    {
+      "created": "2026-09-07 21:01:34.201Z",
+      "state": "sms_accepted",
+      "provider_handle_saved_in_body": false
+    },
+    {
+      "created": "2026-09-07 21:01:29.056Z",
+      "state": "sms_attempted",
+      "provider_handle_saved_in_body": false
+    }
+  ],
+  "daily_outreach_slots": [
+    {
+      "created": "2026-09-07 15:16:49.991Z",
+      "purpose": "clock"
+    },
+    {
+      "created": "2026-09-07 15:00:22.497Z",
+      "purpose": "task_question"
+    },
+    {
+      "created": "2026-09-07 15:00:03.293Z",
+      "purpose": "task_question"
+    }
+  ],
+  "daily_outreach_cap_in_source": 3,
+  "source_findings": [
+    "Task-card notification caption reads schedule, not task receipt",
+    "SendBlue receipt callback matches reply-sms records; task-question path stores job-sms records without provider handles",
+    "Consequential dinner task assigned research executor; server-work rejects effects and emits nonspecific account/device blocker"
+  ],
+  "test_message_origin": "Earlier authorized assistant-operated delivery test, not app autonomously testing itself",
+  "no_production_writes": true
+}

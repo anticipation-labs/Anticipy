@@ -1825,6 +1825,15 @@ No model access or insufficient context is unavailable, never answered."""
                 params.update(changes)
                 params["corrections"] = {**params.get("corrections", {}), **changes}
                 fields = {"params": json.dumps(params)}
+                if workflow and changes:
+                    try:
+                        workflow = merge_plan(workflow, expected_version=workflow.version,
+                            facts=changes, authority_text=workflow.authority_text)
+                    except Exception:
+                        return None
+                    params = put_in_params(params, workflow)
+                    fields.update(workflow.job_fields())
+                    fields["params"] = json.dumps(params)
                 if resolution.get("remaining_question"):
                     fields["result"] = resolution["remaining_question"]
                 return self._flip(job["id"], fields, "amended")
@@ -1894,8 +1903,8 @@ No model access or insufficient context is unavailable, never answered."""
             fields.update(result="", workflow_state="awaiting_approval")
         if workflow:
             fields.update(workflow.job_fields())
-            fields["result"] = _missing_fact_question(
-                workflow.missing, fallback=params.get("missing") or "")
+            fields["result"] = (_missing_fact_question(
+                workflow.missing, fallback=list(workflow.missing)) if workflow.missing else "")
             fields["params"] = json.dumps(params)
         return self._flip(job["id"], fields, "amended")
 

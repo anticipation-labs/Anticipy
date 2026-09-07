@@ -644,6 +644,7 @@ final class AnticipySession: ObservableObject {
     @Published var sessionLines: [SessionLine] = []
     @Published var anticipySays: [BrainEvent] = []
     @Published var replyTextDelivery: [String: ReplyTextDeliveryPolicy.State] = [:]
+    @Published var taskTextDelivery: [String: ReplyTextDeliveryPolicy.TaskCaption] = [:]
     private var replyDeliveryRefreshInFlight = false
     /// The first successful read is history, including when listening resumes
     /// before that read returns. Later polls must not move this boundary.
@@ -1295,6 +1296,12 @@ final class AnticipySession: ObservableObject {
                 // into a fresh assertion that sending has not begun.
                 rows = []
             }
+            self.taskTextDelivery = Dictionary(uniqueKeysWithValues: self.jobs.compactMap { job in
+                guard let caption = ReplyTextDeliveryPolicy.taskCaption(jobID: job.id,
+                    version: job.workflow_version ?? 0, status: job.status, question: job.result ?? "",
+                    owner: owner, rows: rows) else { return nil }
+                return (job.id, caption)
+            })
             self.replyTextDelivery = Dictionary(uniqueKeysWithValues: self.anticipySays
                 .filter { $0.kind == "anticipy_text" }.map { event in
                     (event.id, ReplyTextDeliveryPolicy.state(messageID: event.id,
@@ -1347,7 +1354,10 @@ final class AnticipySession: ObservableObject {
                     return job
                 }
             }
-            if jobs != reconciledJobs { jobs = reconciledJobs }
+            if jobs != reconciledJobs {
+                jobs = reconciledJobs
+                taskTextDelivery = [:] // A receipt belongs to the exact task version/question.
+            }
             connection = .ready
             do {
                 let calendarOwner = accountID
@@ -2393,6 +2403,7 @@ final class AnticipySession: ObservableObject {
         sessionLines = []
         anticipySays = []
         replyTextDelivery = [:]
+        taskTextDelivery = [:]
         initialHistoryReplyIDs = nil
         jobs = []
         ownerReplies = []

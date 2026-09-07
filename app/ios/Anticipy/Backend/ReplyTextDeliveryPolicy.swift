@@ -12,6 +12,7 @@ enum ReplyTextDeliveryPolicy {
         let external_event_id: String?
         let created: String
         let updated: String?
+        var text: String? = nil
     }
 
     enum State: Equatable {
@@ -62,5 +63,45 @@ enum ReplyTextDeliveryPolicy {
         case "sms_skipped", "sms_mock": return .notSent
         default: return .unknown
         }
+    }
+
+    struct TaskCaption: Equatable {
+        let title: String
+        let detail: String
+        let icon: String
+    }
+
+    static func taskCaption(jobID: String, version: Int, status: String,
+                            question: String, owner: String, rows: [Metadata]) -> TaskCaption? {
+        guard !owner.isEmpty, !jobID.isEmpty else { return nil }
+        let matching = rows.filter { row in
+            guard row.owner_ref == owner, let text = row.text,
+                  let meta = try? JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any]
+            else { return false }
+            return meta["purpose"] as? String == "task_question"
+                && meta["job_id"] as? String == jobID
+                && meta["version"] as? Int == version
+                && meta["status"] as? String == status
+                && meta["question"] as? String == question
+        }
+        if let outbox = matching.first(where: { $0.kind == "reply_outbox" }), let messageID = outbox.goal {
+            let delivery = state(messageID: messageID, owner: owner, rows: rows)
+            if let title = delivery.caption {
+                return TaskCaption(title: title, detail: "You can answer this question here or by text.", icon: delivery.symbol)
+            }
+        }
+        guard let latest = matching.filter({ $0.kind == "notification_status" })
+            .max(by: { ($0.created, $0.id) < ($1.created, $1.id) }) else { return nil }
+        let title: String
+        switch latest.decision {
+        case "text_daily_limit": title = "Text paused · daily outreach limit"
+        case "text_question_limit": title = "Text paused · follow-up limit"
+        case "text_quiet_hours": title = "Text paused · quiet hours"
+        case "text_conversation_paused": title = "Text paused · conversation in progress"
+        case "text_no_phone": title = "Text not sent · phone unavailable"
+        case "text_policy_unknown": title = "Text paused · schedule check unavailable"
+        default: return nil
+        }
+        return TaskCaption(title: title, detail: "This question is saved here. You can answer it now.", icon: "pause.circle")
     }
 }

@@ -32,5 +32,24 @@ check("another message's delivery cannot attach", state([row("sms_delivered", me
 check("old job notifications cannot masquerade as message delivery", state([row("sms_delivered", key: "job-result:reply1")]) == .unknown)
 check("prose in a wire decision is never interpreted", state([row("delivered successfully, trust me")]) == .unknown)
 check("legacy sent wording is not proof of delivery", state([row("sms_sent")]) == .unknown)
+
+let questionMeta = "{\"purpose\":\"task_question\",\"job_id\":\"job1\",\"version\":2,\"status\":\"needs_user\",\"question\":\"Which entrance?\"}"
+var deferred = row("text_daily_limit", message: "job1", key: "task-text:identity:limit")
+deferred.text = questionMeta
+func task(_ rows: [ReplyTextDeliveryPolicy.Metadata], version: Int = 2,
+          question: String = "Which entrance?", owner: String = "owner1") -> ReplyTextDeliveryPolicy.TaskCaption? {
+    ReplyTextDeliveryPolicy.taskCaption(jobID: "job1", version: version, status: "needs_user",
+        question: question, owner: owner, rows: rows)
+}
+check("withheld question shows its actual reason", task([deferred])?.title == "Text paused · daily outreach limit")
+check("stale version cannot label a current question", task([deferred], version: 3) == nil)
+check("changed question cannot inherit old delivery", task([deferred], question: "Which afternoon?") == nil)
+check("task delivery never crosses owners", task([deferred], owner: "owner2") == nil)
+var pendingTask = row("reply_pending", kind: "reply_outbox")
+pendingTask.text = questionMeta
+check("task question uses shared positive receipt", task([deferred, pendingTask, row("sms_delivered")])?.title == "Text delivered")
+let encoded = try! JSONEncoder().encode(["id":"m", "kind":"reply_outbox", "decision":"reply_pending", "goal":"reply1", "owner_ref":"owner1", "external_event_id":"reply-outbox:reply1", "created":"now", "text":questionMeta])
+let decoded = try! JSONDecoder().decode(ReplyTextDeliveryPolicy.Metadata.self, from: encoded)
+check("wire decoder keeps task linkage", task([decoded])?.title == "Text queued")
 print("Reply text delivery policy: \(failures) failures")
 exit(failures == 0 ? 0 : 1)

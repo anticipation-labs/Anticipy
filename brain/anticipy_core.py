@@ -57,39 +57,16 @@ NAME = "Anticipy"
 
 
 def _required_from_missing(missing) -> tuple:
-    """Map free-form missing-detail questions onto canonical fact keys.
+    """Preserve each model-declared question as a required fact identity.
 
-    Only details with an unambiguous canonical key may block a plan: the
-    answer arrives through the classifier as {"time": ...}, {"location": ...}
-    etc., so a required name outside this set could never be filled and would
-    wedge the plan in DRAFT forever. Unmappable questions simply don't block.
+    These strings are opaque keys, not a vocabulary classifier. The answer
+    model receives the complete question and must fill that exact key. No
+    question becomes optional because of its length, language or domain.
     """
     if not missing:
         return ()
-    items = missing if isinstance(missing, (list, tuple)) else \
-        [part.strip() for part in str(missing).split(",")]
-    out = []
-    for item in items:
-        low = str(item).lower()
-        # A FIELD NAME, never prose. Triage writes free-form reasoning into
-        # this field — live on 2026-08-16 it held "The current date is
-        # Saturday, August 15, 2026. Tomorrow is Sunday..." and the word
-        # "date" inside that sentence made `date` a required fact, which
-        # parked his dinner card in DRAFT and made Send fail with "didn't go
-        # through". Anything sentence-length is an explanation, not a name.
-        if len(low.split()) > 4:
-            continue
-        if "time" in low or "when" in low:
-            out.append("time")
-        if "location" in low or "where" in low or "which" in low and (
-                "location" in low or "branch" in low or "store" in low):
-            out.append("location")
-        if "how many" in low or "people" in low or "party" in low \
-                or "guests" in low:
-            out.append("party_size")
-        if ("date" in low or "day" in low) and "time" not in low:
-            out.append("date")
-    return tuple(dict.fromkeys(out))
+    items = missing if isinstance(missing, (list, tuple)) else [missing]
+    return tuple(dict.fromkeys(str(item).strip() for item in items if str(item).strip()))
 
 # A correction is an amendment to the plan already on the owner's desk, not
 # a lossy paraphrase of it.  The normal merge guard deliberately refuses to
@@ -796,8 +773,8 @@ def _missing_fact_question(missing, fallback="") -> str:
         return "I still need " + ", ".join(wanted[:-1]) + " and " + wanted[-1] + "."
     if fallback:
         if isinstance(fallback, (list, tuple)):
-            fallback = "; ".join(str(value).strip().rstrip(".?") for value in fallback if value)
-        return "I still need: " + str(fallback).strip().rstrip(".?") + "."
+            fallback = "\n".join(str(value).strip() for value in fallback if value)
+        return "I still need: " + str(fallback).strip()
     if names:
         return "I still need " + ", ".join(sorted(names)) + "."
     return ""
@@ -1064,7 +1041,11 @@ def job_lane(goal: str, params: dict | None = None, *, owner_ref: str = "",
     # about wording, not fields. Honouring them here is what keeps the six
     # pre-existing lane tests true without a word list: no model is asked
     # about a goal that already carries its lane.
-    if g.lower().startswith("research:"):
+    declaration = (params or {}).get("_effect", {})
+    changes_world = isinstance(declaration, dict) and declaration.get("touches") == "world"
+    # A declared lane cannot override the hand's actual capability. Conflicts
+    # go through the same contextual router, not directly to research.
+    if g.lower().startswith("research:") and not changes_world:
         verdict = hands.HandVerdict(hands.HAND_RESEARCH, "declared by the research arm")
     elif str((params or {}).get("source") or "").lower() == "browser":
         verdict = hands.HandVerdict(hands.HAND_BROWSER, "declared: the owner asked for the browser")
@@ -4063,9 +4044,8 @@ class Anticipy:
         # On 2026-08-15 "what time and how many people?" went out, was never
         # answered, and the browser booked toward an invented 7:00 PM for 2 —
         # because the plan carried no required facts and ran anyway. Missing
-        # details map onto canonical fact keys; the workflow machinery then
-        # parks the plan in DRAFT until an answer fills them. Unmappable
-        # questions never block (a stuck plan is worse than a naive one).
+        # questions are preserved as fact identities; the answer model maps
+        # the owner's evidence to those keys. Wording never removes a hold.
         required = _required_from_missing(params.get("missing"))
         seed_facts = {k: params[k] for k in
                       ("time", "party_size", "date", "location")
@@ -4077,10 +4057,8 @@ class Anticipy:
                 if params.get(key) not in (None, "")
             }
             seed_facts.update(calendar_facts)
-            required = tuple(dict.fromkeys(
-                tuple(required)
-                + tuple(key for key in PHONE_CALENDAR_FACTS
-                        if key not in calendar_facts)))
+            required = tuple(key for key in PHONE_CALENDAR_FACTS
+                             if key not in calendar_facts)
             calendar_undo = _calendar_undo(act, calendar_facts)
         workflow = new_plan(
             owner_ref=owner_for_workflow,
@@ -4835,41 +4813,17 @@ class Anticipy:
                 merged["source"] = f"{cur_src} … then: {new_src}"
         elif cur_src:
             merged["source"] = cur_src
-        fields = {}
-        have = goal_tokens(cur_goal)
-        want = goal_tokens(goal)
-        erased = have - want
-        gained = want - have
-        ratio = len(erased) / len(have) if have else 0
-        explicit_correction = bool(_EXPLICIT_CORRECTION_RE.search(new_src))
-        lossless_goal = _lossless_replacement(cur_goal, new_src)
-        # Counting only what a re-mention ERASES asks half the question, and
-        # the missing half is the one that decides a real conversation.
-        #
-        # Measured on his own 2026-08-04 dinner: the card read "Confirm dinner
-        # reservation for 2 people tomorrow at 7 PM" and he then named the
-        # place — "Book dinner for 2 at Cactus Club Park location tomorrow at
-        # 7 PM". That drops three near-synonyms (confirm, reservation, people)
-        # and ADDS the venue, which is the single fact a booking cannot be
-        # carried out without. Three of seven is 0.43, over the third, so the
-        # better goal was refused and the card kept its venue-less wording:
-        # she then texted him "what restaurant?" about a restaurant he had
-        # just said out loud, and any browser run released from that card
-        # would go looking for a venue nobody had told it.
-        #
-        # So weigh both sides. A wording that brings more than it takes is an
-        # enrichment and must land. The bleaching this guard exists to stop
-        # looks the opposite way round — "Confirm Earls West Van tomorrow at
-        # 7 PM" over "Book a table for 2 at Earls in West Vancouver for
-        # tomorrow evening" erases five and adds two — and is still refused.
-        if lossless_goal is not None:
-            fields["goal"] = lossless_goal
-        elif explicit_correction or ratio <= 1 / 3 or len(gained) > len(erased):
-            fields["goal"] = goal          # richer or corrected: new wins
-        else:
-            merged["update"] = goal        # both hold detail: lose neither
-            if merged.get("source"):
-                merged["source"] += f" (update: {goal})"
+        from .task_revision import reconcile
+        model = getattr(getattr(self, "brain", None), "strong", None) or self.llm
+        revision = reconcile(model,
+            {"goal": cur_goal, "params": cur_params, "result": current.get("result")},
+            {"goal": goal, "params": params, "conversation": merged.get("source")})
+        if revision is None:
+            print(f"amendment needs a contextual verdict for {job_id}; existing plan preserved")
+            return
+        fields = {"goal": revision["goal"].strip()}
+        merged["update"] = goal
+        merged["missing"] = revision["missing"]
         workflow = workflow_from_params(cur_params)
         if workflow:
             try:
@@ -4877,12 +4831,18 @@ class Anticipy:
                     workflow,
                     expected_version=workflow.version,
                     goal=fields.get("goal", cur_goal),
+                    facts={key: value for key, value in revision.get("facts", {}).items()
+                           if key in workflow.required},
+                    required=(workflow.required if workflow.act else
+                              _required_from_missing(revision["missing"])),
                     authority_text=str(merged.get("source") or ""),
                     source_event_id=str(params.get("source_event_id")
                                         or self._source_event_id or ""),
                 )
                 merged = put_in_params(merged, workflow)
                 fields.update(workflow.job_fields())
+                fields["result"] = (_missing_fact_question(workflow.missing,
+                    fallback=revision["missing"]) if workflow.missing else "")
             except Exception as e:
                 print(f"workflow merge refused for {job_id}: {e}")
                 return

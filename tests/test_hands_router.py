@@ -175,8 +175,7 @@ def test_each_verdict_reaches_the_lane_through_job_lane(monkeypatch, offline):
     # nobody. The verifier of 2026-09-06 proved the opposite flip unsafe too
     # (a no-verdict READ must never run in the browser), so the rule is: no
     # verdict + consequential -> "", no verdict + read -> research.
-    for hand, lane in ((HAND_BROWSER, ""), (HAND_RESEARCH, "research"),
-                       (HAND_HOLD, "")):
+    for hand, lane in ((HAND_BROWSER, ""), (HAND_HOLD, "")):
         got, params, llm = route(monkeypatch, "sort out the thing with the car",
                                  says(hand), params={"_effect": {"touches": "world"}})
         assert got == lane, hand
@@ -1329,3 +1328,16 @@ def test_live_tool_probe_against_the_real_model():
     control = [w for w in wrong if w[0] == "C"]
     assert not control, f"a CONTROL moved: {control}"
     assert v.hand == HAND_API and v.effect == "read" and lane_for(v) == "api"
+
+
+def test_external_effect_rejects_research_and_reasks_with_complete_contract(offline):
+    model = ScriptedLLM(says(HAND_RESEARCH), says(HAND_BROWSER, effect="write"))
+    verdict = choose_hand("Resolve the owner's task", HandContext(effect_channel="world"), llm=model)
+    assert verdict.hand == HAND_BROWSER
+    assert len(model.asked) == 2
+
+
+def test_external_effect_never_accepts_two_research_verdicts(offline):
+    model = ScriptedLLM(says(HAND_RESEARCH), says(HAND_RESEARCH))
+    verdict = choose_hand("An unfamiliar task", HandContext(effect_channel="world"), llm=model)
+    assert verdict.hand == HAND_UNANSWERED

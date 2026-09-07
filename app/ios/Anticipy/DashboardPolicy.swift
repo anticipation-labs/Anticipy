@@ -75,8 +75,8 @@ enum DashboardPolicy {
                 detail: "Until \(policy.endTime) in your account’s time zone. You can answer here now.",
                 icon: "moon.fill")
         }
-        return NotificationCaption(title: "Text delivery unconfirmed",
-            detail: "Check Messages for a text, or answer here now.", icon: "message")
+        return NotificationCaption(title: "Text status unavailable",
+            detail: "There is no delivery receipt for this question yet. You can answer here now.", icon: "questionmark.message")
     }
 
     // MARK: - Which face is up

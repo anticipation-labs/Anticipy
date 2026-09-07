@@ -61,6 +61,9 @@ class FakePB:
 
 
 def _anticipy(monkeypatch):
+    from brain import task_revision
+    monkeypatch.setattr(task_revision, 'reconcile', lambda model, current, proposed:
+        {'verdict': 'revised', 'goal': proposed['goal'], 'missing': [], 'facts': {}})
     fake = FakePB()
     monkeypatch.setattr(backend, "get", fake.get)
     monkeypatch.setattr(backend, "post", fake.post)

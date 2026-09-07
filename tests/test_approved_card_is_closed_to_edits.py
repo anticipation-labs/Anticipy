@@ -53,6 +53,12 @@ def _core(monkeypatch, job, patches, patch_response=None):
                     return {"id": "job2", "status": "awaiting_confirm"}
             return Response()
     monkeypatch.setattr(C, "backend", FakePB)
+    # Contextual interpretation is scripted here; these tests exercise the
+    # persistence/authority boundary. Real model cases live in the repair proof.
+    from brain import task_revision
+    monkeypatch.setattr(task_revision, "reconcile", lambda model, current, update: {
+        "verdict": "revised", "goal": getattr(a, "revised_goal", update["goal"]),
+        "missing": update["params"].get("missing", []), "facts": {}})
     return a
 
 

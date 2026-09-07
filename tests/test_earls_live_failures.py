@@ -210,14 +210,11 @@ def test_missing_details_are_an_answer_card_before_approval(monkeypatch):
     from brain.anticipy_core import Anticipy, _required_from_missing
     from brain.memory import Memory
 
-    assert _required_from_missing(["time", "party size"]) == ("time", "party_size")
-    assert _required_from_missing("which Earls location") == ("location",)
-    assert _required_from_missing(["favourite colour"]) == ()   # never wedges
-    # the exact prose that froze his card
-    assert _required_from_missing([
-        "The current date is Saturday, August 15, 2026. Tomorrow is Sunday, "
-        "August 16, 2026. The user specified Saturday for tomorrow's booking."
-    ]) == ()
+    assert _required_from_missing(["time", "party size"]) == ("time", "party size")
+    assert _required_from_missing("which Earls location") == ("which Earls location",)
+    assert _required_from_missing(["favourite colour"]) == ("favourite colour",)
+    long_question = "What time would you like to schedule the appointment for?"
+    assert _required_from_missing([long_question]) == (long_question,)
 
     a = Anticipy(memory=Memory(":memory:"), llm=None, owner_id="t")
     posted = {}
@@ -241,9 +238,9 @@ def test_missing_details_are_an_answer_card_before_approval(monkeypatch):
         "missing": ["time", "party size"]}, hold=True)
     wf = _json.loads(posted["params"])["_workflow"]
     assert wf["state"] == "draft", "missing details must remain an answer card"
-    assert tuple(wf["required"]) == ("time", "party_size")
+    assert tuple(wf["required"]) == ("time", "party size")
     assert tuple(k for k in wf["required"] if k not in wf["facts"]) == (
-        "time", "party_size")
+        "time", "party size")
     assert posted["workflow_state"] == "draft"
     assert posted["status"] == "awaiting_confirm"
     assert "time" in posted["result"] and "party size" in posted["result"]
@@ -347,6 +344,9 @@ def test_one_conversation_never_becomes_three_cards(monkeypatch):
         "get": staticmethod(get), "post": staticmethod(post),
         "patch": staticmethod(patch)}))
 
+    from brain import task_revision
+    monkeypatch.setattr(task_revision, "reconcile", lambda model, current, update: {
+        "goal": update["goal"], "missing": [], "facts": {}})
     a = Anticipy(memory=Memory(":memory:"), llm=None, owner_id="t")
     a._lineage_key = SEG
     monkeypatch.setattr(Anticipy, "_covered_by", lambda self, new, old: False)

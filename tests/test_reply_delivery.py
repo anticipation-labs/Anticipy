@@ -20,6 +20,8 @@ def rig(monkeypatch):
                'text TEXT, decision TEXT, goal TEXT, source TEXT, device_id TEXT, '
                'created INTEGER, external_event_id TEXT UNIQUE)')
     lock = threading.Lock()
+    current_job = {'id': 'job1', 'owner_ref': 'owner1', 'workflow_version': 2,
+                   'status': 'awaiting_confirm', 'result': 'Which entrance should I use?'}
     def response(body):
         return SimpleNamespace(json=lambda: body, raise_for_status=lambda: None)
     def post(url, json, **kw):
@@ -28,8 +30,10 @@ def rig(monkeypatch):
                    'created': 1, **json}
             db.execute(f'INSERT INTO events ({",".join(row)}) VALUES ({",".join("?" for _ in row)})', list(row.values()))
             return response(dict(db.execute('SELECT * FROM events WHERE id=?', (row['id'],)).fetchone()))
-    def get(url, params, **kw):
+    def get(url, params=None, **kw):
         with lock:
+            if '/jobs/records/' in url:
+                return response(dict(current_job))
             sql = params['filter'].replace('&&', 'AND').replace('||', 'OR')
             return response({'items': [dict(r) for r in db.execute('SELECT * FROM events WHERE '+sql)]})
     def patch(url, json, **kw):
@@ -42,7 +46,7 @@ def rig(monkeypatch):
     monkeypatch.setattr(backend, 'patch', patch)
     transport = SimpleNamespace(send=Mock(return_value={'sid': 'provider-1', 'delivered': False}))
     delivery = ReplyDelivery('http://fixture', 'owner1', transport, lambda: '+15555550101')
-    return SimpleNamespace(db=db, transport=transport, delivery=delivery, post=post)
+    return SimpleNamespace(db=db, transport=transport, delivery=delivery, post=post, job=current_job)
 
 
 EVENT = {'id': 'input1', 'owner_ref': 'owner1', 'source': 'typed'}
@@ -212,3 +216,57 @@ def test_one_provider_lookup_per_sweep(rig):
     rig.delivery.sweep()
     assert rig.transport.message_status.call_count == 1
     assert rig.transport.send.call_count == 2
+
+
+def test_task_question_uses_shared_receipt_and_exact_saved_words(rig):
+    from brain.task_delivery import TaskDelivery
+    task = TaskDelivery(rig.delivery)
+    task.publish(rig.job, 'Which entrance should I use?')
+    task.publish(rig.job, 'A differently worded retry')
+    assert rig.transport.send.call_count == 1
+    attempt = dict(rig.db.execute("SELECT * FROM events WHERE kind='notification_status'").fetchone())
+    assert json.loads(attempt['text'])['provider_id'] == 'provider-1'
+    assert attempt['external_event_id'].startswith('reply-sms:')
+    assert task.count(rig.job) == 1
+
+
+@pytest.mark.parametrize('change', [{'status': 'cancelled'}, {'workflow_version': 3},
+                                  {'result': 'Which afternoon?'}, {'owner_ref': 'other'}])
+def test_waiting_task_question_is_not_sent_after_its_task_changes(rig, change):
+    from brain.task_delivery import TaskDelivery
+    rig.delivery.phone = lambda: ''
+    TaskDelivery(rig.delivery).publish(rig.job, 'Which entrance?')
+    rig.job.update(change)
+    rig.delivery.phone = lambda: '+15555550101'
+    rig.delivery.sweep()
+    assert rig.transport.send.call_count == 0
+    assert rig.db.execute("SELECT decision FROM events WHERE kind='reply_outbox'").fetchone()[0] == 'question_superseded'
+
+
+def test_task_delivery_deferral_is_durable_without_a_send_attempt(rig):
+    from brain.task_delivery import TaskDelivery
+    task = TaskDelivery(rig.delivery)
+    task.defer(rig.job, 'text_daily_limit')
+    task.defer(rig.job, 'text_daily_limit')
+    rows = rig.db.execute("SELECT * FROM events").fetchall()
+    assert len(rows) == 1
+    assert json.loads(rows[0]['text'])['question'] == rig.job['result']
+    assert rig.transport.send.call_count == 0
+    task.publish(rig.job, 'The question is now allowed')
+    assert rig.transport.send.call_count == 1
+
+
+def test_unknown_task_read_cannot_authorize_a_pending_send(rig, monkeypatch):
+    from brain import backend
+    from brain.task_delivery import TaskDelivery
+    original = backend.get
+    def get(url, **kw):
+        if '/jobs/records/' in url:
+            raise TimeoutError()
+        return original(url, **kw)
+    monkeypatch.setattr(backend, 'get', get)
+    TaskDelivery(rig.delivery).publish(rig.job, 'Which entrance?')
+    assert rig.transport.send.call_count == 0
+    monkeypatch.setattr(backend, 'get', original)
+    rig.delivery.sweep()
+    assert rig.transport.send.call_count == 1

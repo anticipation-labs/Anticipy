@@ -858,7 +858,9 @@ settings:
     #      first run with the permission truth, Settings, the in-app guide and
     #      an app icon. The number moves because the shared pbxproj gains the
     #      Mac's new files and the Mac target its icon; nothing on iOS differs.
-    CURRENT_PROJECT_VERSION: "168"
+    # 169: Bind task text status to actual receipts and show recorded pauses.
+    #      Preserve contextual missing questions and answers across task revisions.
+    CURRENT_PROJECT_VERSION: "169"
     DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: NO
@@ -918,7 +920,7 @@ targets:
         # literal from a Mac one, and two products answering "which build
         # are you holding" with different numbers is the exact disease this
         # gate exists to prevent.
-        CURRENT_PROJECT_VERSION: "168"
+        CURRENT_PROJECT_VERSION: "169"
         DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_ENTITLEMENTS: ../macos/AnticipyMac/AnticipyMac.entitlements

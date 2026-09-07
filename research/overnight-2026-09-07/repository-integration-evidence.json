@@ -1,0 +1,203 @@
+{
+  "recorded_at_utc": "2026-09-07T20:47:16.380663+00:00",
+  "branch": "cloudflare-backend",
+  "head": "a216dae380ebe78ef2e1c20e90080295be2bc6a4",
+  "remote_head": "a216dae380ebe78ef2e1c20e90080295be2bc6a4",
+  "tracked_files": 2648,
+  "top_level_counts": {
+    ".agents": 1,
+    ".github": 5,
+    "[root files]": 29,
+    "app": 301,
+    "brain": 36,
+    "design": 18,
+    "docs": 30,
+    "extension": 115,
+    "firmware": 250,
+    "migration": 206,
+    "output": 9,
+    "overnight": 44,
+    "proof": 1020,
+    "research": 351,
+    "spike": 39,
+    "tests": 193,
+    "website": 1
+  },
+  "status_before_audit_files": [
+    "?? output/playwright/",
+    "?? proof/audit/live_stall_notice.py"
+  ],
+  "worktrees": "worktree /Users/omarebrahim/Anticipy\nHEAD a216dae380ebe78ef2e1c20e90080295be2bc6a4\nbranch refs/heads/cloudflare-backend\n\nworktree /private/tmp/anticipy-overnight-998fca6\nHEAD 998fca62f1e46248455796da22b3614ede2ee144\ndetached",
+  "remote_refs": [
+    {
+      "ref": "origin/cloudflare-backend",
+      "sha": "a216dae380ebe78ef2e1c20e90080295be2bc6a4",
+      "merge_base": "a216dae380ebe78ef2e1c20e90080295be2bc6a4",
+      "current_only_commits": 0,
+      "branch_only_commits": 0
+    },
+    {
+      "ref": "origin/codex/investor-xiao-r0",
+      "sha": "b1ce9eec698a61fdda1ca473389752fb69ddc8ee",
+      "merge_base": null,
+      "current_only_commits": 1067,
+      "branch_only_commits": 470
+    },
+    {
+      "ref": "origin/deploy/preorder-to-main",
+      "sha": "f4adfd4ba41642f77fb33d34c539d6313f72d48c",
+      "merge_base": null,
+      "current_only_commits": 1067,
+      "branch_only_commits": 399
+    },
+    {
+      "ref": "origin/devin/1787459924-anticipy-hq",
+      "sha": "8c597fe5da8aff6eb8e04e8d7b3ba5d8c81f878b",
+      "merge_base": null,
+      "current_only_commits": 1067,
+      "branch_only_commits": 458
+    },
+    {
+      "ref": "origin/devin/1787507284-pendant-v63",
+      "sha": "b7c31ac89da281e433d91069b5dffc310b7b072f",
+      "merge_base": null,
+      "current_only_commits": 1067,
+      "branch_only_commits": 480
+    },
+    {
+      "ref": "origin/devin/1787853189-hardware-v1",
+      "sha": "c323a78e37181a07eb73a88ef12fdbe61941d952",
+      "merge_base": null,
+      "current_only_commits": 1067,
+      "branch_only_commits": 473
+    },
+    {
+      "ref": "origin/devin/1788105992-custom-pcb-r1",
+      "sha": "48987402e60fa4b73e806acbcadbc82e658718e5",
+      "merge_base": null,
+      "current_only_commits": 1067,
+      "branch_only_commits": 481
+    },
+    {
+      "ref": "origin/feature/r2-dmg-hosting-clean",
+      "sha": "ab295eaabbb92082e00b538864708129b9677970",
+      "merge_base": null,
+      "current_only_commits": 1067,
+      "branch_only_commits": 489
+    },
+    {
+      "ref": "origin/hoe/build",
+      "sha": "3f62a9cd8b00dc172694b0c12a7c5daddc23e518",
+      "merge_base": null,
+      "current_only_commits": 1067,
+      "branch_only_commits": 904
+    },
+    {
+      "ref": "origin/issue-37-mac-ears",
+      "sha": "5b68e03140e940da40bba36987e817e8f11cfa61",
+      "merge_base": "5b68e03140e940da40bba36987e817e8f11cfa61",
+      "current_only_commits": 73,
+      "branch_only_commits": 0
+    },
+    {
+      "ref": "origin/jose_anticipy_system",
+      "sha": "863d3d7bbed887d7424878f8bcd5a97677ded679",
+      "merge_base": "98b547b1ef8cc49823c1bd27de5755bf6ac1033a",
+      "current_only_commits": 392,
+      "branch_only_commits": 2
+    },
+    {
+      "ref": "origin/main",
+      "sha": "2cfe1d8859867a0dc434aa89bc7b168db99d4ca3",
+      "merge_base": null,
+      "current_only_commits": 1067,
+      "branch_only_commits": 479
+    },
+    {
+      "ref": "origin/recon/engine-state-2026-05-11",
+      "sha": "83fbd8e49154dadc6180c1876940b4b126d36210",
+      "merge_base": null,
+      "current_only_commits": 1067,
+      "branch_only_commits": 315
+    },
+    {
+      "ref": "origin/register-mac-release",
+      "sha": "28946d5d32d0d529f4b05e9ed65b07099f09574e",
+      "merge_base": null,
+      "current_only_commits": 1067,
+      "branch_only_commits": 477
+    },
+    {
+      "ref": "origin/retire-pocketbase",
+      "sha": "118d744a0d07c1dae1d618fcab8c00c7e093bdc0",
+      "merge_base": "118d744a0d07c1dae1d618fcab8c00c7e093bdc0",
+      "current_only_commits": 63,
+      "branch_only_commits": 0
+    }
+  ],
+  "released_source_comparisons": [
+    {
+      "component": "api",
+      "release_commit": "03f0c7f499617bcedea47c1c58f63b09f644a4be",
+      "paths": [
+        "migration/workers/src",
+        "migration/workers/public",
+        "migration/workers/wrangler.jsonc"
+      ],
+      "changed_files_since_release": []
+    },
+    {
+      "component": "brain",
+      "release_commit": "b9a388b2c933e294da2ce4128f5b30d388433861",
+      "paths": [
+        "brain"
+      ],
+      "changed_files_since_release": []
+    },
+    {
+      "component": "ios",
+      "release_commit": "1f2d8f67298fd38522c6a04dae97dc27e8c3f172",
+      "paths": [
+        "app/ios"
+      ],
+      "changed_files_since_release": []
+    }
+  ],
+  "verification_scope": "Read-only repository/cloud-ref audit; release observations referenced from earlier committed evidence, not a new live end-to-end run.",
+  "open_prs": [
+    {
+      "baseRefName": "main",
+      "headRefName": "codex/investor-xiao-r0",
+      "number": 22,
+      "title": "Add held XIAO investor Unit 001 recovery package",
+      "url": "https://github.com/anticipation-labs/Anticipy/pull/22"
+    },
+    {
+      "baseRefName": "main",
+      "headRefName": "devin/1788105992-custom-pcb-r1",
+      "number": 19,
+      "title": "hardware/r1: Anticipy pendant \u2014 complete PCB + enclosure manufacturing package",
+      "url": "https://github.com/anticipation-labs/Anticipy/pull/19"
+    },
+    {
+      "baseRefName": "main",
+      "headRefName": "devin/1787853189-hardware-v1",
+      "number": 18,
+      "title": "Hardware V1 end-to-end package: case v7, wiring, Omi-fork firmware plan, ordering, 2-week plan, QA",
+      "url": "https://github.com/anticipation-labs/Anticipy/pull/18"
+    },
+    {
+      "baseRefName": "main",
+      "headRefName": "devin/1787459924-anticipy-hq",
+      "number": 6,
+      "title": "Add Anticipy HQ internal workspace prototype at /hq",
+      "url": "https://github.com/anticipation-labs/Anticipy/pull/6"
+    }
+  ],
+  "committed_mac_package": {
+    "path": "migration/workers/public/mac/Anticipy-for-Mac.zip",
+    "plist": "AnticipyMac.app/Contents/Info.plist",
+    "version": "1.1.0",
+    "build": "119"
+  }
+}

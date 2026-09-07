@@ -1,0 +1,33 @@
+{
+  "checked_at": "2026-09-07T20:56:14.884125+00:00",
+  "http_checks": {
+    "brain": {
+      "status": 200,
+      "seconds": 0.219
+    },
+    "events": {
+      "status": 200,
+      "seconds": 0.167
+    },
+    "jobs": {
+      "status": 200,
+      "seconds": 0.243
+    },
+    "agents": {
+      "status": 200,
+      "seconds": 0.162
+    }
+  },
+  "brain_process_running": true,
+  "brain_snapshot_current": true,
+  "speech_rows": 28,
+  "speech_model_calls": 140,
+  "speech_hearing_seconds": 498.679,
+  "median_saved_decision_delay_seconds": 179.913,
+  "max_saved_decision_delay_seconds": 395.338,
+  "calendar_rows": 15,
+  "calendar_first_to_last_saved_seconds": 59.894,
+  "pending_input_at_recheck": 0,
+  "pending_query_http": 200,
+  "no_product_mutations": true
+}

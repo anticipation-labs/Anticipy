@@ -54,6 +54,9 @@ def _patch(url, json=None, timeout=None, **kw):
 
 
 def _rig(monkeypatch):
+    from brain import task_revision
+    monkeypatch.setattr(task_revision, 'reconcile', lambda model, current, proposed:
+        {'verdict': 'revised', 'goal': proposed['goal'], 'missing': [], 'facts': {}})
     JOBS.clear()
     monkeypatch.setattr(backend, "get", _get)
     monkeypatch.setattr(backend, "post", _post)

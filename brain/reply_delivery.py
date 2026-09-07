@@ -39,7 +39,7 @@ class ReplyDelivery:
         response.raise_for_status()
         return response.json()
 
-    def publish(self, event, body, media=None):
+    def publish(self, event, body, media=None, metadata=None):
         if not self.owner or event.get('owner_ref') != self.owner or not event.get('id'):
             raise ValueError('A reply requires its canonical owner and input event')
         key = f'reply:{event["id"]}'
@@ -62,7 +62,7 @@ class ReplyDelivery:
         pending = self.rows(f'external_event_id={json.dumps(key)}', 1)
         if not pending:
             try:
-                pending = [self.create(kind='reply_outbox', text='', goal=row['id'],
+                pending = [self.create(kind='reply_outbox', text=json.dumps(metadata) if metadata else '', goal=row['id'],
                     decision='reply_pending', external_event_id=key)]
             except Exception:
                 pending = self.rows(f'external_event_id={json.dumps(key)}', 1)
@@ -92,6 +92,17 @@ class ReplyDelivery:
             self.finish(row, 'reply_missing')
             return
         message = messages[0]
+        if row.get('text'):
+            meta = json.loads(row['text'])
+            if meta.get('purpose') == 'task_question':
+                response = backend.get(f'{self.base}/api/collections/jobs/records/{meta["job_id"]}')
+                response.raise_for_status()
+                job = response.json()
+                if (job.get('owner_ref') != self.owner or job.get('status') != meta['status']
+                        or job.get('workflow_version', 0) != meta['version']
+                        or job.get('result') != meta['question']):
+                    self.finish(row, 'question_superseded')
+                    return
         phone = self.phone()
         if not phone:
             # Keep pending: saving a verified number later can deliver the same

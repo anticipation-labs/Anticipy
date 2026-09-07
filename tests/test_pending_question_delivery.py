@@ -60,6 +60,34 @@ def question(**changes):
                 params="{}") | changes
 
 
+def test_production_adapter_owns_question_send_and_deferral(delivery, monkeypatch):
+    calls = []
+    delivery.brain.task_delivery = SimpleNamespace(
+        delivery=SimpleNamespace(rows=lambda *a: []), count=lambda job: 0,
+        defer=lambda job, reason: calls.append(('deferred', reason)),
+        publish=lambda job, text: calls.append(('publish', job['id'], text)))
+    delivery.jobs = [question()]
+    delivery.night = True
+    W.ask_about_stuck_jobs(delivery.brain, None)
+    assert calls == [('deferred', 'text_quiet_hours')]
+    delivery.night = False
+    W.ask_about_stuck_jobs(delivery.brain, None)
+    assert calls[-1] == ('publish', 'task-one', 'About Prepare the supplier review: When does it end?')
+    assert delivery.sent == []  # No second composition or legacy transport.
+
+
+def test_production_adapter_records_budget_pause(delivery, monkeypatch):
+    calls = []
+    delivery.brain.task_delivery = SimpleNamespace(
+        delivery=SimpleNamespace(rows=lambda *a: []), count=lambda job: 0,
+        defer=lambda job, reason: calls.append(reason),
+        publish=lambda *a: pytest.fail('A paused question must not send'))
+    delivery.jobs = [question()]
+    monkeypatch.setattr(W, 'reserve_uninvited_text', lambda *a: False)
+    W.ask_about_stuck_jobs(delivery.brain, None)
+    assert calls == ['text_daily_limit'] and not delivery.prompts
+
+
 def test_draft_waits_at_night_then_texts_once_in_daylight(delivery):
     delivery.jobs = [question()]
     delivery.night = True

@@ -4757,7 +4757,12 @@ def ask_about_stuck_jobs(anticipy, convo) -> None:
                 question_params = {}
             invited = question_params.get("_question_invited") is True
             proactive = proposed and not invited
+            delivery = getattr(anticipy, "task_delivery", None)
+            def deferred(reason):
+                if delivery:
+                    delivery.defer(job, reason)
             if proactive and (_in_quiet_hours(time.time()) or MEETING_ARMED):
+                deferred("text_quiet_hours" if _in_quiet_hours(time.time()) else "text_conversation_paused")
                 continue
             # Fence the exact persisted question before touching a provider.
             # Hashing raw record values is transport identity, not a judgment
@@ -4768,6 +4773,11 @@ def ask_about_stuck_jobs(anticipy, convo) -> None:
             notice = dict(job, id=f"question:{job['id']}:{question_key}")
             if notification_was_attempted(notice) is not False:
                 continue
+            if delivery:
+                from .task_delivery import identity
+                key = "reply:task-question:" + identity(job)
+                if delivery.delivery.rows(f'external_event_id={json.dumps(key)}', 1):
+                    continue
             # Cheapest guard FIRST. This whole block used to compose the
             # message before deciding whether to send it, so every poll of a
             # stuck job burned a model call whose output was then discarded.
@@ -4813,6 +4823,8 @@ def ask_about_stuck_jobs(anticipy, convo) -> None:
             # honest re-ask, because a question nobody heard is not a
             # question asked.
             asks_already = asks_for_goal(job.get("goal", ""), anticipy.owner_ref)
+            if delivery:
+                asks_already = max(asks_already, delivery.count(job))
 
             # THE CEILING THE COMMENT ABOVE ALREADY PROMISES.
             #
@@ -4834,6 +4846,7 @@ def ask_about_stuck_jobs(anticipy, convo) -> None:
             # past. Past the ceiling the honest thing is not another text: the
             # card is in his feed, and he has already been told twice.
             if asks_already >= STUCK_ASKS_CEILING:
+                deferred("text_question_limit")
                 print(f"stuck job {job['id']}: asked {asks_already}x about "
                       f"{job.get('goal','')[:40]!r} already — the feed has it, "
                       f"staying quiet")
@@ -4897,6 +4910,7 @@ def ask_about_stuck_jobs(anticipy, convo) -> None:
             # reply. Duplicating a card in order to lie to a dedup guard is
             # not delivery.
             if not can_reach_owner_fresh(anticipy):
+                deferred("text_no_phone")
                 nowhere_key = f"unreachable:{local_key}"
                 if not sent_moments_ago(nowhere_key):
                     mark_sent(nowhere_key)
@@ -4906,8 +4920,11 @@ def ask_about_stuck_jobs(anticipy, convo) -> None:
             # Follow-up invitations share the same durable daily outreach
             # allowance as the original proposal and the clock. Directly
             # requested work blocked during execution remains a prompt reply.
-            if proactive and not reserve_uninvited_text(anticipy.owner_ref, "task_question"):
-                continue
+            if proactive:
+                slot = reserve_uninvited_text(anticipy.owner_ref, "task_question")
+                if not slot:
+                    deferred("text_daily_limit" if slot is False else "text_policy_unknown")
+                    continue
             said = anticipy._voice({
                 "situation": "a task is waiting for the owner's answer. Its recorded "
                              "status and question are below. Awaiting confirmation "
@@ -4927,6 +4944,11 @@ def ask_about_stuck_jobs(anticipy, convo) -> None:
             # A failed database write is not permission to create an
             # unrecordable external effect. A lost provider response also
             # cannot license resending; the attempt stays visibly unconfirmed.
+            if delivery:
+                delivery.publish(job, said)
+                _last_blocker[job["id"]] = blocker
+                mark_sent(local_key)
+                continue
             if claim_notification_attempt(notice) is not True:
                 continue
             # What she actually sent is the durable record — a set in memory
@@ -5010,6 +5032,8 @@ def main() -> None:
     reply_delivery = ReplyDelivery(anticipy.backend_url, anticipy.owner_ref,
                                    transport, lambda: fetch_owner_phone(anticipy.owner_ref))
     convo.reply_delivery = reply_delivery.publish
+    from .task_delivery import TaskDelivery
+    anticipy.task_delivery = TaskDelivery(reply_delivery)
     anticipy.conversation = convo
     # This is deliberately installed after every transport is attached and
     # before the first worker duty can speak.  It also covers notify_owner()

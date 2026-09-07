@@ -46,6 +46,12 @@ def _core(monkeypatch, job, patches):
 
             return Response()
     monkeypatch.setattr(C, "backend", FakePB)
+    # Contextual interpretation is scripted here; these tests exercise the
+    # persistence/authority boundary. Real model cases live in the repair proof.
+    from brain import task_revision
+    monkeypatch.setattr(task_revision, "reconcile", lambda model, current, update: {
+        "verdict": "revised", "goal": getattr(a, "revised_goal", update["goal"]),
+        "missing": update["params"].get("missing", []), "facts": {}})
     return a
 
 
@@ -54,11 +60,12 @@ def test_a_meta_wording_never_overwrites_the_real_goal(monkeypatch):
     job = _Job("Book a table for 2 at Earls in West Vancouver for tomorrow "
                "evening, August 10th", {"source": "let's do drinks at Earls"})
     a = _core(monkeypatch, job, patches)
+    a.revised_goal = job.rec["goal"]
     a._merge_into("job1", job.rec, "Confirm Earls West Van tomorrow at 7 PM",
                   {"source": "booked now"})
     assert patches, "the new detail (7 PM) must be written somewhere"
     fields = patches[-1]
-    assert "goal" not in fields, "the booking goal must survive untouched"
+    assert fields["goal"] == job.rec["goal"], "the booking goal must survive untouched"
     params = json.loads(fields["params"])
     assert "7 PM" in params["update"]
     assert "let's do drinks at Earls" in params["source"], \
@@ -333,10 +340,12 @@ def test_explicit_person_correction_replaces_only_the_named_role(monkeypatch):
              "+1 604 555 3973")
     job = _Job(original, {"source": original})
     a = _core(monkeypatch, job, patches)
+    a.revised_goal = ("Give permission for Nora Patel to attend the Science Centre trip on "
+                      "September 4; emergency contact Jordan Martin at +1 604 555 3973")
     a._open_plan = ("job1", __import__("time").time(), original)
 
     assert a._queue_job(lossy, {
-        "source": ("Actually change Jordan Martin to Nora Patel; keep "
+        "source": ("Change the attendee from Jordan Martin to Nora Patel; keep "
                    "everything else the same."),
     }, explicit=True) == "job1"
     assert patches[-1]["goal"] == (

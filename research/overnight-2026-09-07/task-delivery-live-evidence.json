@@ -1,0 +1,11 @@
+{
+  "scope": "Production database proof using one disposable account with no phone.\n\nExercises real owner-scoped storage and the production delivery adapter from\nthis checkout. The provider must never be called. This is not a carrier test.\n",
+  "checks": [
+    "Exact task pause stored once in live database",
+    "Question saved once with matching durable outbox and no phone send",
+    "Signed-in phone can read its task receipt metadata",
+    "Cancelled question suppressed by fresh live task read",
+    "Disposable account and records removed"
+  ],
+  "provider_calls": 0
+}

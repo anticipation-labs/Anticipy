@@ -110,6 +110,9 @@ def _card(lineage, age_seconds):
 
 
 def _anticipy(monkeypatch, rig, lineage):
+    from brain import task_revision
+    monkeypatch.setattr(task_revision, 'reconcile', lambda model, current, proposed:
+        {'verdict': 'revised', 'goal': proposed['goal'], 'missing': [], 'facts': {}})
     monkeypatch.setattr(backend, "get", rig.get)
     monkeypatch.setattr(backend, "post", lambda url, json=None, timeout=None, **k:
                         rig.post(url, json=json, timeout=timeout, **k))
