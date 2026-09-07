@@ -1,5 +1,30 @@
 # Anticipy overnight repair — 7 September 2026
 
+## Latest checkpoint — 2026-09-07 11:51 UTC
+
+- Speech commit66fa7d4 verified LIVE by34116628621:8/8 workers, current snapshots,
+  revision matched, runtime source c2d1def0e0368610ee16394b8d8c741b02889c85094f955af3bbd0c03e01b8d0.
+- All five real Chrome fixtures passed through the live authenticated Gemini3.1
+  proxy: compare, appointment(one exact write), login, capacity correction,
+  injection refusal. `browser-production-results.json` records scope and limits.
+  The live fixture account is DELETED; its old agent credential returns403.
+- Readiness candidate:3,083 Python tests pass, two skipped;12 real-model contrasts
+  pass; three actual worker replays recorded. Known contact/document no longer
+  produces needless questions, calendar missing-end/correction remain correct.
+  See `readiness-repair.md`. Candidate not yet deployed at this checkpoint.
+- Still open: draft preparation held before useful work; hand router wrongly
+  gated by Brave key; API connection commands wired only to SMS. These are next.
+  Also full browser queue/lease proof, readable structured results, remaining
+  semantic shortcuts, final50-person evaluation and visual PDF audit remain.
+- Apple readback34118333933 at11:46UTC:162 VALID/internal IN_BETA_TESTING;
+  attached to Sanket pilot but externally READY_FOR_BETA_SUBMISSION.159 review
+  blocks162 submission. Do not equate attachment with external installation.
+- Budget at11:45UTC:gateway observed$9.0962540792; native-browser conservative
+  reservation$1.757278. Keep original ledgers; caps25+10 remain below total50.
+- Existing personal extension still0.15. Published0.16 archives do not replace
+  an unpacked installation automatically. Browser security policy rejected
+  extension-settings access; do not bypass that via other tools.
+
 ## Authorization and working constraints
 
 Omar requested autonomous overnight repair and hands-on testing of the iOS app,

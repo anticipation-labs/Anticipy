@@ -31,6 +31,7 @@ from . import research
 from .spoken_consent import judge as judge_spoken_consent
 from .speech_request import information_request
 from .grounding import grounding_verdict
+from .readiness import task_readiness
 
 from .asking import ask_line, question_line
 from .compute import compute_answer
@@ -1772,6 +1773,8 @@ class Anticipy:
         # two goals read WITH the lunch being planned around them are plainly
         # one plan. Refreshed every line, so it is always this conversation.
         self._last_convo = [c for c in (context or []) if c][-6:]
+        # Answers to one task's gaps must never seed a later, unrelated task.
+        self._memory_filled = {}
         self._source_event_id = (source_event_id or "").strip()
         self._lineage_key = (lineage_key or source_event_id or "").strip()
         # Per-line, and only for this line: see the note on _capture_source in
@@ -2437,12 +2440,7 @@ class Anticipy:
                 # missing=[] — and the one text about it filled the gap from
                 # habit and said 7 PM. Same gate, same reason, this lane too.
                 if not explicit:
-                    try:
-                        for gap in check_sufficiency(self.llm, goal):
-                            if gap not in decision.missing:
-                                decision.missing.append(gap)
-                    except Exception:
-                        pass
+                    decision = self._review_readiness(decision, line, context, prev_line)
                 # Memory answers before he is asked: a gap his own history
                 # settles (the location he always books, his home city)
                 # becomes an assumption on the card he approves, not another
@@ -2740,10 +2738,6 @@ class Anticipy:
             except Exception:
                 already = None
         if decision.decision == "act" and decision.goal and not explicit and not already:
-            try:
-                gap = check_sufficiency(self.llm, decision.goal)
-            except Exception:
-                gap = []
             # Factual support is a model question over the full record, not a
             # capitalization or number-word test. Relative dates are evaluated
             # against the same clock used to interpret the request.
@@ -2760,30 +2754,25 @@ class Anticipy:
                         decision="ignore", goal=None,
                         reason=f"task grounding {support}; no invented clarification"),
                         "anticipy_says": None}
-            if gap:
+        # Both triage outcomes must consult the same record. A triage "ask"
+        # used to skip memory entirely; the later check then saw only a title.
+        if (decision.decision in ("act", "ask") and decision.goal and not already
+                and (not explicit or decision.missing)):
+            decision = self._review_readiness(decision, line, context, prev_line)
+            if decision.missing:
                 try:
-                    filled, gap = fill_gaps_from_memory(
-                        self.llm, self.memory, decision.goal, gap)
+                    filled, remaining = fill_gaps_from_memory(
+                        getattr(getattr(self, "brain", None), "strong", None) or self.llm,
+                        self.memory, decision.goal, decision.missing)
                 except Exception:
-                    filled = {}
+                    filled, remaining = {}, decision.missing
                 if filled:
-                    picked = "; ".join(filled.values())
-                    decision = replace(decision,
-                        decision=decision.decision, goal=decision.goal,
-                        reason=decision.reason, missing=decision.missing,
-                        assumption=((decision.assumption + " — "
-                                     if decision.assumption else "")
-                                    + f"from what I know about you: {picked}"),
-                        addressee=decision.addressee, owes=decision.owes,
-                        continues=decision.continues)
+                    decision = replace(decision, missing=remaining,
+                        assumption=((decision.assumption + " — " if decision.assumption else "")
+                                    + "from what I know about you: " + "; ".join(filled.values())))
                     self._memory_filled = dict(filled)
-            if gap:
-                decision = replace(decision,
-                    decision=decision.decision, goal=decision.goal,
-                    reason=decision.reason,
-                    missing=list(decision.missing or []) + gap,
-                    assumption=decision.assumption, addressee=decision.addressee,
-                    owes=decision.owes, continues=decision.continues)
+                    if not remaining:
+                        decision = replace(decision, decision="act")
 
         if decision.decision == "act" and decision.missing:
             decision = replace(decision,
@@ -2992,6 +2981,11 @@ class Anticipy:
                 params = self._keeping(params, mem.get("commitment_id"))
                 if channel:
                     params["channel"] = channel
+                for k, v in (getattr(self, "_memory_filled", None) or {}).items():
+                    key = re.sub(r"\W+", " ", k).strip().lower()[:48]
+                    if key:
+                        params[key] = v
+                self._memory_filled = {}
                 if decision.missing:
                     params["missing"] = decision.missing
                 if decision.assumption:
@@ -3022,6 +3016,44 @@ class Anticipy:
             "anticipy_says": handled,
             "question_job_id": question_job_id,
         }
+
+    def _review_readiness(self, decision, line, conversation, previous_line):
+        """Owner questions are the last resort; reading/setup can be progress.
+
+        Memory remains quoted context. Only fill_gaps_from_memory may promote
+        trusted, active memory into approved action values, and execution keeps
+        its own schema and consent checks after this planning verdict.
+        """
+        model = getattr(getattr(self, "brain", None), "strong", None) or self.llm
+        if not model or not getattr(model, "live", False):
+            return decision
+        try:
+            facts = self.memory.recall(decision.goal, limit=8, retired=RETIRED_QUOTED)
+            notes = memory_notes(facts, budget=2400, exclude=line)
+        except Exception:
+            notes = "Memory unavailable; do not infer facts."
+        try:
+            from .hands import gather_context
+            hand = gather_context(owner_ref=self.owner_ref, backend_url=self.backend_url)
+            access = {"browser_online": hand.browser_online,
+                      "connections": None if hand.connections is None else [
+                          {"toolkit": row.toolkit, "status": row.status,
+                           "writes_enabled": row.writes_enabled}
+                          for row in hand.connections]}
+        except Exception:
+            access = {"connections": None, "browser_online": None}
+        readiness = task_readiness(model, {
+            "task": decision.goal, "heard": line,
+            "conversation": conversation or [], "previous_line": previous_line,
+            "proposed_missing": decision.missing or [], "related_memory": notes,
+            "current_local_time": self._now_line(), "access": access,
+        })
+        if readiness.verdict == "ready":
+            return replace(decision, decision="act", missing=[])
+        if readiness.verdict == "needs_owner":
+            return replace(decision, decision="ask", missing=list(readiness.missing))
+        # A missing verdict cannot invent or silently answer a question.
+        return decision
 
     def _decide(self, line: str, mem: dict, prev_line: Optional[str] = None,
                 convo: Optional[list[str]] = None,

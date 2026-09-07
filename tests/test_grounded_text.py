@@ -127,8 +127,9 @@ def test_the_ambient_lane_asks_about_what_only_he_can_decide(monkeypatch):
     """The sufficiency check now runs for overheard plans too: 'tomorrow
     evening' with no time becomes a question, never a habit-guess."""
     a, fake, sent = _anticipy(monkeypatch, None)   # fallback voice
-    monkeypatch.setattr(core, "check_sufficiency",
-                        lambda llm, goal: ["what time they want"])
+    from dataclasses import replace
+    monkeypatch.setattr(a, "_review_readiness", lambda decision, *args: replace(
+        decision, decision="ask", missing=["what time they want"]))
     a.hear(LINE, may_say=lambda *a_, **k_: True)
     assert len(sent) == 1
     assert "what time they want" in sent[0], sent[0]
