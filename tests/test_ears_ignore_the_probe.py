@@ -20,7 +20,7 @@ row counts, and require the honest verdict.
 """
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 import pytest
 
@@ -164,7 +164,7 @@ def test_both_halves_quiet_is_still_unproven_not_deaf(monkeypatch, capsys):
     Excluding probes must not turn an idle day into an incident."""
     backend = Backend(
         real=0, probe=0, server=0,
-        newest_real=_row("2026-09-05 09:00:00.000Z", "iphone-b124"),
+        newest_real=_row((datetime.now(timezone.utc) - timedelta(hours=26)).strftime("%Y-%m-%d %H:%M:%S.000Z"), "iphone-b124"),
         newest_server=None)
     monkeypatch.setattr(M.requests, "get", backend.get)
     monkeypatch.setattr(sys, "argv", ["are_the_ears_live.py"])
