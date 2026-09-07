@@ -166,6 +166,23 @@ if code "$kit" | grep -qE 'speaker == "owner" \? "[A-Z]|Text\(speaker'; then
     exit 2
 fi
 
+# ============ THE TRANSCRIPT HAS SOMEWHERE TO GO, OR IT WAS DELETED
+# Hiding the words from both faces is only honest if they are readable
+# somewhere. History -> a conversation is that somewhere; before this the row
+# was tappable and `onOpenSession` was wired to `{ _ in }`.
+if ! grep -q 'struct SessionTranscriptView:' "$app/Views/SessionTranscriptView.swift"; then
+    echo "The transcript has nowhere to be read."
+    echo
+    echo "Both faces show tasks now. A transcript hidden everywhere is a"
+    echo "transcript deleted, and this product's whole claim is that it heard"
+    echo "you — so the words must stay readable, attributed, in History."
+    exit 2
+fi
+if code "$home" | grep -q 'onOpenSession: { _ in }'; then
+    echo "Tapping a past conversation does nothing again."
+    exit 2
+fi
+
 # ==================== THE CAPTURE FACE SHOWS TASKS, NOT A TRANSCRIPT
 # Reported 2026-09-06: "it shows every little word that I'm saying. I want you
 # to hide the transcript and only show the task." The transcript lives on the
@@ -176,6 +193,19 @@ fi
 if ! code "$dash" | grep -qE 'case \.owner, \.pending, \.quiet: return false'; then
     echo "isTask no longer excludes every heard-shaped turn."
     echo "The collapsed count would then appear on the capture face as a task."
+    exit 2
+fi
+# The THREAD face too — it is the same screen a moment later, and showing the
+# transcript there instead just moves the wall of words one tap away.
+if ! code "$dash" | grep -q 'private var threadTurns:'; then
+    echo "The thread face shows raw heard lines again."
+    exit 2
+fi
+# ...but a TYPED line stays. Somebody who types a sentence and watches it
+# vanish has been given no acknowledgement at all.
+if ! code "$dash" | grep -q 'speaker == "owner"'; then
+    echo "The thread drops typed lines along with the ambient ones."
+    echo "A send with no receipt is a different bug from the one being fixed."
     exit 2
 fi
 if ! code "$dash" | grep -q 'turns.filter(isTask)'; then

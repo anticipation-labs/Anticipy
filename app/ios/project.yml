@@ -12,7 +12,7 @@ options:
 # exactly what it costs and how to put it back.
 settings:
   base:
-    MARKETING_VERSION: "1.1.0"
+    MARKETING_VERSION: "1.1.1"
     VERSIONING_SYSTEM: apple-generic
     # docs ex 111: "Bump the version when the bytes change." Five behaviour
     # commits landed (ex 77, 78, 83, 87, 88, 90), and the brief records build 63
@@ -829,7 +829,19 @@ settings:
     #      tell, and guessing either way attributes words to the wrong person.
     #      And it prints no NAME: the roster holds none, so the label says
     #      exactly what is known and no more.
-    CURRENT_PROJECT_VERSION: "157"
+    # 158: THE TRANSCRIPT HAS SOMEWHERE TO LIVE, so hiding it stops being
+    #      deletion. Tapping a past conversation did nothing — `onOpenSession`
+    #      was `{ _ in }` with the comment "opening one back up is not built
+    #      yet". It opens `SessionTranscriptView` now: every line of that
+    #      conversation, attributed, each with the goal the brain drew from it.
+    #
+    #      With that home in place BOTH faces stop showing raw heard lines: the
+    #      capture face did in 155, the thread does now. One exception kept on
+    #      purpose — a TYPED line still appears in the thread, because somebody
+    #      who types a sentence and watches it vanish has had no
+    #      acknowledgement at all, which is a send with no receipt and a
+    #      different bug from this one.
+    CURRENT_PROJECT_VERSION: "158"
     DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: NO
@@ -875,13 +887,13 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: ai.anticipy.mac
-        MARKETING_VERSION: "1.1.0"
+        MARKETING_VERSION: "1.1.1"
         # LITERAL, and it moves in lockstep with the app's number: the
         # build-number gate reads the shared pbxproj and cannot tell an iOS
         # literal from a Mac one, and two products answering "which build
         # are you holding" with different numbers is the exact disease this
         # gate exists to prevent.
-        CURRENT_PROJECT_VERSION: "157"
+        CURRENT_PROJECT_VERSION: "158"
         DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_ENTITLEMENTS: ../macos/AnticipyMac/AnticipyMac.entitlements
@@ -935,7 +947,7 @@ targets:
         # and a nested "$(CURRENT_PROJECT_VERSION)" reads as exactly that.
         # These move with the app target's numbers, by hand, in the same
         # commit.
-        MARKETING_VERSION: "1.1.0"
+        MARKETING_VERSION: "1.1.1"
         DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
         CODE_SIGN_STYLE: Automatic
         GENERATE_INFOPLIST_FILE: YES

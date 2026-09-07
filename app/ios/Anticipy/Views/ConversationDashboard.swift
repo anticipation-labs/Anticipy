@@ -144,10 +144,10 @@ struct ConversationDashboard<Notices: View, Approval: View, Deck: View, Settings
                 ScrollView {
                     VStack(alignment: .leading, spacing: 18) {
                         notices()
-                        if turns.isEmpty {
+                        if threadTurns.isEmpty {
                             emptyLine
                         } else {
-                            ForEach(turns, id: \.id) { turn in
+                            ForEach(threadTurns, id: \.id) { turn in
                                 view(for: turn).id(turn.id)
                             }
                         }
@@ -307,6 +307,25 @@ struct ConversationDashboard<Notices: View, Approval: View, Deck: View, Settings
     /// The cards that appear while she listens: the turns from THIS capture,
     /// which are the ones the thread has not settled yet. Never parsed out of
     /// the audio here — they are rows the brain already decided.
+    /// THE THREAD, WITHOUT THE TRANSCRIPT.
+    ///
+    /// Same rule as the capture face and the same reason: the owner asked for
+    /// the tasks, not for their own words read back at them. `.owner` turns are
+    /// the raw heard lines and they now live in History → a conversation, where
+    /// `SessionTranscriptView` shows every one of them attributed.
+    ///
+    /// A TYPED line is the exception and stays. Somebody who types a sentence
+    /// into the ask bar and watches it vanish has been given no acknowledgement
+    /// at all — that is a send with no receipt, which is a different bug from
+    /// the one being fixed here. It is distinguishable because the tagger marks
+    /// a typed line "owner" outright while an ambient one is judged.
+    private var threadTurns: [DashboardPolicy.Turn] {
+        turns.filter { turn in
+            if case .owner(_, _, _, let speaker) = turn { return speaker == "owner" }
+            return true
+        }
+    }
+
     private var captureCards: [DashboardPolicy.Turn] {
         // WHAT SHE IS DOING, newest last. NOT what she is hearing.
         //

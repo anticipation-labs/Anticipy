@@ -346,7 +346,9 @@ enum DashboardPolicy {
     // MARK: - History
 
     /// A past conversation, as the list shows it.
-    struct Session: Equatable {
+    /// Identifiable so a tapped row can present its own transcript — the
+    /// history list had no destination until the transcript needed one.
+    struct Session: Equatable, Identifiable {
         let id: String
         let title: String
         /// ISO-8601, as every row on this phone carries it.

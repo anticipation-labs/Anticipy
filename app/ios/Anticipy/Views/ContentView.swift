@@ -614,6 +614,8 @@ struct HomeView: View {
     @State private var lastAskedSource: ContextSource?
     @State private var showInterview = false
     @State private var showingInsights = false
+    /// The past conversation being read back, if any.
+    @State private var openedSession: DashboardPolicy.Session?
     /// THE SHARED ELEMENT between the peek card and the page it opens.
     ///
     /// Apple almost never cuts between states — it MOVES the object you were
@@ -1261,7 +1263,10 @@ struct HomeView: View {
                     },
                     onStopListening: { session.stopListening() },
                     onSend: { line in typedLine = line; submitTyped() },
-                    onOpenSession: { _ in },   // opening one back up is not built yet
+                    // OPENING ONE BACK UP, which was never built until the
+                    // transcript needed somewhere to live. The capture face
+                    // shows tasks now; this is where the words went.
+                    onOpenSession: { openedSession = $0 },
                     onOpenHistory: { showListeningHistory = true },
                     onRefresh: { await session.refresh() }
                 ) {
@@ -1407,6 +1412,17 @@ struct HomeView: View {
                 // rebuilt, so there is one transcript surface and not two that
                 // can disagree.
                 NavigationStack { ListeningHistoryView(session: session) }
+            }
+            .sheet(item: $openedSession) { picked in
+                SessionTranscriptView(
+                    title: picked.title,
+                    when: DashboardPolicy.history([picked], now: Date()).first?.heading ?? "",
+                    // The SAME grouping the history list is built from, so the
+                    // rows and their contents can never disagree about which
+                    // conversation a line belongs to.
+                    lines: HeardGroup.build(session.transcript)
+                        .first { $0.id == picked.id }?.lines ?? []
+                ) { openedSession = nil }
             }
             .sheet(isPresented: $showInterview) {
                 InterviewView().environmentObject(session)

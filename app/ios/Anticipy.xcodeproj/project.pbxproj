@@ -83,6 +83,7 @@
 		6A543E14AE010B118438C6BB /* InsightsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D8631F77C58AAED87B26F05 /* InsightsView.swift */; };
 		D4C6FC9C70D0BB70AAF23DA9 /* PendantOnboarding.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE005CDB48747ADB5F1983B4 /* PendantOnboarding.swift */; };
 		A2E9C7BEAE17336D2AAC4448 /* HeardGroup.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC042E78CD54BA32A917FDA4 /* HeardGroup.swift */; };
+		305BAB2493D6889F4A7278F8 /* SessionTranscriptView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D51AB3320CF8D6840BE184E /* SessionTranscriptView.swift */; };
 		A7D57FEE8635078FB72C3B13 /* SettingsKit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BE63B13B2A36AB4DB9EA566 /* SettingsKit.swift */; };
 		A9F3E184E914DEA54C1653A4 /* SettingsAccessView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D657B61BDB55AEC37E034E7 /* SettingsAccessView.swift */; };
 		ABAB1EE3B1D325D6B3600473 /* ConversationCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0B72B7E633EA125C09A7923 /* ConversationCard.swift */; };
@@ -291,6 +292,7 @@
 		E9464305444D641C792685AE /* AnticipyUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = AnticipyUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		E94C340A3EF64050C750BCD7 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		EC042E78CD54BA32A917FDA4 /* HeardGroup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeardGroup.swift; sourceTree = "<group>"; };
+		3D51AB3320CF8D6840BE184E /* SessionTranscriptView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionTranscriptView.swift; sourceTree = "<group>"; };
 		EDB2A40B487A55305B6FC7A2 /* Interview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Interview.swift; sourceTree = "<group>"; };
 		F00793646933CBDFE4070BF5 /* PendantManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PendantManager.swift; sourceTree = "<group>"; };
 		F1277C9D57923BEE65E84A60 /* JobReceiptPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JobReceiptPolicy.swift; sourceTree = "<group>"; };
@@ -469,6 +471,7 @@
 				6FAF817396F0334028162D23 /* EnrollmentInvite.swift */,
 				4F5BDFB6645EE440CDCB4F5E /* GlassControls.swift */,
 				EC042E78CD54BA32A917FDA4 /* HeardGroup.swift */,
+				3D51AB3320CF8D6840BE184E /* SessionTranscriptView.swift */,
 				279CD122187AC50931E7FBAB /* InterviewView.swift */,
 				098931E67CC0A16625780FF6 /* ListeningDiagnosticsView.swift */,
 				0A46779BF5154DAF8ACF9261 /* ScratchRecorderView.swift */,
@@ -707,6 +710,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				305BAB2493D6889F4A7278F8 /* SessionTranscriptView.swift in Sources */,
 				BAD8D4571150792AB65F60B0 /* RingsPolicy.swift in Sources */,
 				BB680F715F9F08F778122961 /* SoundPolicy.swift in Sources */,
 				C7D12CBB73B341FC00A9A373 /* SoundEngine.swift in Sources */,
@@ -882,7 +886,7 @@
 				CODE_SIGN_INJECT_BASE_ENTITLEMENTS = NO;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 157;
+				CURRENT_PROJECT_VERSION = 158;
 				DEVELOPMENT_TEAM = "$(DEVELOPMENT_TEAM)";
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -892,7 +896,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 1.1.0;
+				MARKETING_VERSION = 1.1.1;
 				OTHER_CODE_SIGN_FLAGS = "--timestamp";
 				PRODUCT_BUNDLE_IDENTIFIER = ai.anticipy.mac;
 				SDKROOT = macosx;
@@ -954,7 +958,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 157;
+				CURRENT_PROJECT_VERSION = 158;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = "$(DEVELOPMENT_TEAM)";
 				ENABLE_NS_ASSERTIONS = NO;
@@ -969,7 +973,7 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
-				MARKETING_VERSION = 1.1.0;
+				MARKETING_VERSION = 1.1.1;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -989,7 +993,7 @@
 				CODE_SIGN_INJECT_BASE_ENTITLEMENTS = NO;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 157;
+				CURRENT_PROJECT_VERSION = 158;
 				DEVELOPMENT_TEAM = "$(DEVELOPMENT_TEAM)";
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -999,7 +1003,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 1.1.0;
+				MARKETING_VERSION = 1.1.1;
 				OTHER_CODE_SIGN_FLAGS = "--timestamp";
 				PRODUCT_BUNDLE_IDENTIFIER = ai.anticipy.mac;
 				SDKROOT = macosx;
@@ -1060,7 +1064,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 157;
+				CURRENT_PROJECT_VERSION = 158;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = "$(DEVELOPMENT_TEAM)";
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -1081,7 +1085,7 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
-				MARKETING_VERSION = 1.1.0;
+				MARKETING_VERSION = 1.1.1;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -1107,7 +1111,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.1.0;
+				MARKETING_VERSION = 1.1.1;
 				PRODUCT_BUNDLE_IDENTIFIER = ai.anticipy.app.widget;
 				SDKROOT = iphoneos;
 				SWIFT_VERSION = 5.0;
@@ -1146,7 +1150,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.1.0;
+				MARKETING_VERSION = 1.1.1;
 				PRODUCT_BUNDLE_IDENTIFIER = ai.anticipy.app.widget;
 				SDKROOT = iphoneos;
 				SWIFT_VERSION = 5.0;
