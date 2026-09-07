@@ -42,6 +42,11 @@ def prove(base, verify_deployment=False):
         checks.append(name)
         print(name + ": PASS", flush=True)
 
+    if verify_deployment:
+        status, _, _ = request(base, "POST", "/sms/sendblue", {})
+        check(status == 403, "SendBlue webhook is configured and rejects unsigned input")
+        status, _, _ = request(base, "POST", "/sms/inbound", {})
+        check(status == 410, "Retired texting endpoint cannot accept input")
     status, body, headers = request(base, "GET", "/api/health")
     check(status == 200 and body.get("code") == 200, "API liveness")
     if verify_deployment:

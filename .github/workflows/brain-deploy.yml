@@ -25,7 +25,7 @@ on:
         description: 'Backend component to deploy'
         required: true
         type: choice
-        options: [brain, api, inspect]
+        options: [brain, api, inspect, messaging-secret]
         default: brain
       confirm:
         description: 'Type DEPLOY to deploy the selected component'
@@ -42,7 +42,7 @@ concurrency:
 
 jobs:
   deploy:
-    if: ${{ github.ref == 'refs/heads/cloudflare-backend' && github.event.inputs.confirm == 'DEPLOY' && github.event.inputs.component != 'api' && github.event.inputs.component != 'inspect' }}
+    if: ${{ github.ref == 'refs/heads/cloudflare-backend' && github.event.inputs.confirm == 'DEPLOY' && github.event.inputs.component == 'brain' }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
@@ -149,6 +149,19 @@ jobs:
         env:
           ANTICIPY_INTERNAL_KEY: ${{ secrets.ANTICIPY_INTERNAL_KEY }}
         run: python proof/audit/live_api_release.py --base https://api.anticipy.ai --verify-deployment
+
+  messaging-secret:
+    if: ${{ github.ref == 'refs/heads/cloudflare-backend' && github.event.inputs.confirm == 'DEPLOY' && github.event.inputs.component == 'messaging-secret' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      SENDBLUE_WEBHOOK_SECRET: ${{ secrets.SENDBLUE_WEBHOOK_SECRET }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install only the webhook secret and verify live authentication without a message
+        run: python3 proof/audit/configure_sendblue_webhook.py
 
   inspect:
     if: ${{ github.ref == 'refs/heads/cloudflare-backend' && github.event.inputs.component == 'inspect' }}
