@@ -1329,8 +1329,8 @@ export function textCommandDeps(env: TextCommandEnv, said: string, context?: Tex
           { role: "user", content: JSON.stringify({context, current_message:said}) },
         ]));
         const name = query && typeof query === "object" && "query" in query
-          && typeof query.query === "string" ? query.query : said;
-        for (const row of await provider.search(name, { limit: TEXT_CATALOG_LIMIT })) {
+          && typeof query.query === "string" ? query.query.trim() : "";
+        for (const row of name ? await provider.search(name, { limit: TEXT_CATALOG_LIMIT }) : []) {
           if (row && typeof row.slug === "string" && row.slug !== "") seen.set(row.slug, row);
         }
       } catch {

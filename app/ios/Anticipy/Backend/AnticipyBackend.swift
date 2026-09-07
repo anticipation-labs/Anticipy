@@ -900,7 +900,7 @@ final class AnticipyBackend {
         // Scoped, always. Unowned legacy rows are deliberately NOT included:
         // showing them to whoever happens to be signed in is the exact bug this
         // fixes. They are claimed onto an account by /auth/claim instead.
-        var clauses: [String] = []
+        var clauses: [String] = ["kind!=\"reply_outbox\" && kind!=\"notification_status\" && kind!=\"discovery_scan\""]
         if !accountID.isEmpty { clauses.append("owner_ref=\"\(accountID)\"") }
         if let extra, !extra.isEmpty { clauses.append("(\(extra))") }
         if !clauses.isEmpty {
@@ -910,6 +910,27 @@ final class AnticipyBackend {
         let data = try await readData(from: comps.url!)
         struct Page: Decodable { let items: [BrainEvent] }
         return try JSONDecoder().decode(Page.self, from: data).items
+    }
+
+    /// Independent of the capped conversation feed: status bookkeeping must
+    /// not displace the messages it describes, or borrow another owner's state.
+    func fetchReplyDeliveryMetadata(kind: String) async throws -> [ReplyTextDeliveryPolicy.Metadata] {
+        guard !accountID.isEmpty, ["notification_status", "reply_outbox"].contains(kind)
+        else { throw BackendError(status: 400) }
+        let escaped = accountID.replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+        var components = URLComponents(url: baseURL.appendingPathComponent(
+            "api/collections/events/records"), resolvingAgainstBaseURL: false)!
+        components.queryItems = [
+            URLQueryItem(name: "filter", value: "owner_ref=\"\(escaped)\" && kind=\"\(kind)\""),
+            URLQueryItem(name: "sort", value: "-created"),
+            URLQueryItem(name: "perPage", value: "200")]
+        let data = try await readData(from: components.url!)
+        struct Page: Decodable { let items: [ReplyTextDeliveryPolicy.Metadata] }
+        let rows = try JSONDecoder().decode(Page.self, from: data).items
+        guard rows.allSatisfy({ $0.owner_ref == accountID && $0.kind == kind })
+        else { throw BackendError(status: 502) }
+        return rows
     }
 
     /// Exact read-after-write for an idempotent app reply. Both the server

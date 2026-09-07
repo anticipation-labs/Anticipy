@@ -1,0 +1,23 @@
+{
+  "checks" : [
+    "EventKit save and title\/time\/URL readback",
+    "repeat write yields exactly one event",
+    "new EventKit instance reads persistent marker",
+    "marker-based undo and independent absence readback"
+  ],
+  "passed" : true,
+  "personal_data_used" : false,
+  "undo_evidence" : [
+    "proof:calendar_marker_absent_after_remove",
+    "url:anticipy:\/\/act\/5F9C4134-CD01-499B-AC32-D35CDD6725E4",
+    "calendar:43489158-299D-4E5F-913B-CF2174C2B747"
+  ],
+  "write_evidence" : [
+    "proof:created_and_read_back",
+    "url:anticipy:\/\/act\/5F9C4134-CD01-499B-AC32-D35CDD6725E4",
+    "calendar:43489158-299D-4E5F-913B-CF2174C2B747",
+    "title:Anticipy isolated native calendar fixture",
+    "start:1788895400.0",
+    "end:1788899000.0"
+  ]
+}

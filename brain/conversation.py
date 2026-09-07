@@ -310,6 +310,7 @@ class Conversation:
         # Set only inside `reply_in_app()`. See say().
         self._reply_suppressed = False
         self._incoming_event = None
+        self.reply_delivery = None
 
     @contextlib.contextmanager
     def from_event(self, event: dict):
@@ -369,6 +370,13 @@ class Conversation:
     # ------------------------------------------------------------ outbound
 
     def say(self, phone: str, body: str, media=None) -> dict:
+        # Production replies have one durable identity across app and SMS.
+        # Persist before the provider call, including when reply_in_app is
+        # active. The app and text then show the same saved answer.
+        if self.reply_delivery is not None and self._incoming_event is not None:
+            out = self.reply_delivery(self._incoming_event, body, media)
+            self._thread(phone).append(Turn("anticipy", out.get("body", body)))
+            return out
         # THE DEDUPE STILL READS THE BODY ALONE, AND THAT IS A DECISION.
         # A second attempt that differs only by having a picture on it is
         # deduped away by the loop below (spec §13 question 9, settled here by
@@ -389,7 +397,6 @@ class Conversation:
             if turn.text == body and now - turn.ts < 600:
                 return {"to": phone, "body": body, "deduped": True}
             break
-        thread.append(Turn("anticipy", body))
         if self._reply_suppressed:
             # The turn is still recorded, so this is one conversation and the
             # dedupe above still sees it. Only the SMS leg is skipped: the
@@ -400,12 +407,15 @@ class Conversation:
             # owner's own evidence rows through his signed-in session
             # (migration/workers/src/assets.ts), so an in-app reply does not
             # need a public URL to exist for a picture to be seen.
+            thread.append(Turn("anticipy", body))
             return {"to": phone, "body": body, "via": "in-app"}
         # Conditional for the reason TwilioTransport.send gives: transports
         # that predate the picture are still in the tree and still shipping.
-        if media:
-            return self.transport.send(phone, body, media=media)
-        return self.transport.send(phone, body)
+        result = (self.transport.send(phone, body, media=media) if media
+                  else self.transport.send(phone, body))
+        if result and not result.get("skipped"):
+            thread.append(Turn("anticipy", body))
+        return result
 
     def reach_out(self, phone: str, about: str, media=None) -> dict:
         """Anticipy texts first (Tomo-style), conversationally, about a

@@ -846,7 +846,11 @@ settings:
     #      thread, and ask the model before offering optional device context.
     # 162: Follow an explicitly sent reply, keep typed answers out of the
     #      ambient count, and offer context on a fresh account's first line.
-    CURRENT_PROJECT_VERSION: "165"
+    # 166: Run approved native calendar jobs with an atomic lease and EventKit
+    #      readback; park interrupted effects instead of replaying them.
+    #      Show per-reply text delivery evidence without calling acceptance
+    #      delivered or inferring delivery when metadata is missing.
+    CURRENT_PROJECT_VERSION: "166"
     DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: NO
@@ -899,7 +903,7 @@ targets:
         # literal from a Mac one, and two products answering "which build
         # are you holding" with different numbers is the exact disease this
         # gate exists to prevent.
-        CURRENT_PROJECT_VERSION: "165"
+        CURRENT_PROJECT_VERSION: "166"
         DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_ENTITLEMENTS: ../macos/AnticipyMac/AnticipyMac.entitlements

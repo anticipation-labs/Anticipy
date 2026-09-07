@@ -41,6 +41,7 @@ struct ConversationDashboard<Notices: View, Approval: View, Deck: View, Settings
     // What to draw
     let turns: [DashboardPolicy.Turn]
     var initialHistoryReplyIDs: Set<String> = []
+    var replyTextDelivery: [String: ReplyTextDeliveryPolicy.State] = [:]
     let captureState: DashboardPolicy.CaptureState
     let listening: Bool
     /// Whether iOS has taken the microphone away. Passed in rather than read
@@ -255,10 +256,16 @@ struct ConversationDashboard<Notices: View, Approval: View, Deck: View, Settings
             QuietTurn(count: count) { onOpenHistory() }
         case .working(_, let text, _):
             WorkingTurn(text: text)
-        case .said(_, let text, _, let done):
-            SaidTurn(text: text, done: done) { UIPasteboard.general.string = text }
-        case .question(_, let text, _):
-            QuestionTurn(text: text)
+        case .said(let id, let text, _, let done):
+            VStack(alignment: .leading, spacing: 6) {
+                SaidTurn(text: text, done: done) { UIPasteboard.general.string = text }
+                ReplyTextDeliveryBadge(state: replyTextDelivery[id] ?? .unknown)
+            }
+        case .question(let id, let text, _):
+            VStack(alignment: .leading, spacing: 6) {
+                QuestionTurn(text: text)
+                ReplyTextDeliveryBadge(state: replyTextDelivery[id] ?? .unknown)
+            }
         case .approval(let id, _, _, _):
             approval(id)
         }

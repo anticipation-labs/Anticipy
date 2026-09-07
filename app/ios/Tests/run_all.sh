@@ -221,6 +221,8 @@ sh "$HERE/run_consumer_experience_contract_tests.sh"
 # name. Early, like the three above it: `set -eu` stops this file at the first
 # failure, so a suite placed late is a suite that may never run.
 sh "$HERE/run_calendar_hand_tests.sh"
+sh "$HERE/run_native_calendar_execution_tests.sh"
+sh "$HERE/run_reply_text_delivery_tests.sh"
 # The connect handoff — the twenty seconds between the owner's tap and another
 # company's sign-in page. Beside the calendar hand for the same reason it sits
 # beside the receipt: both ask what has to be true before the phone reaches

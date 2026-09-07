@@ -643,6 +643,8 @@ final class AnticipySession: ObservableObject {
     @Published var transcript: [TranscriptLine] = []
     @Published var sessionLines: [SessionLine] = []
     @Published var anticipySays: [BrainEvent] = []
+    @Published var replyTextDelivery: [String: ReplyTextDeliveryPolicy.State] = [:]
+    private var replyDeliveryRefreshInFlight = false
     /// The first successful read is history, including when listening resumes
     /// before that read returns. Later polls must not move this boundary.
     @Published var initialHistoryReplyIDs: Set<String>?
@@ -651,6 +653,7 @@ final class AnticipySession: ObservableObject {
     /// pocket. See Notifier — until it existed, a booking waiting on an OK
     /// reached its owner only if they happened to open the app.
     let notifier = Notifier()
+    let nativeCalendar = NativeCalendarHand()
     @Published var backendReachable = false
     @Published var agentOnline = false
     @Published var agentLastSeenSeconds: Int?   // nil = never seen
@@ -1269,6 +1272,37 @@ final class AnticipySession: ObservableObject {
             isSignedIn: isSignedIn)
     }
 
+    private func refreshReplyDelivery(using b: AnticipyBackend) {
+        guard !replyDeliveryRefreshInFlight else { return }
+        replyDeliveryRefreshInFlight = true
+        let owner = b.accountID
+        let token = b.authToken
+        let baseURL = b.baseURL
+        Task { [weak self] in
+            guard let self else { return }
+            defer { self.replyDeliveryRefreshInFlight = false }
+            // A slow status read must never hold back the actual answer.
+            async let attemptsRead = try? b.fetchReplyDeliveryMetadata(kind: "notification_status")
+            async let outboxRead = try? b.fetchReplyDeliveryMetadata(kind: "reply_outbox")
+            let metadata = await (attemptsRead, outboxRead)
+            guard self.accountID == owner, self.authToken == token,
+                  self.backend.baseURL == baseURL, !owner.isEmpty else { return }
+            let rows: [ReplyTextDeliveryPolicy.Metadata]
+            if let attempts = metadata.0, let pending = metadata.1 {
+                rows = attempts + pending
+            } else {
+                // A missing attempt read cannot turn a stale pending outbox
+                // into a fresh assertion that sending has not begun.
+                rows = []
+            }
+            self.replyTextDelivery = Dictionary(uniqueKeysWithValues: self.anticipySays
+                .filter { $0.kind == "anticipy_text" }.map { event in
+                    (event.id, ReplyTextDeliveryPolicy.state(messageID: event.id,
+                        owner: owner, rows: rows))
+                })
+        }
+    }
+
     func refresh() async {
         guard let lease = beginRefreshLease() else { return }
         let b = backend
@@ -1315,6 +1349,22 @@ final class AnticipySession: ObservableObject {
             }
             if jobs != reconciledJobs { jobs = reconciledJobs }
             connection = .ready
+            do {
+                let calendarOwner = accountID
+                let calendarToken = authToken
+                Task { [weak self] in
+                    guard let self else { return }
+                    await self.nativeCalendar.run(baseURL: b.baseURL,
+                        token: calendarToken, owner: calendarOwner,
+                        stillCurrent: { [weak self] in
+                            guard let self else { return false }
+                            return self.accountID == calendarOwner
+                                && self.authToken == calendarToken
+                                && self.backend.baseURL == b.baseURL
+                                && !calendarOwner.isEmpty
+                        })
+                }
+            }
             // Raised from the poll on purpose: the app keeps running while it
             // listens (background audio), so a local notification from here
             // reaches a locked screen without a push server.
@@ -1399,6 +1449,7 @@ final class AnticipySession: ObservableObject {
             let said = events.filter { $0.kind == "anticipy_says" || $0.kind == "anticipy_text" }
             if initialHistoryReplyIDs == nil { initialHistoryReplyIDs = Set(said.map(\.id)) }
             if anticipySays != said { anticipySays = said }
+            refreshReplyDelivery(using: b)
             // His replies, so a question that is already settled stops
             // offering a box to settle it again. Both lanes: he may answer the
             // same question by text or in here, and either one closes it.
@@ -2341,6 +2392,7 @@ final class AnticipySession: ObservableObject {
         transcript = []
         sessionLines = []
         anticipySays = []
+        replyTextDelivery = [:]
         initialHistoryReplyIDs = nil
         jobs = []
         ownerReplies = []
@@ -2777,27 +2829,8 @@ final class AnticipySession: ObservableObject {
             facts[String(format: "owner_answer_v%03d", approvedVersion)] = asked.isEmpty
                 ? ownerWords
                 : "Q: \(String(asked.prefix(120))) A: \(ownerWords)"
-            // Deterministic structuring: contact-shaped tokens become real
-            // fields the hands can type into the matching form inputs —
-            // never the raw sentence.
-            for (key, pattern) in [
-                ("email", "[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}"),
-                ("phone", "\\+?[0-9][0-9 ().-]{6,}[0-9]"),
-            ] where facts[key] == nil {
-                if let range = ownerWords.range(of: pattern, options: .regularExpression) {
-                    facts[key] = String(ownerWords[range])
-                }
-            }
-            if facts["name"] == nil,
-               let match = ownerWords.range(
-                   of: "(?i)name(?:\\s+is)?[:\\s]+[A-Za-z][A-Za-z'’-]{1,30}",
-                   options: .regularExpression) {
-                let phrase = String(ownerWords[match])
-                if let tail = phrase.range(of: "[A-Za-z][A-Za-z'’-]{1,30}$",
-                                           options: .regularExpression) {
-                    facts["name"] = String(phrase[tail])
-                }
-            }
+            // Human answers are interpreted by the brain's contextual model.
+            // This writer must never derive contact facts from their wording.
             workflow["facts"] = facts
             workflow["version"] = approvedVersion
             let consequence = workflow["consequence"] as? String ?? "consequential"
@@ -2973,7 +3006,22 @@ final class AnticipySession: ObservableObject {
             return await write(job, expected: "queued") {
                 if let fields = try self.approvalFields(for: job,
                                                         ownerAnswer: ownerAnswer) {
-                    try await self.backend.setJobFields(id: job.id, fields: fields)
+                    if CalendarHandPolicy.normalizedLane(job.lane) == CalendarHandPolicy.lane {
+                        let owner = self.accountID
+                        let token = self.authToken
+                        let baseURL = self.backend.baseURL
+                        try await self.nativeCalendar.approveAndRelease(jobID: job.id,
+                            expectedVersion: job.workflow_version ?? 0,
+                            expectedScope: job.scope_digest ?? "", fields: fields,
+                            baseURL: baseURL, token: token, owner: owner,
+                            stillCurrent: { [weak self] in
+                                guard let self else { return false }
+                                return self.accountID == owner && self.authToken == token
+                                    && self.backend.baseURL == baseURL
+                            })
+                    } else {
+                        try await self.backend.setJobFields(id: job.id, fields: fields)
+                    }
                 } else {
                     var params = (try? JSONSerialization.jsonObject(with: Data(job.params.utf8)))
                         as? [String: Any] ?? [:]

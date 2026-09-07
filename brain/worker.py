@@ -27,6 +27,7 @@ import requests
 from . import backend
 from . import research
 from . import server_work
+from .connection_dispatch import ConnectionDispatch
 
 from .anticipy_core import (DEVICE_CALENDAR_LANE, RESEARCH_LANE, Anticipy,
                             goal_tokens, is_device_lane, needs_no_browser, memory_notes)
@@ -4244,6 +4245,9 @@ def claim(event_id: str) -> bool:
     return mark_processed(event_id, "processing")
 
 
+_CONNECTION_DISPATCH = ConnectionDispatch()
+
+
 def connection_command(ev: dict, owner_ref: str) -> str:
     """Sequence the shared connection handler before ordinary conversation.
 
@@ -4253,9 +4257,19 @@ def connection_command(ev: dict, owner_ref: str) -> str:
     """
     if not os.environ.get("ANTICIPY_SERVICE_TOKEN"):
         return "not_for_us"
+    # A slow connection planner must not block the owner loop's other duties.
+    # Keep its HTTP request alive in one transport thread: returning the API
+    # response early with waitUntil would kill work after 30 seconds.
+    event_id = str(ev["id"])
+    base = PB
+    return _CONNECTION_DISPATCH.poll((base, owner_ref, event_id),
+        lambda: _request_connection_command(event_id, owner_ref, base))
+
+
+def _request_connection_command(event_id: str, owner_ref: str, base: str | None = None) -> str:
     try:
-        response = backend.post(f"{PB}/worker/connection-command", json={
-            "event_id": ev["id"], "owner_ref": owner_ref,
+        response = backend.post(f"{base or PB}/worker/connection-command", json={
+            "event_id": event_id, "owner_ref": owner_ref,
         }, timeout=120)
         # Compatibility while the new API is rolling out. No connection
         # executor exists on this endpoint in an older release.
@@ -4372,7 +4386,7 @@ def handle_inbound(ev: dict, convo, anticipy) -> str:
                 convo.say(phone, reply)
                 # The apology has to reach the app too, or answering in the app
                 # and hitting an error is the same silence in a new place.
-                if in_app:
+                if in_app and not getattr(convo, "reply_delivery", None):
                     post_event("anticipy_text", reply)
             except Exception as e2:
                 print(f"{lane}: could not even apologise: {e2}")
@@ -4382,7 +4396,8 @@ def handle_inbound(ev: dict, convo, anticipy) -> str:
     # How an in-app reply is DELIVERED: the app reads this row. The SMS lane has
     # already sent by now and records it here too, so both channels leave one
     # history rather than two (docs leg 2).
-    post_event("anticipy_text", out["reply"])
+    if not getattr(convo, "reply_delivery", None):
+        post_event("anticipy_text", out["reply"])
     print(f"{lane}: {text!r} -> {out['intent']}")
     return out["intent"]
 
@@ -4991,6 +5006,10 @@ def main() -> None:
     # notify_owner while the conversational transport says it is mock.
     arm, transport = configure_message_transport(anticipy, sms_provider)
     convo = Conversation(anticipy, transport=transport)
+    from .reply_delivery import ReplyDelivery
+    reply_delivery = ReplyDelivery(anticipy.backend_url, anticipy.owner_ref,
+                                   transport, lambda: fetch_owner_phone(anticipy.owner_ref))
+    convo.reply_delivery = reply_delivery.publish
     anticipy.conversation = convo
     # This is deliberately installed after every transport is attached and
     # before the first worker duty can speak.  It also covers notify_owner()
@@ -5375,6 +5394,13 @@ def main() -> None:
             for ev in fetch_unprocessed("sms_reply", anticipy.owner_ref) + \
                     fetch_unprocessed("app_reply", anticipy.owner_ref):
                 handle_inbound(ev, convo, anticipy)
+
+            # Retry feed replies that have no provider attempt yet. Delivery
+            # never re-runs the model, approval handling, or the underlying task.
+            try:
+                reply_delivery.sweep()
+            except Exception as exc:
+                print(f"reply delivery sweep unavailable: {type(exc).__name__}")
 
             # A conversation that ended gets its one digest — everything
             # held while he was talking, in a single text.

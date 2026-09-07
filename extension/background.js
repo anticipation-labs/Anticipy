@@ -12,6 +12,7 @@ import {
   MAX_STEPS as READ_MAX_STEPS, leaseLapsed, runSupervisedRead,
 } from "./supervised_read.js";
 import { backendBase } from "./config.js";
+import { backendFetch as fetch } from "./backend_transport.js";
 import {
   effectIntentAfter,
   heartbeatPatch,
@@ -27,7 +28,7 @@ import {
 // imported module alone can leave Chrome running a cached worker graph for an
 // unpacked extension; changing this entry file forces a fresh registration,
 // and the same marker is written into every job trace as runtime proof.
-const ENGINE_BUILD = "0.16.0";
+const ENGINE_BUILD = "0.17.0";
 
 const BACKEND_LLM = "backend-proxy";
 // Job traffic authenticates as THIS ONE AGENT and nothing more. An earlier

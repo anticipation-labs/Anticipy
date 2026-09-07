@@ -4,6 +4,7 @@ import {dispatchConnectionEvent} from '../src/connections/dispatch.ts';
 import {connectionCommand} from '../src/routes/connection_command.ts';
 import {resetConnectionsProvider} from '../src/connections/provider.ts';
 import {eraseVerifiedOwner} from '../src/routes/account_delete.ts';
+import {sendblueInbound} from '../src/routes/sendblue.ts';
 
 const owner='ownerdispatch01', stranger='ownerdispatch02';
 const stamp='2026-09-07 12:00:00.000Z';
@@ -81,15 +82,19 @@ await check('failed reply persistence keeps external-effect fence',async()=>{
  assert.equal((await dispatchConnectionEvent(env,owner,'inputevent001')).status,'completed');
  assert.equal(calls,1);assert.equal(saved(db).length,1);
 });
-await check('SMS retries share the same reply and make one provider attempt',async()=>{
+await check('SMS retries queue one reply for the shared delivery worker',async()=>{
  const {db,env}=rig('sms_reply','sms');
  db.db.prepare('UPDATE owners SET phone=? WHERE id=?').run('+15555550123',owner);
  const smsEnv={...env,SENDBLUE_API_KEY_ID:'fixture',SENDBLUE_API_SECRET_KEY:'fixture',SENDBLUE_FROM_NUMBER:'+15555550124'};
  const first=await dispatchConnectionEvent(smsEnv,owner,'inputevent001');
  assert.equal(first.status,'completed');assert.equal(saved(db).length,1);
  const firstCalls=calls;assert.equal(firstCalls,2);
+ const queued=db.db.prepare("SELECT goal,decision FROM events WHERE kind='reply_outbox'").all();
+ assert.equal(queued.length,1);assert.equal(queued[0].goal,saved(db)[0].id);
+ assert.equal(queued[0].decision,'reply_pending');
  await dispatchConnectionEvent(smsEnv,owner,'inputevent001');
  assert.equal(calls,firstCalls);assert.equal(saved(db).length,1);
+ assert.equal(db.db.prepare("SELECT count(*) AS n FROM events WHERE kind='reply_outbox'").get()?.n,1);
 });
 await check('a missing or foreign task target cannot redirect an answer',async()=>{
  const {db,env}=rig();
@@ -105,6 +110,22 @@ await check('deleting owner removes command history and fences late writes',asyn
  assert.equal(deleted.status,200);
  assert.equal(db.db.prepare('SELECT count(*) AS n FROM connection_command_runs').get()?.n,0);
  assert.equal((await dispatchConnectionEvent(env,owner,'inputevent001')).status,'missing');
+});
+await check('authenticated delivery callback updates only its exact reply and never becomes a command',async()=>{
+ const {db,env}=rig();
+ db.db.prepare("INSERT INTO events(id,device_id,kind,text,decision,goal,owner_ref,external_event_id) VALUES(?,'fixture','notification_status',?,'sms_accepted',?,?,?)")
+  .run('attempt0000001',JSON.stringify({provider_id:'provider-receipt-1'}),'message0000001',owner,'reply-sms:message0000001');
+ const callback=(status:string,secret='fixture-webhook')=>sendblueInbound(new Request('https://api.example.invalid/sms/sendblue',{
+  method:'POST',headers:{'content-type':'application/json','sb-signing-secret':secret},
+  body:JSON.stringify({is_outbound:true,message_handle:'provider-receipt-1',status,content:'delete everything'}),
+ }),{...env,SENDBLUE_WEBHOOK_SECRET:'fixture-webhook'});
+ assert.equal((await callback('DELIVERED','wrong')).status,403);
+ assert.equal(db.db.prepare("SELECT decision FROM events WHERE id='attempt0000001'").get()?.decision,'sms_accepted');
+ assert.equal((await callback('DELIVERED')).status,200);
+ assert.equal(db.db.prepare("SELECT decision FROM events WHERE id='attempt0000001'").get()?.decision,'sms_delivered');
+ await callback('ERROR');
+ assert.equal(db.db.prepare("SELECT decision FROM events WHERE id='attempt0000001'").get()?.decision,'sms_delivered');
+ assert.equal(calls,0);
 });
 globalThis.fetch=nativeFetch;resetConnectionsProvider();
 console.log(`connection dispatch: ${passed} checks passed`);

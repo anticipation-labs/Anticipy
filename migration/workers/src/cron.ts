@@ -29,8 +29,9 @@
 import { newRecordId, pbNow } from "./api/wire.ts";
 import { sendText, type MessagingEnv } from "./messaging.ts";
 import { connectNudgeSweep, installNudgeWiring } from "./connections/nudge.ts";
-import { nudgeWiring } from "./connections/wiring.ts";
+import { nudgeWiring, type TextCommandEnv } from "./connections/wiring.ts";
 import { sweepConnectedSignals } from "./connections/signals.ts";
+import { collectConversationSignals } from "./connections/discovery.ts";
 
 /**
  * THE CONNECT-ASK WIRING, installed once when this module loads.
@@ -83,6 +84,15 @@ export async function scheduled(
   event: ScheduledController, env: CronEnv, ctx: ExecutionContext,
 ): Promise<void> {
   switch (event.cron) {
+    // Separate from the retired HQ reminder job. Evidence collection must
+    // finish before the existing contextual nudge policy reads its signals.
+    case "23 * * * *":
+      ctx.waitUntil((async () => {
+        try { await collectConversationSignals(env as TextCommandEnv); }
+        catch { console.log('conversation discovery unavailable'); }
+        await connectAsks(env);
+      })());
+      return;
     // TWO waitUntil CALLS, NOT ONE CHAINED PROMISE. The reminder sweep carries
     // things somebody is waiting for; the connect ask is an interruption
     // nobody asked for. They must not be able to take each other down, and

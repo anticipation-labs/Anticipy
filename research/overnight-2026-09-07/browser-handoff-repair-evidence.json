@@ -1,0 +1,157 @@
+{
+  "observed_at": "2026-09-07T19:24:42.636035+00:00",
+  "scope": "Real isolated Chrome DOM/CDP and actual page mapper; local HTTP deadline fixtures; no model calls, personal browser, or external actions",
+  "baseline_revision": "a492703512881a935962e62e61b0d019a83b355a",
+  "version": "0.17.0",
+  "source_sha256": {
+    "extension/background.js": "5b536e605ef92fb4afb95c9441b77eb0f82cf669f9ee649652a1378f87ca181b",
+    "extension/backend_transport.js": "bf32b15477b824fb741ba5261a14fdfb9822a4708efd2f32799626a9f66db1e6",
+    "extension/page_map.js": "2b9bd08b9b63b595bde203bde5635131fc7b522b9daa274cce98dc85214bf3b9",
+    "extension/manifest.json": "cca33216d72fb212ab13d834356701c27c92348694fbb9ff398a543b12e37356"
+  },
+  "clicks_before": [
+    {
+      "scenario": "document smooth scroll",
+      "center": {
+        "x": 120,
+        "y": 2452
+      },
+      "clicks": 0,
+      "detached": {
+        "x": 0,
+        "y": 0
+      },
+      "passed": false
+    },
+    {
+      "scenario": "nested smooth scroll",
+      "center": {
+        "x": 120,
+        "y": 2452
+      },
+      "clicks": 0,
+      "detached": {
+        "x": 0,
+        "y": 0
+      },
+      "passed": false
+    }
+  ],
+  "clicks_after": [
+    {
+      "scenario": "document smooth scroll",
+      "center": {
+        "x": 120,
+        "y": 350
+      },
+      "clicks": 1,
+      "detached": null,
+      "passed": true
+    },
+    {
+      "scenario": "nested smooth scroll",
+      "center": {
+        "x": 120,
+        "y": 270
+      },
+      "clicks": 1,
+      "detached": null,
+      "passed": true
+    }
+  ],
+  "extension_suite": {
+    "command": "node extension/tests/run_all.mjs",
+    "passed_suites": 83,
+    "failed_suites": 0,
+    "elapsed_seconds": 79.04
+  },
+  "deadline_test": {
+    "command": "node extension/tests/test_backend_deadline.mjs",
+    "checks": [
+      "stalled headers abort",
+      "stalled body abort",
+      "timed-out POST not replayed",
+      "caller cancellation preserved",
+      "healthy next request succeeds"
+    ],
+    "passed": true
+  },
+  "public_assets_before": [
+    {
+      "asset": "anticipy-extension.zip",
+      "version": "0.16.0",
+      "sha256": "93c3a2d8c29e97031c7c81707a2fb086c01564b3d201b546e2ec1b18aa0a9ba9",
+      "bytes": 351843,
+      "source_mismatches": [
+        "agent_loop.js",
+        "background.js",
+        "config.js",
+        "popup.js",
+        "reconcile.js",
+        "supervised_read.js",
+        "workflow_state.js"
+      ]
+    },
+    {
+      "asset": "anticipy-claude-version-extension.zip",
+      "version": "0.16.0",
+      "sha256": "93c3a2d8c29e97031c7c81707a2fb086c01564b3d201b546e2ec1b18aa0a9ba9",
+      "bytes": 351843,
+      "source_mismatches": [
+        "agent_loop.js",
+        "background.js",
+        "config.js",
+        "popup.js",
+        "reconcile.js",
+        "supervised_read.js",
+        "workflow_state.js"
+      ]
+    },
+    {
+      "asset": "anticipy-codex-version-extension.zip",
+      "version": "0.16.0",
+      "sha256": "93c3a2d8c29e97031c7c81707a2fb086c01564b3d201b546e2ec1b18aa0a9ba9",
+      "bytes": 351843,
+      "source_mismatches": [
+        "agent_loop.js",
+        "background.js",
+        "config.js",
+        "popup.js",
+        "reconcile.js",
+        "supervised_read.js",
+        "workflow_state.js"
+      ]
+    }
+  ],
+  "packaged_assets": [
+    {
+      "path": "migration/workers/public/anticipy-claude-version-extension.zip",
+      "version": "0.17.0",
+      "sha256": "2e36a5de26fd89dd02336b6e3faa4f6b2523625b4fd9ec9f50ed8a0d22caaae7",
+      "source_mismatches": [],
+      "deadline_helper_packaged": true
+    },
+    {
+      "path": "migration/workers/public/anticipy-codex-version-extension.zip",
+      "version": "0.17.0",
+      "sha256": "2e36a5de26fd89dd02336b6e3faa4f6b2523625b4fd9ec9f50ed8a0d22caaae7",
+      "source_mismatches": [],
+      "deadline_helper_packaged": true
+    },
+    {
+      "path": "migration/workers/public/anticipy-extension.zip",
+      "version": "0.17.0",
+      "sha256": "2e36a5de26fd89dd02336b6e3faa4f6b2523625b4fd9ec9f50ed8a0d22caaae7",
+      "source_mismatches": [],
+      "deadline_helper_packaged": true
+    }
+  ],
+  "deployment": "not deployed by this agent",
+  "installed_extension": "not inspected or changed by this agent",
+  "limits": [
+    "No live model reasoning or full queue-to-site task was rerun in this repair. Earlier evidence remains separately recorded.",
+    "Synthetic geometry fixtures cover document and nested smooth scrolling, not every website or iframe.",
+    "Existing semantic word rules elsewhere in agent_loop.js remain.",
+    "Abort cannot undo a request the server already accepted; existing lease/effect recovery owns that state."
+  ]
+}

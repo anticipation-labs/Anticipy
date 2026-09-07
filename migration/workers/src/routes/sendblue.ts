@@ -33,7 +33,6 @@
  * is looked at; nothing is logged but the ids and the last six digits.
  */
 import { landInboundText, last6, type Landing } from "../api/sender.ts";
-import { dispatchConnectionEvent } from "../connections/dispatch.ts";
 import type { TextCommandEnv } from "../connections/wiring.ts";
 
 const json = (status: number, body: unknown) =>
@@ -118,6 +117,24 @@ export async function sendblueInbound(
   // hearing its own "DELIVERED".
   const isOutbound = payload.is_outbound === true || payload.is_outbound === "true";
   if (isOutbound) {
+    // Provider-authenticated receipts update the exact saved reply attempt.
+    // They are delivery facts, never owner words or permission to run a task.
+    const state = status.toUpperCase();
+    const delivered = state === 'DELIVERED' || state === 'READ';
+    const failed = state === 'ERROR' || state === 'DECLINED';
+    if (handle && (delivered || failed)) {
+      const matches = await env.DB.prepare(`SELECT e.id,e.owner_ref FROM events e
+        JOIN owners o ON o.id=e.owner_ref WHERE e.kind='notification_status'
+        AND e.external_event_id LIKE 'reply-sms:%'
+        AND CASE WHEN json_valid(e.text) THEN json_extract(e.text,'$.provider_id') ELSE '' END=? LIMIT 2`)
+        .bind(handle).all<{id:string;owner_ref:string}>();
+      if (matches.results?.length === 1) {
+        const attempt = matches.results[0];
+        await env.DB.prepare(`UPDATE events SET decision=?,updated=?
+          WHERE id=? AND owner_ref=? AND decision!='sms_delivered'`)
+          .bind(delivered?'sms_delivered':'sms_failed',new Date().toISOString().replace('T',' '),attempt.id,attempt.owner_ref).run();
+      }
+    }
     console.log(`sms/sendblue 200, ignored: outbound status update ${status || "(no status)"} ` +
       `message_handle=${handle} to=${last6(str("to_number") || str("number"))}`);
     return json(200, { ok: true, ignored: "status update" });
@@ -175,16 +192,10 @@ export async function sendblueInbound(
     { DB: env.DB }, "sms/sendblue", "message_handle",
     { from, text: content, externalId: handle });
 
-  // THE TEXT TWIN, the identical call routes/sms.ts makes and for the identical
-  // reasons — after the row and never instead of it, the owner from the stored
-  // row `landInboundText` resolved, the message verbatim with no pre-filter in
-  // front of it. Both carriers land the same events row (src/api/sender.ts), and
-  // this is what stops them landing in different products.
-  if (landed.kind === "written") {
-    const run = dispatchConnectionEvent(
-      env as unknown as TextCommandEnv, landed.owner_ref, landed.id);
-    if (ctx) ctx.waitUntil(run); else await run;
-  }
+  // The owner brain consumes this durable event through the same connection
+  // dispatcher as app replies. Model/catalog planning must keep its own HTTP
+  // request open; webhook waitUntil ends after 30 seconds and can strand the
+  // five-minute planning lease. A carrier acknowledgment does no model work.
 
   switch (landed.kind) {
     case "written":         return json(200, { ok: true });

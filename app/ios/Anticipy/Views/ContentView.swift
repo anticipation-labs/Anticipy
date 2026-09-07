@@ -1284,6 +1284,7 @@ struct HomeView: View {
                 ConversationDashboard(
                     turns: dashboardTurns,
                     initialHistoryReplyIDs: session.initialHistoryReplyIDs ?? [],
+                    replyTextDelivery: session.replyTextDelivery,
                     captureState: dashboardCaptureState,
                     listening: session.listener.isListening,
                     micBlocked: micNeedsHelp,
@@ -2735,6 +2736,7 @@ struct AskCard: View {
             Label("She asked", systemImage: "quote.bubble")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(Theme.accent)
+            ReplyTextDeliveryBadge(state: session.replyTextDelivery[event.id] ?? .unknown)
             Text(event.text ?? "")
                 .font(.callout)
                 .foregroundStyle(Theme.text)

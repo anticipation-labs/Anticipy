@@ -1,0 +1,43 @@
+{
+  "at": "2026-09-07T19:30:43.503Z",
+  "model": "anthropic/claude-sonnet-4.6",
+  "scope": "Live model; synthetic conversations and catalog; no external effects",
+  "results": [
+    {
+      "name": "explicit unfamiliar owner app",
+      "expected": "quillbox",
+      "actual": "quillbox",
+      "passed": true
+    },
+    {
+      "name": "generic calendar does not invent provider",
+      "expected": null,
+      "actual": null,
+      "passed": true
+    },
+    {
+      "name": "quoted hostile app suggestion is not owner usage",
+      "expected": null,
+      "actual": null,
+      "passed": true
+    },
+    {
+      "name": "hypothetical comparison is not app usage",
+      "expected": null,
+      "actual": null,
+      "passed": true
+    },
+    {
+      "name": "context resolves renamed reference",
+      "expected": "tideledger",
+      "actual": "tideledger",
+      "passed": true
+    },
+    {
+      "name": "completed removal is not current use",
+      "expected": null,
+      "actual": null,
+      "passed": true
+    }
+  ]
+}

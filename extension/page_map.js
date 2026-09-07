@@ -698,8 +698,12 @@
 
   window.__anticipyCenter = (idx) => {
     const el = actionable(window.__anticipyMap[idx]);
-    if (!el) return null;
-    el.scrollIntoView({ block: "center" });
+    if (!el || !el.isConnected || !el.getClientRects().length) return null;
+    // A site's CSS can make the default scroll asynchronous. Measuring while
+    // that animation has barely started returns the old, off-screen position,
+    // so CDP clicks empty space. Finish this mechanical scroll before reading
+    // the point, including nested/horizontal scrolling containers.
+    el.scrollIntoView({ block: "center", inline: "center", behavior: "instant" });
     const r = el.getBoundingClientRect();
     return { x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2) };
   };

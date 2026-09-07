@@ -87,6 +87,7 @@ import { CONNECT_URL_BASE, TOKEN_CHARS } from "../src/routes/connect.ts";
 import { COMPOSIO_BASE_URL, resetConnectionsProvider } from "../src/connections/provider.ts";
 import { SENDBLUE_BASE } from "../src/messaging.ts";
 import { sendblueInbound } from "../src/routes/sendblue.ts";
+import { dispatchConnectionEvent } from "../src/connections/dispatch.ts";
 import { scheduled, type CronEnv } from "../src/cron.ts";
 import { FakeD1, asD1 } from "./fake-d1.ts";
 import type { ToolkitMeta } from "../../../spike/two-hands/src/connections/contract.ts";
@@ -281,7 +282,8 @@ function linkIn(body: string): string {
  * them for a random integer would leave the stub's behaviour identical, which
  * is the test of whether a list is doing meaning's job.
  */
-function promptKind(body: string): "ask" | "command" | "match" | "sentences" {
+function promptKind(body: string): "ask" | "command" | "match" | "sentences" | "query" {
+  if (body.includes("Which app name should be searched")) return "query";
   if (body.includes("list_connected")) return "command";
   if (body.includes("THE APPS, id first")) return "match";
   if (body.includes("THE MOMENT")) return "ask";
@@ -346,6 +348,7 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   const kind = promptKind(body);
   const content = kind === "command" ? socket.command(body)
     : kind === "match" ? socket.match(body)
+    : kind === "query" ? JSON.stringify({query:APP.name})
     : socket.ask(body);
   return json(200, { choices: [{ message: { content } }] });
 }) as typeof fetch;
@@ -875,6 +878,10 @@ async function inbound(r: Rig, text: string, from = PHONE, handle = "sb-1"): Pro
     ctx as unknown as ExecutionContext,
   );
   await Promise.allSettled(waited);
+  // Drain the persisted inbox as the owner brain now does, outside the carrier
+  // request. Planning keeps this dispatch request alive until it completes.
+  const ev=r.d1.db.prepare("SELECT id,owner_ref FROM events WHERE external_event_id=? AND kind='sms_reply'").get(handle);
+  if(ev) await dispatchConnectionEvent(r.env as never,String(ev.owner_ref),String(ev.id));
   return res;
 }
 
@@ -1108,15 +1115,9 @@ await check("THE TEXT TWIN: a vendor name carrying a forbidden term never reache
       "the containment cost the person their link; it must only cost the name");
   });
 
-await check("THE TEXT TWIN: the two carriers and the entry point are wired the same", () => {
-  for (const [name, source] of [["sms.ts", SMS_SOURCE], ["sendblue.ts", SENDBLUE_SOURCE]] as const) {
-    assert.equal(source.split("dispatchConnectionEvent(").length - 1, 1,
-      `${name} must call the twin exactly once`);
-    assert.ok(/landed\.kind === "written"/.test(source),
-      `${name} must only run the twin for a message that actually landed`);
-    assert.ok(/ctx\?: ExecutionContext/.test(source),
-      `${name} must take a ctx, or a Worker cancels the twin the moment it answers`);
-  }
+await check("THE TEXT TWIN: SendBlue persists input without starting a cancellable model task", () => {
+  assert.equal(SENDBLUE_SOURCE.split("dispatchConnectionEvent(").length-1,0);
+  assert.equal(SENDBLUE_SOURCE.split("ctx.waitUntil(").length-1,0);
   assert.equal(INDEX_SOURCE.split("smsInbound(request, env as unknown as SmsEnv, ctx)").length - 1, 0,
     "retired Twilio route must not dispatch commands");
   assert.equal(

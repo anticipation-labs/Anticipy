@@ -55,6 +55,7 @@ const suites = [
   "test_supervised_read.mjs",
   "test_narration_is_not_a_word_match.mjs",
   "test_background_recovery.mjs",
+  "test_backend_deadline.mjs",
   "test_offline_completion_honesty.mjs",
   "test_memory_context.mjs",
   "test_memory_in_the_prompt.mjs",

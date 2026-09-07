@@ -134,8 +134,9 @@ jobs:
           npm ci
           npm test
           npm run typecheck
-          npm run stage:assets
-          npm run check:assets
+          # Static assets are tracked at migration/workers/public after the
+          # PocketBase retirement; the old staging scripts were removed.
+          python ../../proof/audit/check_extension_package.py
       - name: Apply the non-destructive account erasure write fence
         working-directory: migration/workers
         run: npx --no-install wrangler d1 execute anticipy-backend --remote --config wrangler.jsonc --file ../d1/2026-09-07-account-erasure-fence.sql

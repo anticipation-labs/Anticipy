@@ -30,6 +30,7 @@ fi
 # Foundation like everything else here.
 swiftc -O \
     "$app/Audio/CaptureEnvelope.swift" \
+    "$app/Backend/ReplyTextDeliveryPolicy.swift" \
     "$backend" \
     "$here/ResetMessageTests.swift" \
     -o "$out/resetmessagetests"

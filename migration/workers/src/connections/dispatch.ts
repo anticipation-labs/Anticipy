@@ -5,7 +5,7 @@
 import { ownerId } from '../../../../spike/two-hands/src/connections/contract.ts';
 import { ownerPhone, prepareTextCommand, runTextCommandPlan,
   type TextCommandEnv, type TextCommandOutcome, type TextCommandContext } from './wiring.ts';
-import { sendText } from '../messaging.ts';
+import { sendText, chooseProvider } from '../messaging.ts';
 
 type Event = { id: string; owner_ref: string; kind: string; source: string;
   speaker: string; text: string; created: string; goal: string };
@@ -78,14 +78,8 @@ export async function dispatchConnectionEvent(
       async deliver(line,asks) {
         const saved = await saveReply(env,ev,replyKey,line,asks);
         if (!saved) return false;
-        if (!inApp) {
-          const to = await ownerPhone(env)(ownerId(owner));
-          if (to) {
-            // Durable reply is also the attempt fence. Unknown provider
-            // acceptance is not permission to send the same SMS again.
-            try { await sendText(env,to,line,{tag:'connection reply'}); } catch { /* app holds the answer */ }
-          }
-        }
+        // The same durable outbox serves app and SMS replies. The owner brain
+        // claims delivery independently, so provider I/O cannot lose an answer.
         return true;
       },
     });
@@ -111,11 +105,40 @@ export async function dispatchConnectionEvent(
 
 async function saveReply(env: TextCommandEnv, ev: Event, key: string, line: string, asks: boolean): Promise<boolean> {
   const stamp = new Date().toISOString().replace('T',' ');
-  const result = await env.DB.prepare(`INSERT INTO events
+  const id = crypto.randomUUID().replaceAll('-','').slice(0,15);
+  const result = await env.DB.batch([env.DB.prepare(`INSERT INTO events
     (id,created,updated,device_id,kind,text,decision,source,owner_ref,parent_line,external_event_id)
     SELECT ?,?,?,'anticipy-connections','anticipy_text',?,?,?,?,?,?
     WHERE EXISTS(SELECT 1 FROM owners WHERE id=?)
     ON CONFLICT(external_event_id) WHERE external_event_id!='' DO NOTHING`)
-    .bind(crypto.randomUUID().replaceAll('-','').slice(0,15),stamp,stamp,line,asks?'ask':'ignore',ev.source,ev.owner_ref,ev.id,key,ev.owner_ref).run();
-  return !!result.meta?.changes;
+    .bind(id,stamp,stamp,line,asks?'ask':'ignore',ev.source,ev.owner_ref,ev.id,key,ev.owner_ref),
+    env.DB.prepare(`INSERT INTO events
+      (id,created,updated,device_id,kind,text,decision,goal,owner_ref,external_event_id)
+      SELECT ?,?,?,'anticipy-connections','reply_outbox','','reply_pending',id,owner_ref,('reply-outbox:' || id)
+      FROM events WHERE owner_ref=? AND external_event_id=?
+      ON CONFLICT(external_event_id) WHERE external_event_id!='' DO NOTHING`)
+      .bind(crypto.randomUUID().replaceAll('-','').slice(0,15),stamp,stamp,ev.owner_ref,key)]);
+  if (result[0].meta?.changes) {
+    // Same unique claim protocol as brain/reply_delivery.py. Either process may
+    // deliver, but only the INSERT winner sends, and both preserve uncertainty.
+    try {
+      const to = await ownerPhone(env)(ownerId(ev.owner_ref));
+      if (to && chooseProvider(env) !== 'none') {
+        const attemptId = crypto.randomUUID().replaceAll('-','').slice(0,15);
+        const claimed = await env.DB.prepare(`INSERT INTO events
+          (id,created,updated,device_id,kind,text,decision,goal,owner_ref,external_event_id)
+          SELECT ?,?,?,'anticipy-connections','notification_status','','sms_unconfirmed',?,?,?
+          WHERE EXISTS(SELECT 1 FROM owners WHERE id=?)
+          ON CONFLICT(external_event_id) WHERE external_event_id!='' DO NOTHING`)
+          .bind(attemptId,stamp,stamp,id,ev.owner_ref,`reply-sms:${id}`,ev.owner_ref).run();
+        if (claimed.meta?.changes) {
+          const sent = await sendText(env,to,line,{tag:'connection reply'});
+          const state = sent.ok ? (['DELIVERED','READ'].includes(sent.status.toUpperCase()) ? 'sms_delivered' : 'sms_accepted') : 'sms_unconfirmed';
+          await env.DB.prepare('UPDATE events SET decision=?,text=? WHERE id=? AND owner_ref=?')
+            .bind(state,JSON.stringify({state,provider_id:sent.ok?sent.id:''}),attemptId,ev.owner_ref).run();
+        }
+      }
+    } catch { /* durable pending reply and attempt fence survive */ }
+  }
+  return !!result[0].meta?.changes;
 }
