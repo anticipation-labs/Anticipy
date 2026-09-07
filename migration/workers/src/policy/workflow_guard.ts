@@ -31,6 +31,7 @@
  */
 import { refuse, json, pbTime } from "../api/wire.ts";
 import type { Ctx, Policy } from "./chain.ts";
+import { heldRevision } from './held_revision.ts';
 
 const BASE = "/api/collections/jobs/records";
 
@@ -382,7 +383,8 @@ export const workflowGuard: Policy = async (ctx: Ctx): Promise<Response | null> 
     if (body.workflow_id && body.workflow_id !== oldWorkflow) return reject("workflow id is immutable");
     if (body.owner_ref && body.owner_ref !== old.owner_ref) return reject("owner is immutable");
     if (nextVersion < oldVersion) return reject("workflow version cannot move backwards");
-    if (!(ALLOWED_TRANSITIONS[oldStatus] ?? []).includes(nextStatus)) {
+    if (!(ALLOWED_TRANSITIONS[oldStatus] ?? []).includes(nextStatus)
+        && !heldRevision(ctx, old, body)) {
       return reject(`illegal transition ${oldStatus} -> ${nextStatus}`);
     }
 

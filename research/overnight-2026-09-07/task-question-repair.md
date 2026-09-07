@@ -65,3 +65,26 @@ third-party booking or unsolicited message was used as a release test.
 
 Runtime deployment, current-account repair, and TestFlight availability must be
 verified separately; an uploaded source commit alone is not a release receipt.
+
+## Live repair exposed an API transition mismatch
+
+The first attempt to repair the existing record was rejected before changing it.
+The API's lane policy permitted only the older research handback, and its state
+table did not allow a blocked task to return to an answer card. Python's workflow
+merge supported that transition. This also affected partial answers to blocked
+work; local Python tests could not establish API compatibility.
+
+The API correction permits a held revision only with exactly one version advance,
+the same owner and plan, no active lease/receipt/uncertain effect, and no retained
+approval. Returning an incompatible research task to the browser additionally
+requires the authenticated worker, a consequential external-effect declaration,
+and the new browser hand declaration. Browser claimants cannot perform this
+rewrite. Twenty-seven adverse-case policy checks, the complete Worker suite on
+Node 24, and TypeScript checking pass. The live fixture now traverses creation,
+approval, claim, pause, and revision before checking a repeated-write conflict.
+
+At 22:03 UTC Apple independently reported build 169 VALID and IN_BETA_TESTING
+for the Internal group, including the owner's iCloud tester account. The backend
+source readback reported all eight children running the expected source hash,
+but its fleet observation subsequently became stale. That operational check
+remains open until fresh snapshot and fleet observations are obtained.

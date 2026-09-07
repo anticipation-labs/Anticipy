@@ -30,6 +30,7 @@
 import { parseFilter, andNot, mentionsField, FilterError, type Node } from "../../filter-dsl.ts";
 import { refuse, badRequest, stillInTheFuture } from "../api/wire.ts";
 import type { Ctx, Policy } from "./chain.ts";
+import { heldRevision, object } from './held_revision.ts';
 
 const JOBS_BASE = "/api/collections/jobs/records";
 
@@ -106,7 +107,13 @@ export const researchLane: Policy = async (ctx: Ctx): Promise<Response | null> =
   const bodyLane = "lane" in b ? norm(b.lane) : null;
 
   // ---- LEG 2: the lane is immutable. research_lane.pb.js:544-551 ---------
-  const handback = updates && isResearchHandback(ctx, rec, b, rowLane, bodyLane);
+  const repairedHand = updates && ctx.worker.fromWorker && ctx.principal.kind === 'service'
+    && rowLane === 'research' && bodyLane === '' && heldRevision(ctx, rec, b)
+    && rec?.consequence === 'consequential'
+    && object(object(rec?.params)?._effect)?.touches === 'world'
+    && object(object(b.params)?._effect)?.touches === 'world'
+    && object(object(b.params)?._hand)?.hand === 'browser';
+  const handback = updates && (repairedHand || isResearchHandback(ctx, rec, b, rowLane, bodyLane));
   if (updates && bodyLane !== null && bodyLane !== rowLane && !handback) {
     return refuse(403,
       "a job's lane is decided when it is minted, never rewritten",

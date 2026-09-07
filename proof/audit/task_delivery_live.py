@@ -11,7 +11,8 @@ from pathlib import Path
 from proof.audit.live_api_release import request
 from brain.reply_delivery import ReplyDelivery
 from brain.task_delivery import TaskDelivery, context
-from brain.workflow import new_plan, put_in_params, cancel, Consequence
+from brain import backend
+from brain.workflow import new_plan, put_in_params, cancel, approve, claim, needs_user, Consequence
 
 BASE = 'https://api.anticipy.ai'
 ROOT = Path(__file__).resolve().parents[2]
@@ -75,6 +76,44 @@ def main():
         current = delivery.rows('kind="reply_outbox"', 50)
         assert current[0]['decision'] == 'question_superseded'
         checks.append('Cancelled question suppressed by fresh live task read')
+        # Reproduce the old serializer's inconsistent task, then traverse real
+        # server states. This owner is excluded from the fleet and has no hand.
+        legacy = new_plan(owner_ref=owner['id'], lineage_key='isolated-replan-proof',
+            goal='Synthetic external action', consequence=Consequence.CONSEQUENTIAL,
+            source_event_id='synthetic-replan')
+        old_params = {'missing': [question], '_effect': {'touches': 'world'}}
+        created = backend.post(BASE + '/api/collections/jobs/records', json=dict(
+            legacy.job_fields(), owner_ref=owner['id'], goal=legacy.goal, lane='research',
+            result=question, params=json.dumps(put_in_params(old_params, legacy))))
+        created.raise_for_status()
+        legacy_path = BASE + '/api/collections/jobs/records/' + created.json()['id']
+        def transition(p, headers=None):
+            fields = dict(p.job_fields(), params=json.dumps(put_in_params(old_params, p)))
+            fields.pop('workflow_id', None)
+            if p.lease:
+                fields['claimed_by'] = p.lease.actor_id
+            response = backend.patch(legacy_path, json=fields, headers=headers or {})
+            assert response.ok, (response.status_code, response.text[:300])
+        authorized = approve(legacy, expected_version=legacy.version, owner_words='Synthetic approval')
+        transition(authorized)
+        running = claim(authorized, expected_version=authorized.version, actor_id='worker-proof', token='proof-lease')
+        transition(running)
+        parked = needs_user(running, lease_token='proof-lease', reason='Synthetic read-only hand refusal')
+        transition(parked, {'X-Anticipy-Lease': 'proof-lease'})
+        from proof.audit.repair_dropped_requirements import prepare
+        from proof.audit.task_revision_live import GatewayModel
+        current = backend.get(legacy_path)
+        current.raise_for_status()
+        repaired = prepare(current.json(), model=GatewayModel())
+        changed = backend.patch(legacy_path, json=repaired, headers={'If-Match': current.headers['ETag']})
+        assert changed.ok, (changed.status_code, changed.text[:300])
+        actual = backend.get(legacy_path).json()
+        assert actual['workflow_state'] == 'draft' and actual['lane'] == '' and not actual['approval']
+        assert json.loads(actual['params'])['_workflow']['required'] == [question]
+        checks.append('Old blocked research task safely re-held with required question and no approval')
+        stale = backend.patch(legacy_path, json=repaired, headers={'If-Match': current.headers['ETag']})
+        assert stale.status_code == 412
+        checks.append('Concurrent or repeated repair refused by live version precondition')
     finally:
         status, removed, _ = request(BASE, 'POST', '/me/delete', {'confirm': 'delete'}, token)
         assert status == 200 and removed.get('account_deleted') is True
