@@ -31,7 +31,29 @@ Requested by the owner on 2026-09-06. This is ongoing work, not a completion cla
 The update_plan tool is unavailable in this session; this file is the durable
 plan. Exactly one top-level phase is marked in progress.
 
-## Current handoff status — 06:37 UTC, 7 September 2026
+## Current handoff status — 7 September 2026, phone trial
+
+The user confirmed **build 159 and fresh signup are visible on their iPhone**.
+App Store Connect run 34092989135 verified the exact supplied tester's existing
+access; no duplicate invitation or unchanged iOS upload was needed. The API and
+brain repairs below remain deployed.
+
+The user renewed authorization to remove their data and start with a blank slate.
+The real account was deleted through the verified operator route. Live readback
+shows the account absent and zero profile/event/job rows. The purge ledger marks
+current memory removed, and the old owner's brain is absent from the fleet.
+**Shared historical archives are not yet certified erased.**
+
+The new field guide explains actual architecture, quote-to-action examples, API
+dependencies, text-first operation, known limits and the two-day trial. It includes
+the 50 frozen exemplars, with an explicit distinction between intended tasks and
+observed results. A matching narrated walkthrough and interactive explainer are
+prepared. See PHONE-TRIAL.md for the current phone instructions and evidence scope.
+
+The phone handoff is confirmed; exhaustive audit closure and full historical
+erasure remain open. No production-perfection claim is issued.
+
+## Historical checkpoint — 06:37 UTC, 7 September 2026
 
 The requested outcome is an audited, repaired app on the owner's phone with a
 verified fresh product account. **That outcome has not been delivered.**

@@ -1,0 +1,55 @@
+{
+  "scope": "phone trial handoff, not exhaustive audit closure",
+  "testflight": {
+    "build": 159,
+    "app_store_connect_run": 34092989135,
+    "processing": "VALID",
+    "internal_beta": "IN_BETA_TESTING",
+    "supplied_tester_already_in_group": true,
+    "invitation_sent": false,
+    "user_confirmed_build_and_fresh_signup_visible": true
+  },
+  "active_account_erasure": {
+    "executed": true,
+    "readback_owner_absent": true,
+    "readback_profile_events_jobs_empty": true,
+    "current_memory_purged": true,
+    "deleted_counts": {
+      "jobs": 10,
+      "segments": 9,
+      "agents": 0,
+      "owner_profile": 1,
+      "pendants": 0,
+      "agent_llm_audit": 0,
+      "agent_audit_sessions": 0,
+      "evidence": 0,
+      "events": 244,
+      "password_resets": 1,
+      "connect_codes": 2,
+      "connect_links": 19,
+      "connect_nudges": 0,
+      "app_usage_signals": 0,
+      "connections": 0
+    },
+    "provider_revocation_required": [],
+    "historical_backup_erasure_complete": false
+  },
+  "artifacts": {
+    "pdf_pages": 14,
+    "pdf_sha256": "6b6a251a000173963467a8b8bedef7e0b0dd60803f1053a3db6da0b67cd669a1",
+    "narration_seconds": 103.209433,
+    "narration_kind": "local macOS synthesized speech, Samantha",
+    "audio_sha256": "f46e1cdfb58979300a51d05806afb8c48a0cd2ee2d905168f5344edfb2dcad8e",
+    "visual_checked_widths": [
+      360,
+      736
+    ],
+    "visual_checked_appearances": [
+      "light",
+      "dark"
+    ],
+    "scope": "source-verified architecture; real-model local consent tests; simulated browser observations explicitly labeled"
+  },
+  "paid_audit_spend_usd": 2.548762108,
+  "new_paid_model_calls_this_handoff": 0
+}
