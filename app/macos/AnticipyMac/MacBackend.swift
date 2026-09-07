@@ -7,11 +7,10 @@ import Security
 /// "mac"), and keeps unsent lines in a JSONL queue on disk so a dead network
 /// delays a line rather than deleting it.
 ///
-/// The backend is the Worker at api.anticipy.ai — the one the phone posts to
-/// and the one the brain reads. Build 119 shipped pointed at the Railway
-/// PocketBase that Worker replaced, so every meeting it recorded reached a
-/// backend nothing was listening to. The type keeps its name because the
-/// wire is still PocketBase-shaped; the Worker reimplements that API.
+/// The backend is the Cloudflare Worker at api.anticipy.ai — the one the
+/// phone posts to and the one the brain reads. Build 119 shipped pointed at
+/// the retired Railway host that Worker replaced, so every meeting it
+/// recorded reached a backend nothing was listening to.
 ///
 /// A 401 or 403 on a push is not a delayed row. It is a token the server
 /// will never accept — the session build 119 left in the Keychain is one —
@@ -22,7 +21,7 @@ import Security
 /// The auth token lives in the Keychain, not in UserDefaults — it is a
 /// session credential for a person's whole life, and plists are readable by
 /// anything running as the user.
-final class PocketBase: ObservableObject {
+final class MacBackend: ObservableObject {
 
     struct Credentials: Codable {
         let token: String
@@ -85,7 +84,7 @@ final class PocketBase: ObservableObject {
         func read() -> PushOutcome { lock.lock(); defer { lock.unlock() }; return value }
     }
 
-    static let shared = PocketBase()
+    static let shared = MacBackend()
 
     let baseURL: URL
     @Published private(set) var isSignedIn = false

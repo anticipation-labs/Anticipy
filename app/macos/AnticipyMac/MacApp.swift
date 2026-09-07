@@ -9,7 +9,7 @@ import UserNotifications
 struct AnticipyMacApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject private var listener = MacListener()
-    @StateObject private var pocketbase = PocketBase.shared
+    @StateObject private var backend = MacBackend.shared
     @StateObject private var meetings = MeetingWatcher()
 
     var body: some Scene {
@@ -17,8 +17,8 @@ struct AnticipyMacApp: App {
             VStack {
                 ListenSection(listener: listener, meetings: meetings)
                 Divider()
-                if pocketbase.isSignedIn {
-                    Button("Sign out (\(pocketbase.ownerEmail))") { pocketbase.signOut() }
+                if backend.isSignedIn {
+                    Button("Sign out (\(backend.ownerEmail))") { backend.signOut() }
                 } else {
                     SignInSection()
                 }
@@ -26,7 +26,7 @@ struct AnticipyMacApp: App {
                 Button("Quit Anticipy") { NSApplication.shared.terminate(nil) }
             }
             .padding(6)
-            .environmentObject(pocketbase)
+            .environmentObject(backend)
         } label: {
             let image: String = {
                 if meetings.inMeeting { return "waveform.badge.magnifyingglass" }
@@ -46,7 +46,7 @@ struct AnticipyMacApp: App {
         .onChange(of: listener.lines.count) { _, _ in
             // One push per line, at the listener's own cadence.
             guard let line = listener.lines.last else { return }
-            pocketbase.postTranscript(text: line.text,
+            backend.postTranscript(text: line.text,
                                       startedAt: line.startedAt,
                                       endedAt: line.endedAt,
                                       speaker: TranscriptWire.speaker(for: line.channel))
@@ -57,7 +57,7 @@ struct AnticipyMacApp: App {
 struct ListenSection: View {
     @ObservedObject var listener: MacListener
     @ObservedObject var meetings: MeetingWatcher
-    @EnvironmentObject var pocketbase: PocketBase
+    @EnvironmentObject var backend: MacBackend
 
     var body: some View {
         Button(listener.state == .finishing ? "Finishing recording…"
@@ -99,7 +99,7 @@ struct ListenSection: View {
 }
 
 struct SignInSection: View {
-    @EnvironmentObject var pocketbase: PocketBase
+    @EnvironmentObject var backend: MacBackend
     @State private var email = ""
     @State private var password = ""
     @State private var busy = false
@@ -124,7 +124,7 @@ struct SignInSection: View {
                     error = nil
                     Task {
                         do {
-                            try await pocketbase.signIn(email: email, password: password)
+                            try await backend.signIn(email: email, password: password)
                         } catch {
                             await MainActor.run { self.error = "That email and password didn't open the door." }
                         }
