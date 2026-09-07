@@ -498,7 +498,8 @@ def test_leg4_goes_red_when_a_census_entry_is_dropped(tmp_path):
     _audit(tmp_path)
     with pytest.raises(tg.LegFailed) as e:
         tg.leg_4_census_intact(root, [t for t in tg.KNOWN_TAPE
-                                      if t.audit_item != 22])
+                                      if t.audit_item != 22],
+                             closed=[t for t in tg.CLOSED_TAPE if t.audit_item != 22])
     assert "was dropped or renumbered" in str(e.value)
 
 

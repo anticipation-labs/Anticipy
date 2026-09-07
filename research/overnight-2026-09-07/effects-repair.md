@@ -34,8 +34,10 @@ Evidence in effects-results.json:
 - The stronger router identified the unavailable private calendar/document
   access. A helpful connection request is still needed at that point.
 
-Full Python run: 3,094 passed, two skipped. The three remaining failures were
-the retirement ledger detecting the two deleted pieces of tape. The following
-ledger commit records this removal commit and preserves both expiry predicates;
-it must be included before deployment. Earlier failed runs are preserved in
-work/audit/overnight-effects-full-1.log and -2.log.
+Final full Python run: 3,098 passed, two skipped, recorded in
+work/audit/overnight-effects-final.log. Retirement retained the original
+predicates and exposed one remaining calculator shortcut in hand routing;
+2837c0f removed that too. The law ledger records both actual removal commits.
+The three other registered pieces of tape remain explicitly outstanding.
+Earlier failed runs are preserved in work/audit/overnight-effects-full-1.log
+and -2.log.

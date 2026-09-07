@@ -123,22 +123,6 @@ The `[tape:…]` tag on each bullet is the anchor overnight/tape_gate.py leg 5
 matches. Do not remove one without retiring its registry entry in the same
 diff.
 
-- `[tape:read_only_re]` `_READ_ONLY_RE` (brain/anticipy_core.py) — the default
-  hold/run split for every goal that arrives with no effect-channel
-  declaration. → Replaced when effect-channel classification owns the split
-  outright and an undeclared goal is re-asked of the model instead of guessed
-  at by wording. PARTIAL as of 2026-08-24: computable goals are now classified
-  by CAPABILITY (an early fix that ADDED compute verbs to the regex was itself
-  a Law-1 violation and was reverted); the prose regex still owns everything
-  else. **It carried no `TAPE:` comment in code until this was written down —
-  and tejas_gate leg 4, which this ledger named as its tracker, is GREEN while
-  the regex is still deciding. That is the failure Law 2 exists to prevent,
-  committed by this file.**
-- `[tape:compute_fallback]` the `if compute_answer(g):` fallback inside
-  `is_consequential()` (brain/anticipy_core.py) — on an undeclared goal the
-  calculator is sniffed, and if it can answer, a held goal flips to unattended.
-  → Dies with the effect-channel rewrite, when triage always declares
-  `touches` and nothing reaches a capability sniff.
 - `[tape:shard_too_thin]` `shard_too_thin()` (brain/anticipy_core.py) — a word
   count decides a line is too thin to act on; the brake fitted after "At 5:15"
   minted a meeting with a person nobody had mentioned. → Deleted the day
@@ -182,6 +166,13 @@ Not tape, but adjacent, and still not to be extended:
   no model call, which makes them the decision, not a sift.
 
 ## Retired tape
+
+- `[tape:read_only_re]` closed by `f6753cb` — the model judges actual effects
+  from the full record; unknown declarations hold instead of being classified
+  from verbs. The removal predicate remains in overnight/tape_gate.py.
+- `[tape:compute_fallback]` closed by `2837c0f` — a calculator result no longer
+  decides whether a task is allowed to run. The declared effect owns that
+  decision; execution still validates actual tool effects and approval.
 
 - `[tape:pending_class]` closed by `4eb753f4` — `_pending_class()` now trusts
   the persisted consequence and fails closed when it is absent; goal prose can

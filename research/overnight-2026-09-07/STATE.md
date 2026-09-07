@@ -1,6 +1,36 @@
 # Anticipy overnight repair — 7 September 2026
 
-## Latest checkpoint — 2026-09-07 13:19 UTC
+## Latest checkpoint — 2026-09-07 13:39 UTC
+
+- iOS16410c8eb2 uploaded06:20:18Vancouver; CI34125816490 success.
+  ASC34127186288 confirms VALID and Internal IN_BETA_TESTING. That read timed
+  out listing individual testers;163previously verified Omar in that same group.
+  Sanket164 is ATTACHED by34127548182 but Apple refuses new beta submission
+  because159is still in review. Do not claim he can install164 yet.
+- Effect repair f6753cb plus2837c0f committed locally; retirement commit next.
+  Final full Python3098passed2skipped, logovernight-effects-final.log.
+  Tape gate now expected exit1 for THREE remaining pieces, no unexpected failures.
+  Both retired predicates preserved. Strong model20contrasts PASS. Whole worker
+  replays effects-flow-1(1,2) and effects-flow-2(1,3): private drafts queued
+  read_only; requested thesis note/calendar writes correctly consequential.
+  Strong router now identifies actual private source access instead of memory.
+  No execution arms in these transcript fixtures. Effects repair needs push,
+  brain deployment cap100, and live8/8 source verification before fixed claims.
+- NEXT: unavailable-source connection guidance, useful read/preparation before
+  compound external actions, human browser results and full50final run.
+- Important remaining provider defect: brain/sendblue_arm.choose_provider
+  still falls back to Twilio when unset; worker constructs Twilio calling arm
+  even with SendBlue and assigns it to anticipy.voice when SMS provider is mock.
+  Thus a misconfigured SendBlue path can have a Twilio direct-send fallback.
+  Live fleet is configuredSendBlue, but remove that active fallback as requested.
+- Simulator Today, mic stopped. LocalUIbrain54948stillc67; localWrangler89202,
+  modelgateway60349. Queue browser fixture was CLEANED UP. Do not manage personal
+  extension via alternate tools; chrome://extensions remained policy-blocked.
+- No current corpus workers running; all partial40/50 limitations still apply.
+  No final updatedPDFyet. Keep working; heartbeat remains ACTIVE.
+
+## Previous checkpoint — 2026-09-07 13:19 UTC
+
 
 - iOS164 committed10c8eb20ec240f47109c2f57b057dc869e3baba4, pushed.
   CI34125816490 running; ASC164 not yet queried. Full local suites passed,
