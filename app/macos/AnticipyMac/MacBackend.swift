@@ -88,6 +88,10 @@ final class MacBackend: ObservableObject {
 
     let baseURL: URL
     @Published private(set) var isSignedIn = false
+    /// How many lines are on disk waiting for a 2xx. The sidebar reads it;
+    /// it is the only thing the app can honestly say about sync, because a
+    /// row leaves the queue on the server's answer and on nothing else.
+    @Published private(set) var pendingCount = 0
     private(set) var authToken: String = ""
     private(set) var ownerId: String = ""
     private(set) var ownerEmail: String = ""
@@ -103,6 +107,7 @@ final class MacBackend: ObservableObject {
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         queueURL = dir.appendingPathComponent("unsent.jsonl")
         loadSession()
+        pendingCount = readQueuedRows().count
         drainQueue()
     }
 
@@ -270,6 +275,8 @@ final class MacBackend: ObservableObject {
     }
 
     private func writeQueuedRows(_ rows: [QueuedTranscript]) {
+        let count = rows.count
+        DispatchQueue.main.async { [weak self] in self?.pendingCount = count }
         if rows.isEmpty {
             try? FileManager.default.removeItem(at: queueURL)
             return

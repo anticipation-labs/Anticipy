@@ -852,7 +852,13 @@ settings:
     #      delivered or inferring delivery when metadata is missing.
     # 167: Detect browsers missing the 0.17 execution repairs; keep answer
     #      regression checks aligned with contextual interpretation in the brain.
-    CURRENT_PROJECT_VERSION: "167"
+    # 168: NO BEHAVIOUR CHANGE ON THE PHONE. Anticipy for Mac becomes a window
+    #      and not only a menu: a meeting library read from the local archives,
+    #      a live view with both lanes, notes kept beside each transcript,
+    #      first run with the permission truth, Settings, the in-app guide and
+    #      an app icon. The number moves because the shared pbxproj gains the
+    #      Mac's new files and the Mac target its icon; nothing on iOS differs.
+    CURRENT_PROJECT_VERSION: "168"
     DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: NO
@@ -896,16 +902,23 @@ targets:
       - ../macos/Anticipy/Capture/CaptureStreamHealth.swift
       - ../macos/Anticipy/Capture/MeetingLinePolicy.swift
       - ../macos/Anticipy/Capture/TranscriptWire.swift
+      # The window app's pure halves: reading a meeting folder back, and
+      # which screen opens. Assets.xcassets (the app icon) rides in with the
+      # AnticipyMac folder above; xcodegen files an asset catalog as a
+      # resource on its own.
+      - ../macos/Anticipy/Library/MeetingLibrary.swift
+      - ../macos/Anticipy/Library/OnboardingRoute.swift
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: ai.anticipy.mac
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         MARKETING_VERSION: "1.1.1"
         # LITERAL, and it moves in lockstep with the app's number: the
         # build-number gate reads the shared pbxproj and cannot tell an iOS
         # literal from a Mac one, and two products answering "which build
         # are you holding" with different numbers is the exact disease this
         # gate exists to prevent.
-        CURRENT_PROJECT_VERSION: "167"
+        CURRENT_PROJECT_VERSION: "168"
         DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_ENTITLEMENTS: ../macos/AnticipyMac/AnticipyMac.entitlements
