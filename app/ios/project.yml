@@ -850,7 +850,9 @@ settings:
     #      readback; park interrupted effects instead of replaying them.
     #      Show per-reply text delivery evidence without calling acceptance
     #      delivered or inferring delivery when metadata is missing.
-    CURRENT_PROJECT_VERSION: "166"
+    # 167: Detect browsers missing the 0.17 execution repairs; keep answer
+    #      regression checks aligned with contextual interpretation in the brain.
+    CURRENT_PROJECT_VERSION: "167"
     DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: NO
@@ -903,7 +905,7 @@ targets:
         # literal from a Mac one, and two products answering "which build
         # are you holding" with different numbers is the exact disease this
         # gate exists to prevent.
-        CURRENT_PROJECT_VERSION: "166"
+        CURRENT_PROJECT_VERSION: "167"
         DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_ENTITLEMENTS: ../macos/AnticipyMac/AnticipyMac.entitlements

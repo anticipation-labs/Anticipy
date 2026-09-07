@@ -70,11 +70,28 @@ def test_poll_failures_are_loud():
 
 # ------------------------------------------------------------- failure 2
 
-def test_app_answers_accumulate_and_structure():
-    assert 'facts["owner_answer"] = ownerWords' not in APP
-    assert 'String(format: "owner_answer_v%03d", approvedVersion)' in APP
-    for key in ('"email"', '"phone"', '"name"'):
-        assert key in APP  # deterministic contact structuring
+def test_app_answers_accumulate_without_interpreting_their_words():
+    approval = APP.split("private func approvalFields(", 1)[1].split(
+        "private func cancellationFields(", 1)[0]
+    # Preserve earlier answers and add this question's complete raw answer in
+    # its own versioned slot. A later answer must not erase contact context.
+    assert 'var facts = workflow["facts"] as? [String: Any] ?? [:]' in approval
+    assert 'facts["owner_answer"] = ownerWords' not in approval
+    assert 'facts[String(format: "owner_answer_v%03d", approvedVersion)] = asked.isEmpty' in approval
+    assert '? ownerWords' in approval
+    assert 'A: \\(ownerWords)"' in approval
+    assert 'workflow["facts"] = facts' in approval
+    # The retired assertion demanded phone-side contact parsing, violating
+    # HARNESS-LAWS. Interpretation belongs to the contextual brain; this writer
+    # may preserve a sentence but may not turn its words into guessed facts.
+    assert '.regularExpression' not in approval
+    assert 'NSRegularExpression' not in approval
+    for key in ('email', 'phone', 'name'):
+        assert f'facts["{key}"]' not in approval
+    confirm = APP.split("func confirm(_ job:", 1)[1].split(
+        "/// A failed workflow", 1)[0]
+    assert 'case .toTheBrain(let answer):' in confirm
+    assert 'writeAppReply(pending, text: answer, replyContext: contextJSON)' in confirm
 
 
 # ------------------------------------------------------------- failure 3
