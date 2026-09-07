@@ -36,7 +36,7 @@ name: iOS TestFlight
 # tree; it uploads only when somebody asks for a build, either by dispatching
 # this workflow by hand or by putting [ship] in the commit message. Two or
 # three internal builds a day is plenty. For a tight iteration loop, run to a
-# device from Xcode instead -- that touches no counter at all.
+# simulator from Xcode instead -- no development Mac has a signing identity.
 #
 # The final step says plainly which of the two happened, so a push that
 # deliberately did not ship never reads as a build that silently vanished.
@@ -119,14 +119,17 @@ jobs:
       - name: iOS logic gate — the suites, and that the build number still names these bytes
         # Nothing ran app/ios/Tests/run_all.sh before an upload: it was a
         # hand step, and the tree carried its last leg red into a release
-        # (audit F21). Before xcodegen and before the bump, so the leg reads
+        # (audit F21). Before compilation and before the bump, so the leg reads
         # the committed pbxproj and the committed number.
         run: sh app/ios/Tests/run_all.sh
-      - name: Install xcodegen
-        run: brew install xcodegen
-      - name: Generate Xcode project
-        working-directory: app/ios
-        run: xcodegen generate
+      - name: Compile the committed app for the simulator
+        # Every qualifying push compiles the actual project, including runs
+        # that do not upload. Logic suites alone do not compile the SwiftUI app.
+        run: |
+          xcodebuild -project app/ios/Anticipy.xcodeproj -scheme Anticipy \
+            -configuration Debug -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$RUNNER_TEMP/Anticipy-Simulator" \
+            build CODE_SIGNING_ALLOWED=NO
       - name: Write App Store Connect API key
         if: steps.ship.outputs.ship == 'yes'
         env:

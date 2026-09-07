@@ -1045,7 +1045,7 @@ await check("an empty batch is a no-op, not an error", async () => {
 
 await check("a database that cannot save says so", async () => {
   const r = await rig();
-  r.db.failOn = (sql) => sql.startsWith(`INSERT INTO "connections"`);
+  r.db.failOn = (sql) => sql.includes("UPDATE connections SET writes_enabled");
   const res = await connectionsApiRoute(postReq(R.writes, r.ownerToken, {
     rows: [{ toolkit: "zellibrix", connected_account_id: OWNER_ACCOUNT, writes_enabled: true }],
   }), r.env, r.deps);

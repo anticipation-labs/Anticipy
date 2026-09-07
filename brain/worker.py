@@ -4738,7 +4738,7 @@ def gateway_banner(llm) -> str:
 
     `fallback=none` is load-bearing text for the live leg: a worker holding
     one credential has nothing to fall through to, and deployed-but-inert is
-    not done under HARNESS-LAWS.md LAW 3. A keyless worker says heuristic.
+    not done under HARNESS-LAWS.md LAW 3. A keyless worker says unavailable.
     """
     names = list(getattr(llm, "transport_names", lambda: [])())
 
@@ -4746,7 +4746,7 @@ def gateway_banner(llm) -> str:
         model = llm.gemini_model if name == "gemini" else llm.model
         return f"{name}:{model}"
 
-    primary = label(names[0]) if names else "heuristic"
+    primary = label(names[0]) if names else "unavailable"
     fallback = label(names[1]) if len(names) > 1 else "none"
     return f"primary={primary} fallback={fallback}"
 
@@ -5157,7 +5157,7 @@ def main() -> None:
     # mattered. This hashes the source of the two files that decide what she
     # does, so the log proves which build is live instead of implying it.
     boot_banner = (
-          f"worker up · llm={'live:' + llm.model if llm.live else 'heuristic'}"
+          f"worker up · llm={'live:' + llm.model if llm.live else 'unavailable'}"
           # "sms=mock" is load-bearing text, not a nicety: proof/local_rig.sh
           # refuses to continue unless the boot banner says it, and kills a
           # laptop worker that could text a real person. Anything else names

@@ -4,9 +4,9 @@ Every credential the process holds is a TRANSPORT, and a second one is a
 fallback, not a switch: they are tried in ANTICIPY_LLM_ORDER (default
 "gemini,openrouter"), and when the first machine is absent the next one
 carries the call — see `_transports` and `_fall_through`.
-Falls back to a deterministic heuristic engine when no key is present, so the
-whole pipeline is provable end-to-end without secrets. The real key only
-swaps the reasoning core; the plumbing is identical.
+Without a configured transport, calls report unavailability. A missing model
+cannot be replaced by word matching over the owner's speech. Offline tests
+inject explicit fixture models at the transport boundary.
 """
 from __future__ import annotations
 
@@ -97,30 +97,15 @@ def who_line(first_name: Optional[str] = None) -> str:
 
 
 def where_line(tz_name: Optional[str] = None) -> str:
-    """Where the owner is, in one sentence — always one sentence.
+    """Require place evidence without inventing it from the owner's clock.
 
-    now_line() has always carried the TIME and never the PLACE, which is how
-    "book dinner" became a reservation in Seattle for somebody who lives in
-    Vancouver. An IANA identifier already holds the city, so this costs the
-    user no permission prompt and no typing.
-
-    IT USED TO RETURN "" WHEN THE ZONE WAS UNKNOWN, and silence is not
-    neutral. Live 2026-08-22, an account whose profile says
-    America/Los_Angeles asked how late "the post office on Main" is open on
-    Saturdays and was told about Philadelphia, then hedged in the same
-    breath. Nothing in the prompt was wrong; nothing in it said the place was
-    unknown either, so the model filled the hole and sounded sure. The
-    unknown case now says so out loud, in one sentence, because this text
-    rides on every call including the cheap ones.
+    IANA zones cover many cities. America/Los_Angeles does not place someone
+    in Los Angeles, and a remembered home is not necessarily their location
+    today. Keep the argument for callers; explicit context belongs to the model.
     """
-    raw = (tz_name or "").strip()
-    city = raw.rsplit("/", 1)[-1].replace("_", " ").strip() if "/" in raw else ""
-    if not city:
-        return ("You do not know where they are — never assume a city; if an "
-                "answer depends on which locality they mean, ask or say it "
-                "depends instead of naming one.")
-    return (f"They are in {city} — anything local (a restaurant, a shop, a "
-            f"clinic) means {city} unless they say otherwise.")
+    return ("Use a location explicitly stated in the context; the time zone "
+            "does not establish a city; otherwise never assume a city: ask "
+            "when an answer depends on their locality.")
 
 
 def now_line(tz_name: Optional[str] = None) -> str:
@@ -493,7 +478,7 @@ def _raise_the_one_that_leaves(first: Exception, second: Exception) -> None:
 class LLMResult:
     text: str
     used_model: str
-    mode: str  # "gemini", "openrouter", or "heuristic"
+    mode: str  # "gemini" or "openrouter"; test fixtures may use their own mode
     # DID THE MODEL FINISH THE SENTENCE, or did it run out of room?
     #
     # Both providers say so and this client threw the answer away: Gemini in
@@ -618,7 +603,7 @@ class LLM:
         one is configured; every other call site is unaffected."""
         # THE SLOT IS RESERVED BEFORE ANYTHING IS BUILT OR SENT — every
         # instance in the process (the main one, Brain.strong, the aux route,
-        # memory's) and every mode (gemini, openrouter, heuristic) counts
+        # memory's) and every transport counts
         # against the one decision budget, or against nothing when none is
         # active. See decision_budget() above.
         _spend()
@@ -655,7 +640,7 @@ class LLM:
                               if part)
         transports = self._transports(system, user, temperature, grounding, aux)
         if not transports:
-            return LLMResult(text=self._heuristic(system, user), used_model="heuristic", mode="heuristic")
+            raise ConnectionError("No model transport is configured")
         if len(transports) == 1:
             # ONE credential is the pre-port path, byte for byte: no try, no
             # clock, no print, no tally. There is nothing to fall through to,
@@ -949,28 +934,3 @@ class LLM:
         return LLMResult(text=choice["message"]["content"],
                          used_model=model, mode="openrouter",
                          truncated=str(choice.get("finish_reason") or "") == "length")
-
-    # ---- deterministic fallback so we can prove the pipeline with no key ----
-    def _heuristic(self, system: str, user: str) -> str:
-        """A tiny rules engine that mimics the JSON the real model returns for triage."""
-        text = user.lower()
-        # commitments / promises -> ACT
-        act_patterns = [
-            (r"(send|share) (you |him |her |them |it )?(the |over the |with them )?(deck|pitch|contract|portfolio|file|proposal|link|document)", "draft_and_send_document"),
-            (r"(grab|get|book|reserve) .*(dinner|lunch|table|reservation|restaurant)", "find_and_book_restaurant"),
-            (r"(schedule|set up|book|put).*(meeting|call|time|thursday|monday|tomorrow|calendar)", "create_calendar_event"),
-            (r"(remind me|i should|need to) (to )?(email|message|text|call|follow up)", "create_reminder_or_draft"),
-            (r"(cancel|unsubscribe).*(gym|subscription|membership|plan)", "start_cancellation_flow"),
-            (r"(reorder|order more|out of|running low)", "reorder_item"),
-            (r"(check|find|look up|compare) .*(pric|flight|hotel|availabilit|cost)", "research_and_report"),
-            (r"(reschedule|move|change) .*(appointment|clinic|doctor)", "reschedule_appointment"),
-            (r"running (late|behind)|tell them i", "notify_contact"),
-        ]
-        for pat, goal in act_patterns:
-            if re.search(pat, text):
-                return json.dumps({"decision": "act", "goal": goal, "reason": f"matched intent: {goal}"})
-        # questions to the user / ambiguity -> ASK
-        if re.search(r"\b(should i|do you think|not sure|maybe we|what about)\b", text):
-            return json.dumps({"decision": "ask", "goal": None, "reason": "ambiguous intent, confirm first"})
-        # small talk / jokes -> IGNORE
-        return json.dumps({"decision": "ignore", "goal": None, "reason": "no actionable commitment detected"})

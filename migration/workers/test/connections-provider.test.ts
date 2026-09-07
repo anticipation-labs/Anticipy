@@ -29,6 +29,8 @@ import type { OwnerId, ToolkitMeta } from "../../../spike/two-hands/src/connecti
 import {
   COMPOSIO_BASE_URL,
   ComposioConnections,
+  ConnectionsOwnerMismatch,
+  ConnectionsResponseShape,
   MANAGE_CONNECTIONS_TOOL,
   MAX_CACHED_SESSIONS,
   MAX_SEARCH_RESULTS,
@@ -2201,6 +2203,39 @@ await check("NO MAIL HOST OF OURS is in the adapter's executable source", () => 
 });
 
 // ===========================================================================
+
+await check("connection listing walks every page with the same owner scope", async () => {
+  const f = fakeFetch((call, n) => {
+    const url = new URL("https://test.invalid" + call.path);
+    assert.equal(url.searchParams.get("user_ids"), OWNER_A);
+    if (n === 1) return { body: { items: [accountRow(OWNER_A, { id: "ca_first" })], next_cursor: "page/+2" } };
+    assert.equal(url.searchParams.get("cursor"), "page/+2");
+    return { body: { items: [accountRow(OWNER_A, { id: "ca_second" })], next_cursor: null } };
+  });
+  const rows = await provider(f.impl).connections(OWNER_A);
+  assert.deepEqual(rows.map((r) => r.connected_account_id), ["ca_first", "ca_second"]);
+  assert.equal(f.calls.length, 2);
+});
+
+await check("a wrong owner on page two refuses the entire connection list", async () => {
+  const f = fakeFetch((_call, n) => ({ body: {
+    items: [accountRow(n === 1 ? OWNER_A : OWNER_B)], next_cursor: n === 1 ? "second" : null,
+  } }));
+  await assert.rejects(() => provider(f.impl).connections(OWNER_A), ConnectionsOwnerMismatch);
+});
+
+await check("a failed later page never returns a partial connection list", async () => {
+  const f = fakeFetch((_call, n) => n === 1
+    ? { body: { items: [accountRow(OWNER_A)], next_cursor: "second" } }
+    : { status: 503, body: { error: { slug: "temporarily_unavailable" } } });
+  await assert.rejects(() => provider(f.impl).connections(OWNER_A));
+});
+
+await check("a repeated cursor refuses instead of looping or claiming completeness", async () => {
+  const f = fakeFetch(() => ({ body: { items: [], next_cursor: "same" } }));
+  await assert.rejects(() => provider(f.impl).connections(OWNER_A), ConnectionsResponseShape);
+  assert.equal(f.calls.length, 2);
+});
 
 if (failures) {
   console.error(`connections-provider: ${failures} failing, ${passes} passing`);

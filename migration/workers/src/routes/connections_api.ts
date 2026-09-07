@@ -119,12 +119,10 @@
  *    they like. Both are authenticated and attributable and neither writes
  *    anything; the budget shape to copy is `spendSearch` below, and the durable
  *    substrate both want is the one in item 1.
- * 4. `/writes` CAN RESURRECT A ROW under one race. The stored row is read, then
- *    written, and `putConnection` is an upsert: a disconnect landing between
- *    those two re-inserts the connection. It self-heals — the vendor no longer
- *    holds the account, so the next disconnect takes the stale-row branch and
- *    clears it — and closing it properly needs an UPDATE-only method on the
- *    store, which is not this change's file.
+ * 4. `/writes` now uses one conditional UPDATE for the whole batch. A row
+ *    removed after validation refuses the entire batch; expiry and last-use
+ *    fields are never replaced by stale values. Reproduced by
+ *    test/connection-writes-race.test.ts before repair on 2026-09-06.
  * 5. `/skip` IS UNBUDGETED, and deliberately so for now. It is one D1 read and
  *    at most one upsert of the caller's OWN row, keyed (user_id, toolkit), and
  *    the second call in a snooze window writes nothing at all — so hammering it
@@ -403,6 +401,7 @@ export interface ConnectionsApiStore extends DeclineStore {
   connectionsForOwner(user: OwnerId | string): Promise<StoredConnection[]>;
   readConnection(user: OwnerId | string, accountId: string): Promise<StoredConnection | null>;
   putConnection(row: StoredConnection): Promise<void>;
+  updateWrites(user: OwnerId | string, rows: readonly StoredConnection[]): Promise<boolean>;
   deleteConnection(user: OwnerId | string, accountId: string): Promise<boolean>;
   linksForOwner(user: OwnerId | string): Promise<StoredLink[]>;
   put(row: StoredLink): Promise<void>;
@@ -966,15 +965,11 @@ async function handleWrites(
     toWrite.push({ ...mine, writes_enabled: row.writes_enabled });
   }
 
-  for (const row of toWrite) {
-    try {
-      await deps.store.putConnection(row);
-    } catch (err) {
-      // The toggle is idempotent, so a retry finishes what this stopped. Saying
-      // it did not save is the honest half even when some of it did.
-      console.log(`me/connections/writes: could not save a toggle — ${named(err)}`);
-      return refuse(503, COULD_NOT_SAVE);
-    }
+  try {
+    if (!await deps.store.updateWrites(owner, toWrite)) return refuse(409, COULD_NOT_SAVE);
+  } catch (err) {
+    console.log(`me/connections/writes: could not save permissions — ${named(err)}`);
+    return refuse(503, COULD_NOT_SAVE);
   }
   return json(200, { ok: true, updated: toWrite.length });
 }

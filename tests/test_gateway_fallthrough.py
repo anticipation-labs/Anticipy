@@ -461,7 +461,7 @@ def test_the_boot_banner_names_the_primary_and_the_fallback(wires, monkeypatch):
     assert W.gateway_banner(LLM()) == (
         f"primary=openrouter:{llm_mod.DEFAULT_MODEL} fallback=none")
     monkeypatch.delenv("OPENROUTER_API_KEY")
-    assert W.gateway_banner(LLM()) == "primary=heuristic fallback=none"
+    assert W.gateway_banner(LLM()) == "primary=unavailable fallback=none"
 
 
 def test_the_loop_prints_both():

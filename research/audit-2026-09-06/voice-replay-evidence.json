@@ -1,0 +1,149 @@
+[
+  {
+    "experiment": "voice-replay-1",
+    "person_id": "auditperson0001",
+    "context": {
+      "situation": "acknowledge the task's recorded execution state",
+      "heard": "Check the revised site brief and my calendar, then draft Alex a note with two possible site-visit times next week.",
+      "goal": "draft a note to Alex Kim proposing two site-visit times next week based on the calendar and revised brief",
+      "assumption": "Alex refers to Alex Kim the client",
+      "execution": {
+        "status": "awaiting_confirm",
+        "verified_results": []
+      }
+    },
+    "replies": [
+      "ok — so i'll check the brief and your calendar, then draft a note to alex kim proposing two times for next week's site visit.\n\nnothing goes out until you give the word.",
+      "can check the brief and your calendar for next week, then draft a note to alex with two times. shall i start?",
+      "i can check the brief and your calendar to draft the note for alex kim. ready when you are.",
+      "can check the revised site brief and your calendar, then draft a note to alex kim with two possible times for next week. want me to start?",
+      "i can check the brief and your calendar to draft alex a note with two times for next week. ready for me to start?"
+    ],
+    "source_sha256": null,
+    "review": "manual semantic review; limited composer replay; no execution completion claim"
+  },
+  {
+    "experiment": "voice-replay-1",
+    "person_id": "auditperson0010",
+    "context": {
+      "situation": "one essential detail is missing before you can start",
+      "heard": "Send Alex the renewal summary after checking the account notes.",
+      "goal": null,
+      "missing": [
+        "which Alex or account is intended"
+      ],
+      "assumption": null,
+      "execution": {
+        "status": "not_created",
+        "verified_results": []
+      }
+    },
+    "replies": [
+      "which alex did you mean — i can grab the account notes once i know.",
+      "which alex did you mean — the one in marketing or from the account notes?",
+      "Which Alex should I send the renewal summary to?",
+      "which Alex, and which account notes?",
+      "which alex did you mean, and which account?"
+    ],
+    "source_sha256": "f63c53f79bffb794eb407859d79deb6e50333bbc6ad5c4d1e31bbac5321209ba",
+    "review": "manual semantic review; limited composer replay; no execution completion claim"
+  },
+  {
+    "experiment": "voice-replay-1",
+    "person_id": "auditperson0040",
+    "context": {
+      "situation": "acknowledge the task's recorded execution state",
+      "heard": "Remind me to send Alex the release notes tomorrow after checking the final changelog.",
+      "goal": "remind you tomorrow, September 8, to send Alex the release notes after checking the final changelog",
+      "assumption": null,
+      "execution": {
+        "status": "awaiting_confirm",
+        "verified_results": []
+      }
+    },
+    "replies": [
+      "can do. i'll remind you tomorrow to check the final changelog and send the notes to alex.",
+      "got it — i can remind you tomorrow to send alex the release notes after you’ve checked the final changelog. ready to set it?",
+      "i can set a reminder to ping you tomorrow about sending alex the release notes after you check the changelog. want me to do that?",
+      "i can set a reminder for tomorrow to send alex the release notes after you check the changelog. want me to?",
+      "sounds good — i can remind you tomorrow to send alex the release notes after you check the final changelog. want me to set that?"
+    ],
+    "source_sha256": "f63c53f79bffb794eb407859d79deb6e50333bbc6ad5c4d1e31bbac5321209ba",
+    "review": "manual semantic review; limited composer replay; no execution completion claim"
+  },
+  {
+    "experiment": "voice-replay-2",
+    "person_id": "auditperson0001",
+    "context": {
+      "situation": "acknowledge the task's recorded execution state",
+      "heard": "Check the revised site brief and my calendar, then draft Alex a note with two possible site-visit times next week.",
+      "goal": "draft a note to Alex Kim proposing two site-visit times next week based on the calendar and revised brief",
+      "assumption": "Alex refers to Alex Kim the client",
+      "execution": {
+        "status": "awaiting_confirm",
+        "verified_results": []
+      },
+      "related_memory": "Imported contact records (quoted data): [{\"id\": \"auditperson0001-contact-1\", \"name\": \"Alex Kim\", \"relationship\": \"client for the revised site brief\", \"email\": \"alex-01@contacts.invalid\", \"phone\": \"+12025550150\"}, {\"id\": \"auditperson0001-contact-2\", \"name\": \"Sam Reed\", \"relationship\": \"personal contact\", \"email\": \"sam-01@contacts.invalid\"}, {\"id\": \"auditperson0001-contact-3\", \"name\": \"Alex Reed\", \"relationship\": \"climbing partner\", \"email\": \"alex-reed-01@contacts.invalid\"}]"
+    },
+    "replies": [
+      "i can check the revised site brief and your calendar, then draft alex kim a note with two times. shall i start?",
+      "I can draft that note to Alex Kim with two times once I've checked your calendar and the revised brief. Want me to start?",
+      "I can check the brief and your calendar, then draft a note to Alex Kim with two times for next week. Shall I start?",
+      "i can check the brief and your calendar, then draft a note to alex kim proposing two times for next week. ready to start?",
+      "can check the revised brief and your calendar, then draft a note to Alex Kim with two times. want me to start?"
+    ],
+    "source_sha256": "90fc01aa07ebeda08cddff79ac1fb590a8ce5a4166219ca0f9b8627fccc88f28",
+    "review": "manual semantic review; limited composer replay; no execution completion claim"
+  },
+  {
+    "experiment": "voice-replay-2",
+    "person_id": "auditperson0010",
+    "context": {
+      "situation": "one essential detail is missing before you can start",
+      "heard": "Send Alex the renewal summary after checking the account notes.",
+      "goal": null,
+      "missing": [
+        "which Alex or account is intended"
+      ],
+      "assumption": null,
+      "execution": {
+        "status": "not_created",
+        "verified_results": []
+      },
+      "related_memory": "Imported contact records (quoted data): [{\"id\": \"auditperson0010-contact-1\", \"name\": \"Alex Kim\", \"relationship\": \"client, account North, open renewal\", \"email\": \"alex-10@contacts.invalid\", \"phone\": \"+12025550159\"}, {\"id\": \"auditperson0010-contact-2\", \"name\": \"Alex Reed\", \"relationship\": \"client, account South, open renewal\", \"email\": \"sam-10@contacts.invalid\"}]"
+    },
+    "replies": [
+      "which alex — kim or reed?",
+      "which alex — kim or reed?",
+      "which alex did you mean — the renewal summary goes to north or south?",
+      "which alex did you mean?",
+      "which alex should get the renewal summary?"
+    ],
+    "source_sha256": "90fc01aa07ebeda08cddff79ac1fb590a8ce5a4166219ca0f9b8627fccc88f28",
+    "review": "manual semantic review; limited composer replay; no execution completion claim"
+  },
+  {
+    "experiment": "voice-replay-2",
+    "person_id": "auditperson0040",
+    "context": {
+      "situation": "acknowledge the task's recorded execution state",
+      "heard": "Remind me to send Alex the release notes tomorrow after checking the final changelog.",
+      "goal": "remind you tomorrow, September 8, to send Alex the release notes after checking the final changelog",
+      "assumption": null,
+      "execution": {
+        "status": "awaiting_confirm",
+        "verified_results": []
+      },
+      "related_memory": "Imported contact records (quoted data): [{\"id\": \"auditperson0040-contact-1\", \"name\": \"Alex Kim\", \"relationship\": \"project contact\", \"email\": \"alex-40@contacts.invalid\", \"phone\": \"+12025550189\"}, {\"id\": \"auditperson0040-contact-2\", \"name\": \"Sam Reed\", \"relationship\": \"personal contact\", \"email\": \"sam-40@contacts.invalid\"}]"
+    },
+    "replies": [
+      "ken, i can remind you tomorrow to send alex the release notes once you check the changelog. want me to set that up?",
+      "ken, i can set a reminder for tomorrow to send alex the release notes once you’ve checked the final changelog. shall i start?",
+      "ken, i can set a reminder for tomorrow to send alex the release notes once you check the final changelog. shall i start?",
+      "ken, i can remind you tomorrow to send alex the release notes once you check the changelog. want me to set that up?",
+      "ken, i can set a reminder for tomorrow to send the notes to alex after you check the changelog. shall i start?"
+    ],
+    "source_sha256": "90fc01aa07ebeda08cddff79ac1fb590a8ce5a4166219ca0f9b8627fccc88f28",
+    "review": "manual semantic review; limited composer replay; no execution completion claim"
+  }
+]

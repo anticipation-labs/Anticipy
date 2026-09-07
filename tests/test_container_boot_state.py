@@ -62,7 +62,12 @@ class FakeR2:
         self.downloads.append(key)
         if self._download_error:
             raise self._download_error
-        Path(dest).write_bytes(b"durable-state")
+        if key.endswith("memory.db"):
+            with sqlite3.connect(dest) as db:
+                db.execute("CREATE TABLE remembered (fact TEXT)")
+                db.execute("INSERT INTO remembered VALUES ('durable-state')")
+        else:
+            Path(dest).write_text('{"last_outreach_ts": 123}')
 
 
 @pytest.fixture
@@ -102,7 +107,8 @@ def test_the_bucket_is_proven_before_the_first_file_is_asked_for(owner_dir):
     assert r2.head_bucket_calls == ["anticipy-owner-state"]
     assert r2.downloads == ["owners/qeuy6sv1raof9rw/memory.db",
                             "owners/qeuy6sv1raof9rw/clock_state.json"]
-    assert (owner_dir / "memory.db").read_bytes() == b"durable-state"
+    with sqlite3.connect(owner_dir / "memory.db") as db:
+        assert db.execute("SELECT fact FROM remembered").fetchone()[0] == "durable-state"
 
 
 def test_bad_credentials_abort_rather_than_looking_like_a_new_owner(owner_dir):
@@ -139,7 +145,9 @@ def test_a_read_failure_that_is_not_a_404_still_aborts(owner_dir):
     with pytest.raises(RuntimeError) as caught:
         C.pull_state(r2)
 
-    assert "NOT a 404" in str(caught.value)
+    assert "refusing to replace the local checkpoint" in str(caught.value)
+    assert isinstance(caught.value.__cause__, ClientError)
+    assert caught.value.__cause__.response["Error"]["Code"] == "InternalError"
 
 
 # ----------------------------------------------------------------- F43

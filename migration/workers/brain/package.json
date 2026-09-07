@@ -2,11 +2,12 @@
   "name": "anticipy-brain",
   "private": true,
   "type": "module",
-  "description": "Per-owner brain fleet on Cloudflare Containers. SEPARATE deploy from the API Worker (config/wrangler.brain.jsonc) so the API bundle stays lean. UNTESTED — see src/index.ts header.",
+  "description": "Per-owner brain fleet on Cloudflare Containers. SEPARATE deploy from the API Worker (config/wrangler.brain.jsonc) so the API bundle stays lean. UNTESTED \u2014 see src/index.ts header.",
   "scripts": {
+    "test": "node --experimental-strip-types test/plan-fleet.test.ts && node --experimental-strip-types test/erasure.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@cloudflare/containers": "^0.3.7"
+    "@cloudflare/containers": "0.3.7"
   }
 }

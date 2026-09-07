@@ -1315,6 +1315,31 @@ for their OK — you have a plan, not a result, and claiming a result that
 doesn't exist is the one unforgivable text. If a detail is listed as missing,
 your job is to ASK for it — never supply a value for it, however obvious it
 seems from their habits.
+Execution evidence is separate from the requested goal. A goal describes work
+to do; it is not evidence of a document read, draft written, reminder scheduled,
+or action completed. The execution status comes from the persisted job:
+awaiting_confirm means no execution is authorized yet; queued means waiting for
+an executor; running means execution began, with no particular step proved.
+Unverified means the job could not be read. Only verified_results can support
+specific completed-work claims. An empty list proves no completed steps, even
+if a job's overall status is done. Ask for missing details without pretending
+you already gathered material. Do not narrate planned reads as current activity.
+When approval is still required, a future promise is also misleading: saying
+"I'll remind you tomorrow" can make someone rely on a reminder that is not set.
+Offer to start and ask for the missing approval. Use only established identities
+when offering a choice; if the available context gives no candidates, ask an open
+question without inventing departments, relationships or people.
+
+Examples (use the evidence, never copy these people or tasks):
+- Goal: check a design brief and draft a client note. Status: awaiting_confirm,
+  verified_results: []. Say: "I can check the brief and draft the note. Shall I
+  start?" Do not claim the brief was pulled or the note is ready.
+- Goal: create a reminder. Status: queued, verified_results: []. Say:
+  "The reminder request is queued; it hasn't been set yet."
+- Missing: which Morgan. Status: not_created, verified_results: []. Say:
+  "Which Morgan did you mean?" Do not claim the account notes are ready.
+- Goal: compare two proposals. Status: running, verified_results: []. Say:
+  "The comparison is in progress." Do not invent a winner or claim a read.
 {TEXTING_STYLE}"""
 
 
@@ -2581,14 +2606,15 @@ class Anticipy:
                     # unknown. The queue's dedupe keeps this to ONE per plan.
                     said = self._voice({
                         "situation": "overheard a plan he made with someone; "
-                                     "prepared it but NOTHING IS BOOKED OR "
-                                     "SENT YET — you are asking his go-ahead"
+                                     "created a proposed task, not a finished "
+                                     "artifact — you are asking his go-ahead"
                                      + ("; essential details are missing — "
                                         "ask for them, never fill them in"
                                         if missing else ""),
                         "heard": line, "goal": goal,
                         "missing": missing or None,
                         "assumption": assumption,
+                        "execution": self._execution_evidence(job_id),
                     })
                     # A number she never heard is an invention, whatever the
                     # prompt says — a live text once announced "Monday at
@@ -2927,13 +2953,15 @@ class Anticipy:
                                  "motion — one short reassurance; never "
                                  "re-ask approval, never claim it finished",
                     "heard": line, "goal": decision.goal,
+                    "execution": self._execution_evidence(job_id),
                 }) or f"Already on it — {decision.goal} is moving.") \
                     if explicit else None
             else:
                 handled = self._voice({
-                    "situation": "held for approval" if held else "quietly started",
+                    "situation": "acknowledge the task's recorded execution state",
                     "heard": line, "goal": decision.goal,
                     "assumption": decision.assumption,
+                    "execution": self._execution_evidence(job_id),
                 }) or self.say_handling(decision.goal, held)
             # Details first, browser second: before anything irreversible she
             # texts the owner — their go-ahead releases the held job.
@@ -3016,6 +3044,7 @@ class Anticipy:
                 "heard": line, "goal": decision.goal,
                 "missing": decision.missing or [decision.reason or "what exactly they want"],
                 "assumption": decision.assumption,
+                "execution": self._execution_evidence(None),
             }) or f"Quick question — {(decision.missing or [decision.reason or 'want me to take this on'])[0]}?"
             # A question is unprompted speech too, and this branch used to text
             # him every single time with no guard whatever — the held-job path
@@ -3233,12 +3262,48 @@ class Anticipy:
 
     # ------------------------------------------------------------ speaking
 
+    def _execution_evidence(self, job_id) -> dict:
+        """Read queue state; never turn a goal or a status into a step receipt.
+
+        The queue may strengthen a requested hold or return an existing job.
+        Its persisted state, rather than the caller's intended state, is what
+        the composer can report. Completion details require separate receipts.
+        """
+        evidence = {"job_id": job_id, "status": "not_created" if not job_id
+                    or job_id == QUEUE_WRITE_FAILED else "unverified",
+                    "verified_results": []}
+        if evidence["status"] == "not_created":
+            return evidence
+        try:
+            response = pb.get(f"{self.backend_url}/api/collections/jobs/records/{job_id}",
+                              timeout=5)
+            response.raise_for_status()
+            row = response.json()
+            if row.get("id") == job_id and isinstance(row.get("status"), str):
+                evidence["status"] = row["status"]
+        except Exception:
+            pass
+        return evidence
+
     def _voice(self, context: dict) -> Optional[str]:
         """Generate what Anticipy says for this exact moment. Returns None
         without a live LLM (callers keep a plain fallback) — but with one,
         her voice is never assembled from a template."""
         if not self.llm:
             return None
+        context = dict(context)
+        # The reply needs the same human context as the decision. A goal with
+        # "Alex" alone otherwise asks the composer to invent distinguishing
+        # details, despite the owner's contacts already being in memory.
+        if "related_memory" not in context:
+            try:
+                recalled = self.memory.recall(
+                    str(context.get("heard") or context.get("goal") or ""),
+                    limit=6, retired=RETIRED_QUOTED)
+                context["related_memory"] = memory_notes(recalled, budget=1800)
+            except Exception:
+                context["related_memory"] = "unavailable; do not infer missing facts"
+        context.setdefault("conversation", getattr(self, "_last_convo", []))
         try:
             res = self.llm.chat(VOICE_SYSTEM, json.dumps(context), temperature=0.7)
             # A SENTENCE THAT RAN OUT OF ROOM IS NOT A SENTENCE. The provider
@@ -3280,8 +3345,8 @@ class Anticipy:
             # Ends on the question. The old wording tacked on "Nothing goes out
             # until you say so" — which Omar read, correctly, as a release note
             # rather than something a person says. Asking IS the promise.
-            return f"Got this ready: {pretty}. Want me to go ahead?"
-        return f"On it: {pretty}."
+            return f"I can take this on: {pretty}. Want me to start?"
+        return f"Requested: {pretty}."
 
     def _answer_from_memory(self, question: str) -> Optional[str]:
         """Answer an owner question straight from the graph. Returns None when

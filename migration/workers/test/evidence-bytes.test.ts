@@ -149,13 +149,24 @@ await check("an evidence host is not a file host: the MIME list and the size cei
 await check("a refused row takes its bytes back out of the bucket", async () => {
   // `job` is CHECK(length > 0) in D1, so this create fails after the put.
   const { t, r2, env } = rig();
-  // D1 answers a CHECK violation by THROWING, and records.create rethrows
-  // anything that is not a known column or a unique collision — so the failure
-  // arrives as an exception, not a status, and the cleanup has to be on both
-  // paths. That is what the platform would turn into a 1101.
-  await assert.rejects(() => fetchIt(env, deposit({ owner_ref: OWNER, job: "" }, JPEG)));
+  // Required-field constraints now become an HTTP validation response. The
+  // bytes still have to be removed after the row was refused.
+  assert.equal((await fetchIt(env, deposit({ owner_ref: OWNER, job: "" }, JPEG))).status, 400);
   assert.equal(t.query("SELECT id FROM evidence").length, 0);
   assert.equal(r2.objects.size, 0, "an orphaned object was left in R2, paid for forever");
+  t.close();
+});
+
+await check("an infrastructure exception also removes already-deposited bytes", async () => {
+  const { t, r2, env } = rig();
+  const prepare = env.DB.prepare.bind(env.DB);
+  env.DB.prepare = (sql: string) => {
+    if (sql.startsWith('INSERT INTO "evidence"')) throw new Error("simulated storage outage");
+    return prepare(sql);
+  };
+  await assert.rejects(() => fetchIt(env, deposit({ owner_ref: OWNER, job: JOB }, JPEG)), /simulated storage outage/);
+  assert.equal(t.query("SELECT id FROM evidence").length, 0);
+  assert.equal(r2.objects.size, 0);
   t.close();
 });
 

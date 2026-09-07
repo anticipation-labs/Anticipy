@@ -206,7 +206,7 @@ def test_an_account_with_no_name_is_untouched(monkeypatch):
     assert who_line(None) == ""
     assert who_line("   ") == ""
     _, composer = _compose(monkeypatch, OWNER_ERRAND, None)
-    assert composer.systems[-1].startswith(
+    assert composer.systems[-1].endswith(
         f"{where_line('America/Vancouver')}\n{now_line('America/Vancouver')}")
 
 

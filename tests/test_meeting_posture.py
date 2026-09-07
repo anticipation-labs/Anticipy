@@ -5,9 +5,8 @@ The recorded failure this locks in place: 2026-08-23, a 28-minute call,
 six acts, four texts — one of them a question about the call he was still
 on. The fix is not "act less"; it is "speak later, once".
 
-Offline and deterministic: LLM() with no API keys runs the heuristic path,
-and pb calls are monkeypatched into a dead in-memory backend, the same
-pattern as overnight/evaluate.py.
+Offline and deterministic: each test supplies its decision explicitly; no
+missing credential is allowed to stand in for a semantic model.
 """
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -15,6 +14,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import brain.pb as pb
 from brain.anticipy_core import Anticipy
 from brain.llm import LLM
+from brain.orchestrator import Decision
 
 
 class _Resp:
@@ -23,6 +23,8 @@ class _Resp:
         self._payload = payload or {"items": [], "id": "job1"}
     def json(self):
         return self._payload
+    def raise_for_status(self):
+        return None
 
 
 def _dead_backend(monkeypatch):
@@ -45,8 +47,7 @@ def _anticipy(monkeypatch, sent):
 def test_meeting_holds_tongue_and_digest_speaks_once(monkeypatch):
     sent = []
     a = _anticipy(monkeypatch, sent)
-    # Force the held-card shape regardless of what the offline heuristic
-    # decides about the line: seed _meeting_held the way the ambient branch
+    # Seed _meeting_held the way the ambient branch
     # does, then check the digest contract — one text, everything named,
     # drained after.
     a._meeting_held.append(("job1", "dinner Thursday at 7pm for four"))
@@ -75,11 +76,15 @@ def test_in_meeting_hear_never_texts(monkeypatch):
     reach notify_owner during the meeting — the digest owns the speaking."""
     sent = []
     a = _anticipy(monkeypatch, sent)
+    monkeypatch.setattr(a, "_decide", lambda *args, **kwargs: Decision(
+        decision="act", goal="Book dinner Thursday at seven with the team", reason="fixture",
+        needs_confirmation=True, addressee="person", owes="owner", touches="world"))
     a.hear("let's do dinner Thursday at seven with the team",
            context=["so Thursday works for everyone?"],
            may_say=lambda *args, **kw: True,
            in_meeting=True)
     assert sent == [], f"texted mid-meeting: {sent!r}"
+    assert a._meeting_held, "the positive control must actually prepare held work"
 
 
 def test_shard_cannot_act_even_outside_meetings(monkeypatch):
@@ -87,6 +92,9 @@ def test_shard_cannot_act_even_outside_meetings(monkeypatch):
     never acted on, meeting or no meeting."""
     sent = []
     a = _anticipy(monkeypatch, sent)
+    monkeypatch.setattr(a, "_decide", lambda *args, **kwargs: Decision(
+        decision="act", goal="Book a meeting with the client tomorrow at 5:15", reason="fixture",
+        needs_confirmation=True, addressee="person", owes="owner", touches="world"))
     out = a.hear("At 5:15", may_say=lambda *args, **kw: True)
     assert out["decision"].decision != "act"
     assert sent == []

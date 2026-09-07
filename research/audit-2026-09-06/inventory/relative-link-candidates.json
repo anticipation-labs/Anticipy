@@ -1,0 +1,92 @@
+[
+  {
+    "path": "HANDOFF-TRANSCRIPT.md",
+    "line": 529,
+    "target": "../Anticipy-pendant/app/ios/Anticipy/Views/ContentView.swift",
+    "review_status": "candidate_missing_target"
+  },
+  {
+    "path": "HANDOFF-TRANSCRIPT.md",
+    "line": 2312,
+    "target": "../Anticipy-pendant/CAPTURE-ARCHITECTURE.md",
+    "review_status": "candidate_missing_target"
+  },
+  {
+    "path": "migration/spike/containers-sdk/node_modules/@cloudflare/containers/README.md",
+    "line": 95,
+    "target": "docs/egress.md#intercepthttps",
+    "review_status": "candidate_missing_target"
+  },
+  {
+    "path": "migration/spike/containers-sdk/node_modules/@cloudflare/containers/README.md",
+    "line": 505,
+    "target": "docs/egress.md",
+    "review_status": "candidate_missing_target"
+  },
+  {
+    "path": "research/archive-2026-09-04/deploy-preorder/planning/00-handoff/ARCHITECTURE.md",
+    "line": 312,
+    "target": "../../../../.claude/projects/-Users-omarebrahim-Developer-Anticipy-DEV-FINAL/memory/MEMORY.md",
+    "review_status": "candidate_missing_target"
+  },
+  {
+    "path": "research/archive-2026-09-04/deploy-preorder/planning/00-handoff/HANDOFF.md",
+    "line": 38,
+    "target": "../01-cold-start/",
+    "review_status": "candidate_missing_target"
+  },
+  {
+    "path": "research/archive-2026-09-04/deploy-preorder/planning/00-handoff/HANDOFF.md",
+    "line": 39,
+    "target": "../02-confidence-ladder/",
+    "review_status": "candidate_missing_target"
+  },
+  {
+    "path": "research/archive-2026-09-04/deploy-preorder/planning/00-handoff/HANDOFF.md",
+    "line": 40,
+    "target": "../03-cross-app-auth/",
+    "review_status": "candidate_missing_target"
+  },
+  {
+    "path": "research/archive-2026-09-04/deploy-preorder/planning/00-handoff/HANDOFF.md",
+    "line": 41,
+    "target": "../04-quietness-ux/",
+    "review_status": "candidate_missing_target"
+  },
+  {
+    "path": "research/archive-2026-09-04/deploy-preorder/planning/00-handoff/HANDOFF.md",
+    "line": 42,
+    "target": "../05-existing-code-map/",
+    "review_status": "candidate_missing_target"
+  },
+  {
+    "path": "research/archive-2026-09-04/deploy-preorder/planning/00-handoff/HANDOFF.md",
+    "line": 43,
+    "target": "../06-competitive-landscape/",
+    "review_status": "candidate_missing_target"
+  },
+  {
+    "path": "research/archive-2026-09-04/deploy-preorder/planning/00-handoff/HANDOFF.md",
+    "line": 44,
+    "target": "../07-trivia-fire/",
+    "review_status": "candidate_missing_target"
+  },
+  {
+    "path": "research/archive-2026-09-04/deploy-preorder/planning/00-handoff/SESSION_HANDOFF_2026_05_30.md",
+    "line": 3,
+    "target": "CODE_BUG_LIST_2026_05_30b.md",
+    "review_status": "candidate_missing_target"
+  },
+  {
+    "path": "research/archive-2026-09-04/deploy-preorder/planning/00-handoff/SESSION_HANDOFF_2026_05_30.md",
+    "line": 3,
+    "target": "UX_BUG_LIST.md",
+    "review_status": "candidate_missing_target"
+  },
+  {
+    "path": "research/archive-2026-09-04/deploy-preorder/planning/00-handoff/SESSION_HANDOFF_2026_05_30.md",
+    "line": 3,
+    "target": "PHASE9_REPORT.md",
+    "review_status": "candidate_missing_target"
+  }
+]

@@ -1366,117 +1366,128 @@ export class ComposioConnections implements ConnectionProvider {
   // -------------------------------------------------------------------------
   async connections(user: OwnerId): Promise<Connection[]> {
     const owner = requireOwner("connections", user);
-    const json = await this.#callOrThrow(
-      "connections",
-      "GET",
-      `/connected_accounts?user_ids=${encodeURIComponent(owner)}`,
-    );
-
-    const root = asRecord(json);
-    const items = Array.isArray(json)
-      ? json
-      : Array.isArray(root?.items)
-        ? (root.items as unknown[])
-        : null;
-    if (items === null) {
-      throw new ConnectionsResponseShape("connections", "no items array in the response");
-    }
-
     const out: Connection[] = [];
-    let unreadable = 0;
-    for (const entry of items) {
-      const item = asRecord(entry);
-      if (!item) {
-        unreadable++;
-        continue;
+    const seenCursors = new Set<string>();
+    let cursor = "";
+    for (;;) {
+      const json = await this.#callOrThrow(
+        "connections",
+        "GET",
+        `/connected_accounts?user_ids=${encodeURIComponent(owner)}`
+          + (cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""),
+      );
+
+      const root = asRecord(json);
+      const items = Array.isArray(json)
+        ? json
+        : Array.isArray(root?.items)
+          ? (root.items as unknown[])
+          : null;
+      if (items === null) {
+        throw new ConnectionsResponseShape("connections", "no items array in the response");
       }
 
-      // THE WRONG-PERSON GUARD, and the reason it refuses rather than filters.
-      // The query is scoped by `user_ids`, so an account for anybody else means
-      // the scoping did not hold. Dropping the stray row quietly would leave us
-      // returning the rest as though the response were trustworthy; stamping
-      // OUR owner id over the vendor's would launder a stranger's mailbox into
-      // this owner's connections table under the right name, which is exactly
-      // the failure this contract's `OwnerId` type was created for.
-      //
-      // It fails CLOSED in both non-answers. It used to check only a bare
-      // non-empty string under `user_id`/`user_ids`, so an array — the plural
-      // the request itself sends — a camelCase key, a nested `user.id`, a
-      // number or an empty string all read as "the vendor did not say", the
-      // check was skipped, and the stray row was adopted. `disconnect()` then
-      // used that laundered list as its ownership proof for two endpoints with
-      // no user scoping, and deleting a stranger's connection returns 200.
-      const echo = readOwnerEcho(item, owner);
-      if (echo === "foreign") {
-        throw new ConnectionsOwnerMismatch(
-          "connections",
-          "the vendor returned an account bound to a different user_id than the one queried",
+      let unreadable = 0;
+      for (const entry of items) {
+        const item = asRecord(entry);
+        if (!item) {
+          unreadable++;
+          continue;
+        }
+
+        // THE WRONG-PERSON GUARD, and the reason it refuses rather than filters.
+        // The query is scoped by `user_ids`, so an account for anybody else means
+        // the scoping did not hold. Dropping the stray row quietly would leave us
+        // returning the rest as though the response were trustworthy; stamping
+        // OUR owner id over the vendor's would launder a stranger's mailbox into
+        // this owner's connections table under the right name, which is exactly
+        // the failure this contract's `OwnerId` type was created for.
+        //
+        // It fails CLOSED in both non-answers. It used to check only a bare
+        // non-empty string under `user_id`/`user_ids`, so an array — the plural
+        // the request itself sends — a camelCase key, a nested `user.id`, a
+        // number or an empty string all read as "the vendor did not say", the
+        // check was skipped, and the stray row was adopted. `disconnect()` then
+        // used that laundered list as its ownership proof for two endpoints with
+        // no user scoping, and deleting a stranger's connection returns 200.
+        const echo = readOwnerEcho(item, owner);
+        if (echo === "foreign") {
+          throw new ConnectionsOwnerMismatch(
+            "connections",
+            "the vendor returned an account bound to a different user_id than the one queried",
+          );
+        }
+        if (echo !== "ours") {
+          // A shape refusal rather than a mismatch: we are not claiming this row
+          // belongs to somebody else, only that nothing in it says it is ours.
+          // If this ever fires against the live endpoint, the fix is to read the
+          // field the vendor actually sends — never to let an unowned row
+          // through, because nothing downstream can tell the difference.
+          throw new ConnectionsResponseShape(
+            "connections",
+            echo === "absent"
+              ? "a connected account named no owner at all, so nothing in the response ties it "
+                + "to the owner that was queried"
+              : "a connected account named an owner that could not be read as the one queried "
+                + `(owner fields present: ${ownerEchoFields(item)})`,
+          );
+        }
+
+        // Read as a STRING at every step. `item.toolkit` is an object in the
+        // measured shape, and letting it fall through to `String(...)` would
+        // stamp "[object object]" into the connections table as a toolkit slug —
+        // a row that matches no catalog entry and no nudge, forever.
+        const slug = toolkitSlug(
+          asString(asRecord(item.toolkit)?.slug)
+            ?? asString(item.toolkit_slug)
+            ?? asString(item.toolkit)
+            ?? "",
         );
+        const accountId = asString(item.id) ?? asString(item.connected_account_id);
+        if (slug.length === 0 || accountId === null) {
+          unreadable++;
+          continue;
+        }
+
+        out.push({
+          // OUR validated owner, not an echo. Every row this method emits is
+          // about the owner that was asked for, or the call has already thrown.
+          user_id: owner,
+          toolkit: slug,
+          connected_account_id: accountId,
+          alias: readAlias(item.alias ?? item.label),
+          status: mapConnectionStatus(item.status),
+          // FALSE, ALWAYS, AND NOT A PLACEHOLDER. `writes_enabled` is the
+          // Settings toggle "let Anticipy make changes" and it lives in D1, not
+          // at the vendor — Composio has no idea whether this person opted in.
+          // The Two Hands ladder cannot reach rung 3 without it, so a provider
+          // that guessed `true` here would let an API hand send mail on behalf of
+          // somebody who never agreed to it. A caller merging these rows with the
+          // stored ones must take the STORED value for this field and never this
+          // one.
+          writes_enabled: false,
+          last_used_at: readLastUsedAt(item.last_used_at),
+        });
       }
-      if (echo !== "ours") {
-        // A shape refusal rather than a mismatch: we are not claiming this row
-        // belongs to somebody else, only that nothing in it says it is ours.
-        // If this ever fires against the live endpoint, the fix is to read the
-        // field the vendor actually sends — never to let an unowned row
-        // through, because nothing downstream can tell the difference.
+
+      if (unreadable > 0) {
+        // Not skipped in silence. "You have not connected Notion" is the claim
+        // that sends somebody a connect text about the app they connected
+        // yesterday, and it is far too consequential to make out of a field we
+        // could not read.
         throw new ConnectionsResponseShape(
           "connections",
-          echo === "absent"
-            ? "a connected account named no owner at all, so nothing in the response ties it "
-              + "to the owner that was queried"
-            : "a connected account named an owner that could not be read as the one queried "
-              + `(owner fields present: ${ownerEchoFields(item)})`,
+          `${unreadable} of ${items.length} connected accounts had no readable id or toolkit`,
         );
       }
-
-      // Read as a STRING at every step. `item.toolkit` is an object in the
-      // measured shape, and letting it fall through to `String(...)` would
-      // stamp "[object object]" into the connections table as a toolkit slug —
-      // a row that matches no catalog entry and no nudge, forever.
-      const slug = toolkitSlug(
-        asString(asRecord(item.toolkit)?.slug)
-          ?? asString(item.toolkit_slug)
-          ?? asString(item.toolkit)
-          ?? "",
-      );
-      const accountId = asString(item.id) ?? asString(item.connected_account_id);
-      if (slug.length === 0 || accountId === null) {
-        unreadable++;
-        continue;
+      const next = root?.next_cursor;
+      if (next === null || next === undefined || next === "") return out;
+      if (typeof next !== "string" || !next.trim() || seenCursors.has(next)) {
+        throw new ConnectionsResponseShape("connections", "pagination returned an invalid or repeated cursor");
       }
-
-      out.push({
-        // OUR validated owner, not an echo. Every row this method emits is
-        // about the owner that was asked for, or the call has already thrown.
-        user_id: owner,
-        toolkit: slug,
-        connected_account_id: accountId,
-        alias: readAlias(item.alias ?? item.label),
-        status: mapConnectionStatus(item.status),
-        // FALSE, ALWAYS, AND NOT A PLACEHOLDER. `writes_enabled` is the
-        // Settings toggle "let Anticipy make changes" and it lives in D1, not
-        // at the vendor — Composio has no idea whether this person opted in.
-        // The Two Hands ladder cannot reach rung 3 without it, so a provider
-        // that guessed `true` here would let an API hand send mail on behalf of
-        // somebody who never agreed to it. A caller merging these rows with the
-        // stored ones must take the STORED value for this field and never this
-        // one.
-        writes_enabled: false,
-        last_used_at: readLastUsedAt(item.last_used_at),
-      });
+      seenCursors.add(next);
+      cursor = next;
     }
-
-    if (unreadable > 0) {
-      // Not skipped in silence. "You have not connected Notion" is the claim
-      // that sends somebody a connect text about the app they connected
-      // yesterday, and it is far too consequential to make out of a field we
-      // could not read.
-      throw new ConnectionsResponseShape(
-        "connections",
-        `${unreadable} of ${items.length} connected accounts had no readable id or toolkit`,
-      );
-    }
-    return out;
   }
 
   // -------------------------------------------------------------------------

@@ -85,9 +85,9 @@ def test_the_fallback_still_asks_rather_than_announces():
     assert "?" in said, f"a held plan must ASK: {said!r}"
 
 
-def test_quiet_work_is_unchanged():
+def test_quiet_work_acknowledges_the_request_without_claiming_execution():
     said = _her().say_handling("look up flight times", False)
-    assert said.startswith("On it:")
+    assert said == "Requested: look up flight times."
     assert "?" not in said, "quiet work does not need his permission"
 
 

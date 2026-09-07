@@ -1,0 +1,807 @@
+[
+  {
+    "path": "migration/workers/src/do/PairCodeCounter.ts",
+    "line": 68,
+    "condition": "if (url.pathname === \"/check\") {",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/do/PairCodeCounter.ts",
+    "line": 74,
+    "condition": "if (url.pathname === \"/spend\") {",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/do/PairCodeCounter.ts",
+    "line": 93,
+    "condition": "if (url.pathname === \"/stats\") {",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 160,
+    "condition": "if (path === \"/api/health\" && method === \"GET\") return health();",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 164,
+    "condition": "if (path === \"/auth/reset/request\" && method === \"POST\") {",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 167,
+    "condition": "if (path === \"/auth/reset/confirm\" && method === \"POST\") {",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 171,
+    "condition": "if (path === \"/me/delete\" && method === \"POST\") {",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 177,
+    "condition": "if (path === \"/agent/register\" && method === \"POST\") {",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 180,
+    "condition": "if (path === \"/agent/key\" && method === \"GET\") {",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 183,
+    "condition": "if (path === \"/agent/llm\" && method === \"POST\") {",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 186,
+    "condition": "if (path.startsWith(\"/agent/solve-captcha\") && method === \"POST\") {",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 189,
+    "condition": "if (path === \"/agent/upgrade-credential\" && method === \"POST\") {",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 195,
+    "condition": "if (path === \"/worker/owners\" && method === \"GET\") {",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 198,
+    "condition": "if (path === \"/admin/purge-audit\" && method === \"POST\") {",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 201,
+    "condition": "if (path === \"/auth/claim\" && method === \"POST\") {",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 204,
+    "condition": "if (path === \"/me/phone/remove\" && method === \"POST\") {",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 207,
+    "condition": "if (path === \"/me/profile/upsert\" && method === \"POST\") {",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 215,
+    "condition": "if (path === HANDS_API_RUN_PATH) {",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 220,
+    "condition": "if (path === HANDS_API_TOOLS_PATH) {",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 225,
+    "condition": "if (path === ADMIN_CONNECT_LINK_PATH) {",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 228,
+    "condition": "if (path === ADMIN_SMS_LINES_PATH) {",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 234,
+    "condition": "if (path === \"/sms/inbound\" && method === \"POST\") {",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 245,
+    "condition": "if (path === \"/sms/sendblue\" && method === \"POST\") {",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 248,
+    "condition": "if (path === \"/transcription/token\" && method === \"POST\") {",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 265,
+    "condition": "if (path === CONNECTIONS_WEBHOOK_PATH) {",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 282,
+    "condition": "if (path === \"/me/connections\" || path.startsWith(\"/me/connections/\")) {",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 302,
+    "condition": "if (path.startsWith(\"/c/\")) {",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 324,
+    "condition": "if (path.startsWith(\"/r/\") && method === \"GET\") {",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 336,
+    "condition": "if (path.startsWith(\"/fellows/\") && path !== \"/fellows/hq\") {",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 338,
+    "condition": "if (path === \"/fellows/health\" && method === \"GET\") return fellowsHealth(request, f);",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 339,
+    "condition": "if (path === \"/fellows/code\" && method === \"POST\") return fellowsCode(request, f);",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 340,
+    "condition": "if (path === \"/fellows/verify\" && method === \"POST\") return fellowsVerify(request, f);",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 341,
+    "condition": "if (path === \"/fellows/start\" && method === \"POST\") return fellowsStart(request, f);",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 342,
+    "condition": "if (path === \"/fellows/confirm\" && method === \"GET\") return fellowsConfirm(request, f);",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 343,
+    "condition": "if (path === \"/fellows/me\" && method === \"GET\") return fellowsMe(request, f);",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 344,
+    "condition": "if (path === \"/fellows/apply\" && method === \"POST\") return fellowsApply(request, f);",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 345,
+    "condition": "if (path === \"/fellows/progress\" && method === \"POST\") return fellowsProgress(request, f);",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 346,
+    "condition": "if (path === \"/fellows/profile\" && method === \"POST\") return fellowsProfile(request, f);",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 347,
+    "condition": "if (path === \"/fellows/submissions\" && method === \"POST\") return fellowsSubmissions(request, f);",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 348,
+    "condition": "if (path === \"/fellows/submissions/remove\" && method === \"POST\") return fellowsSubmissionsRemove(request, f);",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 349,
+    "condition": "if (path === \"/fellows/guardian/link\" && method === \"POST\") return fellowsGuardianLink(request, f);",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 350,
+    "condition": "if (path === \"/fellows/guardian\" && method === \"GET\") return fellowsGuardianGet(request, f);",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 351,
+    "condition": "if (path === \"/fellows/guardian\" && method === \"POST\") return fellowsGuardianPost(request, f);",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 358,
+    "condition": "if (path.startsWith(\"/internal/\") || path === \"/fellows/hq\") {",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 369,
+    "condition": "if (path === \"/internal/health\" && method === \"GET\") return hqHealth(request, hq);",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 370,
+    "condition": "if (path === \"/internal/login\" && method === \"POST\") return hqLogin(request, hq);",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 371,
+    "condition": "if (path === \"/fellows/hq\" && method === \"GET\") return hqPage(request, hq);",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 381,
+    "condition": "if (path === \"/internal/session\" && method === \"POST\") return hqSession(request, hq);",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 382,
+    "condition": "if (path === \"/internal/session/end\" && method === \"POST\") return hqSessionEnd(request, hq);",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 386,
+    "condition": "if (path === \"/internal/me\" && method === \"GET\") return hqMe(request, hq);",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 387,
+    "condition": "if (path === \"/internal/me/password\" && method === \"POST\") return hqMePassword(request, hq);",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 392,
+    "condition": "if (path === \"/internal/people/faces\" && method === \"GET\") {",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 397,
+    "condition": "if (path === \"/internal/fellows\" && method === \"GET\") return hqFellows(request, hq);",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 404,
+    "condition": "if (path === \"/internal/fellows/remove\" && method === \"POST\") {",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 407,
+    "condition": "if (path === \"/internal/fellows/submissions/remove\" && method === \"POST\") {",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 410,
+    "condition": "if (path === \"/internal/fellows/submissions/release\" && method === \"POST\") {",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 413,
+    "condition": "if (path === \"/internal/state\" && method === \"GET\") return hqState(request, hq);",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 414,
+    "condition": "if (path === \"/internal/people\" && method === \"POST\") return hqPeopleCreate(request, hq);",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 415,
+    "condition": "if (path === \"/internal/people\" && method === \"PATCH\") return hqPeopleUpdate(request, hq);",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 416,
+    "condition": "if (path === \"/internal/todos\" && method === \"POST\") return hqTodoCreate(request, hq);",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 417,
+    "condition": "if (path === \"/internal/todos\" && method === \"PATCH\") return hqTodoUpdate(request, hq);",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 418,
+    "condition": "if (path === \"/internal/todos/delete\" && method === \"POST\") return hqTodoDelete(request, hq);",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 419,
+    "condition": "if (path === \"/internal/events\" && method === \"POST\") return hqEventCreate(request, hq);",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 420,
+    "condition": "if (path === \"/internal/events/delete\" && method === \"POST\") return hqEventDelete(request, hq);",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 421,
+    "condition": "if (path === \"/internal/tracks\" && method === \"POST\") return hqTrackUpsert(request, hq);",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 422,
+    "condition": "if (path === \"/internal/tracks/delete\" && method === \"POST\") return hqTrackDelete(request, hq);",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 423,
+    "condition": "if (path === \"/internal/expenses\" && method === \"POST\") return hqExpenseCreate(request, hq);",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 424,
+    "condition": "if (path === \"/internal/expenses/delete\" && method === \"POST\") return hqExpenseDelete(request, hq);",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 425,
+    "condition": "if (path === \"/internal/notes\" && method === \"POST\") return hqNoteUpsert(request, hq);",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 426,
+    "condition": "if (path === \"/internal/notes/delete\" && method === \"POST\") return hqNoteDelete(request, hq);",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 427,
+    "condition": "if (path === \"/internal/passwords\" && method === \"POST\") return hqPasswordUpsert(request, hq);",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 428,
+    "condition": "if (path === \"/internal/passwords/reveal\" && method === \"POST\") return hqPasswordReveal(request, hq);",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 429,
+    "condition": "if (path === \"/internal/passwords/delete\" && method === \"POST\") return hqPasswordDelete(request, hq);",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 430,
+    "condition": "if (path === \"/internal/people/code\" && method === \"POST\") return hqPeopleCode(request, hq);",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 431,
+    "condition": "if (path === \"/internal/notifs/read\" && method === \"POST\") return hqNotifsRead(request, hq);",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 432,
+    "condition": "if (path === \"/internal/settings\" && method === \"POST\") return hqSettings(request, hq);",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 433,
+    "condition": "if (path === \"/internal/comments\" && method === \"POST\") return hqCommentCreate(request, hq);",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 434,
+    "condition": "if (path === \"/internal/comments\" && method === \"PATCH\") return hqCommentUpdate(request, hq);",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 435,
+    "condition": "if (path === \"/internal/comments/delete\" && method === \"POST\") return hqCommentDelete(request, hq);",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 436,
+    "condition": "if (path === \"/internal/reminders\" && method === \"POST\") return hqReminderCreate(request, hq);",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 437,
+    "condition": "if (path === \"/internal/reminders/delete\" && method === \"POST\") return hqReminderDelete(request, hq);",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 438,
+    "condition": "if (path === \"/internal/assistant\" && method === \"POST\") return hqAssistant(request, hq);",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 439,
+    "condition": "if (path.startsWith(\"/internal/cal/\") && method === \"GET\") {",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 445,
+    "condition": "if (path === \"/internal/clerk/exchange\" && method === \"POST\") {",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 460,
+    "condition": "if (path === \"/api/collections/owners/auth-with-password\" && method === \"POST\") {",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 463,
+    "condition": "if (path === \"/api/collections/owners/auth-refresh\" && method === \"POST\") {",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 474,
+    "condition": "if (path === \"/api/realtime\" && method !== \"GET\") {",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 491,
+    "condition": "if (path === \"/api/realtime\") {",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 510,
+    "condition": "if (path.startsWith(\"/api/files/\") && method === \"GET\") {",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 515,
+    "condition": "if (path === \"/evidence/share\" && method === \"POST\") {",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 520,
+    "condition": "const m = path.match(/^\\/api\\/collections\\/([A-Za-z0-9_]+)\\/records(?:\\/([^/]+))?$/);",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/index.ts",
+    "line": 778,
+    "condition": "return STATIC_PREFIXES.some((p) => path === p || path.startsWith(p))",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/policy/guard.ts",
+    "line": 73,
+    "condition": "path.startsWith(\"/api/collections/\") ||",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/policy/guard.ts",
+    "line": 74,
+    "condition": "(path === \"/api/realtime\" && method !== \"GET\");",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/policy/guard.ts",
+    "line": 97,
+    "condition": "if (path.startsWith(\"/api/collections/owners/\") && AUTH_ENDPOINTS.test(path)) return null;",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/policy/guard.ts",
+    "line": 98,
+    "condition": "if (method === \"POST\" && path === \"/api/collections/owners/records\") return null;",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/policy/guard.ts",
+    "line": 109,
+    "condition": "if (path.startsWith(\"/api/collections/_superusers/\")) return null;",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/policy/guard.ts",
+    "line": 127,
+    "condition": "if (path === `${AGENTS_BASE}/${agentRowId}` && method === \"PATCH\") {",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/policy/guard.ts",
+    "line": 133,
+    "condition": "if (ownerRef && path === JOBS_BASE && method === \"GET\") {",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/policy/guard.ts",
+    "line": 141,
+    "condition": "if (ownerRef && path.startsWith(`${JOBS_BASE}/`)) {",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/policy/guard.ts",
+    "line": 158,
+    "condition": "if (ownerRef && path === EVENTS_BASE && method === \"POST\") {",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/policy/guard.ts",
+    "line": 173,
+    "condition": "if (ownerRef && method === \"POST\" && path === EVIDENCE_BASE",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/policy/guard.ts",
+    "line": 190,
+    "condition": "if (path === `/api/collections/owners/records/${authId}`) return null;",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/policy/guard.ts",
+    "line": 192,
+    "condition": "const m = path.match(",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/policy/guard.ts",
+    "line": 277,
+    "condition": "if (method === \"POST\" && path === AGENTS_BASE) {",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/policy/guard.ts",
+    "line": 283,
+    "condition": "if (method === \"GET\" && (path === AGENTS_BASE || path === PENDANTS_BASE)) {",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/policy/guard.ts",
+    "line": 291,
+    "condition": "return pairLookup(ctx, env, path === AGENTS_BASE ? \"agents\" : \"pendants\", pair[1]);",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/policy/guard.ts",
+    "line": 301,
+    "condition": "&& (path.startsWith(`${AGENTS_BASE}/`) || path.startsWith(`${PENDANTS_BASE}/`))) {",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/policy/guard.ts",
+    "line": 304,
+    "condition": "const collection = path.startsWith(AGENTS_BASE) ? \"agents\" : \"pendants\";",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/policy/owner_profile_owner.ts",
+    "line": 48,
+    "condition": "if (path !== BASE && !path.startsWith(`${BASE}/`)) return null;",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/policy/research_lane.ts",
+    "line": 64,
+    "condition": "if (method === \"GET\" && path === JOBS_BASE && !ctx.worker.fromWorker) {",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/policy/research_lane.ts",
+    "line": 96,
+    "condition": "const creates = method === \"POST\" && path === JOBS_BASE;",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/policy/research_lane.ts",
+    "line": 97,
+    "condition": "const updates = method === \"PATCH\" && path.startsWith(`${JOBS_BASE}/`);",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/policy/workflow_guard.ts",
+    "line": 270,
+    "condition": "if (path !== BASE && !path.startsWith(`${BASE}/`)) return null;",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  },
+  {
+    "path": "migration/workers/src/routes/connections_api.ts",
+    "line": 251,
+    "condition": "if (pathname === path) return leg as ConnectionsApiLeg;",
+    "review_status": "dispatch_candidate",
+    "evidence": []
+  }
+]

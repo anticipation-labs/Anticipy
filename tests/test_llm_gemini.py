@@ -66,7 +66,8 @@ def test_the_clock_never_leads_the_prompt(monkeypatch):
     system = _Client.request[2]["systemInstruction"]["parts"][0]["text"]
     assert system.startswith("Return JSON."), system[:120]
     # The grounding still travels — it just travels last.
-    assert "Vancouver" in system
+    assert "Right now it is" in system
+    assert "time zone does not establish a city" in system
 
 
 def test_a_mechanical_call_reaches_the_aux_model(monkeypatch):

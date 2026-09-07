@@ -1,0 +1,21 @@
+{
+  "checkpoint": "2026-09-07T03:52Z",
+  "branch": "cloudflare-backend",
+  "python": {
+    "passed": 2986,
+    "skipped": 2
+  },
+  "ios_baseline_suites": 63,
+  "worker_chained_files": 34,
+  "worker_suite": "passed under Node 24",
+  "local_route_probe_requests": 131,
+  "corpus_people": 50,
+  "corpus_contacts": 101,
+  "distinct_transcript_people_observed": 14,
+  "composer_replay_outputs": 30,
+  "model_observed_usd": 0.5372378839999999,
+  "model_reserved_plus_observed_usd": 0.5372378839999999,
+  "deployed": false,
+  "owner_reset_executed": false,
+  "phone_release_executed": false
+}

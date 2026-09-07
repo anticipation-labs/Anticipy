@@ -16,10 +16,10 @@ it could not derive a city from the IANA zone, so the grounding said nothing
 at all about where the owner was, and the model filled the hole confidently
 before hedging in the same sentence.
 
-These tests pin all three halves of the fix: the derivable city still gets
-named, the underivable one is stated as unknown out loud, and the static
-system prompt still leads the message so the prompt cache (measured 5x) keeps
-hitting.
+The old fix incorrectly treated the city in an IANA time-zone identifier as
+the owner's location. Seattle and Los Angeles can share that identifier. These
+tests now require explicit contextual evidence for place and retain the cached
+prompt-prefix check. A clock is not a location sensor.
 """
 import os
 import sys
@@ -70,11 +70,13 @@ def _system_blocks(monkeypatch, zone):
     return payload["messages"][0]["content"]
 
 
-def test_a_derivable_zone_still_names_the_city():
-    """The behaviour that already worked, pinned so the fix cannot bleach it."""
-    line = where_line("America/Los_Angeles")
-    assert "Los Angeles" in line
-    assert "unless they say otherwise" in line
+def test_a_time_zone_does_not_establish_the_owners_city():
+    for zone in ("America/Los_Angeles", "America/New_York", "Europe/London",
+                 "America/Vancouver", "Asia/Kolkata"):
+        line = where_line(zone)
+        assert "They are in" not in line
+        assert "time zone does not establish a city" in line
+        assert "explicitly stated in the context" in line
 
 
 def test_an_unknown_zone_forbids_inventing_a_city():
@@ -104,11 +106,11 @@ def test_the_unknown_place_sentence_reaches_the_model(monkeypatch):
     assert "Right now it is" in grounding
 
 
-def test_a_known_place_reaches_the_model(monkeypatch):
+def test_a_known_timezone_does_not_become_a_known_place_at_the_model(monkeypatch):
     blocks = _system_blocks(monkeypatch, "America/Los_Angeles")
     grounding = blocks[-1]["text"]
-    assert "They are in Los Angeles" in grounding, grounding
-    assert "never assume a city" not in grounding.lower(), grounding
+    assert "They are in Los Angeles" not in grounding, grounding
+    assert "never assume a city" in grounding.lower(), grounding
 
 
 def test_the_static_prompt_is_still_the_cached_prefix(monkeypatch):
