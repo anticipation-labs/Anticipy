@@ -1,4 +1,12 @@
-# Has anything actually moved to Cloudflare? No. Measured 2026-09-04, late.
+# Historical cutover measurement — 2026-09-04
+
+> **Superseded operational status, 2026-09-07.** Production requests to
+> `api.anticipy.ai` now reach the Cloudflare API Worker and D1, with the active
+> source verified in CI. The brain runs on Cloudflare Containers; its runtime
+> rollout and snapshot health are checked separately from deployment success.
+> Use [the active audit](../research/audit-2026-09-06/PLAN.md) and the actual
+> workflows for current operations. The Railway/Vercel/Porkbun inventory below
+> is retained as a dated migration record and must not guide a new deployment.
 
 Everything is BUILT on Cloudflare and verified against production. NOTHING is
 SERVING from it. Not one real request — from a person, a pendant, the Chrome
