@@ -8,7 +8,7 @@ from proof.audit.live_api_release import request
 
 def main():
     base = ("https://api.cloudflare.com/client/v4/accounts/"
-            + os.environ["CLOUDFLARE_ACCOUNT_ID"] + "/cloudchamber")
+            + os.environ["CLOUDFLARE_ACCOUNT_ID"] + "/containers")
 
     def read(path):
         status, body, _ = request(base, "GET", path,
