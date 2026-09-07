@@ -156,4 +156,3 @@ Scope you can trust
 This was a repository-wide inventory and source-path audit at e370340e, not a line-by-line correctness review of 2,723 files. Binary contents, every third-party service and every possible user journey were not re-tested. Historical comments were checked against executable code where findings depended on them. All gaps are source findings unless specifically labeled live proof.
 
 Entry points: migration/workers/src/index.ts:166; brain/container_entry.py:328; brain/worker.py:5097; extension/manifest.json:26. Reproduce the map by following those entry points and the stored inventory.
-

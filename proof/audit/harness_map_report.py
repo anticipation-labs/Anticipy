@@ -129,6 +129,6 @@ p('This was a repository-wide inventory and source-path audit at '+REV[:8]+', no
 p('Entry points: migration/workers/src/index.ts:166; brain/container_entry.py:328; brain/worker.py:5097; extension/manifest.json:26. Reproduce the map by following those entry points and the stored inventory.','SmallA')
 OUT.parent.mkdir(exist_ok=True,parents=True)
 SimpleDocTemplate(str(OUT),pagesize=(595.28,841.89),leftMargin=45,rightMargin=46.28,topMargin=38,bottomMargin=52,title='Anticipy: the harness explained',author='Anticipy repository audit').build(story,onFirstPage=footer,onLaterPages=footer)
-(BASE/'REPORT.md').write_text('\n'.join(md)+'\n')
+(BASE/'REPORT.md').write_text('\n'.join(md).rstrip()+'\n')
 (BASE/'features.json').write_text(json.dumps({'revision':REV,'features':[{'feature':a,'status':b,'behavior':c,'source':d} for a,b,c,d in rows1+rows2],'gaps':[{'gap':a,'finding':b} for a,b in gaps]},indent=2)+'\n')
 print(OUT)
