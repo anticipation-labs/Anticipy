@@ -21,6 +21,7 @@
  */
 import { planFleet, parseCap } from "./plan";
 import { OwnerLifecycle } from "./owner_lifecycle";
+import { observeRunning } from "./observe_running";
 import { requireRuntimeSource } from "./runtime_refresh";
 import { fleetStatus, type FleetObservation, type WorkerObservation } from "./fleet_status";
 import { drainMemoryPurges, type PurgeEnv } from "./purge";
@@ -94,12 +95,18 @@ export class OwnerBrain extends Container<BrainEnv> {
     this.ctx.storage,
     async (ref) => !!await this.env.DB.prepare("SELECT id FROM owners WHERE id = ?").bind(ref).first(),
     async (owner) => {
-      await this.startAndWaitForPorts({ startOptions: { envVars: this.envFor(owner) } });
       // Inside the lifecycle lock, and raw port transport: this observation
       // must never auto-start a container after a crash or erasure.
       if (!this.ctx.container) throw new Error("container runtime unavailable");
-      const response = await this.ctx.container.getTcpPort(8731).fetch("http://container/health");
-      const health = await response.json() as WorkerObservation;
+      const health = await observeRunning(
+        () => !!this.ctx.container?.running,
+        () => this.startAndWaitForPorts({ startOptions: { envVars: this.envFor(owner) },
+          cancellationOptions: { abort: AbortSignal.timeout(60_000) } }),
+        async () => {
+          const response = await this.ctx.container!.getTcpPort(8731).fetch(
+            "http://container/health", { signal: AbortSignal.timeout(15_000) });
+          return await response.json() as WorkerObservation;
+        });
       await this.ctx.storage.put("last_health", health);
       if (this.env.ANTICIPY_EXPECTED_RUNTIME_SOURCE) {
         const prefix = String(this.env.ANTICIPY_STATE_R2_PREFIX || "owners").replace(/^\/+|\/+$/g, "");

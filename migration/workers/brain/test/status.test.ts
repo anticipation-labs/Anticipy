@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { fleetStatus, type FleetObservation } from "../src/fleet_status.ts";
 import { adminBrainStatus } from "../../src/routes/admin_brain_status.ts";
 import { requireRuntimeSource } from "../src/runtime_refresh.ts";
+import { observeRunning } from '../src/observe_running.ts';
 
 const good: FleetObservation = { checked_at: 1000, served: 1, unserved: [], failed: [], workers: [], cleanup_failed: 0 };
 assert.equal(fleetStatus(undefined, 1000).ok, false);
@@ -49,3 +50,18 @@ await assert.rejects(requireRuntimeSource(expected, undefined, state,
 assert.equal(stopped, 1, "only one SIGTERM may be sent while an old image flushes");
 await requireRuntimeSource(expected, expected, state, async () => null, stop, 201_000);
 console.log("runtime refresh: current, missing/stale snapshot, graceful stop and signal coalescing passed");
+
+let starts = 0;
+const start = async () => { starts++; };
+assert.deepEqual(await observeRunning(() => true, start, async () => ({ snapshot: 'current' })),
+  { snapshot: 'current' });
+assert.equal(starts, 0, 'an already-running worker must not re-enter SDK startup');
+assert.equal(await observeRunning(() => false, start, async () => 'ready'), 'ready');
+assert.equal(starts, 1);
+await assert.rejects(observeRunning(() => true, start, async () => { throw new Error('health timeout'); }));
+assert.equal(starts, 1, 'a failed health read must not restart an active effect');
+let observed = false;
+await assert.rejects(observeRunning(() => false, async () => { throw new Error('start failed'); },
+  async () => { observed = true; }));
+assert.equal(observed, false, 'failed startup must not manufacture a health observation');
+console.log('warm health: no restart, cold startup, failed read and failed start checks passed');
