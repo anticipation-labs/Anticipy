@@ -58,7 +58,7 @@ def run_person(person, label, timeout):
     run_dir.mkdir(parents=True, mode=0o700)
     service = requests.Session()
     service.trust_env = False
-    service.headers["X-Anticipy-Token"] = "local-development-service-token"
+    service.headers["X-Anticipy-Token"] = os.environ.get("ANTICIPY_AUDIT_SERVICE_TOKEN", "local-development-service-token")
 
     def request(method, path, **kwargs):
         response = service.request(method, BASE + path, timeout=20, **kwargs)
@@ -109,7 +109,7 @@ def run_person(person, label, timeout):
         "PYTHONPATH": str(ROOT), "PYTHONUNBUFFERED": "1", "ANTICIPY_AUDIT_RUN": audit_run,
         "OPENROUTER_API_KEY": (STATE / "gateway-token").read_text().strip(),
         "ANTICIPY_PB": BASE, "ANTICIPY_OWNER_REF": ref, "ANTICIPY_OWNER_ID": ref,
-        "ANTICIPY_SERVICE_TOKEN": "local-development-service-token",
+        "ANTICIPY_SERVICE_TOKEN": os.environ.get("ANTICIPY_AUDIT_SERVICE_TOKEN", "local-development-service-token"),
         "ANTICIPY_SUPERVISED": "1", "ANTICIPY_SMS_PROVIDER": "mock",
         "ANTICIPY_MEMORY_DB": str(run_dir / "memory.db"),
         "ANTICIPY_CLOCK_STATE": str(run_dir / "clock_state.json"),
@@ -137,7 +137,10 @@ def run_person(person, label, timeout):
                 if process.poll() is not None or time.monotonic() - started > 150:
                     raise RuntimeError("profile imports did not complete; inspect worker.log")
                 time.sleep(2)
-            transcript = event(person["transcript"]["text"], "transcript", "typed", explicit=True, speaker="owner")
+            source = person["transcript"].get("source", "typed")
+            transcript = event(person["transcript"]["text"], "transcript", source,
+                               explicit=person["transcript"].get("explicit", source == "typed"),
+                               speaker=person["transcript"].get("speaker", "owner"))
             result["transcript_id"] = transcript["id"]
             heard_started = time.monotonic()
             while time.monotonic() - heard_started < timeout:
@@ -184,6 +187,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--child", action="store_true")
     parser.add_argument("--ids", default="10")
+    parser.add_argument("--corpus", default="proof/audit/corpus/people.json")
     parser.add_argument("--label", default="pilot-1")
     parser.add_argument("--timeout", type=int, default=150)
     parser.add_argument("--parallel", type=int, choices=range(1, 9), default=1)
@@ -192,7 +196,7 @@ if __name__ == "__main__":
     if args.child:
         child()
     else:
-        people = json.loads((ROOT / "proof/audit/corpus/people.json").read_text())["people"]
+        people = json.loads((ROOT / args.corpus).read_text())["people"]
         selected = [int(i) for i in args.ids.split(",")]
         for index in selected:
             person = people[index - 1]

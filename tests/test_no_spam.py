@@ -188,7 +188,14 @@ def test_a_parked_question_is_not_reasked_every_45_minutes(monkeypatch):
              "text": prior, "created": stamp(90)}]
     get, _ = fake_events(rows)
     monkeypatch.setattr(W.pb, "get", get)
-    assert W.need_already_asked(BOOK, BLOCKER) is True
+    calls = []
+    def judge(system, payload, **kwargs):
+        calls.append(payload)
+        return types.SimpleNamespace(text='{"verdict":"already_asked"}')
+    llm = types.SimpleNamespace(live=True, chat=judge)
+    W._QUESTION_COVERAGE_CACHE.clear()
+    assert W.need_already_asked(BOOK, BLOCKER, llm=llm) is True
+    assert BOOK in calls[0] and BLOCKER in calls[0] and prior in calls[0]
 
 
 def test_a_new_requirement_on_the_same_task_is_still_raised(monkeypatch):

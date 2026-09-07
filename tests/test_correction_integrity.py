@@ -139,6 +139,7 @@ def test_resume_drops_a_code_the_owner_never_gave(monkeypatch):
 
 
 def test_a_non_answer_amendment_never_requeues_a_parked_run(monkeypatch):
+    monkeypatch.setattr(Conversation, "_resolve_question", lambda *args: {"verdict": 'partial', "changes": {'time': '6'}, "remaining_question": ""})
     # Live re-verify (2026-08-12): "make it 6" reached the OTP-parked job as
     # {"time": "6"} — the code was rightly dropped, but the modify still
     # requeued the run, which burned a browser attempt only to re-park on the
@@ -156,6 +157,7 @@ def test_a_non_answer_amendment_never_requeues_a_parked_run(monkeypatch):
 
 
 def test_resume_keeps_the_code_actually_texted(monkeypatch):
+    monkeypatch.setattr(Conversation, "_resolve_question", lambda *args: {"verdict": 'answered', "changes": {'verification_code': '742913'}, "remaining_question": ""})
     job = {"id": "j1", "goal": "book dinner", "status": "needs_user",
            "result": "I need the 6-digit verification code",
            "params": json.dumps({"authorized": True,

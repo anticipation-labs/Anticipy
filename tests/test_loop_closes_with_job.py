@@ -101,6 +101,7 @@ def test_sms_decline_closes_the_promise(monkeypatch):
         "get": staticmethod(lambda *a, **k: R()),
         "patch": staticmethod(lambda *a, **k: R()),
     }))
+    monkeypatch.setattr(conv, "_open_work", lambda: [job])
     out = conv._cancel("j1")
     assert out == "cancelled:j1"
     assert mem.open_loops() == []

@@ -93,6 +93,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--label", required=True)
     parser.add_argument("--model", default="deepseek/deepseek-v3.2")
+    parser.add_argument("--parallel", type=int, default=1)
     args = parser.parse_args()
     destination = STATE / "memory-relations" / args.label / "results.json"
     if destination.exists():
@@ -101,7 +102,7 @@ def main():
     from urllib.parse import quote
     llm.OPENROUTER_URL = "http://127.0.0.1:8790/api/v1/chat/completions?audit_run=" + quote(args.label, safe="")
     os.environ.pop("ANTICIPY_AUX_MODEL", None)
-    with ThreadPoolExecutor(max_workers=5) as pool:
+    with ThreadPoolExecutor(max_workers=args.parallel) as pool:
         results = list(pool.map(lambda case: run(case, args.model), CASES))
         results += list(pool.map(lambda case: run_control(case, args.model), CONTROL_CASES))
     atomic_json(destination, {"scope": "real model; local production memory store; synthetic facts", "results": results})

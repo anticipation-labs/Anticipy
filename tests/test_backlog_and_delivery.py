@@ -363,7 +363,10 @@ def test_a_write_outage_cannot_turn_one_question_into_a_text_storm(monkeypatch):
     blind_backend(monkeypatch, [STUCK])
     for _ in range(8):
         W.ask_about_stuck_jobs(anticipy(notified), convo=None)
-    assert len(notified) == 1, f"sent it {len(notified)} times in one outage"
+    assert notified == [], "a question cannot send without a durable attempt fence"
+    blind_backend(monkeypatch, [STUCK], writes_fail=False)
+    W.ask_about_stuck_jobs(anticipy(notified), convo=None)
+    assert len(notified) == 1
 
 
 def test_a_write_outage_cannot_repeat_a_finished_answer(monkeypatch):
@@ -468,10 +471,10 @@ def test_a_genuinely_new_requirement_still_speaks_at_once(monkeypatch):
     important message this path sends is a NEW blocker on a job she has
     already asked about, and a job-keyed suppression would eat it."""
     notified = []
-    blind_backend(monkeypatch, [STUCK])
+    blind_backend(monkeypatch, [STUCK], writes_fail=False)
     W.ask_about_stuck_jobs(anticipy(notified), convo=None)
     moved_on = dict(STUCK, result="the form needs a phone number to hold it")
-    blind_backend(monkeypatch, [moved_on])
+    blind_backend(monkeypatch, [moved_on], writes_fail=False)
     W.ask_about_stuck_jobs(anticipy(notified), convo=None)
     assert len(notified) == 2
 

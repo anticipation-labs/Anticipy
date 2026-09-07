@@ -11,6 +11,7 @@ Run:  .venv/bin/python -m brain.worker
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -2581,7 +2582,7 @@ def record_notification_status(job: dict, state: str) -> bool:
     this helper records the resulting sent/failed/skipped observation.
     """
     job_id = str(job.get("id") or "").strip()
-    allowed = {"sms_sent", "sms_failed", "sms_skipped"}
+    allowed = {"sms_sent", "sms_failed", "sms_skipped", "sms_accepted", "sms_unconfirmed"}
     if not job_id or state not in allowed:
         return False
     owner_ref = str(job.get("owner_ref") or "")
@@ -3375,26 +3376,21 @@ def asks_for_goal(goal: str, owner_ref: str = "", within_hours: float = 24.0) ->
         return 0
 
 
+_QUESTION_COVERAGE_CACHE: dict = {}
+
+
 def need_already_asked(goal: str, blocker: str, within_hours: float = 24.0,
-                       covered: float = 0.5, owner_ref: str = "") -> bool:
-    """Has she already told him what THIS task is waiting for?
+                       owner_ref: str = "", llm=None) -> bool:
+    """Ask a model whether earlier outbound messages covered this question.
 
-    Keying on the task alone was wrong in a way that only shows up on the
-    second round. If he answers part of what a form wants, the task resumes,
-    the browser gets further and stops on something else — and a task-keyed
-    guard would keep her quiet about the new thing for the rest of the day.
-    The task would die silently, which is the exact failure the stuck-job ask
-    exists to prevent.
-
-    So compare against the BLOCKER — the browser's own words about what it
-    needs, which are stable — and ask whether a message she already sent
-    about this task covered it. Her own wording is generated fresh every time
-    and is useless for this; the requirement is not."""
-    goal, blocker = (goal or "").strip(), (blocker or "").strip()
-    if not goal or not blocker:
-        return False
-    want = _content_words(blocker)
-    if not want:
+    Task/state IDs handle transport identity. This question is about meaning:
+    a name and a restaurant name can share every word and still be different
+    requirements. Old word-overlap and number-subset guesses are removed.
+    Only a positive coverage verdict suppresses an ask; unavailable/unclear
+    must not pretend the owner has already been asked. Other transport guards
+    still bound duplicate effects and outreach volume.
+    """
+    if not goal.strip() or not blocker.strip():
         return False
     try:
         since = (datetime.now(timezone.utc)
@@ -3405,26 +3401,28 @@ def need_already_asked(goal: str, blocker: str, within_hours: float = 24.0,
                            "perPage": 100, "sort": "-created"}, timeout=10)
         if not r.ok:
             return False
-        for ev in r.json().get("items", []):
-            if (ev.get("goal") or "").strip() != goal:
-                continue
-            text = ev.get("text", "")
-            said = _content_words(text)
-            if said and len(want & said) / len(want) >= covered:
-                return True
-            # Word overlap misses a paraphrase (live, 2026-08-10: the same
-            # parked booking was re-asked every 45 minutes, freshly worded
-            # each time). Every ask now carries the blocker's hard facts
-            # exactly, so a prior needs_user ask whose facts match IS this
-            # question, whatever the words around them. A new requirement has
-            # new facts and still gets raised.
-            if (ev.get("decision") == "needs_user"
-                    and _fact_tokens(blocker)
-                    and carries_facts(text, blocker)):
-                return True
-    except Exception as e:
-        print(f"need_already_asked check failed: {e}")
-    return False
+        history = [{key: ev.get(key, "") for key in
+                    ("id", "text", "goal", "created", "decision")}
+                   for ev in r.json().get("items", [])
+                   if _event_matches_owner(ev, owner_ref)
+                   and str(ev.get("goal") or "").strip() == goal.strip()]
+        if not history:
+            return False
+        key = (owner_ref, goal, blocker, json.dumps(history, sort_keys=True))
+        if key not in _QUESTION_COVERAGE_CACHE:
+            from .question_delivery import coverage_verdict
+            verdict = coverage_verdict(llm, goal, blocker, history)
+            # Cache only actual verdicts. A model outage is retried after it
+            # recovers, not remembered as either permission or suppression.
+            if verdict != "unavailable":
+                if len(_QUESTION_COVERAGE_CACHE) >= 500:
+                    _QUESTION_COVERAGE_CACHE.pop(next(iter(_QUESTION_COVERAGE_CACHE)))
+                _QUESTION_COVERAGE_CACHE[key] = verdict
+            return verdict == "already_asked"
+        return _QUESTION_COVERAGE_CACHE[key] == "already_asked"
+    except Exception as exc:
+        print(f"question coverage unavailable: {type(exc).__name__}")
+        return False
 
 
 def already_raised(goal: str, text: str = "", within_hours: float = 24.0,
@@ -4440,7 +4438,8 @@ def handle_inbound(ev: dict, convo, anticipy) -> str:
 
     Returns the decision it recorded, for the log and for tests.
     """
-    in_app = ev.get("kind") == "app_reply"
+    in_app = (ev.get("kind") == "app_reply" or
+              (ev.get("kind") == "transcript" and ev.get("source") == "typed"))
     lane = "app in" if in_app else "sms in"
     text = ev.get("text", "").strip()
     # One conversation key for both channels (docs leg 2 "IT WAS ONE
@@ -4481,9 +4480,20 @@ def handle_inbound(ev: dict, convo, anticipy) -> str:
     # whether SMS is primary or a backstop -- that question stays open -- only
     # that a reply belongs on the channel the answer arrived on.
     deliver = convo.reply_in_app() if in_app else contextlib.nullcontext()
-    with deliver:
+    provenance = (convo.from_event(ev) if hasattr(convo, "from_event")
+                  else contextlib.nullcontext())
+    with deliver, provenance:
         try:
-            out = convo.on_reply(phone, text)
+            reply_context = None
+            if ev.get("kind") == "app_reply":
+                try:
+                    candidate = json.loads(ev.get("goal") or "null")
+                    if isinstance(candidate, dict) and isinstance(candidate.get("reply_to_job_id"), str):
+                        reply_context = candidate
+                except (ValueError, TypeError):
+                    pass
+            out = (convo.on_reply(phone, text, reply_context=reply_context)
+                   if reply_context else convo.on_reply(phone, text))
         except Exception as e:
             mark_processed(ev["id"], "error")
             print(f"{lane}: {text!r} -> error: {e}")
@@ -4827,22 +4837,26 @@ def publish_worker_status(banner: str, owner_ref: str = "",
 
 
 def ask_about_stuck_jobs(anticipy, convo) -> None:
-    """Text the owner about anything the browser handed back, once each.
+    """Deliver unanswered task questions, including drafts not yet executable.
 
     The agent reports exactly what it needs ("I need your birthday to finish
     the reservation"); she puts that in her own words and asks. His reply
     comes back through the normal SMS path, where the answer is remembered
     and the job resumes — so nothing has to be pre-programmed per field."""
     try:
-        filt = 'status="needs_user"'
+        filt = '(status="needs_user" || status="awaiting_confirm") && result!=""'
         scope = owner_filter(anticipy)
         if scope:
             filt += f" && {scope}"
-        r = pb.get(f"{PB}/api/collections/jobs/records",
-                   params={"filter": filt, "perPage": 5, "sort": "-updated"}, timeout=10)
-        if not r.ok:
-            return
-        for job in r.json().get("items", []):
+        # Reuse the owner-scoped, oldest-first paginator. Five already asked
+        # questions must not occupy the entire first page forever and starve
+        # a sixth one. A card without a question does not belong in this pass.
+        for job in _finished_jobs(filt):
+            if not _event_matches_owner(job, anticipy.owner_ref,
+                                        getattr(anticipy, "owner_id", "")):
+                continue
+            if job.get("status") not in ("needs_user", "awaiting_confirm"):
+                continue
             # There used to be an in-RAM ASKED_ABOUT set here, marked before
             # any other check. It defeated the very guard written to replace
             # it: need_already_asked() exists so that a task blocking on a
@@ -4852,9 +4866,27 @@ def ask_about_stuck_jobs(anticipy, convo) -> None:
             blocker = (job.get("result") or "").strip()
             if not blocker:
                 continue
-            # An ambient job that hit a wall does not earn a text — he never
-            # asked for it. It stays visible in the app, nothing more.
+            # Read-only background research stays on the desk. A proposed
+            # consequential task uses the separate desk lane and has an
+            # approval/question the owner can answer; it must not disappear
+            # from this sweep merely because no executor has started yet.
             if ambient_job(job):
+                continue
+            # A draft is an invitation to start, not a reply to an already
+            # authorized errand. After a midnight proposal is deferred, the
+            # persisted card is the morning outbox. Do not expire its question
+            # or pay to rewrite it on every nighttime sweep.
+            proposed = job.get("status") == "awaiting_confirm"
+            if proposed and (_in_quiet_hours(time.time()) or MEETING_ARMED):
+                continue
+            # Fence the exact persisted question before touching a provider.
+            # Hashing raw record values is transport identity, not a judgment
+            # of meaning. New questions/versions remain independently sendable.
+            question_key = hashlib.sha256(json.dumps([
+                job.get("status"), job.get("workflow_version", 0), blocker,
+            ], ensure_ascii=False).encode()).hexdigest()[:24]
+            notice = dict(job, id=f"question:{job['id']}:{question_key}")
+            if notification_was_attempted(notice) is not False:
                 continue
             # Cheapest guard FIRST. This whole block used to compose the
             # message before deciding whether to send it, so every poll of a
@@ -4942,7 +4974,9 @@ def ask_about_stuck_jobs(anticipy, convo) -> None:
             window = 24.0 if asks_already >= 2 else 3.0
             if need_already_asked(job.get("goal", ""), blocker,
                                   within_hours=window,
-                                  owner_ref=anticipy.owner_ref):
+                                  owner_ref=anticipy.owner_ref,
+                                  llm=getattr(getattr(anticipy, "brain", None), "strong", None)
+                                      or getattr(anticipy, "llm", None)):
                 print(f"stuck job {job['id']}: already asked for this, staying quiet")
                 continue
             # Same distinction as the finished-job reporter, for the same
@@ -4989,46 +5023,32 @@ def ask_about_stuck_jobs(anticipy, convo) -> None:
                     print(f"stuck job {job['id']}: nowhere to send this — no "
                           f"phone on this account, not composing")
                 continue
+            # Follow-up invitations share the same durable daily outreach
+            # allowance as the original proposal and the clock. Directly
+            # requested work blocked during execution remains a prompt reply.
+            if proposed and not reserve_uninvited_text(anticipy.owner_ref, "task_question"):
+                continue
             said = anticipy._voice({
-                "situation": "you got most of the way through a task in their browser "
-                             "and need one thing from them to finish. Carry the facts "
+                "situation": "a task is waiting for the owner's answer. Its recorded "
+                             "status and question are below. Awaiting confirmation "
+                             "means execution has not been authorized; needs_user "
+                             "means an executor stopped for input. Do not claim any "
+                             "progress beyond that evidence. Carry the facts "
                              "below EXACTLY — every number, time, date and name in "
                              "what_you_need must survive into your text unchanged",
                 "task": job.get("goal", ""),
+                "status": job.get("status", ""),
                 "what_you_need": blocker,
             })
-            # Her paraphrase is voice, not authority: if it dropped or invented
-            # a number/time/date, the facts go out verbatim instead. Live,
-            # 2026-08-10: "showing 6:30 PM, task is tomorrow at noon" was
-            # rewritten as "I'm gonna drive at 6:30. I can change it for
-            # tomorrow" — word salad about a booking he was waiting on.
-            # The facts she may use are the blocker's AND the task's: the
-            # model is shown both, so a sentence mentioning the 6 PM from the
-            # goal is not an invention. Judging it against the blocker alone
-            # rejected nearly every natural sentence — which is why he kept
-            # getting the identical canned line and said, correctly, "feel
-            # like it's hard-coded" (2026-08-16).
-            allowed = f"{blocker} {job.get('goal', '')}"
-            if said and not (carries_facts(said, blocker)
-                             or (_fact_tokens(blocker) <= _fact_tokens(said)
-                                 and _fact_tokens(said) <= _fact_tokens(allowed))):
-                print(f"stuck job {job['id']}: paraphrase mangled the facts, "
-                      f"asking again with them pinned")
-                said = anticipy._voice({
-                    "situation": "you got most of the way through a task in "
-                                 "their browser and need one thing to finish. "
-                                 "Your reply MUST contain, character for "
-                                 "character, every number, time, date and name "
-                                 "in what_you_need. Write it the way a person "
-                                 "texts, not a status line.",
-                    "task": job.get("goal", ""),
-                    "what_you_need": blocker,
-                })
-                if said and not (carries_facts(said, blocker)
-                                 or (_fact_tokens(blocker) <= _fact_tokens(said)
-                                     and _fact_tokens(said) <= _fact_tokens(allowed))):
-                    said = None
-            said = said or f"I'm nearly through {job.get('goal', 'that')} — {blocker}"
+            # The task and its complete question are the composition context.
+            # A bag of words/numbers cannot validate a paraphrase's meaning.
+            # If composition is unavailable, show the literal recorded question.
+            said = said or f"About {job.get('goal', 'that task')}: {blocker}"
+            # A failed database write is not permission to create an
+            # unrecordable external effect. A lost provider response also
+            # cannot license resending; the attempt stays visibly unconfirmed.
+            if claim_notification_attempt(notice) is not True:
+                continue
             # What she actually sent is the durable record — a set in memory
             # would forget across a redeploy and re-ask for his name and email.
             # Only record it if it actually left the building. notify_owner
@@ -5036,8 +5056,10 @@ def ask_about_stuck_jobs(anticipy, convo) -> None:
             # turned a refused send into 24 hours of silence about that task,
             # because the dedup guard reads these records as proof she spoke.
             if not anticipy.notify_owner(said):
+                record_notification_status(notice, "sms_unconfirmed")
                 print(f"stuck job {job['id']}: send failed, not recording it as said")
                 continue
+            record_notification_status(notice, "sms_accepted")
             _last_blocker[job["id"]] = blocker
             mark_sent(local_key)
             post_event("anticipy_says", said, decision="needs_user",
@@ -5339,6 +5361,13 @@ def main() -> None:
                           "hearing — the rest of the batch waits for the next "
                           "turn so his replies and reports are read first")
                     break
+                # The main composer predates app_reply and writes a typed
+                # transcript. It is still a direct conversation with us, not
+                # ambient speech to triage. Preserve the original event while
+                # sharing the reply path, claim and delivery behavior.
+                if ev.get("source") == "typed":
+                    handle_inbound(ev, convo, anticipy)
+                    continue
                 line = ev.get("text", "").strip()
                 # Mark that this person is mid-conversation, so a question
                 # born from one fragment waits for the sentence to finish.

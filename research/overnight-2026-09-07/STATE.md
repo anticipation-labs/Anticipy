@@ -120,3 +120,122 @@ limits here or linked artifacts. Do not replace unproven outcomes with promises.
   it to require the account guard before `reconciledJobs` and the actual jobs
   mutation. Full rerun ongoing. Extension full tests ongoing.
 - Current model audit total observed spend $2.603758108 before this UI exchange.
+
+## Release and deeper test status (09:15 UTC)
+
+- UI/context release committed and pushed: a50f3ca4e6d49d194bdb3a1e99328c28eed738c6,
+  build161. iOS CI 34104369111 is archiving; NOT yet verified in TestFlight.
+- API CI 34104384706 deployed a50f3ca and verified the live URL's source/version
+  plus34 ownership/auth/deletion checks. Local log overnight-api-deploy.log.
+- System invariants found a date-expiring test fixture: quiet26h had become48h
+  as the date changed. No production monitoring threshold changed. Replaced
+  fixed date with26h-relative data, tested7cases, committed a52c859 and pushed.
+- Brain changes are UNCOMMITTED. Live reply wire tests found partial-answer
+  premature resume, quoted-consent cancellation, and legacy draft question
+  persistence. First two cheap-model runs still failed. Upgrading these
+  authority judgments to the already-configured strong tier; current live
+  proof hit unavailable models under concurrent budget reservation. Do not
+  count unavailable as a semantic pass; that evaluator has been corrected.
+- 40 development people are running through actual local worker processes
+  (overnight-50-development);10 held-out people remain closed. Credentials and
+  models are restricted to localhost/API gateway. Actual cost roughly$3 sofar;
+  conservative reservations share the originalUS$50 cap (operating$25).
+- Memory real-model checks found planned completion being retired as done,
+  and an ambiguous unnamed-person identity case needing adjudication. Unfixed.
+- Chrome metadata found one dead Anticipy path and one current0.15.0 install
+  matching repository hashes. Browser security policy REFUSED chrome://extensions
+  and explicitly prohibited alternate routes to that management page. Do not
+  work around it or modify these entries. Continue isolated browser fixtures.
+
+## Verified progress and next release (10:12 UTC)
+
+- Apple independently reports build161 VALID and IN_BETA_TESTING for the internal
+  group. Query34105899086; evidence work/audit/overnight-asc-161.log. This is
+  availability, not proof anyone installed161. External161 still READY_FOR_BETA_SUBMISSION.
+- Live brain is still1682d69d,8 owner workers, current snapshots, no cleanup failures.
+  Recent worker-status rows identify Sendblue. Brain repairs below are NOT deployed.
+- Real HTTP/model reply proof overnight-replies-final-2 passed14/14, including
+  quoted consent (must not mutate), partial answers, exact-card ambiguity, typed
+  schema answers, queued cancellation and multiple task approval. Strong tier is
+  needed for these authority judgments. The cheap-tier failures remain recorded.
+- Real memory relation proof using the production strong tier passed16/16, including
+  future promises not being treated as completed, different recipients/people and
+  revoked facts. Earlier14/16 result was the wrong cheaper tier, not production.
+-40 development people finished through isolated actual worker processes; outcomes
+  require semantic review, not automatically PASS.10 held-out remain unopened.
+-12 ambient boundary diagnostics completed; eight non-action cases stayed quiet,
+  firm owner plans created held/quiet work. These transcripts include explanatory
+  hints, so natural raw-speech variants are still required before final evaluation.
+-Real isolated Chrome agent: compare, capacity discrepancy, quoted injection,
+  login wall and appointment passed. Appointment first FAILED with five incomplete
+  submissions: page_map omitted wrapping-label names, so the temporal judge removed
+  the end time; the duplicate fence checked before that removal. Repaired accessible
+  labels and final-payload recheck on BOTH click and Enter. Appointment then made
+  exactly one correct POST. Two new injected-error regressions also pass.
+-Extension now0.16.0, iOS version pin updated, three zip aliases rebuilt. These are
+  NOT yet published or installed in Omar's personal Chrome. No extension management
+  workaround is allowed after the browser security rejection.
+-Actual simulator paired the extension registration/heartbeat client through local
+  Worker/D1. Registration singleflight and owner identity passed; hardware Chrome
+  plumbing was adapted, not an installed-extension end-to-end claim. Revocation
+  and reconnect still need the final pass.
+-iOS162 code improves fresh-first-line context offers, typed reply follow/quiet
+  counts, and truthful extension update instructions. Full logic suite passed and
+  simulator build passed. Hands-on NEW REPLY tap exposed a NEW layout freeze in
+  LazyVStack (100% CPU; sample in overnight-ui-freeze.sample.txt). Replaced current
+  thread's lazy estimates with measured bounded rows and deferred the scroll until
+  the banner change settles. Retest completed the jump; typing remained responsive.
+-Actual simulator main composer answer then Yes resumed the SAME legacy draft.
+  Another natural cancellation is being sent now. No real user data/calendar/SMS
+  was touched.
+-Persisted question sweep now also sees awaiting_confirm cards with a question,
+  paginates, checks owner and status, defers proposals at night/during conversation,
+  and uses the shared outreach budget. Authorized executor questions still reply
+  immediately. Truthful voice context no longer pretends every task reached a
+  browser.6 new delivery tests +57 existing delivery tests pass. Older wording
+  deduplication/semantic tape elsewhere remains to audit; no claim of full removal.
+-Full Python3033 passed/2 skipped before latest delivery tests. Extension94 suites
+  passed before the two new final-payload regressions. Re-run required appropriate
+  focused/full checks after final edits.
+-Observed total model spend was aboutUS$6.66 before these last ambient/browser runs;
+  original50-dollar ledger intact, no budget reset.
+
+Next: finish UI responsiveness/capture/reply/pair revoke checks; exact-source
+review and162 source commit/CI. Commit/deploy brain through brain-deploy.yml with
+component=brain confirm=DEPLOY cap=100 (preserve fleet cap), verify live process and
+snapshot hashes. Publish extension zip through API CI. Complete natural speech
+and held-out/API-connection tests, clean synthetic accounts, update visual PDF.
+
+## Release162 and reply deployment preparation (10:33 UTC)
+
+-iOS/browser source committed81dafd1393bb79d982f087fe2279aff84240a89c.
+ CI34110939670 passed; ASC query34112233057 passed (see overnight-asc-162.log).
+ API deploy34110987507 passed. All three live zip aliases are0.16.0 and exactly
+ match source SHA25693c3a2d8c29e97031c7c81707a2fb086c01564b3d201b546e2ec1b18aa0a9ba9.
+-Browser re-pair and UI disconnect verified. Correctly formed /agent/key was
+ rejected403 after disconnect. Before disconnect the local rig authenticated
+ but returned503 because browser model configuration is absent; this limits the
+ local pairing proof. It does NOT prove the full installed-extension/API loop.
+-14 final real-model reply cases passed again after truthful human-readable
+ receipts: a queued job is ready to start, not falsely already executing; a
+ cancellation no longer mechanically concatenates a malformed task title.
+-Question coverage now belongs to a model with complete task/question/history.
+ Word overlap and number-token guesses were removed from that follow-up path,
+ as was the paraphrase token guard.8 real-model coverage cases pass.
+-Questions use an exclusive durable pre-send fence keyed to exact job/question/
+ workflow version. Lost provider responses remain unconfirmed and do not resend
+ after restart. Database outage creates no unrecordable SMS; restoration allows
+ delivery. New question identity remains sendable.68 focused delivery tests pass.
+-Full Python run3051 passed/2 skipped with one obsolete source-string test failing
+ because it required the deleted token guard. Replaced it with real delivery-path
+ behavior; focused41 passed. No production failure was hidden by that change.
+-tape_gate exits1 for its five declared legacy pieces, all other registry legs
+ pass. These are STILL OPEN, not an all-clear: undeclared effect-channel fallback,
+ compute fallback, shard word-count filter, degraded third-person filter, and
+ anaphoric segment word matching. Other legacy semantic shortcuts also remain.
+-Natural speech corpus (no explanatory rubric in the spoken text), including the
+ original greeting and calendar/accounting quotes, is running as overnight-natural-1
+ with2 workers.10 held-out people still not opened. Do not claim corpus completion.
+-Next: commit these reply/delivery changes; deploy brain via CI with cap100; check
+ live process/source/snapshot identities. Then finish natural speech/50-person/API
+ connection proof and remove remaining semantic shortcuts on active paths.

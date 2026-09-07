@@ -123,6 +123,19 @@ def test_an_owner_with_no_phone_can_still_answer(wired):
     assert convo.keys == [f"app:{OWNER_REF}"]
 
 
+@pytest.mark.parametrize("phone", [OWNER_PHONE, ""])
+def test_main_composer_uses_the_owner_conversation_and_replies_in_app(wired, phone):
+    convo = Recorder()
+    row = {**app_row(text="yes"), "kind": "transcript", "source": "typed",
+           "explicit": True, "goal": "a legacy transcript goal is not a phone"}
+    assert W.handle_inbound(row, convo, anticipy(phone=phone)) == "confirm"
+    assert convo.keys == [phone or f"app:{OWNER_REF}"]
+    assert convo.suppressed_during == [True]
+    assert wired["claims"] == [row["id"]]
+    assert wired["marks"] == [(row["id"], "confirm")]
+    assert ("anticipy_text", "On it.") in wired["events"]
+
+
 # ------------------------------------------------- the reply goes back right
 
 def test_an_app_answer_is_not_texted_back(wired):

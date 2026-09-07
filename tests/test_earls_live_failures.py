@@ -231,6 +231,8 @@ def test_missing_details_are_an_answer_card_before_approval(monkeypatch):
 
 
 def test_the_answer_fills_required_facts_even_with_odd_keys(monkeypatch):
+    from brain.conversation import Conversation
+    monkeypatch.setattr(Conversation, "_resolve_question", lambda *args: {"verdict": 'answered', "changes": {'location': 'West Vancouver'}, "remaining_question": ""})
     import json
     import brain.conversation as convmod
     from tests.test_correction_integrity import _conv, _pb
@@ -380,42 +382,38 @@ def test_a_declared_new_task_still_gets_its_own_card(monkeypatch):
 
 # ------------------------------------------- "feel like it's hard-coded"
 
-def test_her_own_words_survive_the_fact_guard():
-    # Live 2026-08-16 he received, again and again, the identical robot line
-    # "I'm nearly through Book dinner for 2 at Earls in West Van tomorrow
-    # (Saturday) at 6 PM — ..." and said "feel like it's hard-coded". He was
-    # right, and the cause was a guard, not a template: a paraphrase was
-    # rejected if it contained ANY fact token absent from the blocker text.
-    # The model is shown the TASK too, so mentioning the 6 PM from the goal
-    # counted as an invention and every natural sentence was thrown away.
-    from brain.worker import _fact_tokens, carries_facts
-
-    blocker = "I need your email address"
-    goal = "Book dinner for 2 at Earls in West Van tomorrow at 6 PM"
-    allowed = f"{blocker} {goal}"
-    human = "I'm almost done booking Earls for 6 PM tomorrow — what's your email?"
-
-    def accepted_for(blk, said, task=goal):
-        allow = f"{blk} {task}"
-        return (carries_facts(said, blk)
-                or (_fact_tokens(blk) <= _fact_tokens(said)
-                    and _fact_tokens(said) <= _fact_tokens(allow)))
-
-    def accepted(said):
-        return accepted_for(blocker, said)
-
-    assert not carries_facts(human, blocker), "this is the rejection he hit"
-    assert accepted(human), "a sentence using the task's own facts must survive"
-    # ...but inventing a fact neither the blocker nor the task ever had is
-    # still refused: that is what the guard exists for.
-    assert not accepted("I'm almost done booking Earls for 9 PM — your email?")
-    # and a time the blocker DID name must still survive the rewrite
-    timed = "I need the 7:15 slot confirmed"
-    assert not accepted_for(timed, "I'm nearly done — confirm?"), \
-        "a rewrite that drops the blocker's own time is still refused"
-
-    src = (ROOT / "brain/worker.py").read_text()
-    assert "asking again with them pinned" in src, "one retry before the robot voice"
+def test_a_natural_question_uses_the_complete_task_context(monkeypatch):
+    """The old token-subset guard discarded natural questions and forced the
+    same robotic prefix. Drive the actual delivery path with a composed ask;
+    no local copy of the old word matcher may stand in for the behavior.
+    """
+    from types import SimpleNamespace
+    from brain import worker as W
+    task = {"id": "earls-question", "owner_ref": "owner-one", "status": "needs_user",
+            "goal": "Book dinner for 2 at Earls tomorrow at 6 PM",
+            "result": "Which email address should I use?", "params": "{}"}
+    said, contexts = [], []
+    human = "Which email should I use for your 6 PM booking at Earls?"
+    monkeypatch.setattr(W, "ACTIVE_OWNER_REF", "owner-one")
+    monkeypatch.setattr(W, "_finished_jobs", lambda query: [task])
+    monkeypatch.setattr(W, "notification_was_attempted", lambda job: False)
+    monkeypatch.setattr(W, "claim_notification_attempt", lambda job: True)
+    monkeypatch.setattr(W, "record_notification_status", lambda *a: True)
+    monkeypatch.setattr(W, "asked_about_recently", lambda *a, **k: False)
+    monkeypatch.setattr(W, "asks_for_goal", lambda *a, **k: 0)
+    monkeypatch.setattr(W, "need_already_asked", lambda *a, **k: False)
+    monkeypatch.setattr(W, "can_reach_owner_fresh", lambda *a: True)
+    monkeypatch.setattr(W, "post_event", lambda *a, **k: None)
+    def compose(context):
+        contexts.append(context)
+        return human
+    brain = SimpleNamespace(owner_ref="owner-one", owner_id="", _voice=compose,
+                            notify_owner=lambda text: (said.append(text), True)[1])
+    W.ask_about_stuck_jobs(brain, None)
+    assert said == [human]
+    assert contexts[0]["task"] == task["goal"]
+    assert contexts[0]["what_you_need"] == task["result"]
+    assert contexts[0]["status"] == "needs_user"
 
 
 # ------------------------- asking into a sentence that is still arriving
