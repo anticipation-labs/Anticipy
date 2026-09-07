@@ -87,6 +87,15 @@ jobs:
           # `run:` body is command injection with a push as the delivery.
           HEAD_COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
           EVENT_NAME: ${{ github.event_name }}
+        # THE SUBJECT LINE, NOT THE BODY. The first commit to carry this gate
+        # uploaded anyway, and it was this rule that let it: its message body
+        # EXPLAINED the marker ("or by putting [ship] in the commit message"),
+        # and a grep over the whole message cannot tell a commit that ships
+        # from a commit that talks about shipping. Every commit touching this
+        # workflow, and every revert or cherry-pick quoting one, is that shape.
+        # The subject line is where an author declares intent and is too short
+        # to discuss anything.
+        #
         # ONE ANSWER, READ BY EVERY STEP BELOW. A condition repeated on four
         # steps is four chances for them to disagree, and the disagreement
         # that matters here -- archiving but not uploading, or uploading a
@@ -96,9 +105,9 @@ jobs:
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
             echo "ship=yes" >> "$GITHUB_OUTPUT"
             echo "This run was dispatched by hand: it will upload."
-          elif printf '%s' "$HEAD_COMMIT_MESSAGE" | grep -q '\[ship\]'; then
+          elif printf '%s' "$HEAD_COMMIT_MESSAGE" | head -1 | grep -q '\[ship\]'; then
             echo "ship=yes" >> "$GITHUB_OUTPUT"
-            echo "The commit message carries [ship]: it will upload."
+            echo "The commit SUBJECT carries [ship]: it will upload."
           else
             echo "ship=no" >> "$GITHUB_OUTPUT"
             echo "No [ship] in the commit message and not a manual dispatch:"
