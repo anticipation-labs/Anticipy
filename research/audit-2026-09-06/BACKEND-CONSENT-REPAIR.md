@@ -51,3 +51,20 @@ is not a claim that all legacy intent rules or integrations are production-ready
 Google Calendar authorization, the selective historical erasure of the real
 account, the complete legacy meaning audit and fresh-phone verification remain.
 The owner's production account has not been deleted.
+
+## Verified release
+
+- API run 34090499964 succeeded at commit 1682d69, deployed version
+  57495b4a-d169-4ec8-a4d0-34d2b5521fd0. All 29 live HTTP/database checks passed,
+  including stale refusal, preserved corrected state, fresh approval and replay refusal.
+- Brain run 34090592279 succeeded. All eight processes serve source hash
+  a11383fe995d4b48fb3c1099d94a02da0d1c80b2b47a224c1a9cf5bb5158dacc,
+  with current durable snapshots and zero pending cleanup failures.
+- System invariants run 34090500689 succeeded: 3,017 Python tests passed, seven
+  skipped, one warning; all 94 browser suites passed in 72.63 seconds; Worker and
+  brain lifecycle tests and types passed.
+- Joined proof: 18/18 cases through the real model, production consent method,
+  local HTTP/workerd and actual SQLite passed. Exactly five intended tasks queued;
+  thirteen negative/uncertain cases left all tasks held. All fixture accounts were
+  deleted. This is an isolated complete authorization path, not a real send/booking.
+- Observed paid audit total: US$2.548762, no unresolved model reservations.

@@ -448,5 +448,10 @@
   "paid_provider_calls": 18,
   "paid_provider_calls_returned": 18,
   "observed_total_audit_cost_usd": 2.460962,
-  "live_verified": false
+  "live_verified": true,
+  "live_runtime_verified": true,
+  "live_source_commit": "1682d69d95dc07135ab14b325910e715a472f28e",
+  "live_source_sha256": "a11383fe995d4b48fb3c1099d94a02da0d1c80b2b47a224c1a9cf5bb5158dacc",
+  "brain_deploy_run": 34090592279,
+  "api_deploy_run": 34090499964
 }

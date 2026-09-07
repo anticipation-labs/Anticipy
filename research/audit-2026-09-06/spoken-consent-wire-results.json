@@ -1,0 +1,120 @@
+{
+  "scope": "production consent method, real model, local HTTP and database; synthetic accounts deleted",
+  "results": [
+    {
+      "case": "single-yes",
+      "passed": true,
+      "expected_release": "contract",
+      "released_goal": "Send the signed renewal contract to Priya"
+    },
+    {
+      "case": "novel-approval",
+      "passed": true,
+      "expected_release": "contract",
+      "released_goal": "Send the signed renewal contract to Priya"
+    },
+    {
+      "case": "explicit-selection",
+      "passed": true,
+      "expected_release": "contract",
+      "released_goal": "Send the signed renewal contract to Priya"
+    },
+    {
+      "case": "older-task-selection",
+      "passed": true,
+      "expected_release": "dinner",
+      "released_goal": "Book dinner at Juniper for two at 7pm on Friday"
+    },
+    {
+      "case": "french-approval",
+      "passed": true,
+      "expected_release": "contract",
+      "released_goal": "Send the signed renewal contract to Priya"
+    },
+    {
+      "case": "refusal",
+      "passed": true,
+      "expected_release": null,
+      "released_goal": null
+    },
+    {
+      "case": "changed-recipient",
+      "passed": true,
+      "expected_release": null,
+      "released_goal": null
+    },
+    {
+      "case": "conditional",
+      "passed": true,
+      "expected_release": null,
+      "released_goal": null
+    },
+    {
+      "case": "multiple-unqualified",
+      "passed": true,
+      "expected_release": null,
+      "released_goal": null
+    },
+    {
+      "case": "weather-agreement",
+      "passed": true,
+      "expected_release": null,
+      "released_goal": null
+    },
+    {
+      "case": "caller-agreement",
+      "passed": true,
+      "expected_release": null,
+      "released_goal": null
+    },
+    {
+      "case": "quoted-approval",
+      "passed": true,
+      "expected_release": null,
+      "released_goal": null
+    },
+    {
+      "case": "negative-sarcasm",
+      "passed": true,
+      "expected_release": null,
+      "released_goal": null
+    },
+    {
+      "case": "future-intent",
+      "passed": true,
+      "expected_release": null,
+      "released_goal": null
+    },
+    {
+      "case": "question",
+      "passed": true,
+      "expected_release": null,
+      "released_goal": null
+    },
+    {
+      "case": "missing-question",
+      "passed": true,
+      "expected_release": null,
+      "released_goal": null
+    },
+    {
+      "case": "old-scope",
+      "passed": true,
+      "expected_release": null,
+      "released_goal": null
+    },
+    {
+      "case": "source-injection",
+      "passed": true,
+      "expected_release": null,
+      "released_goal": null
+    }
+  ],
+  "paid_calls_returned": 18,
+  "live_runtime_verified": true,
+  "live_verified": true,
+  "live_source_commit": "1682d69d95dc07135ab14b325910e715a472f28e",
+  "live_source_sha256": "a11383fe995d4b48fb3c1099d94a02da0d1c80b2b47a224c1a9cf5bb5158dacc",
+  "brain_deploy_run": 34090592279,
+  "api_deploy_run": 34090499964
+}
