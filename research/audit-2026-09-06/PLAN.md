@@ -121,3 +121,21 @@ Paid observed/reserved spend is US$2.339278.
 The earlier report is a checkpoint; erasure, real connected-provider tests and
 the wider legacy meaning audit remain incomplete. No real account reset has
 been executed.
+
+Live verification completed: deployment 34088232090 at 272a3e3 passed
+source/process/snapshot checks on all eight workers. System invariants run
+34088225993 passed (2,999 Python cases, seven environment-specific skips; all
+94 browser suites in 72.91 seconds; Worker checks passed). No iOS source changed.
+
+Calendar continuation: a new link was minted without an extra link SMS; the
+code was requested through the real page and delivery was observed in Messages.
+Chrome refused code entry because another extension UI is open. Native Chrome
+control also reported a concurrent user app change. No bypass was attempted.
+The user has been asked to dismiss that popup and reply continue. Google
+consent and actual connected-calendar execution are still unverified.
+
+Historical data: local SQLite recovery preserves all 112 schema objects and
+every row from 45 readable original tables. The damaged agents table yields
+489 rows, identical in two independently recovered dated backups. Both recovered
+databases pass integrity checks; foreign-key checks have no violations. These
+are private local review copies, not remote rewrites or completed account erasure.

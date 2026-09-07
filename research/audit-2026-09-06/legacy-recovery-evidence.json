@@ -1,0 +1,15 @@
+{
+  "scope": "Read-only remote inspection and separate local recovery; no account data erased",
+  "backups": [
+    "2026-09-04",
+    "2026-09-05"
+  ],
+  "current_original_tables": 46,
+  "readable_tables_matching_every_recovered_row": 45,
+  "schema_objects_identical": 112,
+  "recovered_agents": 489,
+  "agent_row_multisets_identical_across_backup_dates": true,
+  "recovered_integrity_check": "ok",
+  "foreign_key_violations": 0,
+  "remaining": "Selective erasure and review of unscoped worker archives. Recovery does not itself erase an account."
+}

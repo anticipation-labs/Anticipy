@@ -133,7 +133,12 @@
   ],
   "baseline": "Deterministic identity/word-order/case/time merges and veto/closure failures reproduced before repairs. Initial default-model runs failed identity and case changes; stronger-model run passed all 16 cases.",
   "local_python": "3003 passed, 2 skipped before subsequent voice composition adjustment",
-  "live_verification": "pending deployment",
+  "live_verification": {
+    "run": 34088232090,
+    "commit": "272a3e3af7592e56a21a2b8919c043515f73e00a",
+    "workers": 8,
+    "result": "All eight source hashes, child processes and current durable snapshots verified"
+  },
   "memory_source_sha256": "123f5c5d444fcd082be4b4a2cdc8102202a946eafe5166667fd0135da4f14854",
   "candidate_runtime_source_sha256": "1d07ca7b87b3cc9643381bab0fcce962354474e0b53f33a34b94708259bfc405"
 }

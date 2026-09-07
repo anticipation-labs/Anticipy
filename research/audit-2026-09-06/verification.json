@@ -1,10 +1,7 @@
 {
-  "checkpoint": "2026-09-07T05:22:31.383610+00:00",
+  "checkpoint": "2026-09-07T05:56:45.245405+00:00",
   "branch": "cloudflare-backend",
-  "python": {
-    "passed": 2990,
-    "skipped": 2
-  },
+  "python": "3003 passed, 2 skipped locally before final voice adjustment; 2999 passed, 7 skipped on final CI source; 46 focused memory/voice checks passed",
   "ios_baseline_suites": 63,
   "worker_chained_files": 34,
   "worker_suite": "passed under Node 24",
@@ -13,8 +10,8 @@
   "corpus_contacts": 101,
   "distinct_transcript_people_observed": 50,
   "composer_replay_outputs": 30,
-  "model_observed_usd": 2.017588262999999,
-  "model_reserved_plus_observed_usd": 2.017588262999999,
+  "model_observed_usd": 2.339278107999999,
+  "model_reserved_plus_observed_usd": 2.339278107999999,
   "deployed": true,
   "owner_reset_executed": false,
   "phone_release_executed": false,
@@ -22,7 +19,7 @@
   "held_out_cases_observed": 10,
   "live_api_checks": 22,
   "real_sms_delivery": "connection link and code visible in user-supplied Messages screenshots",
-  "google_calendar_oauth": "Not connected: the actual Composio project Users page shows only the synthetic probe, whose Calendar connection is expired.",
+  "google_calendar_oauth": "Fresh code delivered and observed in Messages; code entry blocked by Chrome extension UI. No Google consent completed.",
   "ios_testflight": {
     "build": 159,
     "processing": "VALID",
@@ -34,10 +31,10 @@
   },
   "account_erasure_tests": 17,
   "browser_simulations_completed": 5,
-  "brain_live_summary": "All eight observed instances pass exact runtime-source, running-process, configured-model and recent-memory-snapshot checks. The deployed brain is verified at ebbac06; CI run 34086177008 completed successfully.",
+  "brain_live_summary": "All eight running brain instances at commit 272a3e3 match source hash 1d07ca7b87b3cc9643381bab0fcce962354474e0b53f33a34b94708259bfc405, have running owner processes and current durable snapshots. Deployment 34088232090 passed live verification. Memory mutations and reply composition use the configured stronger model.",
   "brain_runtime_verified": 8,
   "brain_runtime_observed": 8,
-  "brain_deploy_run": 34086177008,
+  "brain_deploy_run": 34088232090,
   "browser_runner": {
     "suites_passed": 94,
     "local_seconds": 72.51,
@@ -50,8 +47,10 @@
     "ci_status": "success"
   },
   "system_invariants_ci": {
-    "run": 34086802463,
-    "status": "success",
-    "source": "7267a728d553ec47af31bb56ecc2d3711d65f912"
-  }
+    "run": 34088225993,
+    "commit": "272a3e3af7592e56a21a2b8919c043515f73e00a",
+    "conclusion": "success"
+  },
+  "memory_real_model_cases": 16,
+  "voice_state_replays": 12
 }
