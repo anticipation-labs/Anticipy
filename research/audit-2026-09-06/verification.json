@@ -1,10 +1,9 @@
 {
-  "checkpoint": "2026-09-07T04:46:50.151222+00:00",
+  "checkpoint": "2026-09-07T05:09:15.697118+00:00",
   "branch": "cloudflare-backend",
   "python": {
-    "passed": 2989,
-    "skipped": 2,
-    "scope": "full suite before runtime-status repair; runtime and affected tests additionally pass"
+    "passed": 2990,
+    "skipped": 2
   },
   "ios_baseline_suites": 63,
   "worker_chained_files": 34,
@@ -14,14 +13,28 @@
   "corpus_contacts": 101,
   "distinct_transcript_people_observed": 50,
   "composer_replay_outputs": 30,
-  "model_observed_usd": 1.8967032629999998,
-  "model_reserved_plus_observed_usd": 1.8967032629999998,
+  "model_observed_usd": 2.017588262999999,
+  "model_reserved_plus_observed_usd": 2.017588262999999,
   "deployed": true,
   "owner_reset_executed": false,
   "phone_release_executed": false,
-  "deployed_scope": "API at b2a61f9 verified live; brain repairs pending deployment",
+  "deployed_scope": "API at ec42707 verified live; brain image rollout under verification",
   "held_out_cases_observed": 10,
-  "live_api_checks": 17,
+  "live_api_checks": 22,
   "real_sms_delivery": "connection link and code visible in user-supplied Messages screenshots",
-  "google_calendar_oauth": "not confirmed"
+  "google_calendar_oauth": "not confirmed",
+  "ios_testflight": {
+    "build": 159,
+    "processing": "VALID",
+    "internal_state": "IN_BETA_TESTING",
+    "asc_query_run": 34084961603,
+    "source_commit": "1b3737cb07390a7ed6634eef4891e005f9782de8",
+    "ios_tree_matches_current": true,
+    "new_upload_needed_for_ios_source": false
+  },
+  "account_erasure_tests": 17,
+  "browser_simulations_completed": 5,
+  "brain_live_summary": "5 of 8 observed instances have the updated runtime, configured strong model and current snapshots. The fleet is not fully verified until all instances pass.",
+  "brain_runtime_verified": 5,
+  "brain_runtime_observed": 8
 }

@@ -16,7 +16,8 @@ Requested by the owner on 2026-09-06. This is ongoing work, not a completion cla
 - Paid model and live integration testing: **US$50 maximum total**. Record usage;
   stop paid requests before crossing the cap. Provider unavailability is not a
   passing test. Paid runs are underway; the private durable spend ledger is
-  `work/audit/spend.json` (under $1 at the September 7 checkpoint).
+  `work/audit/spend.json` (US$2.017588 observed with no unresolved reservations
+  at 05:10 UTC on September 7).
 - Synthetic contacts and users belong to isolated test environments. Live test
   messages may go only to the phone the owner specified, never invented people
   or unrelated real contacts.
@@ -41,9 +42,9 @@ plan. Exactly one top-level phase is marked in progress.
    and privacy boundaries. Freeze a held-out set before repairing behavior.
 3. **IN PROGRESS — Execute, diagnose, repair, and rerun affected tests.** Record concrete
    inputs, traces, persisted outputs, spend, and why each result is valid.
-4. PENDING — Validate deployment behavior, Composio/provider boundaries, and
+4. PARTIAL — Validate deployment behavior, Composio/provider boundaries, and
    controlled live messaging. Resolve material failures and coverage gaps.
-5. PENDING — Synthesize the PDF and repository audit; independently review
+5. PARTIAL — Synthesize the PDF and repository audit; independently review
    release candidates against the recorded failures and source of record.
 6. PENDING — Reset the authorized owner account across product stores and
    connected-account state; verify erasure; ship via CI, confirm App Store
@@ -71,6 +72,22 @@ A partial handoff was incorrectly treated as completion; the owner explicitly
 rejected that on September 7. The full audit, repair, reset and phone delivery
 remain active. Finish deployment and live verification dependencies before
 expanding the research. The elapsed timer automation has been paused.
+
+Latest verification: all 50 transcript cases have observations, including ten
+held-out cases; five actual-extension/real-model browser simulations completed.
+The API at ec42707 passed 22 live checks. SMS delivery is visible in the owner's
+screenshot, but Google consent is pending owner interaction. Five of eight brain
+images currently pass source/process/snapshot/model checks; inspect the platform
+rollout rather than dispatching another replacement blindly. The 13-page PDF is
+updated and rendered. Apple confirms build 159 is available internally and its
+entire iOS tree matches the current checkout. No additional upload is needed for
+the current iOS source. The real account reset has not been executed.
+
+Reset preparation found both scoped worker ZIPs and shared historical PocketBase
+archives. The latest old PocketBase database is already corrupt, including an
+agents-table scan, so rewriting it without losing unrelated records requires
+further work. Read-only local copies are private and must also be erased with
+the product data. Source/git/company archives are outside product-account scope.
 
 Primary-source research is integrated in RESEARCH.md. Inventory candidates cover
 2,518 tracked files and 365 documents; this is enumeration, not complete review.

@@ -258,3 +258,35 @@ The newly observable live image reported that the primary model is DeepSeek v3.2
 Prepared the authenticated operator reset path for the owner's explicit reset request. It checks the internal secret, canonical owner ID, account email, latest profile email and exact E.164 phone before using the existing public erasure implementation. Mismatched identifiers must leave both accounts and the purge queue untouched; the local real-schema test verifies this. CI exercises this path only with its own .invalid fixture, never the owner's account. The real account reset has not yet been executed.
 
 The next observation still showed seven old images and only one image carrying the new runtime fingerprint. The follow-up release uses Cloudflare's default zero connection-age delay and an explicit 100% immediate target, retaining the platform's separate 15-minute SIGTERM drain. The earlier verification-only wait was cancelled after deployment; no running app was cancelled. This replaces the intermediate five-minute policy above. The current eight-process fleet must all pass runtime checks before release is called complete.
+
+### Current verified outcomes and remaining reset work
+
+API release ec42707 passed 22 live checks in run 34085161382, including the
+operator reset using only a synthetic fixture. Five of eight brain containers
+now carry the expected runtime fingerprint, strong model configuration and
+current snapshots. Three still expose the old control response. A read-only CI
+inspection now reports container rollout/instance scalar metadata, excluding all
+environment/configuration values, independently of the serialized deploy job.
+
+The gallery simulation completed after a simulated owner reply using the actual
+extension's resume envelope. Its answer keeps three accepted catalog IDs distinct
+from the waiting-list work. All five browser simulations therefore have correct
+inspected read outcomes. Simulated consent is not the real owner's Google consent.
+Total paid model usage is US$2.017588 with no unresolved reservations.
+
+App Store Connect query 34084961603 independently confirms build 159 is VALID and
+IN_BETA_TESTING. The complete app/ios subtree equals the upload commit
+1b3737cb07390a7ed6634eef4891e005f9782de8 (tree
+b4e48f6ba302f0600be2a79cc2e2bbdec281a7ab). This audit did not change iOS source
+or create that upload. A further upload is unnecessary for the current iOS tree.
+
+Read-only historical archive inspection found a PocketBase data.db whose integrity
+check and agents-table scan fail with corruption. It still contains the verified
+reset subject's account/profile and at least 200 events, nine jobs and five
+segments. Those private rows were not published. Blindly replacing or discarding
+the archive could lose unrelated records; no remote archive rewrite has occurred.
+The account reset and full backup erasure remain unfinished. Source/git/company
+archives are not product-account stores and are excluded from this reset.
+
+The PDF was regenerated with these current outcomes, all 50 exemplars and explicit
+coverage limitations; all 13 pages were rendered and visually reviewed.
