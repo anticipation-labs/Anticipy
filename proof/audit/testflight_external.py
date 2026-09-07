@@ -123,6 +123,7 @@ def prepare(client, *, bundle, build_number, group_name, email, first, last, con
     state = detail.get("attributes", {}).get("externalBuildState")
     result = {"build": build_number, "private_external_group": True, "tester_assigned": True,
               "tester_state": tester.get("attributes", {}).get("state"), "external_build_state": state,
+              "auto_notify_enabled": detail.get("attributes", {}).get("autoNotifyEnabled") is True,
               "ready_to_install": state == "IN_BETA_TESTING"}
     print(json.dumps(result), flush=True)
     return result
