@@ -2,7 +2,7 @@
 # Build the zip the backend serves, FROM the extension source.
 #
 # This exists because the two drifted and nobody noticed. On 2026-08-11 the
-# source was 0.3.9 and backend/pb_public/anticipy-extension.zip — the file
+# source was 0.3.9 and migration/workers/public/anticipy-extension.zip — the file
 # every user downloads, and the file the setup page tells Omar to re-download
 # whenever the browser arm misbehaves — was still 0.3.3. Six releases of
 # browser fixes (frame-aware mapping, the parked-tab resume, "what does this
@@ -22,14 +22,14 @@
 set -e
 
 SRC="$(cd "$(dirname "$0")" && pwd)"
-OUT="$SRC/../backend/pb_public/anticipy-claude-version-extension.zip"
+OUT="$SRC/../migration/workers/public/anticipy-claude-version-extension.zip"
 # The product is now just Anticipy, so all three of these names are historical:
 # two carry a product suffix that no longer exists anywhere in the UI, one is
 # the original. They are aliases of the same bytes, never stale copies — a URL
 # handed to a customer in any era still downloads the current build, which is
 # exactly why these paths outlive the name. Rename none of them.
-LEGACY_OUT="$SRC/../backend/pb_public/anticipy-extension.zip"
-LEGACY_OUT2="$SRC/../backend/pb_public/anticipy-codex-version-extension.zip"
+LEGACY_OUT="$SRC/../migration/workers/public/anticipy-extension.zip"
+LEGACY_OUT2="$SRC/../migration/workers/public/anticipy-codex-version-extension.zip"
 
 VERSION=$(python3 -c "import json;print(json.load(open('$SRC/manifest.json'))['version'])")
 

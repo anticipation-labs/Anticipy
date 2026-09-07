@@ -170,7 +170,7 @@ console.log("PASS 4: every id the two modules reach for exists on its page");
 const repo = join(ext, "..");
 const sources = {
   "extension (popup.html/onboarding.html)": shared,
-  "backend/pb_public/site.css": readFileSync(join(repo, "backend/pb_public/site.css"), "utf8"),
+  "migration/workers/public/site.css": readFileSync(join(repo, "migration/workers/public/site.css"), "utf8"),
   "website/index.html": readFileSync(join(repo, "website/index.html"), "utf8"),
 };
 // The light palette is the FIRST :root, dark is the attribute palette, and a

@@ -14,7 +14,7 @@
      everyone, not a different one for whoever runs their Mac dark. Dark is one
      click away and remembered. The extension's two surfaces and the hosted
      setup page carry the same key and the same rule (extension/theme.js,
-     backend/pb_public/theme.js). -->
+     migration/workers/public/theme.js). -->
 <script>
 (function () {
   var KEY = "anticipy.theme";
@@ -194,7 +194,7 @@
   .cta { display:flex; flex-wrap:wrap; gap:12px; margin-top:26px; }
   /* THE CONTROLS ARE THE OWNER'S LIQUID GLASS COMPONENT, rebuilt INLINE. This
      page is deliberately one file with no assets — it is standalone marketing
-     and does not share backend/pb_public/site.css, which lives in another
+     and does not share migration/workers/public/site.css, which lives in another
      deployment — so it carries its own copy of the material exactly the way
      it already carries its own copy of the palette. PASS 5 of
      extension/tests/test_theme_contract.mjs is what keeps the copies honest.
@@ -405,7 +405,7 @@
             Chrome being honest that something other than you is clicking. It
             goes when the task is done.</li>
         </ul>
-        <a class="btn" href="https://backend-production-61e0a.up.railway.app/setup.html">Open the setup guide</a>
+        <a class="btn" href="https://api.anticipy.ai/setup.html">Open the setup guide</a>
         <p class="note" style="margin-top:14px">The five steps live on that one
           page, with the download on it. I keep them in a single place on
           purpose — two copies of an instruction is how one of them ends up

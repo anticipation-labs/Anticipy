@@ -86,7 +86,7 @@ try:
     # page. Compare the complete committed package to the live download, then
     # compare every packaged file to source.
     committed_path = os.path.join(
-        ROOT, "backend", "pb_public", f"{zip_name}.zip")
+        ROOT, "migration", "workers", "public", f"{zip_name}.zip")
     committed = open(committed_path, "rb").read()
     exact_artifact = blob == committed
     check("the served ZIP is the committed artifact, byte for byte",

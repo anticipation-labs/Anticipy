@@ -77,7 +77,7 @@ def main() -> None:
         requests.get(f"{BASE}{expected_download}", timeout=30),
         200, "extension package")
     local_digest = hashlib.sha256(
-        (ROOT / "backend/pb_public/anticipy-claude-version-extension.zip").read_bytes()).hexdigest()
+        (ROOT / "migration/workers/public/anticipy-claude-version-extension.zip").read_bytes()).hexdigest()
     remote_digest = hashlib.sha256(package.content).hexdigest()
     if remote_digest != local_digest:
         raise RuntimeError(
