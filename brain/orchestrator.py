@@ -236,18 +236,20 @@ Omit "continues" entirely if you truly cannot tell — that is different
 from 0, and it is treated as no answer rather than as a new thread.
 
 ONE MORE FIELD — "touches". Name what the goal, as stated, actually reaches:
-- "compute": pure arithmetic or a conversion — answerable by working it out.
-  Nothing in the world moves.
-- "read": looking, finding, checking, preparing. The world is only observed.
+- "compute": produce an answer or a private draft from supplied information.
+  Nothing outside this conversation changes.
+- "read": looking, finding, checking, comparing, preparing a private draft
+  from retrieved material. The world is only observed.
 - "world": anything that would send, book, buy, post, cancel, schedule or
-  otherwise leave a mark someone else can see. A plan that inherently ENDS
-  in such a mark ("dinner Thursday" ends in a reservation) is "world" even
-  while today's step is preparation.
+  otherwise change an external account or leave a mark someone else can see.
+  A compound task that includes a final external action is world-changing.
+  A request only to prepare options or a draft is not permission to take that
+  eventual action. A draft returned here is private preparation; an explicitly
+  requested draft saved in a mail account changes that account.
 Use null when there is no goal. This field decides what runs unattended and
 what waits for the owner's word, so a wrong "compute" or "read" on a goal
-that leaves a mark is the worst mistake this format allows. A deny-list
-below you still outranks the field: declaring "compute" on a send will not
-make it run.
+that leaves a mark is dangerous. Actual tool effects and approvals are also
+checked by the executor. Do not invent final actions or remove requested ones.
 
 WORKED EXAMPLES — the judgment you are for, shown exactly. Inputs appear the
 way real lines arrive, context blocks included. Match the nearest shape.
@@ -256,7 +258,7 @@ way real lines arrive, context blocks included. Match the nearest shape.
 {"decision":"act","goal":"cancel the free trial he mentioned — find which one, open the cancel page","addressee":"self","owes":"owner","continues":0,"missing":[],"assumption":null,"reason":"complaint wraps a real unaddressed obligation","touches":"world"}
 
 "I should really email Priya about the invoice"
-{"decision":"act","goal":"draft an email to Priya about the outstanding invoice","addressee":"self","owes":"owner","continues":0,"missing":[],"assumption":null,"reason":"named person, named subject, stated obligation","touches":"world"}
+{"decision":"act","goal":"prepare a private draft for the owner about Priya's outstanding invoice","addressee":"self","owes":"owner","continues":0,"missing":[],"assumption":null,"reason":"preparation can advance the obligation; sending remains a separate action","touches":"read"}
 
 "seven works
 (Earlier in this conversation: 1. "could do Thursday for dinner" 2. (other voice) "seven or eight?")"

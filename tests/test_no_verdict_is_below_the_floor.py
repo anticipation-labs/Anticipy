@@ -293,7 +293,7 @@ def test_an_absent_owes_still_allows_a_quiet_lookup(monkeypatch):
     still be looked up quietly, unheld, lane=ambient, saying nothing — and
     the record still says "no verdict", with owes None, not "nobody"."""
     d = Decision(decision="act", goal=LOOK, reason="soft plan",
-                 addressee="person", owes=None)
+                 addressee="person", owes=None, touches="read")
     a, fake, sent = _anticipy(monkeypatch, d)
     kinds, may_say = _recorder()
     out = a.hear(LINE, may_say=may_say)
@@ -387,7 +387,7 @@ def test_machine_silence_stays_positive_only(monkeypatch):
     reason must not claim he was voice-typing, and a read-only goal may
     still be looked up (machine allows nothing at all)."""
     d = Decision(decision="act", goal=LOOK, reason="soft plan",
-                 addressee="dictation", owes=None)
+                 addressee="dictation", owes=None, touches="read")
     a, fake, sent = _anticipy(monkeypatch, d)
     out = a.hear(LINE)
     assert "machine" not in out["decision"].reason

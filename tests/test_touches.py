@@ -5,7 +5,7 @@ History this locks in place: the gate first judged goals with a verb list
 calculator-sniff run on every goal — both pattern-matching wearing
 different coats. Meaning belongs to the model: triage names what a goal
 touches (compute | read | world) and is_consequential merely enforces it,
-with one deterministic deny-list that outranks even the declaration.
+with actual tool effects enforced separately at execution.
 """
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -26,19 +26,17 @@ def test_compute_declaration_runs_unattended_whatever_the_wording():
                                 touches="compute")
 
 
-def test_the_deny_list_outranks_the_declaration():
-    # A model talked into declaring "compute" on a SEND changes nothing —
-    # enforcement lives below the model.
-    assert is_consequential("send the 5 PM CST conversion to Tejas",
-                            touches="compute")
-    assert is_consequential("email Priya the summary", touches="read")
+def test_quoted_action_words_cannot_override_a_private_preparation_verdict():
+    assert not is_consequential("explain 'send the conversion to Tejas'",
+                                touches="compute")
+    assert not is_consequential("draft an email to Priya for my review", touches="read")
 
 
-def test_no_declaration_behaves_exactly_as_before():
-    assert not is_consequential("Convert 5 PM CST to PST")      # calc fallback
-    assert not is_consequential("research standing desks")      # read-only re
-    assert is_consequential("convert the garage into a studio") # held default
-    assert is_consequential("book the 8:40 flight to Boston")   # deny-list
+def test_no_declaration_holds_until_the_model_answers():
+    assert is_consequential("Convert 5 PM CST to PST")
+    assert is_consequential("research standing desks")
+    assert is_consequential("convert the garage into a studio")
+    assert is_consequential("book the 8:40 flight to Boston")
 
 
 def test_garbage_declaration_is_no_declaration():
@@ -73,9 +71,8 @@ def test_a_typed_world_goal_is_held_even_when_no_verb_list_knows_it():
     for goal in ("grab us a table at Earls at 7",
                  "put us down for a table at Earls at 7",
                  "get us on the list for Saturday"):
-        assert not is_consequential(goal, explicit=True), \
-            f"precondition: {goal!r} must be invisible to the deny-list, " \
-            "or this test is not exercising the bypass"
+        assert is_consequential(goal, explicit=True), \
+            "a direct request without an effect declaration must not bypass approval"
         assert is_consequential(goal, explicit=True, touches="world"), \
             f"a declared world goal must hold even when typed: {goal!r}"
 

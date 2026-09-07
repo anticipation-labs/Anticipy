@@ -32,7 +32,7 @@ WORLD_CHANGING_GOALS = [
 
 @pytest.mark.parametrize("goal", WORLD_CHANGING_GOALS)
 def test_all_twenty_day_zero_domains_cross_the_confirmation_boundary(goal):
-    assert is_consequential(goal, explicit=True), goal
+    assert is_consequential(goal, explicit=True, touches="world"), goal
 
 
 @pytest.mark.parametrize("goal", [
@@ -42,7 +42,7 @@ def test_all_twenty_day_zero_domains_cross_the_confirmation_boundary(goal):
     "Tell me which clinics have weekend appointments",
 ])
 def test_read_only_work_stays_outside_the_confirmation_boundary(goal):
-    assert not is_consequential(goal, explicit=True), goal
+    assert not is_consequential(goal, explicit=True, touches="read"), goal
 
 
 @pytest.mark.parametrize("goal", [
@@ -52,4 +52,4 @@ def test_read_only_work_stays_outside_the_confirmation_boundary(goal):
     "Delay the license renewal submission until next week",
 ])
 def test_plan_mutations_remain_world_changing(goal):
-    assert is_consequential(goal, explicit=True), goal
+    assert is_consequential(goal, explicit=True, touches="world"), goal

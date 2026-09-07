@@ -32,6 +32,7 @@ from .spoken_consent import judge as judge_spoken_consent
 from .speech_request import information_request
 from .grounding import grounding_verdict
 from .readiness import task_readiness
+from .effects import task_effect
 
 from .asking import ask_line, question_line
 from .compute import compute_answer
@@ -90,69 +91,6 @@ def _required_from_missing(missing) -> tuple:
         if ("date" in low or "day" in low) and "time" not in low:
             out.append("date")
     return tuple(dict.fromkeys(out))
-
-# Policy layer OUTSIDE the model: any goal whose text implies something that
-# leaves the owner's world (sending, booking, buying, signing up, calling,
-# posting, deleting) is held for confirmation regardless of what triage said.
-# LLM goal strings are free-form, so exact-match sets are not enough.
-# VERB forms only, never the -ation/-ment noun: "find Earls hours and
-# reservation options" is research whose sentence happens to contain the
-# noun "reservation" in action position, and the broad reserv\w* read it as
-# the verb "reserve" — a pure lookup became a held card with a text asking
-# permission to look. Same trap for invitation/confirmation/cancellation.
-_VERBS = (
-    r"send\w*|email\w*|book\w*|reserv(?:e|es|ed|ing)|buy\w*|purchas\w*|order\w*|pay\w*|"
-    r"sign(?:\s+\w+)?\s*up|sign\w*|register\w*|subscrib\w*|submit\w*|post\w*|publish\w*|"
-    r"repl(?:y|ies|ying)|messag\w*|text\w*|call\w*|cancel(?:s|led|ling|ed|ing)?|delet\w*|"
-    r"unsubscrib\w*|transfer\w*|schedul\w*|reschedul\w*|rebook\w*|"
-    r"postpon\w*|delay\w*|invit(?:e|es|ed|ing)|rsvp|"
-    r"shar\w*|forward\w*|respond\w*|confirm(?:s|ed|ing)?|appl(?:y|ies|ying)|"
-    r"wire|venmo|e-?transfer|donat(?:e|es|ed|ing)|checkout|check\s*out|upload\w*|deposit\w*|"
-    # Generic portal actions that alter an account or submit a case. These
-    # were missing from the world-change policy, so the exact same invoice
-    # plan could be classified as two unrelated read-only jobs merely because
-    # the model said "dispute" and then "request" instead of "submit".
-    r"request\w*|disput\w*|renew\w*|file\w*|enrol\w*|consent\w*|"
-    r"grant\s+(?:my\s+)?permission|give\s+permission|"
-    r"reduc\w*|chang\w*|updat\w*|mov\w*|"
-    r"open\s+(?:an?\s+|the\s+)?(?:[a-z][\w-]*\s+){0,3}"
-    r"(?:claim|case|ticket|warranty|repair)\b"
-)
-# Only in ACTION position — the start of the goal, or after and/then/to/&/comma.
-# A verb buried in a noun phrase is not an action: "noise CANCELLING
-# headphones" and "MEETING notes" are not things that leave the owner's world,
-# and holding them taught the owner to tap through prompts without reading.
-_IRREVERSIBLE_RE = re.compile(
-    r"(?:^|\b(?:and|then|to|also|please|&)\s+|,\s*)(?:" + _VERBS + r")\b",
-    re.IGNORECASE,
-)
-
-# Goals that only READ the world. Anything not clearly read-only is held —
-# the safe default, because a missed verb means something leaves the owner's
-# world without their word, while an over-hold costs one tap.
-#
-# A verb list deciding whether a goal leaves the owner's world is a
-# pattern-match on meaning, which Law 1 gives to a model. THE REAL FIX is the
-# effect channel: the model declares `touches` (compute|read|world) at triage
-# and is_consequential reads THAT. This regex is only the fallback for goals
-# arriving without a declaration, and when no live path can produce one it is
-# DELETED — not softened, not shortened.
-#
-# TAPE: (HARNESS-LAWS.md Law 2) audit item #22. Retired by the leg in
-# `overnight/tape_gate.py`, which stays red while the text below exists.
-_READ_ONLY_RE = re.compile(
-    r"^\s*(research|compar\w*|look\s*up|find|check(?!\s*out)\w*|search\w*|read\w*|"
-    r"summar\w*|gather\w*|browse|price|monitor|watch|list|"
-    r"open(?!\s+(?:an?\s+)?account)|go\s+to|visit|navigat\w*|show|load|"
-    # "Plan the weekend at Earls" is PREPARATION — options, hours, logistics
-    # — nothing leaves his world until a book/send verb appears. Held "plan"
-    # cards were the seed of every two-card night: the model words early
-    # vague turns as "plan X", the real "book X" arrives minutes later, and
-    # whenever the judge blinked he got two cards and two texts for one
-    # dinner.
-    r"pull\s+up|view|display|tell|plan(?:s|ned|ning)?\b)",
-    re.IGNORECASE,
-)
 
 # A correction is an amendment to the plan already on the owner's desk, not
 # a lossy paraphrase of it.  The normal merge guard deliberately refuses to
@@ -578,50 +516,17 @@ def memory_notes(facts: list[dict], budget: int = 600, exclude: str = "") -> str
 def is_consequential(goal: str, params: dict | None = None,
                      explicit: bool = False,
                      touches: str | None = None) -> bool:
-    """Does this goal change the world? Judged on the GOAL only — params carry
-    the raw transcript, whose stray words ("cancel my flight" mentioned in
-    passing) must not decide whether a research task is held.
+    """Enforce an effect declaration, never infer meaning from goal words.
 
-    explicit=True means the owner ASKED for this in so many words (a direct
-    text/command, not something overheard). Their ask is the go-ahead, so only
-    goals that actually leave their world (send/book/buy…) are still held —
-    making them confirm "open wikipedia" teaches them to tap through prompts
-    without reading."""
-    g = (goal or "").strip()
-    # The deny-list outranks EVERYTHING below, including the model's own
-    # declaration — enforcement lives beneath the model, and a "compute"
-    # claim on a send must not make it run.
-    if _IRREVERSIBLE_RE.search(g):
-        return True
-    # THE MODEL'S DECLARATION, when triage gave one. What a goal touches is
-    # a question of MEANING, and meaning belongs to the model — the first
-    # two fixes here were a verb list and then a calculator-sniff run on
-    # every goal, both pattern-matching wearing different coats. Now triage
-    # itself names the channel ("touches": compute | read | world) and this
-    # gate merely enforces it. "world" holds even when the wording reads
-    # read-only; compute/read runs unattended even when no word list would
-    # have recognised it.
-    if touches == "world":
-        return True
-    if explicit:
-        return False
-    if touches in ("compute", "read"):
-        return False
-    # TAPE: (HARNESS-LAWS.md Law 2) audit item #19.
-    # WHAT IT IS: with no declared `touches`, the calculator is asked whether
-    # it can answer the goal, and a yes is read as "this only computes". That
-    # is a capability check standing in for a declaration.
-    # THE REAL FIX: the effect-channel rewrite — every goal arrives with
-    # `touches` decided by the model at triage, and this branch becomes
-    # unreachable and is DELETED.
-    # THE LEG THAT RETIRES IT: `overnight/tape_gate.py`. It named
-    # HARNESS-LAWS.md before, which reads as compliant and enforces nothing:
-    # the laws file is where the rule lives, not the check that fails while
-    # the tape does.
-    if compute_answer(g):
-        return False
-    # Overheard: default to holding — only explicitly read-only runs unattended.
-    return not _READ_ONLY_RE.search(g)
+    Unknown effect is held, including on a direct request. Callers with a live
+    model resolve missing declarations before queuing. Actual tool effects,
+    device acts and workflow approvals are checked again by the executor.
+    """
+    if touches is None and isinstance(params, dict):
+        declaration = params.get("_effect")
+        if isinstance(declaration, dict):
+            touches = declaration.get("touches")
+    return touches not in ("compute", "read")
 
 
 _HONORIFIC_RE = re.compile(r"\b(?:Dr|Mr|Mrs|Ms|Prof)\.?\s+([A-Z][a-z]\w*)")
@@ -1246,11 +1151,9 @@ def job_lane(goal: str, params: dict | None = None, *, owner_ref: str = "",
     # -> "" (held, visible). is_consequential is what a plan TOUCHES, which
     # Law 1 permits; the model was still asked first and its silence recorded.
     if verdict.hand in hands.NO_VERDICT or verdict.hand == hands.HAND_HOLD:
-        if is_consequential(g, params):
+        declaration = (params or {}).get("_effect", {})
+        if isinstance(declaration, dict) and declaration.get("touches") == "world":
             lane = ""
-    # THE SEATBELT, AFTER THE VERDICT.
-    if _IRREVERSIBLE_RE.search(g):
-        lane = ""
     if isinstance(params, dict):
         params["_hand"] = dict(verdict.as_note(), lane=lane)
     return lane
@@ -1953,6 +1856,15 @@ class Anticipy:
             authority_event_ids = [event for event in
                                    (stitch_prev_event_id, self._source_event_id)
                                    if event]
+        if decision.decision in ("act", "ask") and decision.goal:
+            effect = self._task_effect(decision.goal, {
+                "heard": authority_source, "conversation": context or [],
+                "previous_line": prev_line, "channel": channel,
+            })
+            if effect.touches in ("compute", "read", "world"):
+                decision = replace(decision, touches=effect.touches)
+            elif effect.touches == "unclear":
+                decision = replace(decision, touches=None)
         # WHOSE PROMISE IS THIS? TRIAGE JUST SAID — AND ONLY A "NOT HIS" THAT
         # SURVIVES THE REVERSAL QUESTION IS EVER WRITTEN DOWN.
         #
@@ -2179,7 +2091,7 @@ class Anticipy:
             may_look = (decision.owes in ("nobody", None)
                         and decision.decision == "act"
                         and goal and not decision.missing
-                        and not is_consequential(goal))
+                        and not is_consequential(goal, touches=decision.touches))
             # "nobody" is right about musing and wrong about a plan the
             # speakers actually SETTLED: "we should really go out… Earl's
             # tomorrow at 2:30… yeah for sure I'd be down" reads as mutual
@@ -2193,7 +2105,7 @@ class Anticipy:
             # both fields blank dies unasked (Omi port 10a).
             settled = (decision.owes in ("nobody", None) and goal
                        and addressee not in DIRECT_ADDRESSEES
-                       and (is_consequential(goal)
+                       and (is_consequential(goal, touches=decision.touches)
                             or ends_in_the_world(self.llm, line, goal))
                        and plan_is_settled(self.llm, line, goal))
             if not may_look and not settled:
@@ -2224,7 +2136,7 @@ class Anticipy:
                 params = {"source": line, "now": self._now_line(),
                           "lane": "ambient"}
                 params = self._keeping(params, mem.get("commitment_id"))
-                job_id = self._queue_job(goal, params)
+                job_id = self._queue_job(goal, params, touches=decision.touches)
                 if not self._backed_by_a_card(goal, job_id, "quiet-lookup"):
                     # No card, so no LoopRecord either: a "handling" loop with
                     # no job id can never close (review_loops has nothing to
@@ -2398,7 +2310,7 @@ class Anticipy:
                 params = self._keeping(params, mem.get("commitment_id"))
                 if decision.assumption:
                     params["assumption"] = decision.assumption
-                job_id = self._queue_job(goal, params)
+                job_id = self._queue_job(goal, params, touches=decision.touches)
                 if self._backed_by_a_card(goal, job_id, "quiet-research"):
                     self.loops.append(LoopRecord(
                         commitment_id=mem.get("commitment_id") or -1,
@@ -3016,6 +2928,16 @@ class Anticipy:
             "anticipy_says": handled,
             "question_job_id": question_job_id,
         }
+
+    def _task_effect(self, goal, evidence):
+        model = getattr(getattr(self, "brain", None), "strong", None) or self.llm
+        try:
+            facts = self.memory.recall(goal, limit=8, retired=RETIRED_QUOTED)
+            notes = memory_notes(facts, budget=2400)
+        except Exception:
+            notes = "Memory unavailable; do not infer facts."
+        return task_effect(model, dict(evidence, task=goal,
+            related_memory=notes, current_local_time=self._now_line()))
 
     def _review_readiness(self, decision, line, conversation, previous_line):
         """Owner questions are the last resort; reading/setup can be progress.
@@ -3827,6 +3749,12 @@ class Anticipy:
                    touches: str | None = None,
                    act: Optional[ActDeclaration] = None) -> Optional[str]:
         self._running_dup = None
+        if touches not in ("compute", "read", "world"):
+            effect = self._task_effect(goal, {"request": params})
+            touches = effect.touches
+            params["_effect"] = {"touches": effect.touches, "reason": effect.reason}
+        else:
+            params["_effect"] = {"touches": touches, "reason": "declared during task interpretation"}
         # A held card supersedes the parked question: the plan the fragment
         # was asking about has since completed itself, and the card's own
         # one-text asks whatever is still missing. Two question texts for
@@ -3928,7 +3856,7 @@ class Anticipy:
             if not explicit and self._retracting_mere_talk(goal):
                 return None
         if (not declared_new_task
-                and is_consequential(goal, params, explicit=explicit)):
+                and is_consequential(goal, params, explicit=explicit, touches=touches)):
             # A plan ALREADY MOVING is not a new card. "Sounds good" after
             # her own "got it, booking it" went back through triage, missed
             # the running job (the dedupe below only saw pending ones) and
@@ -4099,7 +4027,8 @@ class Anticipy:
         # including connected APIs, without ever asking which hand was useful.
         device = device_lane(act)
         lane = device or job_lane(goal, params, owner_ref=self.owner_ref or self.owner_id,
-                                 backend_url=self.backend_url, llm=self.llm)
+                                 backend_url=self.backend_url,
+                                 llm=getattr(getattr(self, "brain", None), "strong", None) or self.llm)
         if lane == RESEARCH_LANE and not os.environ.get("BRAVE_API_KEY"):
             hand = params.get("_hand") or {}
             # Only an actual research verdict licenses this executor fallback.
@@ -4776,12 +4705,14 @@ class Anticipy:
         if goal:
             # Anything she prepares unprompted goes through the same gate as
             # everything else — held if consequential, never auto-sent.
-            held = is_consequential(goal)
+            effect = self._task_effect(goal, {"origin": "proactive review",
+                "proposed_message": say, "commitments": selected})
+            held = is_consequential(goal, touches=effect.touches)
             job_id = self._queue_job(
                 goal, self._keeping(
                     {"source": "clock initiative", "say": say,
                      "now": self._now_line()},
-                    loop_ids[0] if loop_ids else -1), hold=held)
+                    loop_ids[0] if loop_ids else -1), hold=held, touches=effect.touches)
             if not self._backed_by_a_card(goal, job_id, "clock-initiative"):
                 # The say and the goal come out of ONE model reply: the words
                 # are a message about that prepared work, and worker.py posts

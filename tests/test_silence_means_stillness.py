@@ -106,12 +106,12 @@ def _anticipy(monkeypatch, decision):
     return a, fake, sent
 
 
-def _act(goal=GOAL):
+def _act(goal=GOAL, touches="world"):
     # owes="owner" stated since 2026-09-05 (Omi port 10a): these legs pin
     # the ambient held-card path of a plan that is HIS, and an absent owes
     # on an overheard line now withholds her hands (tests/test_owes.py).
     return Decision(decision="act", goal=goal, reason="he committed to it",
-                    addressee="person", owes="owner")
+                    addressee="person", owes="owner", touches=touches)
 
 
 # ------------------------------------------------------------ the failure
@@ -177,8 +177,8 @@ def test_quiet_research_is_untouched(monkeypatch):
     """Unheld work is free, silent and additive by design — it was never
     waiting on him, so there is nothing to cancel."""
     goal = "Research the best noise cancelling headphones under 400 dollars"
-    assert not is_consequential(goal)
-    a, fake, sent = _anticipy(monkeypatch, _act(goal))
+    assert not is_consequential(goal, touches="read")
+    a, fake, sent = _anticipy(monkeypatch, _act(goal, touches="read"))
     a.hear("i should look at headphones", may_say=SAY_NOTHING)
     assert all(j.get("status") != "cancelled" for j in fake.jobs), fake.jobs
 

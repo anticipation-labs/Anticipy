@@ -105,7 +105,9 @@ def test_an_undeclared_goal_is_held_too(monkeypatch):
     posted = queue(monkeypatch, "dispute the hydro bill", touches=None,
                    llm=FakeLLM())
     assert posted["lane"] == "research"
-    assert gate_of(posted)["verdict"] == research.GATE_RESEARCH
+    assert posted["status"] == "awaiting_confirm"
+    assert gate_of(posted)["verdict"] == research.GATE_NOT_REQUIRED
+    assert json.loads(posted["params"])["_effect"]["touches"] == "unavailable"
 
 
 def test_a_declared_read_is_not_held(monkeypatch):

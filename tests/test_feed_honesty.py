@@ -75,7 +75,7 @@ def test_actual_quiet_work_still_says_so():
     """The Paris-flights incident must not come back: work she IS doing
     quietly keeps its goal, so the feed shows 'Looking into it'."""
     a = build({"decision": "act", "goal": "research dinner spots in Vancouver",
-               "addressee": "person", "owes": "nobody", "reason": "soft plan"})
+               "addressee": "person", "owes": "nobody", "reason": "soft plan", "touches": "read"})
     out = a.hear("we should eat somewhere good tomorrow")
     assert len(a.queued) == 1
     assert out["decision"].goal, \

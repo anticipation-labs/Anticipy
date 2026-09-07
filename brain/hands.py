@@ -437,10 +437,18 @@ And two from the house:
   payments, pages he asked to see. Finding, comparing or checking something
   on the open web needs no account and is research, not the browser, even
   though a browser could do it.
-- A question about his own life — what he promised, said, was told, owes, or
-  where something is — is answered from what the assistant heard, never by
-  opening an app or a website for it. That is research too, whether or not
-  anything is connected. Answering him is not a hand.
+- Distinguish remembered conversation from a requested source read. "What did
+  I say about pickup?" can use memory; "check the pickup calendar" requires
+  reading that calendar. Memory may identify the source but must not pretend
+  to be its current contents. Private sources require the connected app or
+  the owner's browser, not public web search.
+- Drafting text to return privately in this conversation does not itself
+  require an email app and does not write one. Choose the hand needed to read
+  its sources. Saving a draft in an external account or sending it does change
+  that account. Never invent such a save/send step merely because it is a draft.
+- An offline browser is an unavailable access path, not permission to substitute
+  memory or public search for a private source. Keep private-source work on
+  browser when no suitable app is connected, so the owner can supply access.
 
 Worked examples, nothing connected unless it says so:
   "find a plumber who works weekends"                  -> research, read

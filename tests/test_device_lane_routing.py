@@ -95,7 +95,7 @@ def test_the_wording_decides_nothing():
                  "schedule the standup for 9am tomorrow",
                  "book Thursday 7pm"):
         assert device_lane(None) == ""
-        assert job_lane(goal) == "", goal
+        assert job_lane(goal) == core.RESEARCH_LANE, goal
 
 
 def test_a_goal_that_never_says_calendar_still_reaches_the_phone():

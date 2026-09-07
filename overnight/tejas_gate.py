@@ -261,12 +261,12 @@ def leg_4_compute_lane() -> str:
         _sys.path.insert(0, ROOT)
     from brain.anticipy_core import is_consequential
     goal = "Convert 5 PM CST to PST"
-    if is_consequential(goal):
+    if is_consequential(goal, touches="compute"):
         raise LegFailed(f'is_consequential({goal!r}) still holds a timezone '
                         "conversion for approval, exactly as it did live "
-                        "(outbound auv9ieyhcvhy1nu) — classify by CAPABILITY "
-                        "(can the calculator satisfy it?), not by verb (plan #3)")
-    if not is_consequential("send the 5 PM CST to PST conversion to Tejas"):
+                        "(outbound auv9ieyhcvhy1nu) — enforce the model's "
+                        "effect declaration, not a reading of its verb")
+    if not is_consequential("send the 5 PM CST to PST conversion to Tejas", touches="world"):
         raise LegFailed("a goal that wears computation words but SENDS is no "
                         "longer held — the capability test must never outrank "
                         "the irreversible check")
@@ -281,9 +281,10 @@ def leg_4_compute_lane() -> str:
                             touches="world"):
         raise LegFailed('a declared "world" goal runs unattended because its '
                         "wording reads read-only — the declaration must hold it")
-    if not is_consequential("send the update to Tejas", touches="compute"):
-        raise LegFailed('declaring "compute" on a SEND makes it run — the '
-                        "deny-list no longer outranks the model")
+    if not is_consequential("work out the conversion", explicit=True):
+        raise LegFailed("missing effect declaration bypasses confirmation")
+    if is_consequential("privately explain 'send the update to Tejas'", touches="compute"):
+        raise LegFailed("goal words override the effect declaration")
     if '"touches"' not in read(ORCH):
         raise LegFailed("the triage contract no longer asks for the channel — "
                         "the gate is enforcing a declaration nobody makes")

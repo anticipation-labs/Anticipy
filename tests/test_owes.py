@@ -86,7 +86,7 @@ def test_his_own_plan_still_gets_prepared():
 def test_no_obligation_may_still_look_something_up_quietly():
     """Looking is free, silent and reversible — be generous there."""
     a = build({"decision": "act", "goal": "research dinner spots in Vancouver",
-               "addressee": "person", "owes": "nobody", "reason": "soft plan"})
+               "addressee": "person", "owes": "nobody", "reason": "soft plan", "touches": "read"})
     a.hear("we should eat somewhere good tomorrow")
     assert len(a.queued) == 1
     assert a.queued[0]["hold"] is False

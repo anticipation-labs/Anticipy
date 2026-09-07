@@ -66,13 +66,13 @@ def test_consequential_goals_keep_the_browser_lane():
                  "buy more coffee beans",
                  "sign up for the newsletter",
                  "draft_and_send_document"):
-        assert job_lane(goal) == "", goal
+        assert job_lane(goal, {"_effect": {"touches": "world"}}) == "", goal
 
 
 def test_a_goal_that_reads_both_ways_is_browser():
     # "find … and book …" leaves his world; the consequential reading wins.
-    assert job_lane("find a flight to Montreal and book the cheapest") == ""
-    assert job_lane("research restaurants and reserve one for Friday") == ""
+    assert job_lane("find a flight to Montreal and book the cheapest", {"_effect": {"touches": "world"}}) == ""
+    assert job_lane("research restaurants and reserve one for Friday", {"_effect": {"touches": "world"}}) == ""
 
 
 def test_explicit_browser_navigation_uses_the_browser_arm():
@@ -102,7 +102,7 @@ def test_explicit_browser_navigation_uses_the_browser_arm():
     assert job_lane("open Wikipedia", {"source": "browser"}) == ""
 
 
-def _queue(monkeypatch, goal, key="test-key"):
+def _queue(monkeypatch, goal, key="test-key", touches="read"):
     """Drive _queue_job with pb mocked; returns the record it would create."""
     if key is None:
         monkeypatch.delenv("BRAVE_API_KEY", raising=False)
@@ -124,7 +124,7 @@ def _queue(monkeypatch, goal, key="test-key"):
     monkeypatch.setattr(core.pb, "post", fake_post)
     a = Anticipy(owner_id="own1")
     monkeypatch.setattr(a, "_same_pending", lambda goal, **_k: None)
-    a._queue_job(goal, {"source": "test", "now": "now"})
+    a._queue_job(goal, {"source": "test", "now": "now"}, touches=touches)
     return posted
 
 
@@ -148,7 +148,7 @@ def test_queue_stamps_the_research_lane(monkeypatch):
 
 
 def test_queue_holds_consequential_goals_in_the_browser_lane(monkeypatch):
-    posted = _queue(monkeypatch, "book a table at Cactus Club")
+    posted = _queue(monkeypatch, "book a table at Cactus Club", touches="world")
     assert posted["lane"] == ""
     assert posted["status"] == "awaiting_confirm"
 
