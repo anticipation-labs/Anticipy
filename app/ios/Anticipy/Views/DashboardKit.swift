@@ -258,6 +258,78 @@ struct OwnerTurn: View {
     }
 }
 
+/// SPEECH SHE HAS NOT COME BACK ON — a count, never the words.
+///
+/// The owner asked for this on 2026-09-06: "hide the transcript and only show
+/// the task." Between a sentence leaving the phone and the brain stamping a
+/// goal there are at least five seconds, and this row is what stands in that
+/// window. It says what the PHONE knows — how many, and that nothing has come
+/// back — and nothing about what was said, because the phone does not know
+/// that and is not allowed to guess.
+///
+/// Deliberately the quietest thing on the thread. It is not news; it is the
+/// absence of news, and a row that shouted would make every ordinary pause
+/// look like a problem.
+struct PendingTurn: View {
+    var count: Int
+
+    private var line: String {
+        count == 1 ? "Heard you. Nothing back on it yet."
+                   : "Heard \(count) things. Nothing back on them yet."
+    }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Circle()
+                .fill(OnboardTheme.muted.opacity(0.5))
+                .frame(width: 5, height: 5)
+            Text(line)
+                .font(.system(size: 13))
+                .foregroundStyle(OnboardTheme.muted)
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, 2)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(line)
+    }
+}
+
+/// SPEECH SHE HEARD AND LEFT ALONE — the count, and the way to the words.
+///
+/// Separate from `PendingTurn` because they are opposite facts wearing the
+/// same silence: one is still coming, this one is finished. Tapping opens
+/// `ListeningHistoryView`, which is where the transcript moved to — so this row
+/// is also the promise that nothing was thrown away, which is the only thing
+/// that makes hiding the words honest rather than lossy.
+struct QuietTurn: View {
+    var count: Int
+    var open: () -> Void
+
+    private var line: String {
+        count == 1 ? "1 thing heard, nothing needed"
+                   : "\(count) things heard, nothing needed"
+    }
+
+    var body: some View {
+        Button(action: open) {
+            HStack(spacing: 8) {
+                Text(line)
+                    .font(.system(size: 13))
+                    .foregroundStyle(OnboardTheme.muted)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(OnboardTheme.muted.opacity(0.7))
+                Spacer(minLength: 0)
+            }
+            .padding(.vertical, 4)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(line)
+        .accessibilityHint("Opens everything she heard")
+    }
+}
+
 /// She is working. A quiet line with a turning mark — never a card, because a
 /// card implies something finished.
 struct WorkingTurn: View {

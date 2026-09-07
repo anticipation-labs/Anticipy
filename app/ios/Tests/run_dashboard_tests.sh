@@ -170,6 +170,14 @@ fi
 # Reported 2026-09-06: "it shows every little word that I'm saying. I want you
 # to hide the transcript and only show the task." The transcript lives on the
 # history face; the capture face is what she is DOING.
+# `isTask` must exclude the two collapsed heard rows as well as `.owner`, or
+# the count lands on the capture face too -- where `face.subtitle` already says
+# she is hearing somebody, which would be the same reassurance twice.
+if ! code "$dash" | grep -qE 'case \.owner, \.pending, \.quiet: return false'; then
+    echo "isTask no longer excludes every heard-shaped turn."
+    echo "The collapsed count would then appear on the capture face as a task."
+    exit 2
+fi
 if ! code "$dash" | grep -q 'turns.filter(isTask)'; then
     echo "The capture face is showing raw heard lines again."
     echo "The transcript belongs on the history face, not typed back at"
@@ -206,12 +214,40 @@ if ! code "$home" | grep -q 'goal: \$0.goal'; then
     echo "ContentView drops the verdict again when it builds HeardRow."
     exit 2
 fi
-# But every line must still APPEAR. Filtering to judged lines only was tried
-# and reverted: somebody talking to a phone that had judged nothing watched an
-# empty screen and concluded she was dead.
-if code "$policy" | grep -qE 'for row in heard where.*goal|heard\.filter'; then
-    echo "The thread filters heard lines by whether they were judged."
-    echo "Leading with the task is a change of FACE, never of membership."
+# ================== THE THREAD FACE SHOWS COUNTS, NEVER THE OWNER'S WORDS
+#
+# THIS LEG REPLACES A FORBID, AND THE OVERRULE IS RECORDED HERE RATHER THAN
+# DELETED. What stood here refused ANY change of membership:
+#
+#   "But every line must still APPEAR. Filtering to judged lines only was
+#    tried and reverted: somebody talking to a phone that had judged nothing
+#    watched an empty screen and concluded she was dead."
+#
+# That incident was real and its fear is right. On 2026-09-06 the owner asked
+# for the opposite of what it produced -- "hide the transcript and only show
+# the task" -- and chose the collapsed-count shape over showing nothing and
+# over keeping the words. So membership DOES change now, on one condition: the
+# thread is never silent while anything is outstanding. That condition is leg 1
+# in DashboardTests.swift, and it is what stops this being a re-run of the
+# empty screen. The forbid became the two legs below.
+#
+# 1. The thread must not print the owner's own text.
+if code "$policy" | grep -qE '\.owner\(id: row\.id, text: row\.text'; then
+    echo "The thread is rendering heard lines as the owner's own words again."
+    echo
+    echo "Un-goaled speech collapses into a count. The words are in"
+    echo "ListeningHistoryView, which is where the transcript moved to."
+    exit 2
+fi
+# 2. And it must still emit something for un-goaled speech. A collapse that
+#    emitted nothing IS the empty screen, wearing this change as a disguise.
+if ! code "$policy" | grep -q 'case pending'; then
+    echo "There is no pending turn, so un-goaled speech produces no row at all."
+    echo
+    echo "That is the empty-screen incident returning: somebody talking to a"
+    echo "phone that has judged nothing sees a blank thread and concludes she"
+    echo "is dead. Hiding the words is only allowed while something still says"
+    echo "she heard them."
     exit 2
 fi
 

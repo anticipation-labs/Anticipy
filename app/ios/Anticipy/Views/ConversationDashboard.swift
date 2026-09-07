@@ -56,6 +56,15 @@ struct ConversationDashboard<Notices: View, Approval: View, Deck: View, Settings
     let onStopListening: () -> Void
     let onSend: (String) -> Void
     let onOpenSession: (DashboardPolicy.Session) -> Void
+    /// WHERE THE WORDS WENT.
+    ///
+    /// The thread stopped printing the owner's own sentences on 2026-09-06.
+    /// They did not stop existing — they are in `ListeningHistoryView`, whole,
+    /// with per-line status and the ear that heard each one. This is the tap
+    /// that reaches them, and it is a required input rather than an optional
+    /// one on purpose: a collapsed count with nothing behind it would be the
+    /// transcript hidden rather than moved.
+    let onOpenHistory: () -> Void
     let onRefresh: () async -> Void
 
     /// The notices and offers Home already owns — the microphone recovery, the
@@ -165,6 +174,10 @@ struct ConversationDashboard<Notices: View, Approval: View, Deck: View, Settings
         switch turn {
         case .owner(_, let text, _, let speaker):
             OwnerTurn(text: text, speaker: speaker)
+        case .pending(_, let count, _):
+            PendingTurn(count: count)
+        case .quiet(_, let count, _):
+            QuietTurn(count: count) { onOpenHistory() }
         case .working(_, let text, _):
             WorkingTurn(text: text)
         case .said(_, let text, _, let done):
@@ -323,10 +336,15 @@ struct ConversationDashboard<Notices: View, Approval: View, Deck: View, Settings
     }
 
     /// Whether a turn is something she is DOING rather than something she
-    /// heard. `.owner` is the raw line and is the only case excluded.
+    /// heard. The three heard-shaped cases are excluded: `.owner` is the raw
+    /// line, and `.pending` / `.quiet` are the collapsed counts that replaced
+    /// it. The capture face already says "listening" in its own subtitle, so a
+    /// count of unanswered speech there would be the same reassurance twice.
     private func isTask(_ t: DashboardPolicy.Turn) -> Bool {
-        if case .owner = t { return false }
-        return true
+        switch t {
+        case .owner, .pending, .quiet: return false
+        default: return true
+        }
     }
 
     private func isWorking(_ t: DashboardPolicy.Turn) -> Bool {
@@ -421,6 +439,13 @@ struct ConversationDashboard<Notices: View, Approval: View, Deck: View, Settings
         case .said(_, let text, _, _): return text
         case .question(_, let text, _): return text
         case .owner(_, let text, _, _): return text
+        // Never the words. These two carry a count and nothing else, which is
+        // the whole reason they exist.
+        case .pending(_, let count, _):
+            return count == 1 ? "1 thing heard" : "\(count) things heard"
+        case .quiet(_, let count, _):
+            return count == 1 ? "1 thing heard, nothing needed"
+                              : "\(count) things heard, nothing needed"
         }
     }
 

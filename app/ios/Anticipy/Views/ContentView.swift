@@ -581,6 +581,9 @@ struct HomeView: View {
     /// The newest line already considered. Nil until the first poll populates
     /// the feed, which is what stops a cold launch asking about yesterday.
     @State private var lastSeenLineID: String?
+    /// The transcript's new home, one tap from the collapsed count that
+    /// replaced it on the thread (2026-09-06).
+    @State private var showListeningHistory = false
     /// WHEN the phone last heard anything, if the record ends in an
     /// interruption and only then — an instant, not a count of seconds, and
     /// that difference is the whole of it.
@@ -1259,6 +1262,7 @@ struct HomeView: View {
                     onStopListening: { session.stopListening() },
                     onSend: { line in typedLine = line; submitTyped() },
                     onOpenSession: { _ in },   // opening one back up is not built yet
+                    onOpenHistory: { showListeningHistory = true },
                     onRefresh: { await session.refresh() }
                 ) {
                     dashboardNotices
@@ -1394,6 +1398,15 @@ struct HomeView: View {
                     .transition(.opacity)
                     .zIndex(2)
                 }
+            }
+            .sheet(isPresented: $showListeningHistory) {
+                // WHERE THE WORDS WENT. The thread shows tasks and a count; the
+                // sentences themselves are here, whole, with each line's status
+                // and the ear that heard it. This screen already existed and
+                // already pages the whole account — it is reused rather than
+                // rebuilt, so there is one transcript surface and not two that
+                // can disagree.
+                NavigationStack { ListeningHistoryView(session: session) }
             }
             .sheet(isPresented: $showInterview) {
                 InterviewView().environmentObject(session)
