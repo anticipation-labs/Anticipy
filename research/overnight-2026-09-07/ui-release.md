@@ -1,7 +1,6 @@
 # Build 161 — interaction repairs
 
-Source branch: cloudflare-backend. Release status: prepared for CI; not yet
-confirmed available from Apple. Brain reply repairs remain a separate, ongoing
+Source branch: cloudflare-backend. Build161 confirmed VALID and IN_BETA_TESTING by Apple query34105899086. Brain reply repairs remain a separate, ongoing
 change and are not claimed by this iOS release.
 
 ## Changed behavior
@@ -52,3 +51,31 @@ Reviewed keyboard geometry in Simulator, account-switch callbacks, retry identit
 multiple tasks with identical words, terminal-task provenance, unavailable models,
 quoted injection, actual people named with ordinary words, and default permissions.
 The screenshot's specific wording is an evaluation example, never a routing rule.
+
+## Build162 and browser0.16.0
+
+- Typed replies follow the message just sent; a reader scrolling older content
+  is left in place with a New reply control. Typed answers no longer inflate
+  the ambient “nothing needed” count.
+- Fresh-account first utterances can offer useful optional context; historical
+  lines loaded on launch cannot.
+- Browser update instructions now explain that Reload does not download new
+  files and provide a direct setup link, including while already paired.
+- Adversarial simulator use exposed a layout loop when the New reply banner
+  disappeared above a lazily estimated feed. Main-thread sample showed repeated
+  LazySubviewPlacements and100% CPU. The bounded current feed now uses measured
+  rows; the scroll follows the banner update. Same tap and subsequent typing
+  completed, and a natural cancellation reached the real local model/backend.
+- Final162 full iOS logic suites and simulator build passed. Both source build
+  numbers are162. Physical-device profiling still remains unproven.
+- Real Chrome appointment test first submitted FIVE incomplete forms, because
+  wrapping labels were absent from the model's field context and the effect
+  fence compared before the scope check cleared a value.0.16.0 includes native
+  labels/aria-labelledby and checks the FINAL payload on click and Enter. The
+  same task then saved exactly one appointment with the requested start and end.
+- Six real-DOM naming cases pass. Both error-injection final-payload regressions
+  pass.94 extension suites passed. Separate comparison, capacity, login-wall
+  and injection browser tasks passed using real Chrome and a metered model.
+- The extension archive will be published with this source; existing unpacked
+  personal Chrome installations still require replacing their files/reloading.
+  Browser security policy blocked the management page, so it was not bypassed.

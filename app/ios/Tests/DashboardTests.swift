@@ -83,6 +83,9 @@ do {
     let mic = P.thread(heard: [.init(id: "mic1", text: text, at: "t", speaker: "owner", source: "phone_mic")], said: [], jobs: [])
     check(typed.contains { if case .owner(_, let value, _, _) = $0 { return value == text }; return false },
           "typed submit retains the exact message while awaiting the brain")
+    let answered = P.thread(heard: [.init(id: "typed1", text: text, at: "t", decision: "answer", source: "typed")], said: [], jobs: [])
+    check(!answered.contains { if case .quiet = $0 { return true }; return false },
+          "an answered typed message is not labelled ambient speech with nothing needed")
     check(!mic.contains { if case .owner = $0 { return true }; return false },
           "speaker ownership never turns microphone speech into a typed bubble")
     let canonical = P.thread(heard: [.init(id: "h", text: text, at: "t", decision: "act", goal: "Family appointment")],

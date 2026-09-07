@@ -40,7 +40,27 @@
       if (aria) return aria.trim();
       return el.value ? "[value redacted]" : (el.getAttribute("placeholder") || "").trim();
     }
-    for (const attr of ["aria-label", "placeholder", "title", "alt"]) {
+    const labelledBy = el.getAttribute("aria-labelledby");
+    if (labelledBy) {
+      const root = el.getRootNode?.() || document;
+      const name = labelledBy.split(/\s+/).map(id => root.getElementById?.(id)?.textContent || "").join(" ").trim();
+      if (name) return name;
+    }
+    const ariaLabel = el.getAttribute("aria-label");
+    if (ariaLabel?.trim()) return ariaLabel.trim();
+    // HTML labels include both label[for] and wrapping <label><input>.
+    // Reading the input's value as its name made two datetime controls
+    // indistinguishable to the authority judge: it could not see Start/End.
+    const labels = Array.from(el.labels || []);
+    if (labels.length) {
+      const name = labels.map(l => {
+        const copy = l.cloneNode(true);
+        copy.querySelectorAll("input,select,textarea,button").forEach(control => control.remove());
+        return copy.textContent.trim();
+      }).join(" ").trim();
+      if (name) return name;
+    }
+    for (const attr of ["placeholder", "title", "alt"]) {
       const v = el.getAttribute(attr);
       if (v && v.trim()) return v.trim();
     }

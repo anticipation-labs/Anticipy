@@ -431,6 +431,30 @@ const drive = async (actions, temporal, required = true) => {
     effects === 0 && clearAttempts === 0 && trace.some((line) => /PRE-SUBMIT BLOCK — these visible values are not supported by what the owner approved: appointment_date/.test(line)),
     trace.filter((l) => /BLOCK/.test(l)).join(" | "));
 }
+// (e) The real Chrome appointment failure: a later step refills a value, the
+// scope audit clears it again, and the FINAL form is identical to the one
+// already submitted. Checking only the pre-audit form allowed five POSTs.
+for (const viaEnter of [false, true]) {
+  controls[2] = { ...controls[3], label: "Reference", tag: "input",
+    name: "reference", elementId: "reference" };
+  const { effects, trace } = await drive([
+    () => {
+      page.fields[1] = { index: 2, name: "reference", label: "Reference",
+        type: "text", required: false, readOnly: false, value: "March 4 appointment" };
+      return { action: "click", index: 3 };
+    },
+    () => {
+      page.fields[0].value = TARGET;
+      return viaEnter
+        ? { action: "type", index: 2, text: "March 4 appointment", enter: true }
+        : { action: "click", index: 3 };
+    },
+    { action: "done", result: "Rescheduled" },
+  ], () => "NO", false);
+  check(`(e) final audited payload cannot be submitted twice through ${viaEnter ? "Enter" : "click"}`,
+    clearAttempts === 2 && effects === 1,
+    `clears=${clearAttempts} effects=${effects} ${trace.filter(x => /BLOCK/.test(x)).join(" | ")}`);
+}
 chrome.scripting.executeScript = realExecuteScript;
 
 if (failures) { console.error(`test_scope_temporal_value: ${failures} failed`); process.exit(1); }

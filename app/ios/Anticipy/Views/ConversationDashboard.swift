@@ -93,6 +93,7 @@ struct ConversationDashboard<Notices: View, Approval: View, Deck: View, Settings
     @State private var focusedReply: String?
     @State private var expandedTurn: DashboardPolicy.Turn?
     @State private var hasNewReply = false
+    @State private var followSentReply = false
     @FocusState private var writing: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -154,7 +155,7 @@ struct ConversationDashboard<Notices: View, Approval: View, Deck: View, Settings
                     Button {
                         writing = false
                         hasNewReply = false
-                        withAnimation(reduceMotion ? nil : Theme.springSlow) {
+                        DispatchQueue.main.async {
                             proxy.scrollTo(dashboardFoot, anchor: .bottom)
                         }
                     } label: {
@@ -166,7 +167,11 @@ struct ConversationDashboard<Notices: View, Approval: View, Deck: View, Settings
                     .foregroundStyle(OnboardTheme.champagneInk)
                 }
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 18) {
+                    // The current thread is a bounded feed, with collapsed
+                    // answer previews. Give scrollTo measured row heights:
+                    // lazy estimation plus a disappearing New reply banner
+                    // trapped iOS 26.5 in LazySubviewPlacements at 100% CPU.
+                    VStack(alignment: .leading, spacing: 18) {
                         notices()
                         if threadTurns.isEmpty { emptyLine }
                         ForEach(threadTurns, id: \.id) { turn in
@@ -179,10 +184,21 @@ struct ConversationDashboard<Notices: View, Approval: View, Deck: View, Settings
                     .padding(.top, 8)
                 }
                 .scrollDismissesKeyboard(.interactively)
+                .simultaneousGesture(DragGesture().onChanged { _ in followSentReply = false })
                 .refreshable { await onRefresh() }
                 .onAppear { proxy.scrollTo(dashboardFoot, anchor: .bottom) }
                 .onChange(of: latestReplyID) { id in
-                    if id != nil { hasNewReply = true }
+                    guard id != nil else { return }
+                    if followSentReply && focusedReply == nil {
+                        followSentReply = false
+                        hasNewReply = false
+                        DispatchQueue.main.async { proxy.scrollTo(dashboardFoot, anchor: .bottom) }
+                    } else { hasNewReply = true }
+                }
+                .onChange(of: latestOwnerID) { _ in
+                    if followSentReply {
+                        DispatchQueue.main.async { proxy.scrollTo(dashboardFoot, anchor: .bottom) }
+                    }
                 }
                 // Incoming polls must not move the card somebody is reading
                 // or editing. Only an explicit compose action follows the foot.
@@ -210,6 +226,13 @@ struct ConversationDashboard<Notices: View, Approval: View, Deck: View, Settings
             case .said, .question: return true
             default: return false
             }
+        }?.id
+    }
+
+    private var latestOwnerID: String? {
+        turns.last { turn in
+            if case .owner = turn { return true }
+            return false
         }?.id
     }
 
@@ -345,6 +368,7 @@ struct ConversationDashboard<Notices: View, Approval: View, Deck: View, Settings
         guard !line.isEmpty else { return }
         typed = ""
         writing = false
+        followSentReply = true
         onSend(line)
     }
 

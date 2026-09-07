@@ -347,7 +347,7 @@ enum DashboardPolicy {
             if verdict.isEmpty || verdict == "processing" {
                 pendingCount += 1
                 if row.at >= pendingAt { pendingAt = row.at; pendingID = row.id }
-            } else {
+            } else if row.source != "typed" {
                 quietCount += 1
                 if row.at >= quietAt { quietAt = row.at; quietID = row.id }
             }

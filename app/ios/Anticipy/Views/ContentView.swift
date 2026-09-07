@@ -582,6 +582,7 @@ struct HomeView: View {
     /// The newest line already considered. Nil until the first poll populates
     /// the feed, which is what stops a cold launch asking about yesterday.
     @State private var lastSeenLineID: String?
+    @State private var contextViewStartedAt = Date()
     /// The transcript's new home, one tap from the collapsed count that
     /// replaced it on the thread (2026-09-06).
     @State private var showListeningHistory = false
@@ -1364,6 +1365,7 @@ struct HomeView: View {
                 contextAsk = nil
                 heardForAsk = ""
                 lastSeenLineID = nil
+                contextViewStartedAt = Date()
             }
             // WHEN THE PHONE LAST HEARD ANYTHING, asked on the three moments
             // that can change that answer and on no others: the view appearing,
@@ -1393,9 +1395,13 @@ struct HomeView: View {
             .onChange(of: session.transcript) { _ in
                 guard let latest = session.transcript.last,
                       !latest.id.hasPrefix("local-"), latest.id != lastSeenLineID else { return }
-                let firstLoad = lastSeenLineID == nil
                 lastSeenLineID = latest.id
-                guard !firstLoad, contextOffer == nil, contextAsk == nil else { return }
+                // A fresh account's first utterance is new input too. History
+                // loaded on opening the screen is identified by its timestamp,
+                // not by whether we happened to have seen another line first.
+                guard let created = AnticipySession.parsePBDate(latest.created),
+                      created >= contextViewStartedAt,
+                      contextOffer == nil, contextAsk == nil else { return }
                 let sources = ContextSource.allCases.filter {
                     $0.isOnDevice && ContextGrants().mayAsk($0)
                 }.map(\.rawValue)

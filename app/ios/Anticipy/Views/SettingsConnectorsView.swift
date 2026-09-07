@@ -120,10 +120,15 @@ private struct SettingsBrowserConnectorView: View {
                     // banner that can never fire can never be proofread by
                     // using the product. That seam is held by the same test.
                     InfoRow("Chrome is running the old extension (\(stale)). "
-                            + "Open chrome://extensions and press Reload to get "
-                            + "\(AnticipySession.expectedExtensionVersion). "
-                            + "Until then it's working from old instructions.",
+                            + "Download version \(AnticipySession.expectedExtensionVersion) from browser setup, replace the installed extension files, "
+                            + "then open chrome://extensions and press Reload. "
+                            + "Reload alone does not download an update.",
                             systemImage: "exclamationmark.triangle")
+                    if let setup = ComputerSetupLinks.browser(baseURL: backendURL) {
+                        ActionRow("Open browser update", systemImage: "arrow.up.right.square") {
+                            UIApplication.shared.open(setup)
+                        }
+                    }
                 }
             }
 
