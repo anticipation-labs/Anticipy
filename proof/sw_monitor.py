@@ -1,5 +1,5 @@
 """NOT-ME proof: attach CDP to the Anticipy extension service worker and log
-every network request it makes (OpenRouter LLM calls + PocketBase job PATCHes)
+every network request it makes (OpenRouter LLM calls + the backend job PATCHes)
 with wall-clock timestamps. Writes JSONL to /home/ubuntu/anticipy_agent_decisions.jsonl.
 
 Run: .venv/bin/python proof/sw_monitor.py

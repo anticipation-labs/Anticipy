@@ -34,7 +34,7 @@ def stamp(minutes_ago):
 
 
 def fake_events(rows):
-    """Stand in for PocketBase, and record what was actually asked for."""
+    """Stand in for the backend, and record what was actually asked for."""
     seen = {}
 
     def get(url, params=None, timeout=None):

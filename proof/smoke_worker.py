@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the REAL worker loop against a REAL local PocketBase. No mocks of our
+"""Run the REAL worker loop against a REAL local the backend. No mocks of our
 own code — only the LLM and the SMS transport are stubbed.
 
 This exists because both regressions on 2026-08-01 were things every unit test
@@ -51,9 +51,9 @@ def start_pocketbase(binary: str, workdir: str):
     shutil.copy(binary, workdir)
     exe = os.path.join(workdir, os.path.basename(binary))
     # Create the superuser BEFORE serving. A data dir with none makes
-    # PocketBase print "Launch the URL below in the browser…" and open one
+    # the backend print "Launch the URL below in the browser…" and open one
     # itself — and every run of this test uses a fresh dir, so every run
-    # popped a PocketBase tab on Omar's machine. He noticed and asked what
+    # popped a the backend tab on Omar's machine. He noticed and asked what
     # it was; this is the thing that was doing it.
     subprocess.run([exe, "superuser", "upsert", "smoke@local.test", "smoke-password-1234"],
                    cwd=workdir, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,

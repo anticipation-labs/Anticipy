@@ -6,7 +6,7 @@ machine where the parity test skips itself.
 
 The defect these were written for: `is_researchable` refused
 `http://127.0.0.1:8090/admin` and allowed `http://2130706433:8090/admin` — the
-same machine, the same PocketBase admin port that extension/agent_loop.js names
+same machine, the same the backend admin port that extension/agent_loop.js names
 by hand as the threat. The refusal was a set of regexes over whatever string
 `urlsplit` returned, and `urlsplit` returns the spelling. The browser's URL
 parser normalises first, so learn.js's identical regexes never saw one.

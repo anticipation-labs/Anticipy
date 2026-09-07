@@ -126,7 +126,7 @@ def headers() -> dict:
 
 
 def parse_ts(value):
-    """PocketBase hands back 'YYYY-MM-DD HH:MM:SS.mmmZ'; the phone writes
+    """the backend hands back 'YYYY-MM-DD HH:MM:SS.mmmZ'; the phone writes
     'YYYY-MM-DDTHH:MM:SS.mmmZ'. Tolerate both and always return an AWARE
     datetime, so nothing is ever read in the zone of whatever laptop ran this.
 

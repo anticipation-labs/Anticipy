@@ -1,6 +1,6 @@
 """Anticipy brain worker — the server-side mind loop.
 
-The phone posts raw transcript lines to PocketBase (`events`, kind
+The phone posts raw transcript lines to the backend (`events`, kind
 "transcript"). This worker is the one place they all flow through:
 each line -> Anticipy.hear() -> memory graph + triage + (held) job, then the
 decision and anything Anticipy wants to say are written back as events the
@@ -407,12 +407,12 @@ def owner_wants_evidence_photos(owner_ref: str = "") -> bool:
     with a picture of a page the owner was logged into — their booking, their
     address, whatever the confirmation page showed. Twilio fetches MediaUrl
     from its own infrastructure with no credential of ours. The window is
-    fifteen minutes and five fetches (backend/pb_hooks/evidence.pb.js), and
+    fifteen minutes and five fetches (migration/workers/src/assets.ts), and
     Twilio's own copy and the handset's copy last forever. design/LOCAL-FIRST
     rule 3 does not obviously permit that, and this code deliberately does not
     settle the question on the owner's behalf.
 
-    Reading a stored boolean is not a rule reading anybody's words: PocketBase
+    Reading a stored boolean is not a rule reading anybody's words: the backend
     serialises a bool field as JSON true/false, and the two string forms below
     are the same value arriving over a form post. Nothing here interprets a
     sentence.
@@ -959,16 +959,16 @@ def reachable_by_twilio(url: str) -> str:
 def webhook_target() -> tuple[str, str]:
     """THE one URL the owner's number must point at, or ("", why not).
 
-    THE SINGLE CORRECT VALUE is the public https origin of the PocketBase
+    THE SINGLE CORRECT VALUE is the public https origin of the the backend
     service plus /sms/inbound — that service is the one serving the route
-    (backend/pb_hooks/sms.pb.js), and the hook authenticates whatever URL
+    (migration/workers/src/routes/sms.ts), and the hook authenticates whatever URL
     Twilio actually requested. ANTICIPY_PB *is* that origin: it is the address
     this process already uses to read and write the database. So the value is
     DERIVED from something already proven to work, not configured a second
     time in a second service where it can drift.
 
     Drift is not hypothetical. ANTICIPY_TWILIO_WEBHOOK_URL had to be identical
-    on the worker (which binds the number) and on PocketBase (which validated
+    on the worker (which binds the number) and on the backend (which validated
     against it); on 2026-08-12→15 they disagreed and every inbound text 403ed
     for three days. The hook no longer needs the variable at all. The worker
     keeps honouring it as a PIN for the one case derivation cannot cover — a
@@ -1097,7 +1097,7 @@ def ensure_inbound_webhook() -> None:
         # Reachability says the URL is routable from the internet; it says
         # nothing about what answers there. One GET to /api/health on the same
         # origin turns "the two services agree" from a claim about environment
-        # variables into an observation: if that origin is not a PocketBase
+        # variables into an observation: if that origin is not a the backend
         # that answers, then whatever the number currently points at is likelier
         # to be right than a URL serving nothing, and the safe move is to leave
         # the live binding alone and say so.
@@ -1111,7 +1111,7 @@ def ensure_inbound_webhook() -> None:
             answered, detail = False, str(exc)
         if not answered:
             print(f"NOT repointing inbound SMS: {health} is not answering as "
-                  f"our PocketBase ({detail}), so this URL cannot be the one "
+                  f"our the backend ({detail}), so this URL cannot be the one "
                   f"Twilio should reach. Leaving {current.split('?')[0] or '(empty)'} "
                   f"in place.")
             return
@@ -1199,7 +1199,7 @@ AGENT_FRESH_SECONDS = 90  # the extension heartbeats far more often than this
 # job delivery is deliberately the exception: its app result is primary and is
 # persisted before the optional SMS attempt, whose outcome is recorded in a
 # separate notification_status event.
-# post_event ends in raise_for_status(), so a PocketBase write outage — a
+# post_event ends in raise_for_status(), so a the backend write outage — a
 # restart, or the nightly backup holding the write lock while reads keep
 # succeeding — means the text went out and nothing recorded it. Two seconds
 # later the same job is re-read, every durable guard says "never mentioned",
@@ -1267,7 +1267,7 @@ STUCK_ASKS_CEILING = 2
 # parked ask), fail-OPEN to 0 on any non-ok response or exception, and looking
 # for an "uninvited" tag in `params` — a field the events schema does not
 # carry (1700000000_anticipy.js), which nothing in the tree ever wrote. So it
-# counted parked asks alone: a flaky PocketBase removed the cap outright, two
+# counted parked asks alone: a flaky the backend removed the cap outright, two
 # workers for one owner both read the same count and both sent, a send whose
 # record failed was invisible to the next count, and the clock, the
 # overheard-plan receipt and the meeting digest never touched it at all — up
@@ -1520,7 +1520,7 @@ def report_unclaimed_device_work(anticipy) -> None:
         # that selector on purpose: a page of ten filled by api rows the
         # selector discards is the device lane going quiet by another route.
         # DELIBERATELY NOT `lane~"device_calendar"`: no filter in this repo
-        # uses that operator against the live PocketBase, and a filter the
+        # uses that operator against the live the backend, and a filter the
         # server rejects comes back `ok=False`, which the line below reads as
         # "nothing to report" — trading a narrow silence for a total one.
         filt = (f'(status="queued" || status="running")'
@@ -2437,7 +2437,7 @@ def persist_stall_notice(job: dict, text: str) -> dict | None:
 def delivered_job_result(job: dict) -> dict | None:
     """Return the result row for this exact job, never merely the same goal.
 
-    New rows are keyed by PocketBase's globally unique job id. A narrow
+    New rows are keyed by the backend's globally unique job id. A narrow
     timestamp-bounded fallback recognizes rows written by the immediately
     preceding release, which did not yet store that id. The fallback is never
     used without a job timestamp and never accepts an older answer, so a later
@@ -2789,8 +2789,8 @@ def claim_stall_notification_attempt(job: dict) -> bool | None:
 #
 # Now every uninvited text takes ONE slot row first: kind="uninvited_slot",
 # external_event_id="uninvited:{owner}:{owner-local day}:{n}", n in 1..3. The
-# partial unique index on external_event_id (backend/pb_migrations/
-# 1700000028_event_sources.js, WHERE external_event_id != '') is the
+# partial unique index on external_event_id (migration/d1/schema.sql
+# (the partial unique index), WHERE external_event_id != '') is the
 # compare-and-set: two processes racing for slot n get one 2xx and one 400,
 # and only the process whose CREATE got an unambiguous 2xx may touch Twilio —
 # the rule claim_notification_attempt above states for done-texts. The slot
@@ -2849,7 +2849,7 @@ def _uninvited_day(now: float | None = None) -> str:
 
 
 def _uninvited_since_utc(now: float | None = None) -> str:
-    """Owner-local midnight as the UTC string PocketBase compares `created` to."""
+    """Owner-local midnight as the UTC string the backend compares `created` to."""
     midnight = _uninvited_local(now).replace(hour=0, minute=0, second=0,
                                              microsecond=0)
     return midnight.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
@@ -4137,7 +4137,7 @@ CLOCK_SKEW_MAX_S = 6 * 3600
 
 
 def _ts(value) -> float | None:
-    """PocketBase and the app both hand us ISO-8601; neither is guaranteed."""
+    """the backend and the app both hand us ISO-8601; neither is guaranteed."""
     if not isinstance(value, str) or not value.strip():
         return None
     text = value.strip().replace(" ", "T")
@@ -4156,7 +4156,7 @@ def capture_key(ev: dict) -> float:
     """When it was SAID, falling back to when it arrived.
 
     The phone buffers — offline, backgrounded, no signal, a call holding the
-    mic — and then flushes a lump. Ordering by PocketBase's `created` orders
+    mic — and then flushes a lump. Ordering by the backend's `created` orders
     by the moment the network delivered the row, so a flushed backlog reaches
     the brain shuffled, and a plan reconstructed from shuffled turns is a
     different plan. Omi ships this exact bug (their #6551) and fixed it by
@@ -4230,7 +4230,7 @@ def fetch_unprocessed(kind: str = "transcript", owner_ref: str = "") -> list[dic
     )
     r.raise_for_status()
     items = r.json().get("items", [])
-    # Sorted here rather than by PocketBase: `spoken_at` is absent on rows
+    # Sorted here rather than by the backend: `spoken_at` is absent on rows
     # from every build before this one, and an empty string sorts to one end
     # of a server-side sort — which would silently bury exactly the oldest
     # lines rather than ordering them.
@@ -4337,7 +4337,7 @@ def stamp_for(decision: str, said) -> str:
     return "ask" if text.strip() else "ignore"
 
 
-# WHETHER THE BACKEND STORES THE MEASUREMENT. PocketBase drops an unknown
+# WHETHER THE BACKEND STORES THE MEASUREMENT. the backend drops an unknown
 # field silently; the Cloudflare Worker (migration/workers/src/pb/records.ts,
 # `unknown_field`) answers 400 — and until migration/d1/schema.sql and
 # pb/schema.ts carry heard_ms/heard_calls, that 400 would have left every
@@ -4395,7 +4395,7 @@ def mark_processed(event_id: str, decision: str, addressee: str = "",
         r = backend.patch(url, json={**body, **measured}, timeout=10)
         if measured and not getattr(r, "ok", False):
             # THE DECISION LANDS, WHATEVER THE MEASUREMENT DID. Until
-            # 2026-09-05 this retried only on a 400 — the answer PocketBase
+            # 2026-09-05 this retried only on a 400 — the answer the backend
             # and the Worker give for an unknown field. Live on Cloudflare the
             # Worker's column map knew heard_ms/heard_calls while D1 did not,
             # the UPDATE threw, and the answer was a 500 (Cloudflare 1101):
@@ -4463,7 +4463,7 @@ def handle_inbound(ev: dict, convo, anticipy) -> str:
     # them with the owner's private pending list.
     #
     # App: the row could only exist if a signed-in account created it --
-    # backend/pb_hooks/guard.pb.js:159 accepts a POST to `events` only when
+    # migration/workers/src/policy/guard.ts accepts a POST to `events` only when
     # `owner_ref === authId`, so an account cannot write a row stamped with
     # someone else's owner_ref. With fetch_unprocessed()'s owner scoping, the
     # row IS the proof of who typed it. Demanding same_phone() here as well
@@ -4593,7 +4593,7 @@ def release_stranded_claims(owner_ref: str = "", older_than_minutes: int = 10) -
 # identically forever, so leaving it claimed would retry it every ten minutes
 # for the life of the account and hold the head of the queue while it did.
 _UNREACHABLE = (
-    requests.exceptions.RequestException,   # PocketBase and Twilio (requests)
+    requests.exceptions.RequestException,   # the backend and Twilio (requests)
     httpx.HTTPError,                        # the model (httpx): status, timeout, transport
     ConnectionError,
     TimeoutError,
@@ -4660,7 +4660,7 @@ def report_deafness(anticipy) -> None:
 
     Deduped the way report_stalled_work is: the durable record first, so a
     redeploy mid-outage does not re-announce it, and the process-local key as
-    well, so a PocketBase write outage cannot make every pass believe nothing
+    well, so a the backend write outage cannot make every pass believe nothing
     was said. The dedupe key is a fixed GOAL string, not the sentence:
     already_raised falls back to comparing message text when the goal is
     empty, and _content_words("") is empty, so an empty goal would make the
@@ -4871,7 +4871,7 @@ def ask_about_stuck_jobs(anticipy, convo) -> None:
                 continue
             # Both guards above end at the same durable record, and that
             # record is written AFTER the text goes out. When the write fails
-            # — a PocketBase restart, the nightly backup holding the write
+            # — a the backend restart, the nightly backup holding the write
             # lock — the text has been sent and nothing knows it, so two
             # seconds later this reads "never asked" and asks again. This one
             # asks the process what it actually sent, so an unrecordable
@@ -5485,7 +5485,7 @@ def main() -> None:
                       f" [{getattr(out['decision'], 'reason', '') or '-'}]")
 
             # THE one answer path. An owner answers a question by text (Twilio
-            # webhook -> pb_hooks -> events) or by typing into the app (the app
+            # webhook -> the Worker -> events) or by typing into the app (the app
             # writes the row itself), and both arrive at the single `on_reply`
             # inside handle_inbound().
             #

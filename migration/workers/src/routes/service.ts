@@ -26,7 +26,7 @@
  * phoneSaveFailed bounce), could not save name/email/birthday, never reported
  * its timezone (quiet hours judged in the server's zone), could not remove its
  * number, and adopted none of its pre-account rows. The three bodies below are
- * the ports of backend/pb_hooks/owner_profile_upsert.pb.js, phone_remove.pb.js
+ * the ports of migration/workers/src/routes/service.ts, phone_remove.pb.js
  * and claim_legacy.pb.js.
  *
  * ONE TRANSACTION, WHERE D1 HAS ONE. All three hooks lean on PocketBase's

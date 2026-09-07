@@ -39,7 +39,7 @@ check("the two ears are visually distinguishable",
 check("a typed line draws nothing — it was never in question",
       CaptureSourcePolicy.badge(for: "typed") == nil)
 
-// PocketBase sends "" for an unset column, and thousands of rows predate
+// the backend sends "" for an unset column, and thousands of rows predate
 // anything writing this field. Defaulting to a microphone would be a lie about
 // a measurement, and it would pollute the comparison this badge exists for.
 check("nil draws nothing", CaptureSourcePolicy.badge(for: nil) == nil)

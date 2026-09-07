@@ -5,7 +5,7 @@ import Foundation
 ///
 /// A browser worker reclaimed between a consequential click and its receipt
 /// leaves the row `effect_uncertain`. The DB guard
-/// (`backend/pb_hooks/workflow_guard.pb.js`, the retry leg) then refuses to
+/// (`migration/workers/src/policy/workflow_guard.ts`, the retry leg) then refuses to
 /// let that row back to `queued` unless the write carries a `reconciliation`
 /// whose `conclusion` is `not_applied`, with evidence behind it. Until
 /// 2026-09-05 the phone satisfied that leg with a string literal: the owner

@@ -379,7 +379,7 @@ def leg_4_does_it() -> str:
 
     import urllib.request
     base = backend.rstrip("/")
-    # PocketBase serves /api/health; the older stand-alone engine served
+    # the backend serves /api/health; the older stand-alone engine served
     # /health. Either one answering is proof something is home — checking only
     # one of them failed a perfectly healthy backend for a whole day.
     tried = []

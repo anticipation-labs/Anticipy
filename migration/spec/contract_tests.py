@@ -4516,7 +4516,7 @@ class TestTheDocumentAndTheSuiteAgree(object):
 
     def test_every_workflow_guard_refusal_string_is_documented(self):
         """CONTRACT.md §1.16 — the complete refusal inventory.  A port that
-        changes one of these strings breaks brain/pb.py and the extension,
+        changes one of these strings breaks brain/backend.py and the extension,
         both of which branch on the 409 detail."""
         text = _contract_text()
         refusals = [

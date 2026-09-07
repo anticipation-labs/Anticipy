@@ -2,7 +2,7 @@
 
 The historical worker held its Memory database, conversation, clock, caches,
 and owner identity in module globals.  Running that loop once against a shared
-PocketBase meant every account was interpreted as the configured founder.
+the backend meant every account was interpreted as the configured founder.
 
 This supervisor is the deliberately small multi-tenant boundary: it discovers
 accounts through a service-authenticated backend route and runs one OS process
@@ -40,7 +40,7 @@ def discover_owners() -> list[dict]:
 
     EVERY discovered owner is returned; how many workers actually run is
     capped at spawn time in reconcile_children(). Truncating here made the
-    cap evict people instead of turning them away: PocketBase ids are
+    cap evict people instead of turning them away: the backend ids are
     random, so `rows[:MAX_OWNER_WORKERS]` is an arbitrary set rather than the
     oldest, and the reconcile reads "not in this set" as "this account was
     deleted" and SIGTERMs the child. One new signup whose generated id
@@ -149,10 +149,10 @@ def owner_state_dir(owner_ref: str) -> Path:
 
 def purge_deleted_owners(*, remove: Callable = shutil.rmtree,
                          live_refs: set[str] | None = None) -> int:
-    """Finish the deletions PocketBase could not.
+    """Finish the deletions the backend could not.
 
     `POST /me/delete` clears every owner-scoped row synchronously, but memory is
-    a per-owner SQLite file on THIS volume and PocketBase cannot reach it. So it
+    a per-owner SQLite file on THIS volume and the backend cannot reach it. So it
     leaves a `purges` row behind and this drains the queue.
 
     Why here and not in the worker: by the time a purge exists the account is

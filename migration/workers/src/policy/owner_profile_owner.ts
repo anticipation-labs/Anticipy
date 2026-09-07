@@ -1,6 +1,6 @@
 /**
  * src/policy/owner_profile_owner.ts
- * backend/pb_hooks/owner_profile_owner.pb.js:34-79. 30 code lines (the brief
+ * migration/workers/src/policy/owner_profile_owner.ts. 30 code lines (the brief
  * said ~45; the file is 79 lines of which 49 are the comment explaining why it
  * is a middleware and not a `required` field).
  *

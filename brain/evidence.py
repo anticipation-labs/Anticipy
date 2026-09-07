@@ -46,7 +46,7 @@ THE WINDOW IS OPENED IN THE MOMENT OF SENDING AND NEVER EARLIER. `POST
 /evidence/share` puts a photograph of a page the owner was logged into on an
 anonymous https URL for fifteen minutes and five fetches, because Twilio
 fetches `MediaUrl` from its own infrastructure with no credential of ours
-(backend/pb_hooks/evidence.pb.js). Opening one speculatively, in advance, or in
+(migration/workers/src/assets.ts). Opening one speculatively, in advance, or in
 bulk is exposure bought for nothing, so every refusal above happens BEFORE the
 call — which is why `wants_photo` is a callable and not a boolean.
 """

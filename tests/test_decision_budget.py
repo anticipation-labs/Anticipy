@@ -586,8 +586,8 @@ def test_a_backend_that_throws_on_the_columns_still_lands_the_decision(monkeypat
 
 def test_a_backend_without_the_columns_still_lands_the_decision(monkeypatch):
     """THE LIVE BACKEND IS NOT POCKETBASE. The Cloudflare Worker
-    (migration/workers/src/pb/records.ts) answers 400 `unknown_field` on a
-    PATCH carrying a column its schema lacks, where PocketBase drops the key
+    (migration/workers/src/api/records.ts) answers 400 `unknown_field` on a
+    PATCH carrying a column its schema lacks, where the backend drops the key
     silently. Until migration/d1/schema.sql carries heard_ms/heard_calls a
     stamp that insisted on them would leave every decision unlanded: the row
     at "processing", handed back by the stranded sweep, heard again every

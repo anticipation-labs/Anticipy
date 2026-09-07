@@ -92,7 +92,7 @@ function job(state = "queued") {
   assert.equal(written.step, 4);
   assert.equal(written.tab, 17);
   assert.equal(written.session, "sess-1");
-  // The PocketBase guard compares _workflow's fields against the row; this
+  // The the backend guard compares _workflow's fields against the row; this
   // write must leave every one of them untouched.
   assert.equal(JSON.stringify(parseJobParams(patch)._workflow), before,
     "_workflow is byte-identical after the intent is written beside it");

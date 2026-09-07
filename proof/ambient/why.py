@@ -15,7 +15,7 @@ and the goal and throws `decision.reason` away, which is the single cheapest
 observability fix available and is written up in the report.
 
 SOURCE 2, with --replay: the same line put back through the REAL brain
-offline, with PocketBase stubbed exactly the way overnight/evaluate.py:31-69
+offline, with the backend stubbed exactly the way overnight/evaluate.py:31-69
 stubs it, so `Decision.reason`, `.addressee` and `.owes` can be read directly.
 This is a SECOND OBSERVATION, not the live verdict: it runs on a fresh mind
 with no memory of the day and no conversation context, so it can disagree with

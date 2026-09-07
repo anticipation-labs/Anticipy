@@ -33,7 +33,7 @@ NOW = datetime(2026, 8, 25, 12, 0, 0, tzinfo=timezone.utc)
 
 
 def seg(*, spoke_ago, arrived_ago, started_ago=120.0, **extra):
-    """A segment row as PocketBase holds one. `last_speech_at` is CAPTURE
+    """A segment row as the backend holds one. `last_speech_at` is CAPTURE
     time (when he stopped talking); `updated` is ARRIVAL time (when the last
     row for it landed). They are different clocks answering different
     questions and this whole rule turns on that."""
@@ -730,7 +730,7 @@ class FakePB:
         self.params = params or {}
         rows = list(self.rows)
         want = self.params.get("sort") or ""
-        # PocketBase sorts server-side. Only the columns it has can be asked
+        # the backend sorts server-side. Only the columns it has can be asked
         # for, and it always answers in the order it was asked.
         if want.lstrip("-") in ("created", "capture_started_at"):
             rows.sort(key=lambda r: r.get(want.lstrip("-")) or "",

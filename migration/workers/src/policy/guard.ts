@@ -1,5 +1,5 @@
 /**
- * src/policy/guard.ts — backend/pb_hooks/guard.pb.js:24-551, ported.
+ * src/policy/guard.ts — migration/workers/src/policy/guard.ts, ported.
  *
  * 223 code lines there; the ladder below preserves every rung and its ORDER,
  * because the order is where the incidents were. Two of them are recorded in

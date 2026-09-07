@@ -1,10 +1,10 @@
 /**
- * src/assets.ts — everything PocketBase served as bytes.
+ * src/assets.ts — everything the backend serves as bytes.
  *
  * TWO DIFFERENT PROBLEMS THAT LOOK LIKE ONE.
  *
- * A. `pb_public/` — 5 static files and 4 zips, COPYed into the image at
- *    backend/Dockerfile:11. Immutable per deploy, no auth, no counting:
+ * A. `public/` — 5 static files and 4 zips, committed beside this Worker
+ *    (migration/workers/public). Immutable per deploy, no auth, no counting:
  *
  *      internal.html                       136 KB   the HQ SPA
  *      setup.html / privacy.html / mac.html
@@ -33,26 +33,12 @@
  *      window and increments `fetches`. A public R2 URL is that gate deleted.
  *
  * -------------------------------------------------------------------------
- * /mac/Anticipy-for-Mac.zip CURRENTLY 404s IN PRODUCTION.
- *
- * The brief states this and it is worth being precise about, because the
- * tree CONTRADICTS the obvious causes:
- *   - the file IS tracked in git (`git ls-files backend/pb_public/` lists it)
- *   - it IS 388,070 bytes on disk
- *   - it IS copied into the image (backend/Dockerfile:11 `COPY pb_public …`)
- *   - backend/.railwayignore excludes only pb_data/, pocketbase, pb.zip, pb.log
- *
- * So a build-time exclusion is NOT the cause, and whatever is (a stale image,
- * a PocketBase static-route quirk on a nested directory, a proxy rule) is not
- * visible from here. UNVERIFIED — I cannot reach production.
- *
- * WHAT MATTERS FOR THE MIGRATION: moving to Static Assets makes the class of
- * bug impossible, because the file is enumerated at deploy time and
- * `wrangler deploy` prints the manifest. Add the assertion below to the
- * cutover checklist so it cannot 404 silently a second time.
- *
- *   curl -sI https://<worker>/mac/Anticipy-for-Mac.zip | head -1   # 200
- *   curl -sI https://<worker>/anticipy-extension.zip   | head -1   # 200
+ * /mac/Anticipy-for-Mac.zip answers 200 from this Worker (measured
+ * 2026-09-06: 388,070 bytes, byte-identical to public/mac/Anticipy-for-Mac.zip).
+ * The PocketBase container used to 404 on it for reasons nobody could see;
+ * with the file enumerated at deploy time that class of bug cannot recur —
+ * `wrangler deploy` prints the manifest. overnight/stranger_gate.py legs 10
+ * and 11 hold the committed zip and the download against each other.
  * -------------------------------------------------------------------------
  */
 import { json, newRecordId, pbNow, stillInTheFuture } from "./api/wire.ts";
@@ -158,7 +144,7 @@ async function streamFromR2(
   env: AssetEnv, rec: Record<string, unknown>, filename: string, gone: () => Response,
 ): Promise<Response> {
   // The COLUMN holds the stored filename; the BYTES lived under --dir /pb_data
-  // (backend/start.sh:33) and move to R2. migration/d1/schema.sql, `file` in
+  // (the retired backend container's start script:33) and move to R2. migration/d1/schema.sql, `file` in
   // the type map. PocketBase's on-disk layout is
   // storage/<collectionId>/<recordId>/<filename>; the R2 key mirrors it by
   // record id so the export script can copy without knowing collection ids.

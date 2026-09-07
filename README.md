@@ -30,7 +30,7 @@ sh app/ios/Tests/run_all.sh
 The iOS app is in `app/ios/`; the Cloudflare API Worker is in
 `migration/workers/`; the Python brain is in `brain/`; browser execution is in
 `extension/`. The production API is `https://api.anticipy.ai`.
-`backend/pb_hooks/` and PocketBase startup instructions are historical migration
+The PocketBase hooks and their startup instructions are gone; the migration runbooks are historical
 references. `backend/pb_public/` remains the source for Worker static assets.
 
 iOS source changes and their build-number increase belong in the same commit.

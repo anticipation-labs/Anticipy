@@ -81,7 +81,7 @@ const check = (name, ok) => {
     sent.opts.headers["X-Anticipy-Agent-ID"] === "a1"
     && !("X-Anticipy-Token" in sent.opts.headers));
   // Multipart sets its own Content-Type, boundary and all. Leaving the JSON
-  // one on makes PocketBase parse the body as JSON and reject a valid upload —
+  // one on makes the backend parse the body as JSON and reject a valid upload —
   // and every other call in background.js hardcodes it.
   check("...with the JSON content-type removed so the boundary survives",
     !("Content-Type" in sent.opts.headers));
@@ -138,7 +138,7 @@ const check = (name, ok) => {
 // ------------------------------- 2b. the pointer survives the receipt's own cap
 //
 // workflow_state.js:116 keeps the FIRST 12 evidence entries, because
-// duplicating a full result there overflows PocketBase's text validation and
+// duplicating a full result there overflows the backend's text validation and
 // turns a verified success into an HTTP 400. Every other entry in that array is
 // a proof index the verifier can rebuild from the page; `evidence:<id>` is the
 // only one that names a row nothing else in the product can find again. So it
@@ -257,7 +257,7 @@ function scripted(actions) {
     && evidence.some((e) => e.startsWith("proof:")));
   check("exactly ONE picture leaves the run, not one per milestone",
     typeof out.evidenceShot === "string" && out.evidenceShot.startsWith("data:image/jpeg;base64,"));
-  // The receipt is what gets JSON.stringify'd into a PocketBase text column.
+  // The receipt is what gets JSON.stringify'd into a the backend text column.
   check("no image bytes ride the receipt into the job row",
     !JSON.stringify(out.receipt).includes("data:image"));
 }

@@ -3,7 +3,7 @@ network delivered it.
 
 This is Omi #6551 in our shape. Their chunks raced each other into the
 database in parallel; ours arrive one at a time, in a strict single-threaded
-loop, but sorted by PocketBase's `created` — the moment the row landed. A
+loop, but sorted by the backend's `created` — the moment the row landed. A
 phone that buffers (offline, backgrounded, no signal, a call holding the mic)
 then hands the brain a flushed lump in delivery order, and a plan
 reconstructed from shuffled turns is a different plan.

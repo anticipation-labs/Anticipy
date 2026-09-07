@@ -304,7 +304,7 @@ def test_stitching_terminates_on_a_cycle_within_the_rows_it_was_given():
 # --- findings 4, 5, 6: what main() reads, and what it admits to ------------
 
 class _FakePB:
-    """Stands in for PocketBase. Records every params dict it was handed, so a
+    """Stands in for the backend. Records every params dict it was handed, so a
     test can see how much of the day the report actually asked for."""
 
     def __init__(self, rows, per_page_cap=500, report_total=True):

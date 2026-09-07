@@ -46,7 +46,7 @@ def test_database_has_a_supported_unique_barrier_and_terminal_release():
     """The barrier is the D1 schema's partial unique index; the release is the
     Worker's writer clearing the key on every terminal status. Both halves are
     read from the code that runs (migration/d1, migration/workers), never from
-    the PocketBase migration and hook they were ported from."""
+    the the backend migration and hook they were ported from."""
     schema = (ROOT / "migration/d1/schema.sql").read_text()
     assert 'CREATE UNIQUE INDEX IF NOT EXISTS "idx_jobs_active_commitment"' in schema
     predicate = schema.split('"idx_jobs_active_commitment"', 1)[1].split(";", 1)[0]
@@ -76,7 +76,7 @@ def test_storage_rejects_two_live_rows_but_allows_history_then_retry():
         raise AssertionError("storage admitted two active workflows")
     except sqlite3.IntegrityError:
         pass
-    # The PocketBase model hook clears the auxiliary identity in the same
+    # The the backend model hook clears the auxiliary identity in the same
     # write that makes the row terminal.
     db.execute("UPDATE jobs SET status='done', commitment_key='' ")
     db.execute("INSERT INTO jobs VALUES ('same-promise', 'queued')")

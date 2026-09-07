@@ -3,12 +3,12 @@
 // second copy of "how to mint a job" is how one copy quietly stops matching
 // the guard.
 //
-//   TRAP 1  `params` is a TEXT column. POST a nested object and PocketBase
+//   TRAP 1  `params` is a TEXT column. POST a nested object and the backend
 //           stores "" without complaint; the agent then wakes with no task and
 //           start_url=about:blank and reports it could not find anything.
 //   TRAP 2  Every column must byte-match the plan embedded in params._workflow
 //           or workflow_guard.pb.js refuses the write 409
-//           (backend/pb_hooks/workflow_guard.pb.js:81-96).
+//           (migration/workers/src/policy/workflow_guard.ts).
 //
 // Both are proven, not assumed: proof/battery/selfcheck.mjs writes a real row
 // through this module and re-reads it, and it also writes a deliberately wrong
@@ -48,7 +48,7 @@ async function once(method, path, { body, timeoutMs = 20000 } = {}) {
   } finally { clearTimeout(t); }
 }
 
-// PocketBase RESTARTS ITSELF whenever a file in backend/pb_hooks changes, which
+// the retired PocketBase backend RESTARTED ITSELF whenever a hook file changed, which
 // on a shared rig happens while a multi-hour battery is running. For those few
 // seconds every request refuses, and a read that gave up there would be
 // recorded as "the job row vanished" — a harness artefact reported as an engine

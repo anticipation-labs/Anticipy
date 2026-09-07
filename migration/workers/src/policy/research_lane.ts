@@ -1,5 +1,5 @@
 /**
- * src/policy/research_lane.ts — backend/pb_hooks/research_lane.pb.js:272-727.
+ * src/policy/research_lane.ts — migration/workers/src/policy/research_lane.ts.
  * 228 code lines. Registered FIFTH.
  *
  * Two jobs, and the first is the one that makes this migration hard.

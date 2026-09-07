@@ -143,7 +143,7 @@ for (const [label, task] of [["read-only", readOnlyTask], ["consequential", cons
   if (typeof raw !== "string" || !raw || !parsed) {
     bad(`the ${label} row survived the write`, [
       `params came back as ${typeof raw} ${raw === "" ? "(empty string)" : short(raw, 60)}`,
-      "PocketBase stores a nested object in a text column as \"\" — the agent would run with no task at all.",
+      "the backend stores a nested object in a text column as \"\" — the agent would run with no task at all.",
     ]);
     continue;
   }
@@ -195,7 +195,7 @@ for (const [label, task] of [["read-only", readOnlyTask], ["consequential", cons
         "so run.mjs's read-back assertion is load-bearing, not superstition",
       ]);
     } else {
-      // Not a failure of ours: PocketBase would have started coercing objects.
+      // Not a failure of ours: the backend would have started coercing objects.
       ok("the params trap has changed shape", [
         `a nested object came back as ${typeof row.params} (${String(row.params).length} bytes) — note it and re-read run.mjs's assertion`,
       ]);

@@ -2,7 +2,7 @@
 
 HANDS 1 spec §4.3 left one question open: is the procedure store owner-scoped?
 The recommendation was "owner-scoped first, shared later or never", and §4.4
-priced the two backings — a PocketBase collection costs a migration plus three
+priced the two backings — a the backend collection costs a migration plus three
 registration points (`guard.pb.js`, `account_delete.pb.js` OWNER_TABLES, and a
 retention sweep), while a per-owner SQLite TABLE has always been free.
 
@@ -62,7 +62,7 @@ def test_the_store_survives_a_reopen_of_the_same_database(tmp_path):
 def test_an_existing_database_gains_the_table_with_no_migration(tmp_path):
     """`CREATE TABLE IF NOT EXISTS` reaches an old database with a new TABLE —
     that is how `vetoed_facts` shipped, and it is the whole reason this is
-    free where a PocketBase collection is not (§4.4)."""
+    free where a the backend collection is not (§4.4)."""
     import sqlite3
     db = sqlite3.connect(str(tmp_path / "old.db"))
     db.execute("CREATE TABLE episodes (id INTEGER PRIMARY KEY, ts REAL, text TEXT)")

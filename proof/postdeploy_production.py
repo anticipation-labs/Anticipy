@@ -55,7 +55,7 @@ def main() -> None:
     webhook_url = os.environ.get(
         "ANTICIPY_TWILIO_WEBHOOK_URL", f"{BASE}/sms/inbound")
 
-    require(requests.get(f"{BASE}/api/health", timeout=20), 200, "PocketBase health")
+    require(requests.get(f"{BASE}/api/health", timeout=20), 200, "the backend health")
     setup = require(requests.get(f"{BASE}/setup.html", timeout=20), 200, "browser setup")
     # The name the setup page and is_it_live.py agree on; the two other zips
     # are aliases of the same bytes. Until 2026-09-05 this pinned the old

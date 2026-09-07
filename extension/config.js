@@ -18,7 +18,7 @@
 export const DEFAULT_BASE = "https://api.anticipy.ai";
 
 // A trailing slash turns every `${base}/api/...` into `//api/...`, which
-// PocketBase answers with a redirect the fetch then follows without the
+// the backend answers with a redirect the fetch then follows without the
 // headers — a 403 that reads like a stale credential rather than a typo.
 // Strip it once, here, instead of at each of the dozen call sites.
 const strip = (u) => String(u || "").replace(/\/$/, "");

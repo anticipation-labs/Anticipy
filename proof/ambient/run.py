@@ -152,7 +152,7 @@ def check_worker_is_current(repo: str) -> str:
 def _refused(err: Exception) -> bool:
     """Did the request never reach the server?
 
-    PocketBase watches backend/pb_hooks and restarts itself whenever anything
+    the retired PocketBase backend watched its hooks and restarted itself whenever anything
     in there changes — which, on a rig several agents are sharing, is often.
     The restart is a few seconds of ECONNREFUSED. A retry is safe precisely
     because the connection was refused: nothing was sent, so nothing can be
@@ -191,7 +191,7 @@ def iso(dt: datetime) -> str:
 
 
 def pb_ts(dt: datetime) -> str:
-    """The ONLY timestamp shape PocketBase compares correctly in a filter.
+    """The ONLY timestamp shape the backend compares correctly in a filter.
 
     A `created>="2026-08-20T21:52:00.000Z"` filter does not error and does not
     match — it silently returns zero rows, which reads exactly like "she
@@ -297,7 +297,7 @@ def backfill(base, owner_ref, path):
     """Re-read the cards and messages for results already on disk.
 
     Exists because the first live run recorded them with a `T`-separated
-    timestamp, which PocketBase accepts and never matches (see pb_ts). The
+    timestamp, which the backend accepts and never matches (see pb_ts). The
     verdicts in that file are real and expensive; only the consequence columns
     were blank, and they are recoverable from each row's pushed_at. Rerunning
     320 live model calls to recover a column that is sitting in the database

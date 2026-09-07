@@ -147,10 +147,10 @@
   ],
 
   // --------------------------------------------------------------------------
-  // D1 — the backend that replaces PocketBase.
+  // D1 — the backend that replaces the backend.
   // Read DIRECTLY by BrainSupervisor for discovery and the purge queue, which
   // is why brain/supervisor.py:54-58's HTTP call to GET /worker/owners
-  // (backend/pb_hooks/worker_owners.pb.js:9) disappears entirely rather than
+  // (migration/workers/src/routes/service.ts) disappears entirely rather than
   // being ported. See BRAIN.md §3.3.
   // --------------------------------------------------------------------------
   "d1_databases": [
@@ -182,7 +182,7 @@
       // when somebody needs a restore; the container writes to it with boto3,
       // not through this binding.
       // NOTE: the bucket NAME is not in the repo — it comes from
-      // ANTICIPY_BACKUP_S3_BUCKET (backend/pb_migrations/1700000053_off_volume_backups.js:27).
+      // ANTICIPY_BACKUP_S3_BUCKET (migration/d1/schema.sql).
       // migration/BLOCKERS.md records the observed production value as
       // anticipy-pocketbase-backups-production AND records that R2 is not
       // enabled on this account. Confirm before trusting it.
@@ -193,7 +193,7 @@
 
   // --------------------------------------------------------------------------
   // Service binding to the site Worker, which is what now answers the
-  // PocketBase-shaped API that brain/pb.py talks to. This is optional: the
+  // The data API brain/backend.py talks to. This is optional: the
   // container can equally reach https://www.anticipy.ai over the public
   // internet. Using the binding keeps ANTICIPY_SERVICE_TOKEN off the public
   // internet entirely — see BRAIN.md §7.2 for the outbound-interception code
@@ -214,11 +214,11 @@
   // --------------------------------------------------------------------------
   "vars": {
     // brain/worker.py:43, brain/supervisor.py:29, brain/evidence.py:75,
-    // brain/voice_arm.py:325. The PocketBase-shaped API. MUST be the API Worker
+    // brain/voice_arm.py:325. The data API. MUST be the API Worker
     // (api.anticipy.ai), NOT www.anticipy.ai — the OpenNext site Worker only
     // serves Next.js /api/* routes and /internal proxies, so /api/collections/*
     // 404s there; api.anticipy.ai (the D1-backed anticipy-api Worker) serves the
-    // PocketBase API the brain polls (verified 2026-09-05: www→404, api→403 gated).
+    // the backend API the brain polls (verified 2026-09-05: www→404, api→403 gated).
     "ANTICIPY_PB": "https://api.anticipy.ai",
     // Always-served owners, outside the cap (brain/src/index.ts planFleet).
     // Only the end-to-end probe owner — `e2e-2026-09-05@anticipy-test.invalid`,

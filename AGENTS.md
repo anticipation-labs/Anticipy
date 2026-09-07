@@ -55,7 +55,8 @@ definition of done, the fifty moments, and every screen with file refs.
 `docs/BOARD-STATE-2026-08-24.md` is the twelve harness cards as the board
 actually has them.
 Live-deploy rule: verify with overnight/is_it_live.py-style checks after every
-deploy — `railway up` reports success while failing.
+deploy — the API Worker deploys with `cd migration/workers && npm run deploy`, and a deploy that
+"succeeded" has served stale bytes before.
 
 ## When more than one agent is working in this tree
 

@@ -789,7 +789,7 @@ LINEAGE_AMEND_WINDOW = OPEN_PLAN_WINDOW
 # genuine duplicate IS a card that exists on his desk). Deliberately the
 # empty string: falsy, so every truthiness check that already reads this
 # return value keeps behaving exactly as it did, and impossible to confuse
-# with a PocketBase record id, which is always fifteen characters. hear()
+# with a the backend record id, which is always fifteen characters. hear()
 # compares against this constant to tell "already waiting on him" apart from
 # "that errand exists in no system at all".
 QUEUE_WRITE_FAILED = ""
@@ -799,7 +799,7 @@ QUEUE_WRITE_FAILED = ""
 # It is the same string `job_lane` returns for read-only work, and that is the
 # point rather than an accident: the research gate needs a value that is
 # already excluded at BOTH enforcement points HANDS 1 §5.5 names —
-# backend/pb_hooks/research_lane.pb.js's poll rewrite, and every shipped
+# migration/workers/src/policy/research_lane.ts's poll rewrite, and every shipped
 # extension's own `lane!="research"` filter — and a NEW lane string would be
 # excluded by neither. Client code cannot be recalled; a third value would be
 # claimable by every extension in the wild until they all updated, which is
@@ -824,7 +824,7 @@ RESEARCH_LANE = "research"
 #
 # So the value is new, and what the scar demands of a new value is that BOTH
 # enforcement points name it. THIS FILE CANNOT DO THAT — both of them live in
-# `backend/pb_hooks/research_lane.pb.js`, and queuing a row onto a lane the
+# `migration/workers/src/policy/research_lane.ts`, and queuing a row onto a lane the
 # server does not know about is exactly the hole. Verified in the tree at the
 # time of writing, and it is a standing dependency of this constant, not a
 # courtesy:
@@ -873,7 +873,7 @@ DEVICE_CALENDAR_LANE = "device_calendar"
 # the row are the brain's to choose. When
 # `test_the_brain_and_the_phone_spell_the_act_the_same` goes red, the file
 # that moves is `CalendarHandPolicy.swift`, never this one — and the same is
-# true of `backend/pb_hooks/research_lane.pb.js`, which reads `act_type` off
+# true of `migration/workers/src/policy/research_lane.ts`, which reads `act_type` off
 # the row this file wrote. An earlier draft of this block claimed the opposite
 # ("these are the phone's words, not ours"), which is how a client file ends
 # up deciding what the server may mint.
@@ -1015,7 +1015,7 @@ DEVICE_ACT_LANES: dict[tuple[str, str, str], str] = {
 # (app/ios/Anticipy/Backend/CalendarHandPolicy.swift:110) does the same on the
 # phone, saying why in its own comment: "an orphan is worse than a refusal,
 # because a refusal is countable and an orphan is silence". THE BRAIN WAS THE
-# LAYER THAT DID NOT. Its two readers compared raw strings inside a PocketBase
+# LAYER THAT DID NOT. Its two readers compared raw strings inside a the backend
 # filter, and SQLite's `=` is case-sensitive, so a row stored as
 # `"Device_Calendar"` — which the hook's immutability leg accepts as no change
 # at all, because it normalises both sides before comparing — was a device row
@@ -1425,7 +1425,7 @@ class Anticipy:
         self.voice = voice
         self.owner_phone = owner_phone
         self.owner_id = owner_id
-        # Canonical PocketBase owners-record id. owner_id is the legacy device
+        # Canonical the backend owners-record id. owner_id is the legacy device
         # UUID retained only while old extensions drain.
         self.owner_ref = owner_ref
         self.conversation = conversation
@@ -1497,7 +1497,7 @@ class Anticipy:
         self._last_loop_sweep: float = 0.0
 
     def _owner_filter(self) -> str:
-        """Return the strongest available tenant filter for PocketBase."""
+        """Return the strongest available tenant filter for the backend."""
         if self.owner_ref:
             return f'owner_ref="{self.owner_ref}"'
         return f'owner="{self.owner_id}"' if self.owner_id else ""
@@ -1731,7 +1731,7 @@ class Anticipy:
         truncation at the wrong byte boundary, room noise), and until this rode
         along on the job every decision, card and outcome in the backend was
         provenance-blind: events.source has existed since
-        backend/pb_migrations/1700000004_segments.js:51 ("// phone | pendant")
+        migration/d1/schema.sql ("// phone | pendant")
         and no build ever wrote or read it, so "did the pendant run of this
         errand work as well as the phone run?" had no answer anywhere in the
         data. Empty means UNKNOWN provenance and is never a value: it is left
@@ -4439,7 +4439,7 @@ class Anticipy:
                 params.get("commitment_id"))
             if commitment_key:
                 # The read-before-create check makes the common path cheap and
-                # friendly. This field is the race barrier: PocketBase has a
+                # friendly. This field is the race barrier: the backend has a
                 # partial unique index over ACTIVE rows, so two workers that
                 # both saw an empty queue still cannot mint two workflows for
                 # the same promise.

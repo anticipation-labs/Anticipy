@@ -4,7 +4,7 @@ The backend is the Cloudflare Worker at api.anticipy.ai (migration/workers),
 whose guard (src/policy/guard.ts) requires the shared service token on every
 request the brain makes. Every brain-side request goes through here so a
 change to that enforcement is an env change, not a code hunt. The module was
-called `pb` while PocketBase served this API; the wire is unchanged.
+called `pb` while the backend served this API; the wire is unchanged.
 """
 from __future__ import annotations
 

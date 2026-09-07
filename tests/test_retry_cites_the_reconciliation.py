@@ -2,7 +2,7 @@
 
 Audit #90, correction (E). A browser worker reclaimed between a consequential
 click and its receipt leaves the row `effect_uncertain`. The DB guard
-(`backend/pb_hooks/workflow_guard.pb.js`, the effect_uncertain block) refuses
+(`migration/workers/src/policy/workflow_guard.ts`, the effect_uncertain block) refuses
 to let that row back to `queued` unless the PATCH carries a `reconciliation`
 with `conclusion: "not_applied"`, a matching `effect_key`, `verified: true`,
 non-empty `owner_words` and a non-empty `evidence` list.

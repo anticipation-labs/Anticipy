@@ -962,7 +962,7 @@ struct HomeView: View {
     /// the phone that heard him was to leave the app and send a text.
     ///
     /// Still-open is decided by comparing against his newest reply rather than
-    /// by remembering locally what he answered. PocketBase `created` is a fixed
+    /// by remembering locally what he answered. the backend `created` is a fixed
     /// ISO shape, so string order IS time order here.
     private var openQuestions: [BrainEvent] {
         let newestReply = session.ownerReplies
@@ -1027,7 +1027,7 @@ struct HomeView: View {
     /// Done as it is actually drawn — the shelf, plus every card the shelf is
     /// not allowed to swallow.
     ///
-    /// `finished` is newest-UPDATED first. PocketBase's update timestamp moves
+    /// `finished` is newest-UPDATED first. the backend's update timestamp moves
     /// when a job settles, so the shelf now follows when work ended; legacy
     /// rows fall back to their creation time. The policy below still preserves
     /// every unsettled terminal result even beyond the ordinary shelf.

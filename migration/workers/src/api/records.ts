@@ -131,7 +131,7 @@ export function uniqueViolationColumn(message: string): string | null {
 // ---------------------------------------------------------------------------
 // THE MODEL HOOK THIS FILE HAS TO CARRY, because D1 has nowhere else to put it.
 //
-// backend/pb_hooks/job_commitment_identity.pb.js is nine lines: on create and
+// migration/workers/src/api/records.ts is nine lines: on create and
 // on update of a `jobs` row, a terminal status releases `commitment_key`.
 // `idx_jobs_active_commitment` (migration/d1/schema.sql:300-301) is UNIQUE over
 // every row whose key is non-empty, and it is the only thing stopping two

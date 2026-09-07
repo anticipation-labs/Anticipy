@@ -211,7 +211,7 @@ class FakeOwner:
 
 
 def _quiet_backend(monkeypatch, rows=()):
-    """PocketBase up, model down — the actual shape of a credit outage.
+    """the backend up, model down — the actual shape of a credit outage.
 
     Returns the list of event rows posted, so the durable record can be
     asserted rather than assumed.

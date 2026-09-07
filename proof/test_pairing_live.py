@@ -1,6 +1,6 @@
 """Live pairing + heartbeat + drop recovery, against the real backend.
 
-Plays both sides against real PocketBase: the extension's registration/
+Plays both sides against real the backend: the extension's registration/
 heartbeat/claim logic (same requests background.js makes) and the app's
 pair-by-code + health logic (same requests AnticipySession makes).
 """

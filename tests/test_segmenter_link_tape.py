@@ -129,7 +129,7 @@ class FakeStore:
         self._n += 1
         self.created.append((started, parent))
         if not self._create_ok:
-            return None       # PocketBase said no — place_turn's `failed` path
+            return None       # the backend said no — place_turn's `failed` path
         return {"id": f"fresh{self._n}", "entities": "[]", "turn_count": 0,
                 "word_count": 0}
 

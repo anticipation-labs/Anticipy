@@ -6,7 +6,7 @@ from brain.anticipy_core import Anticipy, NAME
 
 
 class NoBackend(Anticipy):
-    """Offline Anticipy: job queue is stubbed so tests need no PocketBase."""
+    """Offline Anticipy: job queue is stubbed so tests need no the backend."""
     def __init__(self, **kw):
         super().__init__(backend_url="http://127.0.0.1:1", **kw)
         self.queued = []

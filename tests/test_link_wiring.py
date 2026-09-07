@@ -73,7 +73,7 @@ def test_blanks_are_dropped_where_ids_and_texts_leave_together(monkeypatch):
 def test_candidates_come_back_in_speech_order_not_delivery_order(monkeypatch):
     """A flushed backlog must be numbered the way he SAID it.
 
-    The rows are given in the order PocketBase actually returns them — newest
+    The rows are given in the order the backend actually returns them — newest
     delivered first, because the query sorts by "-created" — and that order
     is deliberately the REVERSE of speech order. An earlier version of this
     test happened to list them already-sorted, so deleting the sort entirely

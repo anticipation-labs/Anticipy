@@ -138,7 +138,7 @@ def verdict(rows: list[dict], allowed_ms: int = ALLOWED_MS,
     network. Returns (exit_code, status, sentence, stats).
 
     A row is MEASURED when either number is above zero: the worker adds the
-    keys only when it measured, and PocketBase reads an unset number as 0, so
+    keys only when it measured, and the backend reads an unset number as 0, so
     0/0 is an echo ignored before hear(), a pre-migration row, or a deploy
     without the stamp — never a free decision.
     """

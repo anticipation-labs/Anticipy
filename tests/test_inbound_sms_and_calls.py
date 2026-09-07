@@ -5,13 +5,13 @@ Two live failures paid for these tests.
 INBOUND. `sms.pb.js` used to compare Twilio's signature against
 ANTICIPY_TWILIO_WEBHOOK_URL byte-for-byte, and 503 when that var was unset. The
 var has to be identical on two Railway services that nobody diffs — the hook
-runs on PocketBase, the thing that binds the number runs on the worker
+runs on the backend, the thing that binds the number runs on the worker
 (brain/worker.py:340) — and on 2026-08-12→15 they disagreed: a stale
 "?token=..." binding against a clean env URL, every inbound text 403, zero
 inbound events for three days, and the only symptom on Twilio's side of the wire
 (brain/worker.py:382-387). Twilio signs the exact URL it requested, so the hook
 now reconstructs that URL from the request. These tests run the real hook source
-in a stand-in PocketBase runtime and check the reconstruction, the refusals, and
+in a stand-in the backend runtime and check the reconstruction, the refusals, and
 that no refusal is silent.
 
 CALLS. `VoiceArm.call()` would dial with a bare string: no goal, no named

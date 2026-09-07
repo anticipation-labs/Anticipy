@@ -2,7 +2,7 @@
 -> Chrome extension (real Chrome, unpacked) -> action -> result back to app.
 
 The 'phone app' here is a stand-in that calls the exact same backend endpoints
-the Swift app calls (events + jobs on PocketBase). Everything else is real:
+the Swift app calls (events + jobs on the backend). Everything else is real:
 live OpenRouter triage, real Chrome, real website, real result round-trip.
 """
 import json

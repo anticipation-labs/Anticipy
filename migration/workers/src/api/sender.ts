@@ -5,7 +5,7 @@
  * deliberately carrier-blind: the brain (brain/worker.py handle_inbound, which
  * polls kind "sms_reply" with decision "") must not be able to tell which
  * carrier delivered a text, so both routes land the identical row through the
- * identical code. Ported from backend/pb_hooks/sms.pb.js:160-293, THE ORACLE
+ * identical code. Ported from migration/workers/src/routes/sms.ts, THE ORACLE
  * for this half; the signature halves stay in their routes because the two
  * carriers prove themselves differently.
  *

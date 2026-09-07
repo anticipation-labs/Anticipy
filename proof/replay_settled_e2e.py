@@ -1,5 +1,5 @@
 """End-to-end check of the settled-plan fix through the real hear() path
-against the local PocketBase: the exact production line must now produce a
+against the local the backend: the exact production line must now produce a
 HELD card and one go-ahead text, not silence."""
 from __future__ import annotations
 

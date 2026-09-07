@@ -84,7 +84,7 @@ if says '"transcription/token"' || says "appendingPathComponent(\"transcription"
     fail \
 "The app asks the server for a transcription token again.
 
-That endpoint answers 410 GONE (backend/pb_hooks/transcription_token.pb.js) and
+That endpoint answers 410 GONE (migration/workers/src/routes/sms.ts) and
 it is never coming back. The old catch block retried on ANY error, so a
 permanent refusal spun a three-second reconnect loop forever against a
 connected pendant - battery and radio spent on a decision that will not change.

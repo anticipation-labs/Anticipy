@@ -744,8 +744,9 @@ Five static files and four zips, `COPY`ed into the image at
 no Worker invocation, cost nothing per request, and version with the code that
 references them — which R2 would not. Total ~1.3 MB.
 
-Staged by `npm run stage:assets` (copies `backend/pb_public/` into
-`migration/workers/public/`) rather than committing a second copy of the zips.
+Committed in `migration/workers/public/` — since 2026-09-07 the only copy.
+(They were staged from `backend/pb_public/` while PocketBase served the same
+files; that directory and the staging step are gone.)
 (The extension zips are 338,456 B each at 0.13.0 as of 2026-09-05; the table
 above is the 2026-09-03 measurement.)
 

@@ -67,7 +67,7 @@ class ScriptedLLM:
 
 
 class Offline(Anticipy):
-    """No PocketBase, no Twilio: the queue and the phone are recorders."""
+    """No the backend, no Twilio: the queue and the phone are recorders."""
 
     def __init__(self, llm):
         mem = types.SimpleNamespace(

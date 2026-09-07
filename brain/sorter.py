@@ -69,7 +69,7 @@ MAX_ITEMS = 4
 
 
 def _arrival(segment: dict) -> Optional[datetime]:
-    """When did the last row for this conversation LAND. PocketBase stamps
+    """When did the last row for this conversation LAND. the backend stamps
     `updated` on every append, which is exactly the fact we want; the explicit
     column is read first so a caller can carry the value itself."""
     for key in ("last_arrival_at", "updated", "created"):

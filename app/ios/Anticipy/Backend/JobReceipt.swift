@@ -2,7 +2,7 @@ import Foundation
 
 /// THE PROOF THE SERVER ITSELF DEMANDED, read back on the phone.
 ///
-/// `backend/pb_hooks/workflow_guard.pb.js` refuses to move ANY job to `done`
+/// `migration/workers/src/policy/workflow_guard.ts` refuses to move ANY job to `done`
 /// unless the row's `receipt` column parses and carries `verified: true`, an
 /// `effect_key` matching the job's, and a NON-EMPTY `evidence` array. So every
 /// done row in the product is, by construction, backed by something checked.
@@ -141,7 +141,7 @@ struct JobReceipt: Equatable {
                 .trimmingCharacters(in: .whitespacesAndNewlines),
             items: items,
             // Anything other than a real JSON `true` is not a verification.
-            // PocketBase hands back what was stored; a string "true" would be
+            // the backend hands back what was stored; a string "true" would be
             // somebody's hand-written row, and this must not vouch for it.
             verified: obj["verified"] as? Bool ?? false,
             recordedAt: obj["recorded_at"] as? String ?? "")

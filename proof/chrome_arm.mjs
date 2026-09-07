@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // THE BROWSER ARM, STOOD UP BY A SCRIPT INSTEAD OF BY HAND.
 //
-//   sh proof/local_rig.sh up            # PocketBase + the brain
+//   sh proof/local_rig.sh up            # the backend + the brain
 //   node proof/chrome_arm.mjs up        # this: launch Chrome, point it at the
 //                                       # rig, register, pair, prove it is live
 //   node proof/chrome_arm.mjs status    # what the arm looks like right now
@@ -53,7 +53,7 @@
 // you insist otherwise with --profile.
 //
 // Flags:
-//   --base=URL          PocketBase (default http://127.0.0.1:8090)
+//   --base=URL          the backend (default http://127.0.0.1:8090)
 //   --owner-ref=ID      default: ~/.anticipy-rig/state/owner_ref
 //   --port=N            remote debugging port (default 29344)
 //   --chrome=PATH       Chrome for Testing binary (default: newest in
@@ -534,7 +534,7 @@ async function up() {
 
   // SIMULATE THE PHONE. This is the same write the iPhone app makes when the
   // owner types the 6-digit code: claim a not-yet-paired record by flipping
-  // owner/owner_ref/paired exactly once (backend/pb_hooks/guard.pb.js:213).
+  // owner/owner_ref/paired exactly once (migration/workers/src/policy/guard.ts).
   const claim = await pb("PATCH", `/api/collections/agents/records/${info.recordId}`,
     { owner: ownerRef, owner_ref: ownerRef, paired: true });
   if (!claim.ok) {
@@ -564,7 +564,7 @@ async function up() {
   console.log(`paired        owner_ref ${state.ownerRef}`);
   if (!state.openrouterKey) {
     console.error("paired, but the backend handed out no model key: every job this browser "
-      + "claims will die at 'no LLM key'. Start PocketBase with OPENROUTER_API_KEY set.");
+      + "claims will die at 'no LLM key'. Start the backend with OPENROUTER_API_KEY set.");
     process.exit(2);
   }
   console.log(`model         ${state.agentModel} via ${state.openrouterKey}`);

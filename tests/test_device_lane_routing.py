@@ -479,7 +479,7 @@ def _device_row(minutes_old=30, lane=DEVICE_CALENDAR_LANE, status="queued"):
 
     `lane` is a parameter because the STORED string is the thing under test
     below: the hook accepts a rewrite to "Device_Calendar" as no change at
-    all, and PocketBase keeps what it was given.
+    all, and the backend keeps what it was given.
     """
     stamp = (datetime.now(timezone.utc) - timedelta(minutes=minutes_old)
              ).strftime("%Y-%m-%d %H:%M:%S")
@@ -915,7 +915,7 @@ def test_the_brain_routes_on_every_field_the_phone_refuses_on():
 # `research_lane.pb.js` normalises with `.trim().toLowerCase()` BEFORE it
 # judges anything, so a PATCH rewriting a row's lane to "Device_Calendar" is
 # no change at all to its immutability leg and is accepted with a `next()`.
-# PocketBase then stores the raw string. `CalendarHandPolicy.normalizedLane`
+# the backend then stores the raw string. `CalendarHandPolicy.normalizedLane`
 # normalises too, so the phone still calls that row its own — and says why in
 # its own comment: "an orphan is worse than a refusal, because a refusal is
 # countable and an orphan is silence."

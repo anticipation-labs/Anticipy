@@ -1,7 +1,7 @@
 /**
  * src/index.ts — the Worker entry point.
  *
- * Replaces the PocketBase binary at backend/Dockerfile. It serves, in order:
+ * Replaces the PocketBase binary at the retired backend container's Dockerfile. It serves, in order:
  *
  *   /api/health                       PocketBase's liveness probe (CONTRACT.md §0.5)
  *   /api/collections/{n}/records[...] the generic records API   (src/api/records.ts)

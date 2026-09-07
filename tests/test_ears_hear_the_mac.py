@@ -1,7 +1,7 @@
 """The deaf-ears gate says which EAR spoke, and the Mac is one of them.
 
 Issue #37. The Mac meeting recorder shipped as build 119 with the Railway
-PocketBase URL baked in, after the phone had moved to the Worker at
+the backend URL baked in, after the phone had moved to the Worker at
 api.anticipy.ai. Every meeting it recorded was posted to a backend nothing
 read. `are_the_ears_live.py` could not have said so: it counted one total,
 and the phone alone kept that total green.

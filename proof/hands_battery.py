@@ -24,8 +24,8 @@ proves nothing.
 
 TWO WAYS TO RUN IT, and only one of them measures anything today.
 
-  --rig   (the default whenever PocketBase answers on 127.0.0.1:8090)
-          The jobs go to the LOCAL RIG — the repo's own PocketBase with this
+  --rig   (the default whenever the backend answers on 127.0.0.1:8090)
+          The jobs go to the LOCAL RIG — the repo's own the backend with this
           tree's hooks (sh proof/local_rig.sh up) — and are run by the arm
           proof/chrome_arm.mjs stood up: a Chrome for Testing that registered
           through the real hooks, was paired to the rig's owner, and is handed
@@ -45,7 +45,7 @@ TWO WAYS TO RUN IT, and only one of them measures anything today.
           `workflow_id` and the embedded `params._workflow` plan, so
           claimJob's `isWorkflowJob` refuses every one of them and every
           scenario sits `status=queued` for its whole 300s. It also imitates
-          PocketBase's filter/PATCH semantics loosely and serves no
+          the backend's filter/PATCH semantics loosely and serves no
           /api/health (harmless — only onboarding.js and popup.js probe that,
           the worker never gates on it). Kept reachable so nothing is lost,
           and so the two can be diffed; do not extend it.
@@ -401,7 +401,7 @@ class SiteH(http.server.BaseHTTPRequestHandler):
 
 
 # --------------------------------------------------------------- the fake
-# The original stand-in for production PocketBase. DEAD against 0.13.0 — see
+# The original stand-in for production the backend. DEAD against 0.13.0 — see
 # the header — and reachable only with --fake. Exactly the endpoints
 # extension/background.js used to call, with roughly the same shapes.
 JOBS = {}
@@ -543,7 +543,7 @@ PROFILE_FIELDS = ("first_name", "last_name", "email", "phone")
 
 
 # ---------------------------------------------------------------- the rig
-# Everything below talks to the real PocketBase the way the brain and
+# Everything below talks to the real the backend the way the brain and
 # proof/extension_smoke.mjs do. No auth header beyond the one smoke sends:
 # the rig runs with no ANTICIPY_SERVICE_TOKEN (guard.pb.js falls through), so
 # the token — if the environment happens to carry one — is sent and ignored.
@@ -643,7 +643,7 @@ def _approval(plan, owner_words):
 
 
 def _job_fields(plan):
-    """Plan.job_fields(): the PocketBase columns that mirror the embedded plan."""
+    """Plan.job_fields(): the the backend columns that mirror the embedded plan."""
     lease = plan.get("lease") or {}
     return {
         "workflow_id": plan["plan_id"],

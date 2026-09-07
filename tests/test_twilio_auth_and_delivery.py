@@ -7,7 +7,7 @@ wrong once in this product:
    grants full account access — Twilio's own console says so. Outbound now
    prefers a scoped, revocable API key. Inbound CANNOT: Twilio signs webhooks
    with the account auth token and offers no API-key equivalent, so
-   backend/pb_hooks/sms.pb.js must keep reading it forever. The two halves use
+   migration/workers/src/routes/sms.ts must keep reading it forever. The two halves use
    different credentials on purpose, and the pull to "finish" the migration by
    deleting the auth token is exactly what would make every text he sends 503.
 
@@ -323,7 +323,7 @@ def test_twilio_mock_false_is_not_a_muzzle(clean_env):
 def test_credentials_can_be_a_key_pair_alone_with_no_auth_token(clean_env):
     """What the worker's live/mock gate has to accept once the owner has moved
     outbound to a key and taken the token off the WORKER service (it stays on
-    PocketBase, which needs it for signatures)."""
+    the backend, which needs it for signatures)."""
     for name, value in env(TWILIO_AUTH_TOKEN=None, TWILIO_API_KEY_SID=KEY_SID,
                            TWILIO_API_KEY_SECRET=KEY_SECRET).items():
         clean_env.setenv(name, value)
@@ -385,7 +385,7 @@ def test_the_target_is_derived_from_the_address_the_worker_already_uses(clean_en
 
 
 def test_a_pin_is_honoured_when_derivation_cannot_work(clean_env):
-    """The one case derivation cannot cover: the worker reaches PocketBase on an
+    """The one case derivation cannot cover: the worker reaches the backend on an
     address Twilio cannot (a private network, a container name)."""
     clean_env.setattr(worker, "PB", "http://pocketbase.internal:8090")
     clean_env.setenv("ANTICIPY_TWILIO_WEBHOOK_URL",

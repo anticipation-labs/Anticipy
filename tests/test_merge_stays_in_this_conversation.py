@@ -41,7 +41,7 @@ PHARMACY = "Look up what time the pharmacy on Broadway closes tonight"
 
 
 def _stamp(seconds_ago: float) -> str:
-    """PocketBase's own format, which is what _last_touched parses."""
+    """the backend's own format, which is what _last_touched parses."""
     when = dt.datetime.now(dt.timezone.utc) - dt.timedelta(seconds=seconds_ago)
     return when.strftime("%Y-%m-%d %H:%M:%S") + ".000Z"
 

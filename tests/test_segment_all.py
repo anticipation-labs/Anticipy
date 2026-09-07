@@ -1,7 +1,7 @@
 """How many conversations was that?
 
 Until now that question could not be asked. The boundary rules existed, but the
-only way to run them was one turn at a time against PocketBase, so "is this one
+only way to run them was one turn at a time against the backend, so "is this one
 call or three?" could only be answered by running the whole system and looking
 at a screenshot. Omar's screenshot said three. It was one.
 
@@ -126,7 +126,7 @@ def test_a_silence_longer_than_the_continue_window_can_end_it():
 # --------------------------------------------------------- times of any shape
 
 def test_the_same_moment_written_four_ways_groups_the_same():
-    """Epoch seconds, epoch milliseconds, an ISO string and PocketBase's
+    """Epoch seconds, epoch milliseconds, an ISO string and the backend's
     space-separated form are all the same instant. An unreadable capture time
     makes a turn unplaceable, and an unplaceable turn is DROPPED — losing what
     somebody said because a number arrived where a string was expected is not a

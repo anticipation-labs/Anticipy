@@ -35,7 +35,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from brain import backend  # noqa: E402
 
-# ---- in-memory PocketBase: everything in brain/ runs for real -------------
+# ---- in-memory the backend: everything in brain/ runs for real -------------
 JOBS: list[dict] = []
 
 

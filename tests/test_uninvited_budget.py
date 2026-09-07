@@ -3,7 +3,7 @@
 Omi's second proactivity ordering: the budget is RESERVED before the side
 effect, never checked after it. Until 2026-09-05 the brain counted
 anticipy_says rows after the fact, on one door of four (the parked ask),
-fail-OPEN to zero on any read error — so a flaky PocketBase removed the cap,
+fail-OPEN to zero on any read error — so a flaky the backend removed the cap,
 two workers for one owner both read the same count and both sent, and the
 clock, the overheard-plan receipt and the meeting digest never touched the
 count at all: up to 4 clock nudges plus every receipt plus a digest plus 3
@@ -97,7 +97,7 @@ def _strip_parens(s: str) -> str:
 
 
 def matches(row: dict, filt: str) -> bool:
-    """A PocketBase filter, honoured: =, !=, >=, <=, &&, || and parens."""
+    """A the backend filter, honoured: =, !=, >=, <=, &&, || and parens."""
     filt = _strip_parens(filt)
     if not filt.strip():
         return True
@@ -117,7 +117,7 @@ def matches(row: dict, filt: str) -> bool:
 
 
 class FakeBackend:
-    """PocketBase's events collection with the partial unique index on
+    """the backend's events collection with the partial unique index on
     external_event_id (WHERE external_event_id != ''), plus a jobs table for
     the core-driven cases. Scriptable: a lost CREATE response (insert, then
     raise), an unreadable store, a hook that runs inside a GET."""

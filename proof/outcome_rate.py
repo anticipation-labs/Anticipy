@@ -168,7 +168,7 @@ CANNOT_DISTINGUISH = [
 
 
 def headers() -> dict:
-    # Same shape brain/pb.py uses. Without the token every read is 403 and
+    # Same shape brain/backend.py uses. Without the token every read is 403 and
     # this file would report a perfect day by reading nothing.
     h = {"X-Anticipy-Worker": "1"}
     token = os.environ.get("ANTICIPY_SERVICE_TOKEN")

@@ -51,7 +51,7 @@ def check(name, ok, note=""):
 
 
 class FakeJobs:
-    """In-memory stand-in for the PocketBase jobs table."""
+    """In-memory stand-in for the the backend jobs table."""
     def __init__(self):
         self.jobs = []
 

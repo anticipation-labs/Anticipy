@@ -1328,7 +1328,7 @@ def mac_zip(version="1.1.0", build="119", extra=b"") -> bytes:
 def mac_tree(tmp_path, blob=None) -> str:
     root = str(tmp_path)
     write(root, sg.MAC_ZIP, blob if blob is not None else mac_zip())
-    write(root, "app/macos/AnticipyMac/PocketBase.swift", "// the mouth\n")
+    write(root, "app/macos/AnticipyMac/the backend.swift", "// the mouth\n")
     return root
 
 

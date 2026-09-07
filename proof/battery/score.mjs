@@ -61,7 +61,7 @@ function judge(rec) {
   const task = TASKS.get(rec.task_id);
   if (!task) return { pass: false, why: "no such task id in tasks.json" };
   // Harness-side endings are never scored as engine failures — they are scored
-  // as nothing, and counted separately, because attributing "PocketBase was
+  // as nothing, and counted separately, because attributing "the backend was
   // restarting" to the agent is how a battery starts lying.
   if (["queue_refused", "row_corrupt", "row_deleted", "harness_error"].includes(rec.outcome)) {
     return { pass: false, invalid: true, why: `harness: ${rec.outcome} — ${rec.note || ""}` };

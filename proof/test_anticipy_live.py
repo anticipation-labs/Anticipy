@@ -1,4 +1,4 @@
-"""Live spine: Anticipy -> real PocketBase job queue -> confirm gate -> loop closed.
+"""Live spine: Anticipy -> real the backend job queue -> confirm gate -> loop closed.
 
 Runs against the actual backend at 127.0.0.1:8090 (no mocks). The extension's
 role (claiming the job and reporting done) is played by direct API calls so

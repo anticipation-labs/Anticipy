@@ -1,6 +1,6 @@
 /**
  * src/llm.ts — POST /agent/llm, the model proxy.
- * backend/pb_hooks/agent_key.pb.js:65-422. CONTRACT.md §6.4.
+ * migration/workers/src/llm.ts. CONTRACT.md §6.4.
  *
  * Every model call the browser agent makes goes through here. Until this was
  * ported the route answered 503 "llm proxy not yet ported", which on the

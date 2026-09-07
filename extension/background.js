@@ -1,5 +1,5 @@
 // Anticipy extension service worker.
-// Polls the Anticipy backend (PocketBase) for action jobs and executes them in
+// Polls the Anticipy backend (the backend) for action jobs and executes them in
 // the user's own browser using their live logged-in sessions — browser-only,
 // no service APIs. Irreversible steps stop at a prefilled page for the user
 // (or the phone app) to confirm.
@@ -98,7 +98,7 @@ const ownerLaneFilter = (status, ownerRef) =>
 // A SUPERVISED READ IS ITS OWN LANE, and it is invisible to the poll above on
 // purpose — twice over. It carries no `workflow_id` (there is no plan to
 // approve: the person is standing there watching), and
-// `backend/pb_hooks/research_lane.pb.js` now appends `lane != "supervised_read"`
+// `migration/workers/src/policy/research_lane.ts` now appends `lane != "supervised_read"`
 // to any queued poll that does not NAME the lane. That second guard exists
 // because an old extension in the wild would otherwise claim a read and run it
 // through `runAgentGoal` with the full action vocabulary — clicking and typing
@@ -151,7 +151,7 @@ async function ensureRegisteredOnce() {
     if (agentCredentialInstalled && agentToken) return { agentId, agentToken, recordId };
     // Existing installs predate per-agent credentials, and this endpoint is
     // how they were meant to get one. It is authorized by the SERVER's master
-    // token (backend/pb_hooks/agent_auth.pb.js:53), which this browser no
+    // token (migration/workers/src/routes/agent.ts), which this browser no
     // longer holds — see writeHeaders above. So this call has been answered
     // 403 since that release, and a 403 returns null exactly like any other
     // failed registration. It stays because the alternative, re-registering a
@@ -615,7 +615,7 @@ export async function claimJob() {
     // still stands.
     //
     // Measured from when it was last QUEUED, not from when the row was
-    // created. `created` is immutable in PocketBase, so reading it meant a
+    // created. `created` is immutable in the backend, so reading it meant a
     // task that had merely EXISTED for 12 hours was bounced — including one
     // the owner had just this second unblocked by answering. His Cactus
     // booking was created 21h before he supplied his details; every resume
@@ -1028,7 +1028,7 @@ async function claimSupervisedRead(ownerRef, agentId) {
     // like the 12-hour rule above; it is the supervision itself.
     if (leaseLapsed(job.watching_until)) continue;
     try {
-      // The claim is also lease-guarded server-side: PocketBase answers 403
+      // The claim is also lease-guarded server-side: the backend answers 403
       // when `watching_until` is missing, unparseable or past. A refusal here
       // is therefore normal — the person put their phone down between the poll
       // and the claim — and it is not worth a word to anybody.
@@ -1359,7 +1359,7 @@ export function takeEvidenceShot(out) {
 /// booked either way, and a done-text with no photo is the product's behaviour
 /// as of yesterday. The guard's own refusal shape agrees — `owner_ref` is
 /// compared against the credential's owner and refused when it disagrees
-/// (backend/pb_hooks/guard.pb.js:342-346), so a wrong claim here fails closed
+/// (migration/workers/src/policy/guard.ts), so a wrong claim here fails closed
 /// at the door rather than depositing somebody else's page.
 export async function depositEvidence(job, shot, deps = {}) {
   const base = deps.backendBase || backendBase;
@@ -1384,7 +1384,7 @@ export async function depositEvidence(job, shot, deps = {}) {
     const h = await headers();
     // MULTIPART SETS ITS OWN CONTENT-TYPE, boundary and all. writeHeaders()
     // hardcodes application/json for every other call in this file; leaving it
-    // on makes PocketBase parse the body as JSON and reject a valid upload.
+    // on makes the backend parse the body as JSON and reject a valid upload.
     delete h["Content-Type"];
     const r = await send(`${await base()}/api/collections/evidence/records`,
       { method: "POST", headers: h, body: form });

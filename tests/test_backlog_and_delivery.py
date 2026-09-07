@@ -18,7 +18,7 @@ one sweep and all pinned here:
      run itself routinely passes two minutes — so the backend refused the
      `done` write and the answer was discarded.
   5. Every notification site sent the text and wrote the durable dedupe
-     record second, and every guard reads only that record. A PocketBase
+     record second, and every guard reads only that record. A the backend
      write outage therefore turned one notification into one text every two
      seconds.
 """
@@ -74,7 +74,7 @@ def daytime(monkeypatch):
 # ---------------------------------------------------------------- 1. the page
 
 def paged_jobs(monkeypatch, jobs, per_page=None, events=()):
-    """A jobs collection that pages exactly like PocketBase does."""
+    """A jobs collection that pages exactly like the backend does."""
     size = per_page or W.FINISHED_PER_PAGE
     asked = []
 

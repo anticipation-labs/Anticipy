@@ -21,7 +21,7 @@ outside from "she stopped noticing". The only way to separate them from a
 genuine property of the words is to run the words with none of that state.
 
 So: a new Memory on a private in-process database and a new Anticipy for every
-single line, with PocketBase stubbed the way overnight/evaluate.py:31-69 stubs
+single line, with the backend stubbed the way overnight/evaluate.py:31-69 stubs
 it, so the jobs she queues are captured in-process instead of reaching the rig.
 Nothing is written to the rig. Nothing under brain/ is touched.
 
@@ -61,7 +61,7 @@ class _R:
 
 
 def _install_pb_stub():
-    """Capture jobs in memory. A live PocketBase here would pollute the rig's
+    """Capture jobs in memory. A live the backend here would pollute the rig's
     queue with replay rows AND let dedupe leak back in through the database —
     the exact state this file exists to exclude."""
     from brain import backend

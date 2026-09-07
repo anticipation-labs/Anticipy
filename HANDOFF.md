@@ -225,7 +225,7 @@ registers, spacing/radius scales, real card elevation), the per-screen polish is
    read/write → 403; worker 5/5 standing check through the locked API.
    - Token env `ANTICIPY_SERVICE_TOKEN` is set on BOTH Railway services (backend + worker).
      Value is only in Railway variables — never commit it.
-   - **How the token flows:** worker reads env (`brain/pb.py` attaches the header to every
+   - **How the token flows:** worker reads env (`brain/backend.py` attaches the header to every
      call — never bypass pb.py with raw requests). The extension and iPhone app receive it
      from `GET /agent/key?agent_id=…` (only answers for a PAIRED agent; also carries the
      OpenRouter key + owner profile) and store it (chrome.storage `serviceToken` /

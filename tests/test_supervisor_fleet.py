@@ -2,7 +2,7 @@
 
   1. MAX_OWNER_WORKERS was enforced by truncating an id-sorted list inside
      discover_owners, and main() reads "not in that list" as "this account
-     was deleted". PocketBase ids are random, so past the cap ONE new signup
+     was deleted". the backend ids are random, so past the cap ONE new signup
      whose generated id sorted low evicted a live owner: SIGTERM, no log
      line, no retry. They simply stopped being heard, while every other
      account kept working — and the kill landed wherever the process was,
@@ -54,7 +54,7 @@ def fleet(monkeypatch):
 
 
 def oid(label):
-    """A realistic PocketBase id: 15 random-looking chars, sortable by the
+    """A realistic the backend id: 15 random-looking chars, sortable by the
     label so a test can say which one sorts low."""
     return label + "0" * (15 - len(label))
 

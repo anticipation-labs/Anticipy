@@ -55,7 +55,7 @@ assert.ok(/do not go back to it/.test(block),
   "the model must be told the host is dead, or it re-picks the top hit");
 
 // The server half of this contract (the refuse list for money and identity
-// hosts, the hourly ceiling, the account check) lived in a PocketBase hook
+// hosts, the hourly ceiling, the account check) lived in a the backend hook
 // that no longer exists; server-side solving was withdrawn on 2026-08-16 and
 // the Worker carries no solver. What remains to pin is the browser's side.
 

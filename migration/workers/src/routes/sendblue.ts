@@ -10,7 +10,7 @@
  * retries up to three times on a 5xx, 45 s apart, and wants a 2xx.
  *
  * The shape of every decision here is the Twilio route's (routes/sms.ts) and
- * the oracle's (backend/pb_hooks/sms.pb.js):
+ * the oracle's (migration/workers/src/routes/sms.ts):
  *
  *   configuration problem   503, and it says so -- a 403 here would look like
  *                           a forged request forever and hide a deaf product

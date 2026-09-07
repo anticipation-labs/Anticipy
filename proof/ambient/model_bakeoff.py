@@ -20,7 +20,7 @@ it is the product failing silently and cheaply. So this measures both, on the
 same corpus lines, against the same gold labels.
 
 WHAT IT MEASURES, and it is deliberately NOT the full pipeline. This calls
-triage and nothing else: no worker, no PocketBase, no memory, no segmentation.
+triage and nothing else: no worker, no the backend, no memory, no segmentation.
 That isolates the one decision the model is responsible for, runs in minutes
 instead of hours, and costs a few cents. The winner still has to be confirmed
 end to end afterwards — proof/ambient/fanout.py is what does that.

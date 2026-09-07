@@ -374,7 +374,7 @@ enum DashboardPolicy {
         /// THE STORE WRITES A SPACE WHERE ISO-8601 WANTS A T.
         ///
         /// Rows arrive stamped "2026-09-06 11:43:07.000Z", which is
-        /// PocketBase's shape and what D1 carries forward. `ISO8601DateFormatter`
+        /// the backend's shape and what D1 carries forward. `ISO8601DateFormatter`
         /// refuses it, so every row failed to parse and `history` returned no
         /// days at all — a History page that said "Nothing here yet" over a
         /// phone holding a week of conversations. The thread never showed it

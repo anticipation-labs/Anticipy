@@ -28,7 +28,7 @@ enum ContextSource: String, CaseIterable, Identifiable {
     /// It is supervised rather than autonomous because three independent
     /// constraints say so, any one of which decides it: the architecture
     /// already forbids read-only work in the owner's browser
-    /// (`backend/pb_hooks/research_lane.pb.js:70-73` answers 403, "research
+    /// (`migration/workers/src/policy/research_lane.ts` answers 403, "research
     /// jobs run in the worker, never in a browser"); `gmail.readonly` is a
     /// Google *restricted* scope, so the API route is a subscription to a CASA
     /// audit re-certified every twelve months; and LinkedIn's User Agreement

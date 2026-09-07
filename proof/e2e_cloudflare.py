@@ -148,7 +148,7 @@ def wire_stamp(when: dt.datetime) -> str:
 
 
 def pb_stamp(when: dt.datetime) -> str:
-    """The space-separated form PocketBase and the Worker compare correctly in
+    """The space-separated form the backend and the Worker compare correctly in
     a filter (proof/live_day.py:consequences; migration/workers/test/filter-dsl.test.ts:102)."""
     when = when.astimezone(dt.timezone.utc)
     return when.strftime("%Y-%m-%d %H:%M:%S.") + f"{when.microsecond // 1000:03d}Z"
@@ -372,7 +372,7 @@ def env_root(start: str = REPO) -> str:
 
 class Api:
     """The service principal, the way the gates and the brain speak: the
-    routing marker plus the token (brain/pb.py), and a named User-Agent
+    routing marker plus the token (brain/backend.py), and a named User-Agent
     because Cloudflare answers 403 1010 to Python-urllib's (overnight/_env.py)."""
 
     def __init__(self, base: str, token: str):

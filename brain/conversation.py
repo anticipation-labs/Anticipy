@@ -375,7 +375,7 @@ class Conversation:
             #
             # NO PICTURE ON THIS LANE, and none is needed: the app reads the
             # owner's own evidence rows through his signed-in session
-            # (backend/pb_hooks/evidence.pb.js), so an in-app reply does not
+            # (migration/workers/src/assets.ts), so an in-app reply does not
             # need a public URL to exist for a picture to be seen.
             return {"to": phone, "body": body, "via": "in-app"}
         # Conditional for the reason TwilioTransport.send gives: transports
@@ -764,7 +764,7 @@ Use {"facts": {}} when there is nothing durable."""
         and dies with the process; this does not."""
         try:
             # A newly minted DRAFT is also stopped for information. Its legacy
-            # row status stays awaiting_confirm because PocketBase admits new
+            # row status stays awaiting_confirm because the backend admits new
             # workflow rows through that entry state, but the canonical state
             # is what decides whether the owner owes details or approval.
             filt = ('(status="needs_user" || '

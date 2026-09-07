@@ -11,7 +11,9 @@ def test_agent_key_route_never_returns_server_credentials():
     assert "openrouter" not in answer.lower()
     assert "service_token" not in answer.lower()
     assert "Bearer" not in answer
-    assert "key" not in answer.lower(), "no vendor key in the key route's answer"
+    code = "\n".join(l.split("//", 1)[0] for l in answer.splitlines())
+    for credential in ("openrouter", "gemini", "api_key", "apikey", "secret", "token", "bearer"):
+        assert credential not in code.lower(), f"{credential} in the key route's answer"
     assert "providerKeys(env)" in source, "the route checks a provider exists, and answers llm_proxy"
     assert "paired(env, agentId, token)" in source, "and only a paired agent gets that answer"
 

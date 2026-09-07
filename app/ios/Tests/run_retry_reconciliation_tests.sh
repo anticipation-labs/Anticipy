@@ -32,7 +32,7 @@ for literal in 'owner explicitly checked the destination before retry' \
                'I checked the site; the action did not happen'; do
     if code "$session" | grep -q "$literal"; then
         echo "The phone is citing a constant again: \"$literal\""
-        echo "That string is what backend/pb_hooks/workflow_guard.pb.js's retry"
+        echo "That string is what migration/workers/src/policy/workflow_guard.ts's retry"
         echo "leg accepts as proof it is safe to retry, and nothing checked"
         echo "anything. A crash plus a tap re-sends the submission."
         exit 2

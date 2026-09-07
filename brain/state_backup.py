@@ -1,6 +1,6 @@
 """Consistent, encrypted-at-rest off-volume backups of worker state.
 
-PocketBase has its own backup engine.  The brain does not: every owner has a
+the backend has its own backup engine.  The brain does not: every owner has a
 private SQLite database on the worker volume, plus a small JSON clock file.
 Copying a live SQLite file byte-for-byte can capture a database between writes,
 so each database is copied through SQLite's online backup API and checked

@@ -2,7 +2,7 @@
  * POST /sms/inbound   -- Twilio's inbound webhook.
  * POST /transcription/token
  *
- * Ported from backend/pb_hooks/sms.pb.js + twilio_signature.js. The signature
+ * Ported from migration/workers/src/routes/sms.ts + twilio_signature.js. The signature
  * half is here; the owner-resolution + event-write half is src/api/sender.ts,
  * shared with routes/sendblue.ts so that a text lands in the identical events
  * row whichever carrier brought it and the brain cannot tell them apart.

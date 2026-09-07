@@ -54,7 +54,7 @@ enum ListenEvent: Equatable {
     case flushed(reason: FlushReason, words: Int)
     /// Whether a line reached the server, and the SHAPE of what happened —
     /// never a sentence. The tempting values at the call site are the wrong
-    /// ones: `BackendError` carries the server's own sentence, and a PocketBase
+    /// ones: `BackendError` carries the server's own sentence, and a the backend
     /// error body is built from a request whose payload includes the owner's
     /// speech. Spec section 9 makes this journal exportable from Settings, so
     /// anything put here leaves the phone on a person's tap. `PostDetail` is
@@ -182,7 +182,7 @@ enum ListenEvent: Equatable {
     }
 
     /// WHAT WENT WRONG, as a shape. Never a message: `BackendError` carries the
-    /// server's own sentence, and a PocketBase error body is built from a
+    /// server's own sentence, and a the backend error body is built from a
     /// request whose payload is the words the owner just said.
     enum PostFailure: Equatable {
         /// The server refused, with its status.
@@ -314,7 +314,7 @@ final class ListenJournal {
     private let queue = DispatchQueue(label: "ai.anticipy.listenjournal")
 
     /// A ring, so a long session overwrites its own oldest line in place
-    /// instead of growing without end. `backend/start.sh` exists in this repo
+    /// instead of growing without end. `the retired backend container's start script` exists in this repo
     /// because a disposable log database filled a volume and took production
     /// down; an unbounded journal on a phone is the same mistake at smaller
     /// scale. When it is full the newest events win, because those are the ones
@@ -330,7 +330,7 @@ final class ListenJournal {
     /// of listening is not. So the same line also goes to a file.
     ///
     /// Two files and no more, rotated, for the reason the ring is bounded:
-    /// `backend/start.sh` exists in this repo because a disposable log filled a
+    /// `the retired backend container's start script` exists in this repo because a disposable log filled a
     /// volume and took production down. On a phone that would be someone's
     /// storage instead, which is worse, because they cannot see why.
     /// Readable so Settings can hand the file to a ShareLink. The screen that

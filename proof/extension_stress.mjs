@@ -276,9 +276,9 @@ scenarios.s5 = {
     const id = await queue(readOnlyLookup(`${FIXTURE}/wiki/a/return-policy`,
       "how long have I got to send something back"));
     // Backdate `updated`, which is what claimJob measures for staleness
-    // (`created` is immutable in PocketBase and would not move).
+    // (`created` is immutable in the backend and would not move).
     //
-    // A 200 HERE MEANS NOTHING. `updated` is an autodate field: PocketBase
+    // A 200 HERE MEANS NOTHING. `updated` is an autodate field: the backend
     // accepts the write, ignores the value, and stamps NOW. The first version
     // of this scenario trusted the status code, watched the job get claimed
     // like any fresh row, and reported the engine red for a staleness rule it
@@ -294,7 +294,7 @@ scenarios.s5 = {
       await cancelJob(id, "stress: could not stage a stale row");
       return {
         ok: null,
-        detail: "SKIP — PocketBase owns `updated` (autodate), so a stale row "
+        detail: "SKIP — the backend owns `updated` (autodate), so a stale row "
           + "cannot be staged over the API. Staleness is covered offline by "
           + "extension/tests/test_claim_evidence.mjs.",
       };

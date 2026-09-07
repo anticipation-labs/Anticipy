@@ -1,6 +1,6 @@
 /**
  * src/do/PairCodeCounter.ts — the pair-code brute-force ceiling.
- * Replaces `e.app.store()` at backend/pb_hooks/guard.pb.js:116-195.
+ * Replaces `e.app.store()` at migration/workers/src/policy/guard.ts.
  *
  * WHY A DURABLE OBJECT AND NOT KV, AND NOT A MODULE-LEVEL Map
  * -----------------------------------------------------------

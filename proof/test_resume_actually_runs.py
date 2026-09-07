@@ -6,7 +6,7 @@ Three defects found by tracing "what if he answers hours later", each
 confirmed by two independent skeptics before being touched.
 
 1. extension/background.js measured staleness from `job.created`, which
-   PocketBase makes immutable. His Cactus booking was created 21 hours before
+   the backend makes immutable. His Cactus booking was created 21 hours before
    he would supply his details, and the limit is 12 — so the moment the brain
    requeued it, the extension would refuse to claim it, every time, forever.
    She had already said "I'll finish the booking now". Worse, the refusal

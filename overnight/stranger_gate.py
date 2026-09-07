@@ -1539,7 +1539,7 @@ def leg_7_receipt_is_what_is_shown(root: str = ROOT) -> str:
 # and an audit caught it: "MediaUrl appears nowhere in any .py, .js or .swift"
 # is false — the string is in five files across two languages. Every one of
 # them is a test fixture or a comment (tests/test_evidence_host.py,
-# tests/test_stranger_gate.py, backend/pb_hooks/evidence.pb.js), and none is a
+# tests/test_stranger_gate.py, migration/workers/src/assets.ts), and none is a
 # send path, so the LEG was right the whole time and only this sentence was
 # not. A gate whose prose is refutable teaches the next reader that its
 # verdicts are too, which is expensive in a repo where the gates are the only
@@ -1664,7 +1664,7 @@ def leg_8_done_text_can_carry_the_photo(root: str = ROOT) -> str:
             "reaches a phone on this channel — is in no send path in the "
             "product. (It IS in five files: test fixtures and comments in "
             "tests/test_evidence_host.py, tests/test_stranger_gate.py and "
-            "backend/pb_hooks/evidence.pb.js. This leg reads the POST payload "
+            "migration/workers/src/assets.ts. This leg reads the POST payload "
             "out of the syntax tree, so a comment cannot retire it — one once "
             "did.)\n"
             "        WIRE IT ALL step 1 describes the loop as act -> evidence "

@@ -2,7 +2,7 @@ import Foundation
 
 /// WHICH EARS heard a line, turned into something a person can read.
 ///
-/// `events.source` has existed since backend/pb_migrations/1700000004_segments.js
+/// `events.source` has existed since migration/d1/schema.sql
 /// and for a long time nothing wrote it; then the phone wrote it on every event
 /// and nothing read it back. So the one comparison the field exists for — the
 /// pendant run of an errand against the phone-mic run of the same errand — was
@@ -30,7 +30,7 @@ enum CaptureSourcePolicy {
     /// - `typed`: the person watching knows they typed it. A badge on every
     ///   typed line is noise on the busiest lane in the feed, and it labels the
     ///   one case that was never in question.
-    /// - unknown/empty: PocketBase sends "" for an unset column, and thousands
+    /// - unknown/empty: the backend sends "" for an unset column, and thousands
     ///   of rows predate anything writing this field. Silence is honest;
     ///   defaulting to "Phone" would be a lie about a measurement, and it would
     ///   quietly pollute the very comparison this badge exists to serve.

@@ -105,9 +105,9 @@ def fetch(collection: str, params: dict) -> list[dict]:
 
 
 def parse_ts(value: str) -> dt.datetime | None:
-    """PocketBase hands back 'YYYY-MM-DD HH:MM:SS.mmmZ' — tolerate both forms.
+    """the backend hands back 'YYYY-MM-DD HH:MM:SS.mmmZ' — tolerate both forms.
 
-    Always returns an AWARE datetime in UTC. PocketBase stores `created` in
+    Always returns an AWARE datetime in UTC. the backend stores `created` in
     UTC and the trailing Z is sometimes absent, so a naive parse used to hand
     back a datetime carrying no zone at all — which `.astimezone()` then reads
     as the zone of whatever laptop happened to run the checker. Anchoring it

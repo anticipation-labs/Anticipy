@@ -14,7 +14,7 @@
 // conclusion "not_applied", evidence "owner explicitly checked the
 // destination before retry" — whether or not anyone had checked anything.
 // That constant is what satisfied the DB guard's "proven safe to retry" leg
-// (backend/pb_hooks/workflow_guard.pb.js, the effect_uncertain block), so a
+// (migration/workers/src/policy/workflow_guard.ts, the effect_uncertain block), so a
 // crash followed by a tap re-sent the submission: the duplicate booking the
 // loop's own comment calls the cardinal sin.
 //

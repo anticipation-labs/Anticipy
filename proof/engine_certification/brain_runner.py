@@ -20,10 +20,10 @@ class Response:
 
     def raise_for_status(self) -> None:
         if not self.ok:
-            raise RuntimeError("in-memory PocketBase request failed")
+            raise RuntimeError("in-memory backend request failed")
 
 
-class PocketBaseRig:
+class BackendRig:
     def __init__(self):
         self.jobs: list[dict[str, Any]] = []
 
@@ -90,7 +90,7 @@ def run(cases_path: Path, oracle_path: Path, results_path: Path,
         raise RuntimeError("brain certification requires the live production model")
     rows = []
     for number, case in enumerate(cases, start + 1):
-        rig = PocketBaseRig()
+        rig = BackendRig()
         core.backend = rig
         memory = Memory(":memory:", llm=llm)
         anticipy = Anticipy(
