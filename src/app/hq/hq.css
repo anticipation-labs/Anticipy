@@ -1,0 +1,237 @@
+/* Anticipy HQ — light internal product theme.
+   Scoped under .hq so the dark marketing globals never leak in. */
+
+.hq {
+  --hq-bg: #ffffff;
+  --hq-text: #111111;
+  --hq-muted: #66625b;
+  --hq-surface: #f7f6f3;
+  --hq-border: #e7e4de;
+  --hq-bronze: #8a6b44;
+  --hq-gold: #c8a97e;
+  --hq-success: #2e6b4f;
+  --hq-danger: #a33a3a;
+  --hq-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+
+  background: var(--hq-bg);
+  color: var(--hq-text);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.5;
+  letter-spacing: 0;
+  min-height: 100vh;
+}
+
+.hq ::selection {
+  background: rgba(200, 169, 126, 0.35);
+  color: var(--hq-text);
+}
+
+.hq h1, .hq h2, .hq h3 { line-height: 1.25; }
+
+.hq .hq-serif { font-family: var(--font-serif); font-weight: 400; }
+.hq .hq-mono { font-family: var(--hq-mono); font-size: 12px; letter-spacing: -0.01em; }
+
+/* Buttons */
+.hq .hq-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 8px;
+  border: 1px solid var(--hq-border);
+  background: var(--hq-bg);
+  color: var(--hq-text);
+  font-size: 13px;
+  font-weight: 500;
+  padding: 6px 12px;
+  cursor: pointer;
+  transition: background 140ms ease, border-color 140ms ease, color 140ms ease;
+  white-space: nowrap;
+}
+.hq .hq-btn:hover { background: var(--hq-surface); }
+.hq .hq-btn:focus-visible,
+.hq .hq-input:focus-visible,
+.hq a:focus-visible,
+.hq button:focus-visible,
+.hq [tabindex]:focus-visible {
+  outline: 2px solid var(--hq-bronze);
+  outline-offset: 1px;
+}
+.hq .hq-btn-primary {
+  background: #111111;
+  border-color: #111111;
+  color: #ffffff;
+}
+.hq .hq-btn-primary:hover { background: #2a2a2a; border-color: #2a2a2a; }
+.hq .hq-btn-danger { color: var(--hq-danger); border-color: #e3cfcf; }
+.hq .hq-btn-danger:hover { background: #faf3f3; }
+.hq .hq-btn:disabled { opacity: 0.5; cursor: default; }
+.hq .hq-btn-sm { padding: 3px 8px; font-size: 12px; border-radius: 6px; }
+
+/* Inputs */
+.hq .hq-input,
+.hq textarea.hq-input,
+.hq select.hq-input {
+  width: 100%;
+  border: 1px solid var(--hq-border);
+  border-radius: 8px;
+  background: var(--hq-bg);
+  color: var(--hq-text);
+  font-size: 13px;
+  font-family: inherit;
+  padding: 7px 10px;
+  transition: border-color 140ms ease;
+}
+.hq .hq-input::placeholder { color: #9b968d; }
+.hq .hq-input:focus { border-color: var(--hq-bronze); outline: none; }
+
+.hq .hq-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--hq-muted);
+  margin-bottom: 4px;
+}
+
+/* Rows and surfaces */
+.hq .hq-card {
+  border: 1px solid var(--hq-border);
+  border-radius: 10px;
+  background: var(--hq-bg);
+}
+.hq .hq-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--hq-border);
+  transition: background 140ms ease;
+}
+.hq .hq-row:last-child { border-bottom: none; }
+.hq .hq-row-click { cursor: pointer; }
+.hq .hq-row-click:hover { background: var(--hq-surface); }
+
+/* Checkbox */
+.hq .hq-check {
+  width: 16px;
+  height: 16px;
+  min-width: 16px;
+  border: 1.5px solid #c9c4bb;
+  border-radius: 5px;
+  background: var(--hq-bg);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 140ms ease, border-color 140ms ease;
+  padding: 0;
+}
+.hq .hq-check:hover { border-color: var(--hq-bronze); }
+.hq .hq-check[data-checked="true"] {
+  background: var(--hq-success);
+  border-color: var(--hq-success);
+}
+.hq .hq-check svg { opacity: 0; transition: opacity 140ms ease; }
+.hq .hq-check[data-checked="true"] svg { opacity: 1; }
+
+/* Badges */
+.hq .hq-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border-radius: 6px;
+  border: 1px solid var(--hq-border);
+  background: var(--hq-surface);
+  color: var(--hq-muted);
+  font-size: 11px;
+  font-weight: 500;
+  padding: 1px 7px;
+  white-space: nowrap;
+}
+.hq .hq-dot { width: 6px; height: 6px; min-width: 6px; border-radius: 50%; }
+
+/* Sidebar */
+.hq .hq-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--hq-muted);
+  text-decoration: none;
+  transition: background 140ms ease, color 140ms ease;
+}
+.hq .hq-nav-item:hover { background: var(--hq-surface); color: var(--hq-text); }
+.hq .hq-nav-item[data-active="true"] { background: var(--hq-surface); color: var(--hq-text); }
+
+/* Avatars */
+.hq .hq-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--hq-surface);
+  border: 1px solid var(--hq-border);
+  color: var(--hq-bronze);
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+/* Live pulse for working agents */
+@keyframes hqPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+.hq .hq-pulse { animation: hqPulse 2s ease-in-out infinite; }
+
+/* Panel + modal transitions */
+@keyframes hqSlideIn {
+  from { transform: translateX(24px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+@keyframes hqFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes hqPopIn {
+  from { transform: translateY(6px) scale(0.99); opacity: 0; }
+  to { transform: translateY(0) scale(1); opacity: 1; }
+}
+.hq .hq-slide-in { animation: hqSlideIn 160ms ease-out; }
+.hq .hq-fade-in { animation: hqFadeIn 140ms ease-out; }
+.hq .hq-pop-in { animation: hqPopIn 150ms ease-out; }
+
+/* Scrollbars, keep them quiet */
+.hq ::-webkit-scrollbar { width: 8px; height: 8px; }
+.hq ::-webkit-scrollbar-thumb { background: #d9d4cc; border-radius: 4px; }
+.hq ::-webkit-scrollbar-track { background: transparent; }
+
+/* Kbd hint */
+.hq .hq-kbd {
+  font-family: var(--hq-mono);
+  font-size: 10.5px;
+  border: 1px solid var(--hq-border);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  padding: 0 5px;
+  color: var(--hq-muted);
+  background: var(--hq-bg);
+}
+
+/* Print: strip navigation and controls, keep content */
+@media print {
+  .hq { font-size: 12px; }
+  .hq .hq-no-print { display: none !important; }
+  .hq .hq-print-area { margin: 0 !important; padding: 0 !important; max-width: none !important; }
+  .hq .hq-card { border-color: #bbb; break-inside: avoid; }
+}
+
+.hq .hq-print-only { display: none; }
+@media print {
+  .hq .hq-print-only { display: block; }
+}
