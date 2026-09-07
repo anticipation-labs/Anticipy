@@ -93,11 +93,11 @@ def brain(monkeypatch, phone="", fails=False):
 
 def backend(monkeypatch, jobs):
     """Reads return these jobs and no events; writes succeed."""
-    monkeypatch.setattr(W.pb, "get", lambda url, **kw: Resp(
+    monkeypatch.setattr(W.backend, "get", lambda url, **kw: Resp(
         {"items": [] if "/collections/events/" in url else [dict(j)
                                                             for j in jobs]}))
-    monkeypatch.setattr(W.pb, "post", lambda *a, **k: Resp())
-    monkeypatch.setattr(W.pb, "patch", lambda *a, **k: Resp())
+    monkeypatch.setattr(W.backend, "post", lambda *a, **k: Resp())
+    monkeypatch.setattr(W.backend, "patch", lambda *a, **k: Resp())
 
 
 FINISHED = {"id": "dxrx1q9y0tcx8ld", "goal": "email Devon the invoice",

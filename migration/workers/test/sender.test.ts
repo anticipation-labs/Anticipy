@@ -3,7 +3,7 @@
  *
  *   node --experimental-strip-types migration/workers/test/sender.test.ts
  *
- * The pure half of src/pb/sender.ts, pinned to backend/pb_hooks/sms.pb.js
+ * The pure half of src/api/sender.ts, pinned to backend/pb_hooks/sms.pb.js
  * :160-293 (the oracle): who a phone number resolves to, and what row a
  * resolved text becomes. The wire half -- the two carriers' front doors, a
  * real workerd, a real D1 with the partial-unique index -- is
@@ -19,7 +19,7 @@
 import assert from "node:assert/strict";
 import {
   resolveSenderWith, landInboundText, recordInboundReply, type SenderDb,
-} from "../src/pb/sender.ts";
+} from "../src/api/sender.ts";
 
 let failures = 0;
 let passes = 0;

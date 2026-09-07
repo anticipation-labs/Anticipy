@@ -34,7 +34,7 @@ struct AgentJob: Identifiable, Decodable, Equatable {
     let status: String // queued | running | awaiting_confirm | done | failed | cancelled
     let result: String?
     let created: String
-    /// PocketBase's last-write timestamp. A terminal shelf is about when work
+    /// the backend's last-write timestamp. A terminal shelf is about when work
     /// ended, not when it was first requested, so Home uses this when ordering
     /// completed cards and falls back to `created` for legacy rows.
     let updated: String?
@@ -73,7 +73,7 @@ struct AgentJob: Identifiable, Decodable, Equatable {
 
     /// THE EVIDENCE THE SERVER ITSELF CHECKED, as the row holds it.
     ///
-    /// `backend/pb_hooks/workflow_guard.pb.js` refuses to mark ANY job done
+    /// `migration/workers/src/policy/workflow_guard.ts` refuses to mark ANY job done
     /// unless this column parses and carries `verified: true` with a non-empty
     /// `evidence`. The app never decoded it. So the done card led with
     /// `result` — free text the extension composed — while the one thing that
@@ -181,7 +181,7 @@ struct BrainEvent: Decodable, Identifiable, Equatable {
     let external_event_id: String?
 }
 
-/// One PocketBase page of events, including the server's own pagination
+/// One the backend page of events, including the server's own pagination
 /// boundary. History reads this instead of guessing that a short page was the
 /// end or pretending the Home poll window is an archive.
 struct BrainEventPage: Decodable, Equatable {
@@ -192,7 +192,7 @@ struct BrainEventPage: Decodable, Equatable {
     let items: [BrainEvent]
 }
 
-/// Thin client for the Anticipy PocketBase backend (pairing, events, jobs).
+/// Thin client for the Anticipy the backend backend (pairing, events, jobs).
 /// Endpoints proven live in proof/test_backend.py and proof/test_extension.py.
 final class AnticipyBackend {
     var baseURL: URL
@@ -275,7 +275,7 @@ final class AnticipyBackend {
     // LOCAL-FIRST.md rule 1 broken by the one function that made it possible.
     //
     // The route still exists server-side and answers 410 GONE with its reason
-    // (backend/pb_hooks/transcription_token.pb.js), because a deleted route
+    // (migration/workers/src/routes/sms.ts), because a deleted route
     // answers 404 and a 404 reads as "wrong URL" — something a client retries.
     // Nothing in this app calls it any more, so the refusal is a backstop
     // rather than a thing this file has to interpret.
@@ -294,7 +294,7 @@ final class AnticipyBackend {
     /// nothing updates again — Settings saves through `upsertOwnerPhone`,
     /// which writes `owner_profile`. And `owner_profile.phone` is the one that
     /// carries: it is the row an inbound text is routed through
-    /// (backend/pb_hooks/sms.pb.js:167) and the row a live run refuses to
+    /// (migration/workers/src/routes/sms.ts) and the row a live run refuses to
     /// start without (proof/live_day.py:105). So the profile answers when it
     /// has a number, and the account record answers for the accounts that have
     /// never been through Settings. Reading only the account record would hand
@@ -754,7 +754,7 @@ final class AnticipyBackend {
         // WHEN IT WAS SAID, not when it arrived. The phone buffers: offline,
         // backgrounded, bad signal, a call holding the mic — and then flushes
         // a lump. Everything downstream that reasons about order was reading
-        // PocketBase's `created`, which is the moment the network delivered
+        // the backend's `created`, which is the moment the network delivered
         // the row, so a flushed backlog looked like a burst of unrelated
         // fragments seconds apart. Omi ships this exact bug (their #6551).
         //
@@ -980,7 +980,7 @@ final class AnticipyBackend {
                              createdAtOrBefore snapshot: String? = nil) async throws -> BrainEventPage {
         var clauses = ["kind=\"transcript\""]
         if let snapshot, !snapshot.isEmpty {
-            // The value came from PocketBase's own `created` field. Escape it
+            // The value came from the backend's own `created` field. Escape it
             // anyway so the archive boundary remains data inside the filter,
             // never syntax, if that wire format changes later.
             let safe = snapshot

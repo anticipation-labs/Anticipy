@@ -749,7 +749,7 @@ def test_the_credential_is_never_sent_off_our_own_zone(monkeypatch):
     recently as last week. Leg 3 is the only leg in the file that sends a secret,
     and a gate that posted an owner's auth token to whatever host a variable
     happened to name would be a credential leak with a scoreboard on it."""
-    monkeypatch.setattr(M, "WORKER", "https://anticipy-backend.up.railway.app")
+    monkeypatch.setattr(M, "WORKER", "https://anticipy-backend.up.example.net")
     worker = a_deployed_worker()
     _, rows = _catalog_run(worker)
     assert rows[2][0] == M.INFO

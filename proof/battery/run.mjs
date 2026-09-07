@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // THE BROWSER BATTERY, RUN FOR REAL. No dependencies, plain Node.
 //
-//   sh proof/local_rig.sh up                 # PocketBase + the brain
+//   sh proof/local_rig.sh up                 # the backend + the brain
 //   node proof/fixtures/server.mjs &         # the deterministic sites (port 8899)
 //   node proof/battery/run.mjs               # this: queue, watch, record
 //   node proof/battery/score.mjs             # the scorecard
@@ -23,13 +23,13 @@
 //
 // THE TWO TRAPS, both documented in proof/extension_smoke.mjs and both re-paid
 // for here:
-//   1. `params` is a TEXT column. Post a nested object and PocketBase stores ""
+//   1. `params` is a TEXT column. Post a nested object and the backend stores ""
 //      in silence; the agent then wakes with no task and start_url=about:blank
 //      and reports that it could not find anything. JSON.stringify, always, and
 //      this file reads the row back to prove it survived.
 //   2. The row's columns must byte-match the plan embedded in params._workflow
 //      or workflow_guard.pb.js refuses the write with 409
-//      (backend/pb_hooks/workflow_guard.pb.js:81-96).
+//      (migration/workers/src/policy/workflow_guard.ts).
 //
 // Flags:
 //   --tasks=PATH        default proof/battery/tasks.json
@@ -44,7 +44,7 @@
 //   --skip-fixture      drop every fixture task (use when :8899 is not running)
 //   --claim-wait=S      how long to wait for a Chrome to claim (default 150)
 //   --pad=S             pause between tasks (default 3)
-//   --base=URL          PocketBase (default http://127.0.0.1:8090)
+//   --base=URL          the backend (default http://127.0.0.1:8090)
 //   --owner-ref=ID      default: ~/.anticipy-rig/state/owner_ref
 //   --dry-run           print the plan, queue nothing
 //   --allow-backlog     start even though other jobs are already queued for this

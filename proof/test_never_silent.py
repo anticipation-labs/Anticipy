@@ -62,9 +62,9 @@ def run_inbound(text: str, blow_up: bool, voice_works: bool = True,
     if kind == "app_reply":
         ev["goal"] = ""
 
-    W.pb.get = lambda url, **kw: Resp([ev] if "/events/" in url else [])
-    W.pb.post = lambda url, **kw: Resp()
-    W.pb.patch = lambda url, **kw: Resp()
+    W.backend.get = lambda url, **kw: Resp([ev] if "/events/" in url else [])
+    W.backend.post = lambda url, **kw: Resp()
+    W.backend.patch = lambda url, **kw: Resp()
     W.post_event = lambda kind_, text_, **kw: posted.append(text_)
 
     class Convo:

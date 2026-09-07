@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { FakeD1, asD1 } from "./fake-d1.ts";
-import { create, update, type RecordsRequest } from "../src/pb/records.ts";
-import { COLLECTIONS } from "../src/pb/schema.ts";
+import { create, update, type RecordsRequest } from "../src/api/records.ts";
+import { COLLECTIONS } from "../src/api/schema.ts";
 
 let failures = 0;
 async function check(name: string, test: () => Promise<void>) {

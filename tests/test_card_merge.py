@@ -45,7 +45,7 @@ def _core(monkeypatch, job, patches):
                     return {"id": "job2", "status": "awaiting_confirm"}
 
             return Response()
-    monkeypatch.setattr(C, "pb", FakePB)
+    monkeypatch.setattr(C, "backend", FakePB)
     return a
 
 

@@ -9,7 +9,7 @@
  * from migration/d1/schema.sql, so `connections` and `connect_links` behave
  * with their real CHECKs, their real primary keys and the real cross-owner
  * predicate on the upsert. So is the account token — a real HMAC-signed one
- * from src/pb/auth.ts against a real `owners` row — so "signed in" here means
+ * from src/api/auth.ts against a real `owners` row — so "signed in" here means
  * what it means in production and a stranger's token is a stranger's token
  * rather than a string a fake believed. So is `mintConnectLink`, which writes
  * the real row through the real store.
@@ -76,7 +76,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { FakeD1, asD1 } from "./fake-d1.ts";
-import { issueToken } from "../src/pb/auth.ts";
+import { issueToken } from "../src/api/auth.ts";
 import { createD1Store, forgetLiveColumns, type StoredConnection } from "../src/connections/store.ts";
 import {
   ComposioConnections, connectionsFromEnv, resetConnectionsProvider, COMPOSIO_BASE_URL,

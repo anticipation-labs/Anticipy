@@ -26,7 +26,7 @@ def test_every_history_and_profile_read_is_bound_to_active_owner(monkeypatch):
         return Reply()
 
     monkeypatch.setattr(W, "ACTIVE_OWNER_REF", "owner_alpha")
-    monkeypatch.setattr(W.pb, "get", fake_get)
+    monkeypatch.setattr(W.backend, "get", fake_get)
     W.fetch_owner_phone()
     W.fetch_owner_timezone()
     W.browser_reachable()
@@ -59,7 +59,7 @@ def test_an_existing_profile_with_an_empty_phone_is_authoritative(monkeypatch):
             return Reply({"items": [{"phone": ""}]})
         return Reply({"phone": "+16045550101"})
 
-    monkeypatch.setattr(W.pb, "get", fake_get)
+    monkeypatch.setattr(W.backend, "get", fake_get)
     assert W.fetch_owner_phone("owner_alpha") == ""
     assert not any("/owners/records/" in url for url in reads), (
         "an explicit profile clear must not resurrect the sign-up number")
@@ -75,10 +75,10 @@ def test_a_missing_profile_uses_the_account_seed_and_a_failed_read_is_unknown(
             return Reply({"items": []})
         return Reply({"phone": "+16045550101"})
 
-    monkeypatch.setattr(W.pb, "get", seeded)
+    monkeypatch.setattr(W.backend, "get", seeded)
     assert W.fetch_owner_phone("owner_alpha") == "+16045550101"
 
-    monkeypatch.setattr(W.pb, "get", lambda *args, **kwargs: Refused())
+    monkeypatch.setattr(W.backend, "get", lambda *args, **kwargs: Refused())
     assert W.fetch_owner_phone("owner_alpha") is None
 
 
@@ -101,7 +101,7 @@ def test_brain_output_is_scoped_by_owner_ref_and_never_sends_the_owner_column(
     def fake_post(_url, **kwargs):
         sent.update(kwargs)
         return Reply()
-    monkeypatch.setattr(W.pb, "post", fake_post)
+    monkeypatch.setattr(W.backend, "post", fake_post)
     W.post_event("anticipy_says", "Done", decision="done", goal="renew permit")
     assert sent["json"]["owner_ref"] == "owner_alpha"
     assert "owner" not in sent["json"], (
@@ -150,7 +150,7 @@ def test_discovery_accepts_only_safe_ids_and_returns_no_account_data(monkeypatch
             {"id": "owner_bravo", "legacy_uuid": "device-b"},
         ], "totalPages": 2}),
     ]
-    monkeypatch.setattr(S.pb, "get", lambda *_a, **_k: pages.pop(0))
+    monkeypatch.setattr(S.backend, "get", lambda *_a, **_k: pages.pop(0))
     found = S.discover_owners()
     assert found == [
         {"id": "owner_alpha", "legacy_uuid": "device-a"},

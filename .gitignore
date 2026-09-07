@@ -3,13 +3,6 @@ app/ios/build/
 *.xcarchive/
 *.ipa
 
-# Local PocketBase data and binary. The binary is fetched per machine; pb_data
-# holds a real database and must never be committed.
-backend/pb_data/
-backend/pocketbase
-backend/pb.zip
-backend/pb.log
-pb_data/
 
 # Python
 __pycache__/

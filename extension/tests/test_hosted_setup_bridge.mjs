@@ -10,13 +10,13 @@ import vm from "node:vm";
 const here = dirname(fileURLToPath(import.meta.url));
 const bridgeSource = readFileSync(join(here, "../setup_bridge.js"), "utf8");
 const backgroundSource = readFileSync(join(here, "../background.js"), "utf8");
-const setupPage = readFileSync(join(here, "../../backend/pb_public/setup.html"), "utf8");
+const setupPage = readFileSync(join(here, "../../migration/workers/public/setup.html"), "utf8");
 
 let state = { code: "274901", linked: false, agent_token: "never-publish-me" };
 let storageListener = null;
 let pageListener = null;
 const posts = [];
-const location = { origin: "https://backend-production-61e0a.up.railway.app" };
+const location = { origin: "https://api.anticipy.ai" };
 const window = {
   location,
   addEventListener(type, listener) { if (type === "message") pageListener = listener; },

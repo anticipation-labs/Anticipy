@@ -112,9 +112,9 @@ def event_backend(monkeypatch, jobs):
         patches.append(dict(kwargs.get("json") or {}))
         return Resp()
 
-    monkeypatch.setattr(W.pb, "get", fake_get)
-    monkeypatch.setattr(W.pb, "post", fake_post)
-    monkeypatch.setattr(W.pb, "patch", fake_patch)
+    monkeypatch.setattr(W.backend, "get", fake_get)
+    monkeypatch.setattr(W.backend, "post", fake_post)
+    monkeypatch.setattr(W.backend, "patch", fake_patch)
     return events, patches
 
 
@@ -183,7 +183,7 @@ def test_parked_question_rechecks_after_refresh_and_stays_retryable(monkeypatch)
     monkeypatch.setattr(W, "LAST_HEARD_AT", 0.0)
     daytime(monkeypatch)
     patches = []
-    monkeypatch.setattr(W.pb, "patch", lambda *a, **k: patches.append(k) or Resp())
+    monkeypatch.setattr(W.backend, "patch", lambda *a, **k: patches.append(k) or Resp())
     monkeypatch.setattr(W, "reserve_uninvited_text",
                         lambda *a, **k: "uninvited:account-one:today:1")
     monkeypatch.setattr(W, "already_said", lambda *a, **k: False)

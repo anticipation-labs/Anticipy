@@ -118,9 +118,9 @@ def backend(monkeypatch, jobs):
             feed.append(dict(kw.get("json") or {}))
         return Resp()
 
-    monkeypatch.setattr(W.pb, "get", fake_get)
-    monkeypatch.setattr(W.pb, "post", fake_post)
-    monkeypatch.setattr(W.pb, "patch", lambda *a, **k: Resp())
+    monkeypatch.setattr(W.backend, "get", fake_get)
+    monkeypatch.setattr(W.backend, "post", fake_post)
+    monkeypatch.setattr(W.backend, "patch", lambda *a, **k: Resp())
     return feed
 
 
@@ -233,11 +233,11 @@ def test_a_second_process_does_not_repeat_it(monkeypatch):
                 if row["external_event_id"] in filt]
         return Resp({"items": rows})
 
-    monkeypatch.setattr(W.pb, "get", fake_get)
+    monkeypatch.setattr(W.backend, "get", fake_get)
     posted = []
-    monkeypatch.setattr(W.pb, "post", lambda url, **kw: (
+    monkeypatch.setattr(W.backend, "post", lambda url, **kw: (
         posted.append(url), Resp())[1])
-    monkeypatch.setattr(W.pb, "patch", lambda *a, **k: Resp())
+    monkeypatch.setattr(W.backend, "patch", lambda *a, **k: Resp())
 
     W.report_finished_jobs(a)
 
@@ -312,9 +312,9 @@ def test_a_restart_reads_the_attempt_fence_while_retrying_the_app_feed(monkeypat
             stored_events.append(row)
         return Resp()
 
-    monkeypatch.setattr(W.pb, "get", fake_get)
-    monkeypatch.setattr(W.pb, "post", fake_post)
-    monkeypatch.setattr(W.pb, "patch", lambda *args, **kwargs: Resp())
+    monkeypatch.setattr(W.backend, "get", fake_get)
+    monkeypatch.setattr(W.backend, "post", fake_post)
+    monkeypatch.setattr(W.backend, "patch", lambda *args, **kwargs: Resp())
 
     W.report_finished_jobs(a)
     assert voice.attempts == 1
@@ -362,9 +362,9 @@ def test_app_result_saved_before_restart_still_gets_one_optional_text(monkeypatc
         stored_events.append(dict(kw.get("json") or {}))
         return Resp()
 
-    monkeypatch.setattr(W.pb, "get", fake_get)
-    monkeypatch.setattr(W.pb, "post", fake_post)
-    monkeypatch.setattr(W.pb, "patch", lambda *args, **kwargs: Resp())
+    monkeypatch.setattr(W.backend, "get", fake_get)
+    monkeypatch.setattr(W.backend, "post", fake_post)
+    monkeypatch.setattr(W.backend, "patch", lambda *args, **kwargs: Resp())
 
     W.report_finished_jobs(a)
     assert llm.calls == 0
@@ -426,9 +426,9 @@ def test_two_workers_racing_the_attempt_fence_send_exactly_one_text(monkeypatch)
             stored_events.append(row)
         return Resp()
 
-    monkeypatch.setattr(W.pb, "get", fake_get)
-    monkeypatch.setattr(W.pb, "post", fake_post)
-    monkeypatch.setattr(W.pb, "patch", lambda *args, **kwargs: Resp())
+    monkeypatch.setattr(W.backend, "get", fake_get)
+    monkeypatch.setattr(W.backend, "post", fake_post)
+    monkeypatch.setattr(W.backend, "patch", lambda *args, **kwargs: Resp())
     monkeypatch.setattr(W, "picture_for_done_text", lambda *args: [])
 
     def participant(draft):

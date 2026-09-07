@@ -10,7 +10,7 @@ the call ends.
 
 Honesty rules, same as overnight/evaluate.py:
   * The REAL Anticipy.hear() runs — nothing reimplemented, nothing mocked
-    but the world: brain.pb is patched to an in-memory jobs list and
+    but the world: brain.backend is patched to an in-memory jobs list and
     notify_owner is captured, so no text, job, or card leaves this process.
   * The REAL meeting_heard() from brain/worker.py decides the posture, fed
     the recording's own timestamps — not wall clock, because density is the
@@ -62,7 +62,7 @@ def main() -> int:
               "fiction, refusing to pretend")
         return 2
 
-    import brain.pb as pb
+    from brain import backend
     from brain.anticipy_core import Anticipy
     from brain.llm import LLM
     from brain import worker
@@ -86,7 +86,7 @@ def main() -> int:
         j = dict((k.get("json") or {}), id=f"job{len(jobs)+1}")
         jobs.append(j)
         return R(j)
-    pb.get, pb.post, pb.patch = fake_get, fake_post, (lambda *a, **k: R({}))
+    backend.get, backend.post, backend.patch = fake_get, fake_post, (lambda *a, **k: R({}))
 
     sent_during: list = []
     a = Anticipy(llm=LLM(owner_zone="America/Vancouver"),

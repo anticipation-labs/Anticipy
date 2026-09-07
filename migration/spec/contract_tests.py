@@ -9,9 +9,6 @@ Worker, and the two result sets are diffed.  A test that passes on one and
 fails on the other is either a bug in the port or a line in CONTRACT.md that
 was wrong.  Both are findings.
 
-    BASE_URL=https://backend-production-61e0a.up.railway.app \
-      python3 -m pytest migration/spec/contract_tests.py -v \
-      -m "not destructive" --junitxml=/tmp/pocketbase.xml
 
     BASE_URL=https://api.anticipy.workers.dev \
       python3 -m pytest migration/spec/contract_tests.py -v \
@@ -290,7 +287,7 @@ def _require_base_url(request):
         return
     if not BASE_URL:
         pytest.skip("set BASE_URL to the backend under test "
-                    "(e.g. BASE_URL=https://backend-production-61e0a.up.railway.app)")
+                    "(e.g. BASE_URL=https://api.anticipy.ai)")
 
 
 @pytest.fixture(autouse=True)
@@ -4516,7 +4513,7 @@ class TestTheDocumentAndTheSuiteAgree(object):
 
     def test_every_workflow_guard_refusal_string_is_documented(self):
         """CONTRACT.md §1.16 — the complete refusal inventory.  A port that
-        changes one of these strings breaks brain/pb.py and the extension,
+        changes one of these strings breaks brain/backend.py and the extension,
         both of which branch on the 409 detail."""
         text = _contract_text()
         refusals = [

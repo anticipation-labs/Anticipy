@@ -61,9 +61,9 @@ class DraftsALie:
 
 
 def build(intent: str, learns: dict | None = None, blocked=BLOCKED):
-    C.pb.get = lambda url, **kw: Resp()
-    C.pb.post = lambda *a, **k: Resp()
-    C.pb.patch = lambda *a, **k: Resp()
+    C.backend.get = lambda url, **kw: Resp()
+    C.backend.post = lambda *a, **k: Resp()
+    C.backend.patch = lambda *a, **k: Resp()
     llm = DraftsALie(intent)
     spoken = []
     anticipy = types.SimpleNamespace(

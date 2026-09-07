@@ -15,7 +15,7 @@ it still holds" is the entire point of this exercise.
 
 Six lanes make it about ninety minutes, and they are genuinely independent:
 separate owner, separate worker process, separate memory database, separate
-clock file. Nothing is shared except PocketBase and the model key.
+clock file. Nothing is shared except the backend and the model key.
 
 WHAT IT DOES NOT DO: it does not shard a CONVERSATION. Lines that share a
 `convo` id are context for each other — brain/segmenter.py glues them into one

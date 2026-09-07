@@ -3,7 +3,7 @@
 Omi's second proactivity ordering: the budget is RESERVED before the side
 effect, never checked after it. Until 2026-09-05 the brain counted
 anticipy_says rows after the fact, on one door of four (the parked ask),
-fail-OPEN to zero on any read error — so a flaky PocketBase removed the cap,
+fail-OPEN to zero on any read error — so a flaky the backend removed the cap,
 two workers for one owner both read the same count and both sent, and the
 clock, the overheard-plan receipt and the meeting digest never touched the
 count at all: up to 4 clock nudges plus every receipt plus a digest plus 3
@@ -20,7 +20,7 @@ cannot prove a non-send, so a slot is burned or reused, never given back.
 Every test here drives the REAL worker code (SPEAK_ONCE, maybe_ask_parked,
 deliver_pending_digest, clock_should_run, reserve_uninvited_text) and, where
 the door is inside the core, the real Anticipy.hear() / clock_tick(), through
-the brain.pb seam with a fake store that enforces the unique index. The
+the brain.backend seam with a fake store that enforces the unique index. The
 transport is a lambda that logs. Twilio is never touched.
 """
 from __future__ import annotations
@@ -38,7 +38,7 @@ import requests
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import brain.pb as pb  # noqa: E402
+from brain import backend  # noqa: E402
 import brain.worker as W  # noqa: E402
 from brain.anticipy_core import Anticipy, is_consequential  # noqa: E402
 from brain.memory import Memory  # noqa: E402
@@ -97,7 +97,7 @@ def _strip_parens(s: str) -> str:
 
 
 def matches(row: dict, filt: str) -> bool:
-    """A PocketBase filter, honoured: =, !=, >=, <=, &&, || and parens."""
+    """A the backend filter, honoured: =, !=, >=, <=, &&, || and parens."""
     filt = _strip_parens(filt)
     if not filt.strip():
         return True
@@ -117,7 +117,7 @@ def matches(row: dict, filt: str) -> bool:
 
 
 class FakeBackend:
-    """PocketBase's events collection with the partial unique index on
+    """the backend's events collection with the partial unique index on
     external_event_id (WHERE external_event_id != ''), plus a jobs table for
     the core-driven cases. Scriptable: a lost CREATE response (insert, then
     raise), an unreadable store, a hook that runs inside a GET."""
@@ -136,7 +136,7 @@ class FakeBackend:
     def get(self, url, params=None, timeout=None, **k):
         self.gets += 1
         if self.gets_raise:
-            raise requests.ConnectionError("pb down")
+            raise requests.ConnectionError("backend down")
         if self.gets_not_ok:
             return _Resp({}, ok=False, status=502)
         filt = str((params or {}).get("filter") or "")
@@ -150,7 +150,7 @@ class FakeBackend:
     def post(self, url, json=None, timeout=None, **k):
         self.posts += 1
         if self.posts_raise:
-            raise requests.ConnectionError("pb down")
+            raise requests.ConnectionError("backend down")
         row = dict(json or {})
         self._n += 1
         row["id"] = f"r{self._n}"
@@ -202,9 +202,9 @@ class FakeBackend:
 @pytest.fixture
 def fake(monkeypatch):
     f = FakeBackend()
-    monkeypatch.setattr(pb, "get", f.get)
-    monkeypatch.setattr(pb, "post", f.post)
-    monkeypatch.setattr(pb, "patch", f.patch)
+    monkeypatch.setattr(backend, "get", f.get)
+    monkeypatch.setattr(backend, "post", f.post)
+    monkeypatch.setattr(backend, "patch", f.patch)
     monkeypatch.setattr(W, "ACTIVE_OWNER_REF", OWNER)
     monkeypatch.setattr(W, "ACTIVE_OWNER_ID", "")
     monkeypatch.setattr(W, "UNINVITED_SPENT_UNTIL", 0.0)
@@ -398,7 +398,7 @@ def test_an_ambiguous_send_never_gives_the_slot_back(fake):
     Twilio 4xx, a rig refusal, a missing phone and a revocation). Releasing
     on None is how three "failed" sends plus three real ones become six
     texts. Three such attempts leave three slot rows; the fourth ask is
-    dropped; pb.patch is never called.
+    dropped; backend.patch is never called.
 
     A PATCH release reintroduced on None turns this RED."""
     attempts: list[str] = []
@@ -711,7 +711,7 @@ def test_a_conflict_on_slot_n_moves_to_n_plus_one_and_the_cap_holds(fake):
         if 'kind="uninvited_slot"' in str((params or {}).get("filter") or ""):
             return _Resp({"items": []})       # a stale snapshot
         return r
-    pb.get = stale_get
+    backend.get = stale_get
     assert W.reserve_uninvited_text(OWNER, "ask").endswith(":2")
     assert W.reserve_uninvited_text(OWNER, "ask").endswith(":3")
     assert W.reserve_uninvited_text(OWNER, "ask") is False

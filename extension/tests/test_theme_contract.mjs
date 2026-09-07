@@ -157,7 +157,7 @@ console.log("PASS 4: every id the two modules reach for exists on its page");
 
 // ------------------------------------------------- 5: one palette everywhere
 // The product is four surfaces in three deployments — this extension, the
-// pages PocketBase serves, and the marketing site — and each one has to carry
+// pages the backend serves, and the marketing site — and each one has to carry
 // its own copy of the palette, because they ship separately and the extension
 // cannot even use a stylesheet (see the top of this file). Copies drift: the
 // two hosted pages had already diverged from each other (--stroke #2b2b2b vs
@@ -170,7 +170,7 @@ console.log("PASS 4: every id the two modules reach for exists on its page");
 const repo = join(ext, "..");
 const sources = {
   "extension (popup.html/onboarding.html)": shared,
-  "backend/pb_public/site.css": readFileSync(join(repo, "backend/pb_public/site.css"), "utf8"),
+  "migration/workers/public/site.css": readFileSync(join(repo, "migration/workers/public/site.css"), "utf8"),
   "website/index.html": readFileSync(join(repo, "website/index.html"), "utf8"),
 };
 // The light palette is the FIRST :root, dark is the attribute palette, and a

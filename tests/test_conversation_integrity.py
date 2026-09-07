@@ -50,7 +50,7 @@ def _pb(monkeypatch, jobs, refuse=()):
                 return _R(j)
         return _R({}, ok=False)
 
-    monkeypatch.setattr(convmod, "pb", type("PB", (), {
+    monkeypatch.setattr(convmod, "backend", type("PB", (), {
         "get": staticmethod(get), "patch": staticmethod(patch)}))
     return jobs
 

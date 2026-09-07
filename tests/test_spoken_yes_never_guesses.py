@@ -41,8 +41,8 @@ def brain(monkeypatch, items, answer=None, *, latest=None, etag='"snapshot"', pa
     def patch(url, **kw):
         writes.append((url, kw))
         return SimpleNamespace(ok=patch_ok)
-    monkeypatch.setattr('brain.anticipy_core.pb.get', get)
-    monkeypatch.setattr('brain.anticipy_core.pb.patch', patch)
+    monkeypatch.setattr('brain.anticipy_core.backend.get', get)
+    monkeypatch.setattr('brain.anticipy_core.backend.patch', patch)
     return a, model, writes
 
 
@@ -153,6 +153,6 @@ def test_canonical_workflow_keeps_its_approval_invariants(monkeypatch, missing_r
 def test_absent_model_does_not_query_or_release(monkeypatch):
     a, model, writes = brain(monkeypatch, [row()])
     model.live = False
-    monkeypatch.setattr('brain.anticipy_core.pb.get', lambda *a, **kw: pytest.fail('no model can authorize'))
+    monkeypatch.setattr('brain.anticipy_core.backend.get', lambda *a, **kw: pytest.fail('no model can authorize'))
     assert a._release_freshest_held('go ahead') is None
     assert writes == []

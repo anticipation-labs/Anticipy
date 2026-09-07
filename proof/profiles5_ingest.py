@@ -2,7 +2,7 @@
 
 Multi-user is NOT in production (single-owner hosted worker), so each profile
 gets its own LOCAL Anticipy brain with an isolated on-disk memory graph —
-same code the hosted worker runs. Jobs queue into the local PocketBase so
+same code the hosted worker runs. Jobs queue into the local the backend so
 ingestion doesn't spam production; the browser-task phase copies chosen tasks
 to the production backend for the real extension to execute.
 

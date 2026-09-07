@@ -107,7 +107,7 @@ console.log("PASS 2: a stored backendUrl override wins over the default");
 
 // ---------------------------------------------------------- 3: trailing slash
 // A trailing slash makes every `${base}/api/...` into `//api/...`, which
-// PocketBase answers with a redirect that fetch follows without our headers —
+// the backend answers with a redirect that fetch follows without our headers —
 // a 403 that looks like a stale credential rather than a typo.
 installStorage({ backendUrl: "http://127.0.0.1:8090/" });
 {

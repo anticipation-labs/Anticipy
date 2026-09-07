@@ -3,7 +3,7 @@
 // The Python brain owns plan creation and approval.  Chrome owns only the
 // execution attempt: claim a queued version, renew its lease, park/fail it, or
 // attach independently verified evidence.  Every patch updates both the
-// indexed PocketBase fields and the embedded canonical plan so a restarted
+// indexed the backend fields and the embedded canonical plan so a restarted
 // process reconstructs one state instead of guessing from loose status text.
 
 export const WORKFLOW_PARAM = "_workflow";
@@ -111,7 +111,7 @@ export function workflowPatch(job, nextState, options = {}) {
   if (nextState === "succeeded") {
     // The durable receipt is a compact proof index. The complete human result
     // stays in jobs.result and the complete model exchange stays in the audit
-    // ledger; duplicating both here can exceed PocketBase's text validation
+    // ledger; duplicating both here can exceed the backend's text validation
     // limit and turn a verified browser success into HTTP 400.
     const evidence = Array.isArray(options.evidence)
       ? options.evidence.map((x) => String(x).trim().slice(0, 1000))
@@ -183,7 +183,7 @@ export function workflowPatch(job, nextState, options = {}) {
 // against a click it was not about.
 //
 // Written into params beside _workflow using the idiom heartbeatPatch uses,
-// which the PocketBase guard already accepts: it compares _workflow's fields,
+// which the the backend guard already accepts: it compares _workflow's fields,
 // and this touches none of them.
 export function markEffectUncertainPatch(job, intent = null) {
   if (!isWorkflowJob(job)) return { effect_uncertain: true };

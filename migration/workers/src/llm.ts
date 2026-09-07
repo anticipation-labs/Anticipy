@@ -1,6 +1,6 @@
 /**
  * src/llm.ts — POST /agent/llm, the model proxy.
- * backend/pb_hooks/agent_key.pb.js:65-422. CONTRACT.md §6.4.
+ * migration/workers/src/llm.ts. CONTRACT.md §6.4.
  *
  * Every model call the browser agent makes goes through here. Until this was
  * ported the route answered 503 "llm proxy not yet ported", which on the
@@ -80,7 +80,7 @@
  * │ is a named constant precisely so it can be lowered from a number.    │
  * └──────────────────────────────────────────────────────────────────────┘
  */
-import { json, newRecordId, pbNow, pbTime } from "./pb/wire.ts";
+import { json, newRecordId, pbNow, pbTime } from "./api/wire.ts";
 
 /** agent_key.pb.js:337,389. Kept as a named constant so it can be measured. */
 export const UPSTREAM_TIMEOUT_MS = 95_000;
@@ -367,7 +367,7 @@ export async function redactProviderPayload(value: unknown): Promise<unknown> {
 }
 
 // ---------------------------------------------------------------------------
-// The audit ledger, on D1. agent_llm_audit is NOT in pb/schema.ts COLLECTIONS
+// The audit ledger, on D1. agent_llm_audit is NOT in api/schema.ts COLLECTIONS
 // (it is never exposed over /api/collections), so this writes it directly.
 // Failures are logged and never break execution — certification evidence
 // must not take a customer's browser down (agent_key.pb.js:140-145, :158-160).

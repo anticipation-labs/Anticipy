@@ -9,7 +9,7 @@
  * See hq_data.ts for what is proven here and what is not.
  */
 import { sha256Hex } from "../llm.ts";
-import { newRecordId, pbNow } from "../pb/wire.ts";
+import { newRecordId, pbNow } from "../api/wire.ts";
 import { hqCors, type HqEnv } from "./hq.ts";
 import { boolDefaultFalse, isoNow, logActivity, resolveActor, type Person } from "./hq_data.ts";
 

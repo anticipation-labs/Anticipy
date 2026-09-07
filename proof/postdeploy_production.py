@@ -55,7 +55,7 @@ def main() -> None:
     webhook_url = os.environ.get(
         "ANTICIPY_TWILIO_WEBHOOK_URL", f"{BASE}/sms/inbound")
 
-    require(requests.get(f"{BASE}/api/health", timeout=20), 200, "PocketBase health")
+    require(requests.get(f"{BASE}/api/health", timeout=20), 200, "the backend health")
     setup = require(requests.get(f"{BASE}/setup.html", timeout=20), 200, "browser setup")
     # The name the setup page and is_it_live.py agree on; the two other zips
     # are aliases of the same bytes. Until 2026-09-05 this pinned the old
@@ -77,7 +77,7 @@ def main() -> None:
         requests.get(f"{BASE}{expected_download}", timeout=30),
         200, "extension package")
     local_digest = hashlib.sha256(
-        (ROOT / "backend/pb_public/anticipy-claude-version-extension.zip").read_bytes()).hexdigest()
+        (ROOT / "migration/workers/public/anticipy-claude-version-extension.zip").read_bytes()).hexdigest()
     remote_digest = hashlib.sha256(package.content).hexdigest()
     if remote_digest != local_digest:
         raise RuntimeError(

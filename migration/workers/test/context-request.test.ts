@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { FakeD1, asD1 } from "./fake-d1.ts";
-import { issueToken } from "../src/pb/auth.ts";
+import { issueToken } from "../src/api/auth.ts";
 import { contextRequest, parseContextVerdict } from "../src/routes/context_request.ts";
 
 const db = new FakeD1();

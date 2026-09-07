@@ -1,5 +1,5 @@
 /**
- * src/policy/guard.ts — backend/pb_hooks/guard.pb.js:24-551, ported.
+ * src/policy/guard.ts — migration/workers/src/policy/guard.ts, ported.
  *
  * 223 code lines there; the ladder below preserves every rung and its ORDER,
  * because the order is where the incidents were. Two of them are recorded in
@@ -33,8 +33,8 @@
  *       status codes while the fix lands.
  */
 import { parseFilter, provesOwnerScope, legacyOwnedList, FilterError } from "../../filter-dsl.ts";
-import { ACCOUNT_REACHABLE } from "../pb/schema.ts";
-import { refuse, badRequest } from "../pb/wire.ts";
+import { ACCOUNT_REACHABLE } from "../api/schema.ts";
+import { refuse, badRequest } from "../api/wire.ts";
 import type { Ctx, Policy } from "./chain.ts";
 
 export interface GuardEnv {
@@ -163,7 +163,7 @@ async function agentRung(
         && text.length > 0 && text.length <= 400) {
       const job = await loadRow(ctx, "jobs", String(b.goal ?? ""));
       if (job && job.owner_ref === ownerRef && job.lane === "supervised_read") {
-        const { stillInTheFuture } = await import("../pb/wire.ts");
+        const { stillInTheFuture } = await import("../api/wire.ts");
         if (stillInTheFuture(job.watching_until)) return null;
       }
     }

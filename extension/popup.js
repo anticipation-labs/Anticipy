@@ -37,7 +37,7 @@ function hint(text, holdMs = 0) {
 // ------------------------------------------------------------------ backend
 // The same credential the worker sends. guard.pb.js lets an agent read exactly
 // one thing beyond its own row — a job belonging to its owner
-// (backend/pb_hooks/guard.pb.js:71-77) — which is the one row this file reads.
+// (migration/workers/src/policy/guard.ts) — which is the one row this file reads.
 // The server-wide service token is deliberately NOT sent: /agent/key has
 // returned an empty one for a release and the save erases it, so the header
 // could only ever be empty — and a browser holding the server's master

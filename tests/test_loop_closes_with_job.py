@@ -97,7 +97,7 @@ def test_sms_decline_closes_the_promise(monkeypatch):
     class R:
         ok = True
         def json(self): return job
-    monkeypatch.setattr(convmod, "pb", type("PB", (), {
+    monkeypatch.setattr(convmod, "backend", type("PB", (), {
         "get": staticmethod(lambda *a, **k: R()),
         "patch": staticmethod(lambda *a, **k: R()),
     }))

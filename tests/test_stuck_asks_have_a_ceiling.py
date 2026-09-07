@@ -42,7 +42,7 @@ class FakePB:
 @pytest.fixture
 def pb(monkeypatch):
     fake = FakePB()
-    monkeypatch.setattr(W, "pb", fake)
+    monkeypatch.setattr(W, "backend", fake)
     return fake
 
 

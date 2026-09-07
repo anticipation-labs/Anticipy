@@ -46,7 +46,7 @@ THE WINDOW IS OPENED IN THE MOMENT OF SENDING AND NEVER EARLIER. `POST
 /evidence/share` puts a photograph of a page the owner was logged into on an
 anonymous https URL for fifteen minutes and five fetches, because Twilio
 fetches `MediaUrl` from its own infrastructure with no credential of ours
-(backend/pb_hooks/evidence.pb.js). Opening one speculatively, in advance, or in
+(migration/workers/src/assets.ts). Opening one speculatively, in advance, or in
 bulk is exposure bought for nothing, so every refusal above happens BEFORE the
 call — which is why `wants_photo` is a callable and not a boolean.
 """
@@ -56,7 +56,7 @@ import json
 import os
 from typing import Callable, Optional, Sequence
 
-from . import pb
+from . import backend
 
 # The key the browser writes, beside `url:`, `title:`, `page:`, `proof:` and
 # `journal:` (extension/workflow_state.js).
@@ -115,7 +115,7 @@ def open_share_window(evidence_id: str, base: str = "",
     if not evidence_id:
         return ""
     try:
-        r = pb.post(f"{_backend(base)}/evidence/share",
+        r = backend.post(f"{_backend(base)}/evidence/share",
                     json={"id": evidence_id}, timeout=timeout)
         if not getattr(r, "ok", False):
             log(f"no picture on this text: the share door answered "

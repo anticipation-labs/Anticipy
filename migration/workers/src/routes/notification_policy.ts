@@ -1,4 +1,4 @@
-import { verifyToken, type AuthEnv } from "../pb/auth.ts";
+import { verifyToken, type AuthEnv } from "../api/auth.ts";
 import { QUIET_HOURS_START, QUIET_HOURS_END } from "../connections/nudge.ts";
 
 /** The current outreach policy, not a receipt for any individual message. */

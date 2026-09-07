@@ -1,5 +1,5 @@
-import { verifyToken, type AuthEnv } from "../pb/auth.ts";
-import { newRecordId, pbNow } from "../pb/wire.ts";
+import { verifyToken, type AuthEnv } from "../api/auth.ts";
+import { newRecordId, pbNow } from "../api/wire.ts";
 import { callModel } from "../connections/wiring.ts";
 import type { ChatMessage, LlmEnv } from "../llm.ts";
 

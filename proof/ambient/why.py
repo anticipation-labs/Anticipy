@@ -15,7 +15,7 @@ and the goal and throws `decision.reason` away, which is the single cheapest
 observability fix available and is written up in the report.
 
 SOURCE 2, with --replay: the same line put back through the REAL brain
-offline, with PocketBase stubbed exactly the way overnight/evaluate.py:31-69
+offline, with the backend stubbed exactly the way overnight/evaluate.py:31-69
 stubs it, so `Decision.reason`, `.addressee` and `.owes` can be read directly.
 This is a SECOND OBSERVATION, not the live verdict: it runs on a fresh mind
 with no memory of the day and no conversation context, so it can disagree with
@@ -134,7 +134,7 @@ def kind_of(row) -> str:
 def replay(rows):
     """Put each wrong line back through the real brain to read its reason."""
     sys.path.insert(0, REPO)
-    from brain import pb  # noqa: E402
+    from brain import backend  # noqa: E402
 
     JOBS: list[dict] = []
 
@@ -173,7 +173,7 @@ def replay(rows):
                 return _R(j)
         return _R({}, ok=False)
 
-    pb.get, pb.post, pb.patch = _get, _post, _patch
+    backend.get, backend.post, backend.patch = _get, _post, _patch
 
     from brain.anticipy_core import Anticipy  # noqa: E402
     from brain.llm import LLM  # noqa: E402

@@ -2,7 +2,7 @@
 // send since 2026-09-05: `fields=` projection and a unique-index collision on
 // create. Run: node --experimental-strip-types test/records-parity.test.ts
 import assert from "node:assert/strict";
-import { projectFields, uniqueViolationColumn, missingColumn, fillEmpties } from "../src/pb/records.ts";
+import { projectFields, uniqueViolationColumn, missingColumn, fillEmpties } from "../src/api/records.ts";
 
 let n = 0;
 const check = (name: string, fn: () => void) => { fn(); n++; console.log(`PASS: ${name}`); };

@@ -26,7 +26,7 @@ file is that leg, in three parts, and it is honest about what it cannot see:
       silence nobody counts is decoration. This is the count.
 
 WHAT IT NEEDS, and where it looks. /agent/llm accepts only a PAIRED `agents`
-record's agent_id + agent_token (backend/pb_hooks/agent_key.pb.js), and those
+record's agent_id + agent_token (migration/workers/src/llm.ts), and those
 live in the browser's chrome.storage.local — not in .env.local. So leg 2 reads
 ANTICIPY_PB + ANTICIPY_SERVICE_TOKEN (present in .env.local, loaded by _env)
 to fetch the owner's paired agent record, and uses ITS credentials for the

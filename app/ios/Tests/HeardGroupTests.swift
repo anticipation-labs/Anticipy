@@ -93,7 +93,7 @@ enum Cases {
         check("every stripe is the .noted stripe", groups.allSatisfy { $0.weight == .noted })
     }
 
-    /// An empty-string segment is PocketBase's "unset", not a segment named "".
+    /// An empty-string segment is the backend's "unset", not a segment named "".
     static func blankSegmentsNeverMerge() {
         section("Blank segment ids")
         let groups = HeardGroup.build([

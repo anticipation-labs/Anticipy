@@ -2,7 +2,7 @@
 
 Audit #90, correction (E). A browser worker reclaimed between a consequential
 click and its receipt leaves the row `effect_uncertain`. The DB guard
-(`backend/pb_hooks/workflow_guard.pb.js`, the effect_uncertain block) refuses
+(`migration/workers/src/policy/workflow_guard.ts`, the effect_uncertain block) refuses
 to let that row back to `queued` unless the PATCH carries a `reconciliation`
 with `conclusion: "not_applied"`, a matching `effect_key`, `verified: true`,
 non-empty `owner_words` and a non-empty `evidence` list.
@@ -40,7 +40,6 @@ behaviour:
 """
 from __future__ import annotations
 
-import json
 import re
 import shutil
 import subprocess
@@ -48,7 +47,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.test_workflow_guard_fails_closed import HARNESS, HOOKS, ROOT
+ROOT = Path(__file__).resolve().parents[1]
 
 
 JOB_ID = "job0000000000090"
@@ -86,142 +85,11 @@ def phone_reconciliation(verdict: str, evidence=None, effect_key: str = EFFECT):
     }
 
 
-def retry(reconciliation, *, row_verdict="not_applied", effect_uncertain=False):
-    """Drive the phone's PATCH for an uncertain needs_user row back to queued.
-
-    Everything but `reconciliation` and `effect_uncertain` is the ordinary,
-    well-formed shape `approvalFields` sends: a fresh version-bound approval,
-    the embedded plan re-queued, no lease, no receipt.
-    """
-    approval = {"plan_id": PLAN, "plan_version": 2, "scope_digest": SCOPE,
-                "owner_words": "Tapped “I checked, try again”.",
-                "approved_at": NOW}
-    base = {
-        "plan_id": PLAN, "version": 2, "goal": GOAL,
-        "consequence": "consequential", "lineage_key": "lin-90",
-        "owner_ref": OWNER, "scope_digest": SCOPE, "effect_key": EFFECT,
-        "attempts": 1, "receipt": None, "lease": None, "required": [],
-        "facts": {},
-    }
-    old_embedded = dict(base, state="needs_user", approval=approval)
-    old_params = {"_workflow": old_embedded,
-                  "_effect_intent": {"doing": "Clicking Book table on fixture.test",
-                                     "url": "https://fixture.test/book",
-                                     "sig": "s1g", "digest": "d1gest", "step": 4},
-                  "_reconciliation": found(row_verdict)}
-    new_embedded = dict(base, state="queued", approval=approval, attempts=0,
-                        reason="approved by owner", updated_at=NOW)
-    new_params = dict(old_params, _workflow=new_embedded, authorized=True,
-                      approved_scope=f"Task: {GOAL}")
-    body = {
-        "status": "queued", "workflow_state": "queued", "workflow_version": 2,
-        "attempts": 0, "scope_digest": SCOPE, "effect_key": EFFECT,
-        "approval": json.dumps(approval), "params": json.dumps(new_params),
-        "lease_token": "", "lease_until": "", "receipt": "",
-        "effect_uncertain": effect_uncertain,
-        "reconciliation": json.dumps(reconciliation) if reconciliation is not None else "",
-    }
-    scenario = {
-        "path": f"/api/collections/jobs/records/{JOB_ID}",
-        "method": "PATCH",
-        "body": body,
-        "old": {
-            "id": JOB_ID, "workflow_id": PLAN, "workflow_version": 2,
-            "workflow_state": "needs_user", "status": "needs_user",
-            "consequence": "consequential", "goal": GOAL, "lineage_key": "lin-90",
-            "owner_ref": OWNER, "scope_digest": SCOPE, "effect_key": EFFECT,
-            "attempts": 1, "lease_token": "", "lease_until": "",
-            "approval": json.dumps(approval), "receipt": "",
-            "effect_uncertain": True, "reconciliation": "",
-            "params": json.dumps(old_params),
-        },
-    }
-    proc = subprocess.run(
-        ["node", "-e", HARNESS, "--", json.dumps(scenario), str(HOOKS)],
-        capture_output=True, text=True, timeout=60)
-    if proc.returncode != 0:
-        raise AssertionError(f"harness failed: {proc.stderr[-3000:]}")
-    out = json.loads(proc.stdout)
-    assert out["threw"] is None, out["threw"]
-    return out
-
-
-def detail(out):
-    return (out.get("body") or {}).get("detail")
-
-
-# ----------------------------------------------------------- 1. the guard's leg
-
-def test_a_retry_that_cites_a_not_applied_row_is_admitted():
-    """The shape the phone sends now: conclusion read off the row, the row's
-    evidence first, the tap last. This is the one write that may move an
-    uncertain row back to queued, and it has to keep working."""
-    out = retry(phone_reconciliation("not_applied"))
-    assert out["outcome"] == "next", out
-
-
-@pytest.mark.parametrize("verdict", ["applied", "unclear", "no_verdict"])
-def test_every_other_verdict_is_refused_even_when_cited_honestly(verdict):
-    """The phone never sends these — `mayRetry` refuses first — but the guard
-    is the layer that has to be right when the phone is stale or lying, so
-    the same honest citation of any other verdict must be a 409."""
-    out = retry(phone_reconciliation(verdict), row_verdict=verdict)
-    assert out["outcome"] == "json" and out["status"] == 409, out
-    assert detail(out) == "uncertain effect was not proven safe to retry", out
-
-
-def test_a_retry_with_no_reconciliation_is_refused():
-    out = retry(None)
-    assert out["outcome"] == "json" and out["status"] == 409, out
-    assert detail(out) == "uncertain effect needs reconciliation before retry", out
-
-
-def test_a_retry_that_keeps_the_effect_uncertain_is_refused():
-    """Citing not_applied while leaving the flag up is a write that says two
-    things at once; the guard takes the flag."""
-    out = retry(phone_reconciliation("not_applied"), effect_uncertain=True)
-    assert out["outcome"] == "json" and out["status"] == 409, out
-    assert detail(out) == "uncertain effect was not proven safe to retry", out
-
-
-def test_an_empty_evidence_list_is_refused():
-    """The reason RetryReconciliationPolicy refuses a not_applied row with
-    nothing behind it: the tap line is appended, never substituted, and a
-    citation with no lines is not a citation."""
-    bare = dict(phone_reconciliation("not_applied"), evidence=[])
-    out = retry(bare)
-    assert out["outcome"] == "json" and out["status"] == 409, out
-
-
-def test_a_reconciliation_for_another_effect_is_refused():
-    out = retry(phone_reconciliation("not_applied", effect_key="effect-key-other"))
-    assert out["outcome"] == "json" and out["status"] == 409, out
-    assert detail(out) == "uncertain effect was not proven safe to retry", out
-
-
-def test_the_old_constant_would_still_satisfy_the_guard():
-    """Stated rather than hidden: the guard reads shape, not provenance. The
-    literal the phone used to write passes it today exactly as it did on
-    2026-09-04. That is WHY the phone's floor exists and why the Swift leg
-    below is not optional — the guard cannot see a made-up finding, only a
-    missing one."""
-    constant = {
-        "effect_key": EFFECT, "conclusion": "not_applied", "verified": True,
-        "owner_words": "I checked the site; the action did not happen. Try again.",
-        "evidence": ["owner explicitly checked the destination before retry"],
-        "recorded_at": NOW,
-    }
-    out = retry(constant, row_verdict="applied")
-    assert out["outcome"] == "next", (
-        "if the guard has learned to tell a literal from a finding, update "
-        f"this pin and RetryReconciliationPolicy's header together: {out}")
-
-
-# ------------------------------------------------------------ 2. the spellings
-
 SWIFT = ROOT / "app" / "ios" / "Anticipy" / "Backend" / "RetryReconciliationPolicy.swift"
-SESSION = ROOT / "app" / "ios" / "Anticipy" / "AnticipyApp.swift"
 JS = ROOT / "extension" / "reconcile.js"
+
+
+SESSION = ROOT / "app" / "ios" / "Anticipy" / "AnticipyApp.swift"
 
 
 def _code(text: str) -> str:

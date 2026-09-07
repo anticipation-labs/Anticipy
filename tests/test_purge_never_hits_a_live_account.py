@@ -35,7 +35,7 @@ class _Response:
 def _queue(monkeypatch, refs, patched=None):
     """Stand in for the purges queue, and record what got marked done."""
     rows = [{"id": f"row-{ref}", "owner_ref": ref, "memory_purged": False} for ref in refs]
-    monkeypatch.setattr(supervisor.pb, "get",
+    monkeypatch.setattr(supervisor.backend, "get",
                         lambda *a, **k: _Response({"items": rows}), raising=False)
     marked = []
 
@@ -43,7 +43,7 @@ def _queue(monkeypatch, refs, patched=None):
         marked.append(url.rsplit("/", 1)[-1])
         return _Response({})
 
-    monkeypatch.setattr(supervisor.pb, "patch", fake_patch, raising=False)
+    monkeypatch.setattr(supervisor.backend, "patch", fake_patch, raising=False)
     if patched is not None:
         patched.extend([])
     return marked
@@ -136,10 +136,10 @@ def test_the_founder_path_outside_the_state_root_is_also_purged(monkeypatch, tmp
 
     rows = [{"id": "row-1", "owner_ref": "founderacct1",
              "legacy_uuid": "FOUNDER-UUID-0001", "memory_purged": False}]
-    monkeypatch.setattr(supervisor.pb, "get",
+    monkeypatch.setattr(supervisor.backend, "get",
                         lambda *a, **k: _Response({"items": rows}), raising=False)
     marked = []
-    monkeypatch.setattr(supervisor.pb, "patch",
+    monkeypatch.setattr(supervisor.backend, "patch",
                         lambda url, **k: (marked.append(url), _Response({}))[1],
                         raising=False)
 

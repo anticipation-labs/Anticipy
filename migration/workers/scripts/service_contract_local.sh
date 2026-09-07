@@ -135,7 +135,7 @@ echo "service-wire: workerd on :$PORT, log $LOG"
 BASE="http://127.0.0.1:$PORT"
 
 # Accounts are made through the REAL signup route, so the password digest and
-# the tokenKey are the ones src/pb/auth.ts will later verify. Seeding them with
+# the tokenKey are the ones src/api/auth.ts will later verify. Seeding them with
 # SQL would prove nothing about signing in.
 signup() {   # email legacy_uuid  -> prints the owners id
   curl -sf -X POST "$BASE/api/collections/owners/records" \

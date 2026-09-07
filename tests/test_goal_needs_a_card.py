@@ -74,7 +74,7 @@ def build(monkeypatch, triage, alive=True):
     """A brain whose ONLY stubs are backend reads — _queue_job itself is the
     real one, because its return value is the thing under test."""
     posted = Posted(alive)
-    monkeypatch.setattr(core.pb, "post", posted)
+    monkeypatch.setattr(core.backend, "post", posted)
     mem = types.SimpleNamespace(
         ingest=lambda *a, **k: {"commitment_id": None},
         recall=lambda *a, **k: [],
@@ -184,7 +184,7 @@ def test_the_clock_stays_quiet_when_its_prepared_work_never_landed(monkeypatch):
     message promises work that exists in no system, so she says nothing and
     nothing is stamped as reached — the next window may try for real."""
     posted = Posted(alive=False)
-    monkeypatch.setattr(core.pb, "post", posted)
+    monkeypatch.setattr(core.backend, "post", posted)
 
     class WantsToReachOut:
         live = True

@@ -76,8 +76,8 @@ def build(jobs):
         flips.append((url.rsplit("/", 1)[-1], (kw.get("json") or {}).get("status")))
         return Resp(single={})
 
-    C.pb.get, C.pb.patch = get, patch
-    C.pb.post = lambda *a, **k: Resp(single={})
+    C.backend.get, C.backend.patch = get, patch
+    C.backend.post = lambda *a, **k: Resp(single={})
     anticipy = types.SimpleNamespace(owner_id="X", backend_url="http://pb", llm=None,
                                      memory=types.SimpleNamespace(recall=lambda *a, **k: []))
     convo = C.Conversation(anticipy=anticipy, llm=None, transport=None)

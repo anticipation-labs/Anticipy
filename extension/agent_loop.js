@@ -6589,7 +6589,7 @@ export async function runAgentGoal(goal, opts) {
   //   * `milestoneShot` — the NEWEST frame only, in memory, never written to a
   //     job row or a trace. One picture per errand reaches the host, because
   //     the host keeps 60 rows in total across every errand this product ever
-  //     runs (backend/pb_hooks/evidence.pb.js) on a 5GB volume that has been
+  //     runs (migration/workers/src/assets.ts) on a 5GB volume that has been
   //     to 4MB free once already. Two rows per errand halves how far back the
   //     photos go; it does not double what anybody can see. A second row would
   //     also be indistinguishable from the first — the collection has no

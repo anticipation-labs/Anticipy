@@ -173,7 +173,7 @@ Every refusal is exactly:
 409 {"error": "workflow violation", "detail": "<reason>"}
 ```
 (`:26`). There is no other status code in this file. A port that returns 400 or
-403 for any of these has broken the contract — brain/pb.py and the extension
+403 for any of these has broken the contract — brain/backend.py and the extension
 both branch on 409.
 
 ### 1.4 Field derivation (body-or-row)
@@ -3049,7 +3049,7 @@ Ranked by what breaks if the port gets it wrong.
 
 ### 9.1 The generic REST API *is* the interface
 
-`iOS`, `macOS`, the Chrome extension, `brain/pb.py` and ~30 proof harnesses all
+`iOS`, `macOS`, the Chrome extension, `brain/backend.py` and ~30 proof harnesses all
 speak `/api/collections/{name}/records` with PocketBase's filter DSL, and
 authorization is implemented by **parsing and rewriting those filter strings**
 (`guard.pb.js:45-50`, `research_lane.pb.js:436-452`). There is no purpose-built
@@ -3373,7 +3373,7 @@ document.
     strings (25 literal/template + 2 approval + 15 Shelf 2). §1.16 lists all 42.
     Either the brief counted only the non-Shelf-2 literals (25) or a different
     grouping; the enumeration in §1.16 is what the tests assert.
-19. Client-side claims — that `brain/pb.py` sends `X-Anticipy-Worker` on every
+19. Client-side claims — that `brain/backend.py` sends `X-Anticipy-Worker` on every
     request, that `extension/background.js` never sends the service token, that
     `AnticipyBackend.swift:144` carries the account token alone — are quoted from
     the hook comments. I read the hooks, not the clients. If the port changes

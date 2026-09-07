@@ -15,7 +15,7 @@
  * WHAT IS REAL HERE AND WHAT IS NOT. The wiring, the D1 store, the vendor
  * adapter, the sentence writer, the words audit, the routes, the HTML, the
  * schema (migration/d1/schema.sql, loaded into SQLite) and the account token
- * (a real HMAC from src/pb/auth.ts against a real `owners` row) are all the
+ * (a real HMAC from src/api/auth.ts against a real `owners` row) are all the
  * shipped code. The ONE thing replaced is `globalThis.fetch`, because the two
  * things on the other side of it are another company's HTTP API and a language
  * model. Everything between this file and that socket is production code.
@@ -147,7 +147,7 @@ import { randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { FakeD1, asD1, type FakeStatement } from "./fake-d1.ts";
-import { issueToken } from "../src/pb/auth.ts";
+import { issueToken } from "../src/api/auth.ts";
 import {
   connectRoute, connectWiringInstalled, tokenHandle, SESSION_COOKIE,
   type ConnectEnv, type Connection,

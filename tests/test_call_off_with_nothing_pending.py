@@ -24,7 +24,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from brain import pb  # noqa: E402
+from brain import backend  # noqa: E402
 from brain.anticipy_core import Anticipy, is_consequential  # noqa: E402
 from brain.memory import Memory  # noqa: E402
 from brain.orchestrator import Decision  # noqa: E402
@@ -105,9 +105,9 @@ class WorldSayingLLM:
 
 def _anticipy(monkeypatch, decision=None, llm=None):
     rig = Rig()
-    monkeypatch.setattr(pb, "get", rig.get)
-    monkeypatch.setattr(pb, "post", rig.post)
-    monkeypatch.setattr(pb, "patch", rig.patch)
+    monkeypatch.setattr(backend, "get", rig.get)
+    monkeypatch.setattr(backend, "post", rig.post)
+    monkeypatch.setattr(backend, "patch", rig.patch)
     a = Anticipy(memory=DeadMemory(), llm=llm, owner_id="calloff")
     if decision is not None:
         monkeypatch.setattr(a, "_decide", lambda *args, **kw: decision)

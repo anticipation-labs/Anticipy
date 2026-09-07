@@ -445,7 +445,7 @@ enum AccountDeletionPolicy {
         let purge = (payload?.memoryPurge ?? "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .lowercased()
-        // Closing the account and deleting PocketBase rows are not the last
+        // Closing the account and deleting the backend rows are not the last
         // physical effect. The worker owns a private per-account memory file,
         // so the endpoint first records a durable purge request and reports
         // whether it is scheduled (the production response) or already done.
@@ -486,7 +486,7 @@ enum AccountDeletionPolicy {
     }
 }
 
-/// A PATCH can reach PocketBase even when its HTTP response never reaches the
+/// A PATCH can reach the backend even when its HTTP response never reaches the
 /// phone. Decide retry safety from a canonical read of that exact job, not from
 /// the transport error that happened after the request left.
 enum ActionWritePolicy {
@@ -1113,7 +1113,7 @@ final class AnticipySession: ObservableObject {
     /// What went wrong, in a form that is safe to write down.
     ///
     /// A status code, or an error's domain and code. Never a message:
-    /// `BackendError` carries the server's own sentence, and a PocketBase error
+    /// `BackendError` carries the server's own sentence, and a the backend error
     /// body is built from a request whose payload is the words the owner just
     /// said. The journal is exportable from Settings, so anything put in it
     /// leaves the phone on a person's tap (`design/LOCAL-FIRST.md`).
@@ -1302,7 +1302,7 @@ final class AnticipySession: ObservableObject {
                     confirmedStatus.removeValue(forKey: job.id)
                     return job
                 case .safeToRetry:
-                    // This is the one legitimate stale read: PocketBase's
+                    // This is the one legitimate stale read: the backend's
                     // collection query still shows the pre-write state even
                     // though the PATCH response already confirmed acceptance.
                     return job.withStatus(held.expected)
@@ -1328,7 +1328,7 @@ final class AnticipySession: ObservableObject {
             connection = .refused(e.status)
             if e.status == 401 || e.status == 403 {
                 // A signed-in session that is being refused is over — the
-                // account was deleted, or the token expired (PocketBase issues
+                // account was deleted, or the token expired (the backend issues
                 // 7-day tokens). Put them back at the door rather than leaving
                 // them staring at "Anticipy won't let me in" with no way
                 // forward. Seen for real in the simulator: an account removed
@@ -1363,7 +1363,7 @@ final class AnticipySession: ObservableObject {
                                       // could not say, never a person named "".
                                       speaker: ($0.speaker?.isEmpty == false) ? $0.speaker : nil,
                                       // Same empty-string-is-nothing normalisation the
-                                      // two fields above already use: PocketBase sends
+                                      // two fields above already use: the backend sends
                                       // "" for an unset text column, and "" must mean
                                       // ungrouped, not a segment named "".
                                       segmentID: ($0.segment?.isEmpty == false) ? $0.segment : nil,
@@ -2049,7 +2049,7 @@ final class AnticipySession: ObservableObject {
     /// -- Why there is no token fetch left to fail ---------------------------
     ///
     /// `/transcription/token` answers 410 GONE now
-    /// (`backend/pb_hooks/transcription_token.pb.js`), and the old catch block
+    /// (`migration/workers/src/routes/sms.ts`), and the old catch block
     /// called `schedulePendantRetry` on ANY error — so a permanent refusal
     /// would have spun a three-second reconnect loop forever against a
     /// connected pendant, spending battery and radio on a decision that is
@@ -2609,7 +2609,7 @@ final class AnticipySession: ObservableObject {
     /// Pure string→Date; nothing about it touches session state, and a view
     /// needs it to put a clock time on a card.
     nonisolated static func parsePBDate(_ s: String) -> Date? {
-        // PocketBase dates: "2026-07-21 04:55:00.123Z" or ISO8601.
+        // the backend dates: "2026-07-21 04:55:00.123Z" or ISO8601.
         let fmt = DateFormatter()
         fmt.locale = Locale(identifier: "en_US_POSIX")
         fmt.timeZone = TimeZone(identifier: "UTC")
@@ -2655,7 +2655,7 @@ final class AnticipySession: ObservableObject {
     /// `write` exists to prevent. This is only ever populated AFTER the server
     /// returned success, and it answers a different problem: `fetchJobs` is a
     /// separate round-trip that can legitimately return a pre-write row
-    /// (PocketBase gives no read-after-write guarantee across requests), so
+    /// (the backend gives no read-after-write guarantee across requests), so
     /// without this the card visibly snaps back to "waiting for your OK" for one
     /// poll after she was told yes.
     private struct ConfirmedJobStatus {
@@ -2738,7 +2738,7 @@ final class AnticipySession: ObservableObject {
         // conclusion "not_applied" and evidence "owner explicitly checked the
         // destination before retry" — whether or not anyone had checked
         // anything. That is exactly what the DB guard's retry leg reads
-        // (backend/pb_hooks/workflow_guard.pb.js, the effect_uncertain block),
+        // (migration/workers/src/policy/workflow_guard.ts, the effect_uncertain block),
         // so a crash plus a tap re-sent the submission. The extension now
         // looks (extension/reconcile.js) and writes `params._reconciliation`
         // in four states; this reads it, and `RetryReconciliationPolicy` is
@@ -3109,7 +3109,7 @@ final class AnticipySession: ObservableObject {
                                           expectedStatus: expected)
             pendingJobWrites[id] = pending
             // Give a PATCH whose response connection died a moment to finish
-            // before asking PocketBase for the exact canonical row.
+            // before asking the backend for the exact canonical row.
             try? await Task.sleep(nanoseconds: 500_000_000)
             let reconciliation = await reconcilePendingJob(id: id, pending: pending)
             switch reconciliation {
@@ -3261,7 +3261,7 @@ final class AnticipySession: ObservableObject {
                   authToken == requestedToken else { return false }
             if let refusal = error as? AnticipyBackend.BackendError,
                ActionWritePolicy.isVerifiedRefusal(status: refusal.status) {
-                // PocketBase reports a unique external_event_id collision as a
+                // the backend reports a unique external_event_id collision as a
                 // 400/409. That can mean the earlier response-lost request won,
                 // so these two statuses still require the exact canonical read.
                 if refusal.status == 400 || refusal.status == 409 {
@@ -3381,7 +3381,7 @@ final class AnticipySession: ObservableObject {
         /// inventing a speaker.
         var speaker: String? = nil
         var segmentID: String? = nil
-        /// PocketBase `created`, carried through so a card can show a clock
+        /// the backend `created`, carried through so a card can show a clock
         /// time. Empty on local lines and on anything we could not read a date
         /// from; the time is then simply not drawn.
         var created: String = ""

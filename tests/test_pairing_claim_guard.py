@@ -38,23 +38,23 @@ def test_tokenless_claim_refuses_an_owner_ref_it_cannot_verify():
     now fails LOUDLY and tells the person to pair from the signed-in app,
     rather than pairing them to a stranger.
     """
-    source = (ROOT / "backend/pb_hooks/guard.pb.js").read_text()
-    tokenless = source.split("// 3. Claiming", 1)[1]
-    allowed = tokenless.split("const allowed = {", 1)[1].split("}", 1)[0]
+    source = (ROOT / "migration/workers/src/policy/guard.ts").read_text()
+    tokenless = source.split("// 3. guard.pb.js:511-548 — claiming.", 1)[1]
+    allowed = tokenless.split("const allowed = new Set([", 1)[1].split("])", 1)[0]
     assert "owner_ref" not in allowed, (
         "an owner_ref that nothing can verify must not be tokenlessly writable")
     assert '"owner_ref" in b' in tokenless and "pair from the signed-in app" in tokenless, (
         "and the refusal must say what to do instead")
-    for k in ("owner: 1", "paired: 1", "last_seen: 1", "browser: 1"):
+    for k in ('"owner"', '"paired"', '"last_seen"', '"browser"'):
         assert k in allowed, f"{k} must stay claimable so pairing still works"
     assert "b.owner_ref === authId" in source, (
         "the signed-in path remains the one honest way to accept an owner_ref")
 
 
 def test_blank_owner_claims_are_refused_everywhere():
-    source = (ROOT / "backend/pb_hooks/guard.pb.js").read_text()
-    signed_in = source.split("who has actually signed in", 1)[1].split("// 3. Claiming", 1)[0]
-    tokenless = source.split("// 3. Claiming", 1)[1]
+    source = (ROOT / "migration/workers/src/policy/guard.ts").read_text()
+    signed_in = source.split("async function accountRung", 1)[1].split("// ownedList", 1)[0]
+    tokenless = source.split("// 3. guard.pb.js:511-548 — claiming.", 1)[1]
     for name, part in (("signed-in", signed_in), ("tokenless", tokenless)):
         assert 'b.owner.trim() !== ""' in part, (
             f"the {name} claim path no longer bans blank owners — the "
@@ -62,9 +62,9 @@ def test_blank_owner_claims_are_refused_everywhere():
 
 
 def test_paired_records_still_cannot_be_reclaimed_tokenlessly():
-    source = (ROOT / "backend/pb_hooks/guard.pb.js").read_text()
-    tokenless = source.split("// 3. Claiming", 1)[1]
-    assert '!rec.getBool("paired")' in tokenless
+    source = (ROOT / "migration/workers/src/policy/guard.ts").read_text()
+    tokenless = source.split("// 3. guard.pb.js:511-548 — claiming.", 1)[1]
+    assert "!truthy(rec.paired)" in tokenless
     assert '"owner" in b || "paired" in b' in tokenless
 
 

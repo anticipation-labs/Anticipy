@@ -90,7 +90,7 @@ MAX_PAGES = 200
 
 
 def headers() -> dict:
-    # Same shape brain/pb.py uses. Without the token every read is 403 and this
+    # Same shape brain/backend.py uses. Without the token every read is 403 and this
     # file would report a perfect day by reading nothing.
     h = {"X-Anticipy-Worker": "1"}
     token = os.environ.get("ANTICIPY_SERVICE_TOKEN")
@@ -100,7 +100,7 @@ def headers() -> dict:
 
 
 def parse_ts(value: str) -> dt.datetime | None:
-    """PocketBase hands back UTC, sometimes without the Z. Always aware."""
+    """the backend hands back UTC, sometimes without the Z. Always aware."""
     if not value:
         return None
     v = str(value).replace("Z", "+00:00").replace(" ", "T", 1)

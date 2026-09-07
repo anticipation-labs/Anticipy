@@ -149,7 +149,7 @@ def await_verdict(event_id: str, seconds: float) -> dict:
 
 def consequences(owner_ref: str, since: datetime.datetime) -> dict:
     """Jobs and messages this line caused. The space-separated stamp is the only
-    shape PocketBase compares correctly in a filter — see proof/ambient/run.py."""
+    shape the backend compares correctly in a filter — see proof/ambient/run.py."""
     stamp = since.astimezone(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3] + "Z"
     out = {}
     jobs = pb("GET", "/api/collections/jobs/records?perPage=10&sort=created&filter="

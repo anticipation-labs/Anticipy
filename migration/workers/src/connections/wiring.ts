@@ -747,7 +747,7 @@ const PHRASING_LINE_CHARS = 240;
  *
  * WHAT IT SELECTS AND WHY IT SELECTS NOTHING CLEVERER. The newest lines this
  * owner SPOKE (`speaker = 'owner'`) that were ADDRESSED TO US — a text they
- * sent this number (`kind = 'sms_reply'`, which is what src/pb/sender.ts lands
+ * sent this number (`kind = 'sms_reply'`, which is what src/api/sender.ts lands
  * an inbound message as) or a line the sense layer already marked
  * `addressee = 'assistant'`. There is no filter for lines that MENTION an app,
  * and there must not be one: "is this line about their apps?" is a meaning
@@ -905,7 +905,7 @@ export function nudgeMomentFor(env: NudgeWiringEnv) {
     // THE WORK. `substr(created, 1, 10)` compares the DATE ONLY, on purpose.
     // This tree holds timestamps in TWO SPELLINGS — "2026-09-06 12:00:00.000Z"
     // (pbNow, a space) and "2026-09-06T12:00:00.000Z" (toISOString, a T); see
-    // pbTime in src/pb/wire.ts, which exists for the same reason. A space sorts
+    // pbTime in src/api/wire.ts, which exists for the same reason. A space sorts
     // BEFORE a T, so any comparison that reaches past the tenth character
     // answers differently depending on which writer made the row.
     //
@@ -922,7 +922,7 @@ export function nudgeMomentFor(env: NudgeWiringEnv) {
     //
     // `MAX("updated", "created")` IS THE LAST TIME ANYTHING TOUCHED THE ROW.
     // `jobs.updated` is the column the rest of the system already calls a
-    // heartbeat — src/pb/records.ts stamps it on every PATCH, and
+    // heartbeat — src/api/records.ts stamps it on every PATCH, and
     // brain/worker.py's own stranded sweep selects on `updated <= cutoff` —
     // but it is `NOT NULL DEFAULT ''` and a hand-written row can carry the
     // empty string, which would sort before every date and read as stranded.

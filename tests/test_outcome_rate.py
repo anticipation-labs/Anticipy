@@ -519,7 +519,7 @@ def test_an_owner_who_said_nothing_but_was_spoken_to_is_still_named():
 # --- main(): what it reads, and what it admits to -------------------------
 
 class _FakePB:
-    """Stands in for PocketBase across two collections. Records every params
+    """Stands in for the backend across two collections. Records every params
     dict it was handed, so a test can see how much the report asked for."""
 
     def __init__(self, events, jobs=(), per_page_cap=500, report_total=True,

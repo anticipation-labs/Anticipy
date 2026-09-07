@@ -109,32 +109,19 @@ def test_the_default_run_never_shells_railway(monkeypatch, capsys):
     """The finding itself. Production is Cloudflare; the Railway worker is a
     different machine and grading it was the defect."""
     called = []
-    monkeypatch.setattr(G, "fetch_messages",
-                        lambda *a, **k: called.append(a) or [])
+    monkeypatch.setattr(G.subprocess, "run",
+                        lambda *a, **k: called.append(a) or None)
     monkeypatch.setattr(G, "fetch_status_rows", lambda *a, **k: [])
     monkeypatch.setattr(G._env, "load_and_announce", lambda *a, **k: [])
     monkeypatch.setattr(sys, "argv", ["is_the_gateway_live.py"])
 
     code = G.main()
 
-    assert called == [], "the Cloudflare path must not read Railway's logs"
+    assert called == [], "the gate shells nothing — there is no log path left to read"
     assert code == 2
     out = capsys.readouterr().out
     assert "api.anticipy.ai" in out
     assert "0 THE RUNNING BRAIN" in out
-
-
-def test_railway_is_still_available_but_only_when_asked(monkeypatch, capsys):
-    """It is not deleted — it is demoted to the thing it is honest about."""
-    monkeypatch.setattr(G, "fetch_messages", lambda *a, **k: [LIVE_TEXT])
-    monkeypatch.setattr(G, "fetch_status_rows", lambda *a, **k: (_ for _ in ()).throw(
-        AssertionError("the railway path must not read the status row")))
-    monkeypatch.setattr(G._env, "load_and_announce", lambda *a, **k: [])
-    monkeypatch.setattr(sys, "argv", ["is_the_gateway_live.py", "--source", "railway"])
-
-    G.main()
-
-    assert "railway service" in capsys.readouterr().out
 
 
 def test_a_live_row_is_graded_exactly_as_a_log_line_was(monkeypatch, capsys):
@@ -212,9 +199,9 @@ def backend(monkeypatch):
     fake = FakeBackend()
     monkeypatch.setattr(W, "ACTIVE_OWNER_REF", "qeuy6sv1raof9rw")
     monkeypatch.setattr(W, "ACTIVE_OWNER_ID", "")
-    monkeypatch.setattr(W.pb, "get", fake.get)
-    monkeypatch.setattr(W.pb, "post", fake.post)
-    monkeypatch.setattr(W.pb, "patch", fake.patch)
+    monkeypatch.setattr(W.backend, "get", fake.get)
+    monkeypatch.setattr(W.backend, "post", fake.post)
+    monkeypatch.setattr(W.backend, "patch", fake.patch)
     monkeypatch.setattr(W, "_GATEWAY_TOTALS",
                         dict.fromkeys(W._GATEWAY_TALLY_KEYS, 0))
     return fake
@@ -275,7 +262,7 @@ def test_a_backend_that_refuses_the_row_never_stops_the_brain(backend, monkeypat
                                                               capsys):
     """Bookkeeping must never cost her hearing. A failure is logged, not
     raised, and the worker goes on."""
-    monkeypatch.setattr(W.pb, "post", lambda *a, **k: (_ for _ in ()).throw(
+    monkeypatch.setattr(W.backend, "post", lambda *a, **k: (_ for _ in ()).throw(
         RuntimeError("backend down")))
 
     assert W.publish_worker_status("worker up · primary=a:b fallback=c:d",

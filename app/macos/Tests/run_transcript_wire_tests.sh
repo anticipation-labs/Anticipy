@@ -13,7 +13,7 @@ here=$(cd "$(dirname "$0")" && pwd)
 tree=$(cd "$here/.." && pwd)
 policy="$tree/Anticipy/Capture/TranscriptWire.swift"
 lines="$tree/Anticipy/Capture/MeetingLinePolicy.swift"
-client="$tree/AnticipyMac/PocketBase.swift"
+client="$tree/AnticipyMac/MacBackend.swift"
 app="$tree/AnticipyMac/MacApp.swift"
 out=$(mktemp -d)
 trap 'rm -rf "$out"' EXIT
@@ -29,7 +29,7 @@ done
 code() { grep -vE '^[[:space:]]*//' "$1"; }
 
 # ------------------------------------------------------------ the right brain
-# Build 119 shipped with the Railway PocketBase URL baked in, and the phone had
+# Build 119 shipped with the retired Railway URL baked in, and the phone had
 # already moved to the Worker at api.anticipy.ai (AnticipyApp.swift migrates
 # installs off the old URL). Recordings went to a backend on its way out. The
 # runner excludes ITSELF from the search, because the old name lives here.
@@ -45,7 +45,7 @@ if [ -n "$stale" ]; then
     exit 2
 fi
 if ! code "$client" | grep -q 'URL(string: "https://api.anticipy.ai")'; then
-    echo "PocketBase.swift no longer defaults to https://api.anticipy.ai."
+    echo "MacBackend.swift no longer defaults to https://api.anticipy.ai."
     echo "That is the one backend the brain reads."
     exit 2
 fi
@@ -55,13 +55,13 @@ echo "the Mac posts to the brain the phone feeds"
 # The logic checks below are worthless if the app builds its own row beside
 # the policy. Prove the thread before proving the type.
 if ! code "$client" | grep -q 'TranscriptWire.body('; then
-    echo "PocketBase.swift no longer builds the row through TranscriptWire."
+    echo "MacBackend.swift no longer builds the row through TranscriptWire."
     echo "A second row shape beside the tested one is how the Mac drifts from"
     echo "the phone one column at a time."
     exit 2
 fi
 if ! code "$client" | grep -q 'TranscriptWire.deviceID('; then
-    echo "PocketBase.swift no longer stamps the build on device_id."
+    echo "MacBackend.swift no longer stamps the build on device_id."
     echo "overnight/are_the_ears_live.py names the build that last spoke from"
     echo "that column; a random id there says nothing about which bytes heard."
     exit 2
@@ -83,7 +83,7 @@ fi
 # row, and until this existed every one of them went back on disk forever
 # while the menu said "signed in". The door has to reappear.
 if ! code "$client" | grep -q 'case 401, 403: result.mark(.refused)'; then
-    echo "PocketBase.swift no longer reads a 401/403 as a refusal."
+    echo "MacBackend.swift no longer reads a 401/403 as a refusal."
     echo "A refused row is not a delayed row: it is queued behind a token the"
     echo "server will never accept, and nothing on screen says so."
     exit 2

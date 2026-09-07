@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 
@@ -81,12 +82,14 @@ def test_the_token_endpoint_mints_nothing_and_says_why():
     and the phone's catch block schedules a retry on them — a
     temporary-sounding refusal would spin a reconnect loop forever against a
     permanent decision."""
-    hook = (ROOT / "backend/pb_hooks/transcription_token.pb.js").read_text()
-    assert "if (!e.auth)" in hook, "an unauthenticated caller must still be refused first"
-    assert "/v1/auth/grant" not in hook, "the vendor exchange is back"
-    assert "DEEPGRAM_API_KEY" not in hook, "the vendor key is being read again"
-    assert "410" in hook, "a permanent refusal must not read as a transient one"
-    assert "LOCAL-FIRST" in hook, "the refusal must name the law it obeys"
+    worker = (ROOT / "migration/workers/src/index.ts").read_text()
+    assert '"/transcription/token"' in worker, "the route must be KEPT, refusing"
+    sms = (ROOT / "migration/workers/src/routes/sms.ts").read_text()
+    route = sms.split("export async function transcriptionToken", 1)[1].split("\n}", 1)[0]
+    assert "/v1/auth/grant" not in sms, "the vendor exchange is back"
+    assert "DEEPGRAM_API_KEY" not in sms, "the vendor key is being read again"
+    assert re.search(r"json\((401|403|410),", route), "the refusal must be a verdict, not a retry"
+    assert not re.search(r"json\(50[0-9],", route), "a permanent refusal must not read as a transient one"
 
 
 def test_the_pendant_lane_is_inert_and_forwards_nothing():

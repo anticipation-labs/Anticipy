@@ -69,7 +69,7 @@ def queue(monkeypatch, goal, touches=None, key="test-key", llm=None,
         def json(self):
             return {"id": "j1"}
 
-    monkeypatch.setattr(core.pb, "post",
+    monkeypatch.setattr(core.backend, "post",
                         lambda url, **kw: (posted.update(kw.get("json") or {}), R())[1])
     a = Anticipy(owner_id="own1", llm=llm, memory=memory or Memory())
     monkeypatch.setattr(a, "_same_pending", lambda goal, **_k: None)

@@ -1,6 +1,6 @@
 /**
  * src/policy/owner_profile_owner.ts
- * backend/pb_hooks/owner_profile_owner.pb.js:34-79. 30 code lines (the brief
+ * migration/workers/src/policy/owner_profile_owner.ts. 30 code lines (the brief
  * said ~45; the file is 79 lines of which 49 are the comment explaining why it
  * is a middleware and not a `required` field).
  *
@@ -28,7 +28,7 @@
  * the only copy of a phone number and must stay patchable, because patching
  * them is how they get adopted (claim_legacy.pb.js:73-84).
  */
-import { json } from "../pb/wire.ts";
+import { json } from "../api/wire.ts";
 import type { Ctx, Policy } from "./chain.ts";
 
 const BASE = "/api/collections/owner_profile/records";

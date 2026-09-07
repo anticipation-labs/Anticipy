@@ -2,8 +2,8 @@
  * POST /sms/inbound   -- Twilio's inbound webhook.
  * POST /transcription/token
  *
- * Ported from backend/pb_hooks/sms.pb.js + twilio_signature.js. The signature
- * half is here; the owner-resolution + event-write half is src/pb/sender.ts,
+ * Ported from migration/workers/src/routes/sms.ts + twilio_signature.js. The signature
+ * half is here; the owner-resolution + event-write half is src/api/sender.ts,
  * shared with routes/sendblue.ts so that a text lands in the identical events
  * row whichever carrier brought it and the brain cannot tell them apart.
  *
@@ -24,7 +24,7 @@
  * POST parameter, sorted by key, appended as key+value with no separators.
  * Base64 of the digest is the signature.
  */
-import { landInboundText, last6 } from "../pb/sender.ts";
+import { landInboundText, last6 } from "../api/sender.ts";
 import { dispatchConnectionEvent } from "../connections/dispatch.ts";
 import type { TextCommandEnv } from "../connections/wiring.ts";
 
@@ -150,7 +150,7 @@ export async function smsInbound(
   }
 
   // Everything above refuses. Everything below accepts the request and decides
-  // whether it becomes an event -- src/pb/sender.ts, shared with Sendblue.
+  // whether it becomes an event -- src/api/sender.ts, shared with Sendblue.
   const landed = await landInboundText(
     { DB: env.DB }, "sms/inbound", "MessageSid",
     { from, text: body, externalId: messageSid });

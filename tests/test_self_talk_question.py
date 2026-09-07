@@ -130,7 +130,7 @@ def test_a_broken_dedupe_never_silences_a_question():
 # (tests/test_owes.py). Stating the verdict keeps each leg on the lane it
 # was written against.
 
-from brain import pb  # noqa: E402
+from brain import backend  # noqa: E402
 from brain.anticipy_core import Anticipy  # noqa: E402
 from brain.memory import Memory  # noqa: E402
 from brain.orchestrator import Decision  # noqa: E402
@@ -150,12 +150,12 @@ class _Reply:
 def _anticipy(monkeypatch, decision: Decision):
     """A real Anticipy whose triage is replaced by one fixed verdict."""
     rows = []
-    monkeypatch.setattr(pb, "get", lambda url, params=None, timeout=None, **k:
+    monkeypatch.setattr(backend, "get", lambda url, params=None, timeout=None, **k:
                         _Reply({"items": []}))
-    monkeypatch.setattr(pb, "post", lambda url, json=None, timeout=None, **k:
+    monkeypatch.setattr(backend, "post", lambda url, json=None, timeout=None, **k:
                         (rows.append(dict(json or {})),
                          _Reply({"id": f"j{len(rows)}", **(json or {})}))[1])
-    monkeypatch.setattr(pb, "patch", lambda url, json=None, timeout=None, **k:
+    monkeypatch.setattr(backend, "patch", lambda url, json=None, timeout=None, **k:
                         _Reply({}))
 
     class DeadMemory(Memory):

@@ -167,7 +167,7 @@ def test_retired_webhook_has_no_rebinding_network_path():
 
 
 def test_sms_rejections_are_logged():
-    sms = (ROOT / "backend/pb_hooks/sms.pb.js").read_text()
+    sms = (ROOT / "migration/workers/src/routes/sms.ts").read_text()
     assert "signature mismatch" in sms
 
 
@@ -214,7 +214,7 @@ def test_missing_details_are_an_answer_card_before_approval(monkeypatch):
         posted.update(kw.get("json") or {})
         return R()
 
-    monkeypatch.setattr(coremod, "pb", type("PB", (), {
+    monkeypatch.setattr(coremod, "backend", type("PB", (), {
         "post": staticmethod(post),
         "get": staticmethod(lambda *a, **k: type("E", (), {
             "ok": False, "json": lambda self: {"items": []}})()),
@@ -326,7 +326,7 @@ def test_one_conversation_never_becomes_three_cards(monkeypatch):
             cards[jid].update(kw.get("json") or {})
         return R(cards.get(jid, {}))
 
-    monkeypatch.setattr(coremod, "pb", type("PB", (), {
+    monkeypatch.setattr(coremod, "backend", type("PB", (), {
         "get": staticmethod(get), "post": staticmethod(post),
         "patch": staticmethod(patch)}))
 
@@ -365,7 +365,7 @@ def test_a_declared_new_task_still_gets_its_own_card(monkeypatch):
         def raise_for_status(self): pass
         def json(self): return self._p
 
-    monkeypatch.setattr(coremod, "pb", type("PB", (), {
+    monkeypatch.setattr(coremod, "backend", type("PB", (), {
         "get": staticmethod(lambda *a, **k: R({"items": [
             {"id": "job1", "goal": "dinner", "status": "awaiting_confirm",
              "params": "{}"}]})),

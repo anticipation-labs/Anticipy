@@ -83,7 +83,7 @@ def test_recent_outcomes_reach_the_classifier(monkeypatch):
                                  "result": "max steps reached"}]})
         return R({"items": []})
 
-    monkeypatch.setattr(convmod, "pb", type("PB", (), {
+    monkeypatch.setattr(convmod, "backend", type("PB", (), {
         "get": staticmethod(get)}))
     c = _conv()
 

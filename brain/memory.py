@@ -147,7 +147,7 @@ CREATE INDEX IF NOT EXISTS idx_vetoed_norm ON vetoed_facts(norm);
 -- owners is worth anything — the product has one owner. Ship the reach; earn
 -- the sharing, and name what changed.
 --
--- Living here rather than in PocketBase is also what makes it FREE: §4.4
+-- Living here rather than in the backend is also what makes it FREE: §4.4
 -- prices a new collection at a migration plus guard.pb.js's hard-coded list
 -- plus account_delete.pb.js's OWNER_TABLES plus a retention sweep on a 5 GB
 -- volume that has filled once, and every one of those four costs is paid by

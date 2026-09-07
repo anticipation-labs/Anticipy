@@ -43,7 +43,7 @@ const bg = readFileSync(join(here, "..", "background.js"), "utf8");
 // (CI pins Node 24 — .github/workflows/system-invariants.yml), the same way
 // the worker suite itself runs. Nothing here re-implements what a filter means.
 const dsl = await import(pathToFileURL(join(workers, "filter-dsl.ts")).href);
-const { COLLECTIONS } = await import(pathToFileURL(join(workers, "src", "pb", "schema.ts")).href);
+const { COLLECTIONS } = await import(pathToFileURL(join(workers, "src", "api", "schema.ts")).href);
 const { FakeD1 } = await import(pathToFileURL(join(workers, "test", "fake-d1.ts")).href);
 
 let passes = 0;

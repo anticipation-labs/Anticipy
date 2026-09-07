@@ -63,7 +63,7 @@ def build(intent: str, triage: str, says: str = "Want me to go ahead?"):
         if "/jobs/records/" in url:
             return Resp(single={})
         return Resp([])
-    C.pb.get, C.pb.post, C.pb.patch = get, (lambda *a, **k: Resp()), (lambda *a, **k: Resp())
+    C.backend.get, C.backend.post, C.backend.patch = get, (lambda *a, **k: Resp()), (lambda *a, **k: Resp())
 
     class LLM:
         live = True

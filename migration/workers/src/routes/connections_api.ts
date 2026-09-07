@@ -133,7 +133,7 @@
  *    failure. The shape to copy if that changes is `handleLink`'s, which counts
  *    rows in D1 rather than in an isolate.
  */
-import { verifyToken, type AuthEnv } from "../pb/auth.ts";
+import { verifyToken, type AuthEnv } from "../api/auth.ts";
 import {
   createD1Store,
   ownerId,
@@ -600,7 +600,7 @@ async function whoIsAsking(request: Request, env: ConnectionsApiEnv): Promise<st
     // is the second lock on the one claim that decides whose accounts these are.
     if (v.claims.collectionName !== "owners") return null;
     const id = String((v.row as Record<string, unknown>).id ?? "");
-    // 15 lowercase alphanumerics — src/pb/wire.ts ID_ALPHABET. The brand on
+    // 15 lowercase alphanumerics — src/api/wire.ts ID_ALPHABET. The brand on
     // `OwnerId` is erased before this line runs, so a display name reaching a
     // query is stopped by a CALL or by nothing at all.
     return /^[a-z0-9]{15}$/.test(id) ? id : null;

@@ -189,7 +189,7 @@ def _queue(monkeypatch, goal, act=None, key="test-key", **kw):
         def json(self):
             return {"id": "j1", "status": "awaiting_confirm"}
 
-    monkeypatch.setattr(core.pb, "post",
+    monkeypatch.setattr(core.backend, "post",
                         lambda url, **k: (posted.update(k.get("json") or {}),
                                           R())[1])
     a = Anticipy(owner_id="own1")
@@ -288,15 +288,15 @@ def test_the_worker_and_the_brain_spell_the_lane_once():
 def test_the_brain_and_the_backend_hook_spell_the_lane_the_same():
     """The drift this repo has already had once: `background.js:60-73` kept
     two copies of one lane clause and they diverged. The brain queues the row
-    and `backend/pb_hooks/research_lane.pb.js` is what keeps a browser off
-    it — a typo in either is a lane nobody enforces, which is worse than no
-    lane at all."""
+    and the Worker's research_lane policy is what keeps a browser off it — a
+    typo in either is a lane nobody enforces, which is worse than no lane at
+    all."""
     from pathlib import Path
     import re
-    src = (Path(__file__).resolve().parent.parent / "backend" / "pb_hooks"
-           / "research_lane.pb.js").read_text()
+    src = (Path(__file__).resolve().parent.parent / "migration" / "workers"
+           / "src" / "policy" / "research_lane.ts").read_text()
     m = re.search(r'const DEVICE_LANE = "([^"]+)"', src)
-    assert m, "research_lane.pb.js must name the device lane exactly once"
+    assert m, "research_lane.ts must name the device lane exactly once"
     assert m.group(1) == DEVICE_CALENDAR_LANE
 
 
@@ -478,7 +478,7 @@ def _device_row(minutes_old=30, lane=DEVICE_CALENDAR_LANE, status="queued"):
 
     `lane` is a parameter because the STORED string is the thing under test
     below: the hook accepts a rewrite to "Device_Calendar" as no change at
-    all, and PocketBase keeps what it was given.
+    all, and the backend keeps what it was given.
     """
     stamp = (datetime.now(timezone.utc) - timedelta(minutes=minutes_old)
              ).strftime("%Y-%m-%d %H:%M:%S")
@@ -524,9 +524,9 @@ def _stall_backend(monkeypatch, jobs, writes_fail=False):
             rows.append(j)
         return _Resp({"items": rows})
 
-    monkeypatch.setattr(W.pb, "get", _get)
-    monkeypatch.setattr(W.pb, "post", lambda *a, **k: _Resp(ok=not writes_fail))
-    monkeypatch.setattr(W.pb, "patch", lambda *a, **k: _Resp())
+    monkeypatch.setattr(W.backend, "get", _get)
+    monkeypatch.setattr(W.backend, "post", lambda *a, **k: _Resp(ok=not writes_fail))
+    monkeypatch.setattr(W.backend, "patch", lambda *a, **k: _Resp())
 
 
 # ==================================================================== REPAIR
@@ -914,7 +914,7 @@ def test_the_brain_routes_on_every_field_the_phone_refuses_on():
 # `research_lane.pb.js` normalises with `.trim().toLowerCase()` BEFORE it
 # judges anything, so a PATCH rewriting a row's lane to "Device_Calendar" is
 # no change at all to its immutability leg and is accepted with a `next()`.
-# PocketBase then stores the raw string. `CalendarHandPolicy.normalizedLane`
+# the backend then stores the raw string. `CalendarHandPolicy.normalizedLane`
 # normalises too, so the phone still calls that row its own — and says why in
 # its own comment: "an orphan is worse than a refusal, because a refusal is
 # countable and an orphan is silence."

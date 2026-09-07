@@ -68,14 +68,14 @@ def backend(rows):
 
 
 def test_the_third_cactus_message_never_goes_out(monkeypatch):
-    monkeypatch.setattr(W.pb, "get", backend(says(THE_FIVE[:2]))[0])
+    monkeypatch.setattr(W.backend, "get", backend(says(THE_FIVE[:2]))[0])
     assert W.raised_and_ignored(GOAL) is True
 
 
 def test_a_different_wording_still_counts(monkeypatch):
     """Every one of the five was worded differently. Keying on her wording is
     what let all five out."""
-    monkeypatch.setattr(W.pb, "get", backend(says(THE_FIVE[:2]))[0])
+    monkeypatch.setattr(W.backend, "get", backend(says(THE_FIVE[:2]))[0])
     assert W.raised_and_ignored("Confirm the Cactus Club Park Royal dinner reservation") is True
 
 
@@ -83,32 +83,32 @@ def test_a_new_loop_id_does_not_reset_it(monkeypatch):
     """The actual mechanism of the bug: nothing here reads an id at all."""
     rows = says([THE_FIVE[0]], goal="Confirm dinner plans", days_ago=2) + \
         says([THE_FIVE[1]], goal="Confirm the dinner reservation at Cactus", days_ago=1)
-    monkeypatch.setattr(W.pb, "get", backend(rows)[0])
+    monkeypatch.setattr(W.backend, "get", backend(rows)[0])
     assert W.raised_and_ignored(GOAL) is True
 
 
 def test_once_is_not_nagging(monkeypatch):
-    monkeypatch.setattr(W.pb, "get", backend(says(THE_FIVE[:1]))[0])
+    monkeypatch.setattr(W.backend, "get", backend(says(THE_FIVE[:1]))[0])
     assert W.raised_and_ignored(GOAL) is False
 
 
 def test_a_different_subject_is_never_silenced(monkeypatch):
     """The one thing no guard may do."""
-    monkeypatch.setattr(W.pb, "get", backend(says(THE_FIVE))[0])
+    monkeypatch.setattr(W.backend, "get", backend(says(THE_FIVE))[0])
     assert W.raised_and_ignored("Send Marcus the quarterly numbers") is False
     assert W.raised_and_ignored("Renew the car insurance before it lapses") is False
 
 
 def test_it_looks_back_over_days_not_hours(monkeypatch):
     get, seen = backend([])
-    monkeypatch.setattr(W.pb, "get", get)
+    monkeypatch.setattr(W.backend, "get", get)
     W.raised_and_ignored(GOAL)
     assert "created>=" in seen["filter"]
     assert W.NAG_WINDOW_DAYS >= 7, "same-day windows are exactly what failed"
 
 
 def test_no_goal_never_silences(monkeypatch):
-    monkeypatch.setattr(W.pb, "get", backend(says(THE_FIVE))[0])
+    monkeypatch.setattr(W.backend, "get", backend(says(THE_FIVE))[0])
     assert W.raised_and_ignored("") is False
     assert W.raised_and_ignored(None) is False
 
@@ -118,9 +118,9 @@ def test_a_backend_failure_lets_her_speak(monkeypatch):
     mute about real things exactly when the backend is unwell."""
     def boom(*a, **k):
         raise RuntimeError("pb down")
-    monkeypatch.setattr(W.pb, "get", boom)
+    monkeypatch.setattr(W.backend, "get", boom)
     assert W.raised_and_ignored(GOAL) is False
-    monkeypatch.setattr(W.pb, "get", lambda *a, **k: types.SimpleNamespace(
+    monkeypatch.setattr(W.backend, "get", lambda *a, **k: types.SimpleNamespace(
         ok=False, json=lambda: {}))
     assert W.raised_and_ignored(GOAL) is False
 
@@ -133,7 +133,7 @@ def test_the_gate_actually_consults_it(monkeypatch):
     fired — caught by mutation testing, where deleting the nag guard left the
     original version of this test green because already_raised was answering
     for it."""
-    monkeypatch.setattr(W.pb, "get", backend(says(THE_FIVE[:2], days_ago=3))[0])
+    monkeypatch.setattr(W.backend, "get", backend(says(THE_FIVE[:2], days_ago=3))[0])
     assert W.SPEAK_ONCE("Just confirming tomorrow at 7?", goal=GOAL, kind="clock") is False
 
 
@@ -144,7 +144,7 @@ def test_two_shared_words_is_the_floor_that_protects_other_subjects(monkeypatch)
     because the absolute floor still stood. That is worth knowing rather than
     hiding: on real data unrelated subjects share ZERO words with the goal, so
     the floor is what protects them and the ratio only sharpens the edge."""
-    monkeypatch.setattr(W.pb, "get", backend(says(THE_FIVE))[0])
+    monkeypatch.setattr(W.backend, "get", backend(says(THE_FIVE))[0])
     for unrelated in ("Send Marcus the quarterly numbers",
                       "Renew the car insurance before it lapses",
                       "Research noise cancelling headphones under 400 dollars"):
@@ -156,7 +156,7 @@ def test_two_shared_words_is_the_floor_that_protects_other_subjects(monkeypatch)
 
 
 def test_the_gate_still_lets_a_first_word_through(monkeypatch):
-    monkeypatch.setattr(W.pb, "get", backend([])[0])
+    monkeypatch.setattr(W.backend, "get", backend([])[0])
     assert W.SPEAK_ONCE("Heads up, the invoice is due Friday",
                         goal="Remind about the Friday invoice") is True
 
@@ -176,7 +176,7 @@ def test_a_blocking_question_is_never_nagging(monkeypatch):
     # THREE DAYS old, so the same-day guard cannot be the thing answering
     # here. If this passes it is because the nag limit stood aside for a
     # blocking question, which is the whole point.
-    monkeypatch.setattr(W.pb, "get", backend(
+    monkeypatch.setattr(W.backend, "get", backend(
         says(THE_FIVE, goal="Email Priya the invoice", days_ago=3))[0])
     assert W.SPEAK_ONCE("Quick question — who is Priya?",
                         goal="Email Priya the invoice", kind="ask") is True
@@ -184,7 +184,7 @@ def test_a_blocking_question_is_never_nagging(monkeypatch):
 
 def test_speech_she_started_is_still_limited(monkeypatch):
     """The half that must keep working. All five Cactus messages were clock."""
-    monkeypatch.setattr(W.pb, "get", backend(says(THE_FIVE[:2], days_ago=3))[0])
+    monkeypatch.setattr(W.backend, "get", backend(says(THE_FIVE[:2], days_ago=3))[0])
     assert W.SPEAK_ONCE("Just confirming tomorrow at 7?", goal=GOAL, kind="clock") is False
 
 
@@ -200,10 +200,10 @@ def test_a_fresh_overheard_plan_is_never_nagging(monkeypatch):
     # Pin waking hours so it passes identically at noon and in a 2 a.m. CI run.
     monkeypatch.setattr(W, "CLOCK_QUIET_START", 24)
     monkeypatch.setattr(W, "CLOCK_QUIET_END", 0)
-    monkeypatch.setattr(W.pb, "get", backend(says(THE_FIVE, days_ago=3))[0])
+    monkeypatch.setattr(W.backend, "get", backend(says(THE_FIVE, days_ago=3))[0])
     # The door's last gate is the reserved daily budget (Omi port 10b), a row
     # write; give it a store that accepts one.
-    monkeypatch.setattr(W.pb, "post", lambda *a, **k: types.SimpleNamespace(
+    monkeypatch.setattr(W.backend, "post", lambda *a, **k: types.SimpleNamespace(
         ok=True, status_code=200, json=lambda: {"id": "slot1"}))
     monkeypatch.setattr(W, "UNINVITED_SPENT_UNTIL", 0.0)
     assert W.SPEAK_ONCE("Caught your plan — dinner at Earls tomorrow at 7.",
@@ -226,11 +226,11 @@ def test_a_new_card_speaks_even_when_yesterdays_plan_rhymed_with_it(monkeypatch)
     """
     monkeypatch.setattr(W, "CLOCK_QUIET_START", 24)
     monkeypatch.setattr(W, "CLOCK_QUIET_END", 0)
-    monkeypatch.setattr(W.pb, "get", backend(says(
+    monkeypatch.setattr(W.backend, "get", backend(says(
         ["Caught your plan — dinner at Earls in West Van tomorrow."],
         goal="Book dinner for tomorrow at Earls in West Van",
         days_ago=0.1))[0])
-    monkeypatch.setattr(W.pb, "post", lambda *a, **k: types.SimpleNamespace(
+    monkeypatch.setattr(W.backend, "post", lambda *a, **k: types.SimpleNamespace(
         ok=True, status_code=200, json=lambda: {"id": "slot1"}))
     monkeypatch.setattr(W, "UNINVITED_SPENT_UNTIL", 0.0)
     assert W.SPEAK_ONCE("Ready to book Earls in West Van for tomorrow.",

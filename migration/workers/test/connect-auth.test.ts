@@ -42,7 +42,7 @@
  *   is carried VERBATIM, and one that was never sent is never invented.
  *
  *   THE SESSION THAT IS NOT A LOGIN. The cookie must be refused by
- *   src/pb/auth.ts `verifyToken`, must be scoped by Path to one link, must die
+ *   src/api/auth.ts `verifyToken`, must be scoped by Path to one link, must die
  *   at its stamped instant, and must not exist at all when
  *   ANTICIPY_AUTH_SECRET is unbound.
  *
@@ -64,7 +64,7 @@
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 import { FakeD1, asD1 } from "./fake-d1.ts";
-import { issueToken, verifyToken } from "../src/pb/auth.ts";
+import { issueToken, verifyToken } from "../src/api/auth.ts";
 import {
   CALLBACK_WINDOW_MS, LINK_TTL_MS, SESSION_COOKIE, connectPageView, tokenHandle,
   type ClaimOutcome, type ConnectLinkStore, type StoredLink, type ToolkitMeta,

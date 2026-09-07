@@ -7,7 +7,7 @@
  * driven as the phone and the extension drive them: a real Request, the real
  * handler, the real SQL, the real migration/d1/schema.sql (partial-unique
  * indexes included) behind test/fake-d1.ts, and a real HMAC-signed account
- * token from src/pb/auth.ts. Nothing here asserts that a constant exists; every
+ * token from src/api/auth.ts. Nothing here asserts that a constant exists; every
  * check is a status code, a body the iPhone decodes, or a row in the database.
  *
  * The wire half -- a real workerd, a real D1, a real sign-in -- is
@@ -29,7 +29,7 @@
  */
 import assert from "node:assert/strict";
 import { FakeD1, asD1 } from "./fake-d1.ts";
-import { issueToken } from "../src/pb/auth.ts";
+import { issueToken } from "../src/api/auth.ts";
 import { authClaim, phoneRemove, profileUpsert, type ServiceEnv } from "../src/routes/service.ts";
 import { agentKey, agentRegister, type AgentEnv } from "../src/routes/agent.ts";
 import { accountDelete } from "../src/routes/account_delete.ts";
@@ -225,7 +225,7 @@ await check("an anonymous upsert is refused", async () => {
 await check("AN UNREADABLE ACCOUNT IS 500, NEVER EMPTY SEEDS", async () => {
   const r = await rig({ email: "her@anticipy-test.invalid", phone: "+15550100001" });
   // The SECOND read of `owners` on this request: the first is the token
-  // verification in src/pb/auth.ts, which runs before the handler's own read.
+  // verification in src/api/auth.ts, which runs before the handler's own read.
   r.db.failNth(/SELECT \* FROM "owners"/, 2);
   const resp = await profileUpsert(post("/me/profile/upsert", r.token, { first_name: "Ada" }), r.env);
   assert.equal(resp.status, 500, "unknown state refuses; it is never a blank profile");

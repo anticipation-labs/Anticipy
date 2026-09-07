@@ -11,7 +11,7 @@ composition has drifted.
 SCHEMA — deliberately overnight/gold_dev.json's vocabulary wherever the two
 sets are asking the same question, so numbers stay comparable:
 
-  id            corpus-local stable id ("amb-0001"); overnight used PocketBase
+  id            corpus-local stable id ("amb-0001"); overnight used the backend
                 ids because its lines were real rows. These are written, not
                 overheard, so they get their own namespace.
   text          the words, exactly as a recognizer would hand them over.

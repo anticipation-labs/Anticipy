@@ -58,8 +58,8 @@ def run(jobs, events, voice="Montreal's 22 and clear today."):
             return Resp(events)
         return Resp()
 
-    W.pb.get = fake_get
-    W.pb.post = lambda url, **kw: posted.append(kw.get("json") or {}) or Resp()
+    W.backend.get = fake_get
+    W.backend.post = lambda url, **kw: posted.append(kw.get("json") or {}) or Resp()
     anticipy = types.SimpleNamespace(
         owner_id="X",
         notify_owner=lambda m, channel="sms": (sent.append(m), {"sid": "SM1"})[1],

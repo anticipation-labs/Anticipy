@@ -17,7 +17,7 @@ def test_offer_or_fallback_is_saved_once_without_nighttime_send(monkeypatch, ava
         return SimpleNamespace(status_code=200 if available else 503,
                                json=lambda: {"line": "Connect the account to read your brief: https://fixture.invalid/c/test"})
 
-    monkeypatch.setattr(W.pb, "post", post)
+    monkeypatch.setattr(W.backend, "post", post)
     monkeypatch.setattr(W, "delivered_stall_notice", lambda _: stored.get("note"))
     monkeypatch.setattr(W, "persist_stall_notice", lambda _, line: stored.setdefault("note", {"text": line}))
     monkeypatch.setattr(W, "sent_moments_ago", lambda _: False)

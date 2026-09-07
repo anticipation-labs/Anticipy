@@ -2,7 +2,7 @@
 
 STEP 1 of CAPTURE-ARCHITECTURE.md. The functions here are PURE (dicts in,
 decisions out) so the rules can be tested without a database, a network, or a
-model. `SegmentStore` is the only part that talks to PocketBase.
+model. `SegmentStore` is the only part that talks to the backend.
 
 The central idea: a conversation is not "however long a recognizer happened to
 live". It is a row that stays OPEN with a rolling `last_speech_at`. A dropped
@@ -22,7 +22,7 @@ import re
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from . import pb
+from . import backend
 
 # --- boundary parameters (CAPTURE-ARCHITECTURE.md) ------------------------
 CONTINUE_S = 45          # silence below this = same conversation, zero cost
@@ -93,7 +93,7 @@ _EPOCH_MS_MIN, _EPOCH_MS_MAX = _EPOCH_S_MIN * 1000, _EPOCH_S_MAX * 1000
 
 
 def parse_ts(value) -> Optional[datetime]:
-    """PocketBase, ISO8601 and epoch numbers, always tz-aware UTC.
+    """the backend, ISO8601 and epoch numbers, always tz-aware UTC.
 
     Epoch is handled because the alternative is worse than a wrong format: an
     unreadable capture time makes a turn UNPLACEABLE, and an unplaceable turn is
@@ -235,7 +235,7 @@ def segment_all(turns: list[dict]) -> list[list[dict]]:
 
     This exists so the one question that matters can actually be ASKED: "how
     many conversations was that?" Everything else in this module answers it one
-    turn at a time against PocketBase, which means the only way to check the
+    turn at a time against the backend, which means the only way to check the
     boundary rules was to run the whole system and look at a screenshot.
 
     THE LAW IT UPHOLDS: the answer depends on when things were SPOKEN and on
@@ -298,7 +298,7 @@ def segment_all(turns: list[dict]) -> list[list[dict]]:
 
 
 class SegmentStore:
-    """The thin PocketBase layer. Everything above is pure."""
+    """The thin the backend layer. Everything above is pure."""
 
     def __init__(self, backend_url: str, owner: str = "",
                  owner_ref: str = ""):
@@ -317,7 +317,7 @@ class SegmentStore:
             owner_filter = self._owner_filter()
             if owner_filter:
                 filt += f" && {owner_filter}"
-            r = pb.get(f"{self.base}/api/collections/segments/records",
+            r = backend.get(f"{self.base}/api/collections/segments/records",
                        params={"filter": filt, "sort": "-last_speech_at", "perPage": 1})
             items = r.json().get("items", []) if r.ok else []
             return items[0] if items else None
@@ -330,7 +330,7 @@ class SegmentStore:
             owner_filter = self._owner_filter()
             if owner_filter:
                 filt += f" && {owner_filter}"
-            r = pb.get(f"{self.base}/api/collections/segments/records",
+            r = backend.get(f"{self.base}/api/collections/segments/records",
                        params={"filter": filt, "sort": "-ended_at", "perPage": 1})
             items = r.json().get("items", []) if r.ok else []
             return items[0] if items else None
@@ -349,7 +349,7 @@ class SegmentStore:
         and flushes, so a backlog reaches the prompt out of order and the
         model reads a plan that was never said in that order.
 
-        The fetch still asks PocketBase for `-created`, because
+        The fetch still asks the backend for `-created`, because
         `capture_started_at` is EMPTY on every historical row and sorting
         server-side by it would bury them. A wider window is pulled and the
         order is settled here, where `capture_span`'s fallback to `created`
@@ -360,7 +360,7 @@ class SegmentStore:
             owner_filter = self._owner_filter()
             if owner_filter:
                 filt += f" && {owner_filter}"
-            r = pb.get(f"{self.base}/api/collections/events/records",
+            r = backend.get(f"{self.base}/api/collections/events/records",
                        params={"filter": filt,
                                "sort": "-created",
                                "perPage": max(limit * 4, limit)})
@@ -390,7 +390,7 @@ class SegmentStore:
             owner_filter = self._owner_filter()
             if owner_filter:
                 filt += f" && {owner_filter}"
-            r = pb.get(f"{self.base}/api/collections/events/records",
+            r = backend.get(f"{self.base}/api/collections/events/records",
                        params={"filter": filt, "sort": "-created",
                                "perPage": limit})
             items = r.json().get("items", []) if r.ok else []
@@ -412,7 +412,7 @@ class SegmentStore:
         the summary as thread context, so this call is never wasted — which is
         exactly why a SHADOW run must never make it."""
         try:
-            pb.patch(f"{self.base}/api/collections/segments/records/{segment['id']}",
+            backend.patch(f"{self.base}/api/collections/segments/records/{segment['id']}",
                      json={"summary": summary,
                            "entities": json.dumps([str(e) for e in entities][:40]),
                            "triaged_through_seq": int(through or 0),
@@ -431,7 +431,7 @@ class SegmentStore:
             }
             if self.owner_ref:
                 body["owner_ref"] = self.owner_ref
-            r = pb.post(f"{self.base}/api/collections/segments/records",
+            r = backend.post(f"{self.base}/api/collections/segments/records",
                         json=body)
             return r.json() if r.ok else None
         except Exception:
@@ -445,7 +445,7 @@ class SegmentStore:
             entities = set()
         entities |= proper_nouns(text)
         try:
-            pb.patch(f"{self.base}/api/collections/segments/records/{segment['id']}", json={
+            backend.patch(f"{self.base}/api/collections/segments/records/{segment['id']}", json={
                 "last_speech_at": iso(ended),
                 "turn_count": int(segment.get("turn_count") or 0) + 1,
                 "word_count": int(segment.get("word_count") or 0) + len(text.split()),
@@ -456,14 +456,14 @@ class SegmentStore:
 
     def close(self, segment: dict, ended: datetime) -> None:
         try:
-            pb.patch(f"{self.base}/api/collections/segments/records/{segment['id']}",
+            backend.patch(f"{self.base}/api/collections/segments/records/{segment['id']}",
                      json={"status": "closed", "ended_at": iso(ended)})
         except Exception:
             pass
 
     def stamp_event(self, event_id: str, segment_id: str) -> None:
         try:
-            pb.patch(f"{self.base}/api/collections/events/records/{event_id}",
+            backend.patch(f"{self.base}/api/collections/events/records/{event_id}",
                      json={"segment": segment_id})
         except Exception:
             pass

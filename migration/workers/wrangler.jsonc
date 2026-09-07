@@ -139,10 +139,10 @@
   ],
 
   // --------------------------------------------------------------------------
-  // Static assets — pb_public/, verbatim.
-  // Populate migration/workers/public/ from backend/pb_public/ at build time
-  // (`npm run stage:assets`, ARCHITECTURE.md §10) rather than committing a
-  // second copy of 1.3 MB of zips.
+  // Static assets — public/, committed here: the setup, privacy and Mac pages,
+  // site.css/theme.js, the extension zips and the Mac app zip. PocketBase used
+  // to serve the same files from backend/pb_public; that directory is gone and
+  // this is their only home (ARCHITECTURE.md §10).
   //
   // run_worker_first is FALSE for these paths: they need no auth and no
   // counting, so serving them from the edge without invoking the Worker is

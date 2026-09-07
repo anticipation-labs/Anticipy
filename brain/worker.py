@@ -1,6 +1,6 @@
 """Anticipy brain worker — the server-side mind loop.
 
-The phone posts raw transcript lines to PocketBase (`events`, kind
+The phone posts raw transcript lines to the backend (`events`, kind
 "transcript"). This worker is the one place they all flow through:
 each line -> Anticipy.hear() -> memory graph + triage + (held) job, then the
 decision and anything Anticipy wants to say are written back as events the
@@ -24,7 +24,7 @@ from datetime import datetime, timedelta, timezone
 import httpx
 import requests
 
-from . import pb
+from . import backend
 from . import research
 from . import server_work
 
@@ -142,7 +142,7 @@ def _latest_profile(owner_ref: str = "") -> dict | None:
     params = {"sort": "-updated", "perPage": 1}
     if ref:
         params["filter"] = _scoped_filter("", ref)
-    r = pb.get(
+    r = backend.get(
         f"{PB}/api/collections/owner_profile/records",
         params=params,
         timeout=10,
@@ -242,7 +242,7 @@ def fetch_owner_phone(owner_ref: str = "") -> str | None:
     if not ref:
         return None
     try:
-        r = pb.get(
+        r = backend.get(
             f"{PB}/api/collections/owner_profile/records",
             params={"filter": _scoped_filter("", ref),
                     "sort": "-updated", "perPage": 1},
@@ -266,7 +266,7 @@ def fetch_owner_phone(owner_ref: str = "") -> str | None:
     # This fallback is ACCOUNT-BOUND: it reads the phone belonging to THIS
     # owner_ref only, so it cannot resurrect the cross-account leak.
     try:
-        r = pb.get(f"{PB}/api/collections/owners/records/{ref}", timeout=10)
+        r = backend.get(f"{PB}/api/collections/owners/records/{ref}", timeout=10)
         if getattr(r, "ok", False):
             phone = str((r.json() or {}).get("phone") or "").strip()
             if phone:
@@ -409,12 +409,12 @@ def owner_wants_evidence_photos(owner_ref: str = "") -> bool:
     with a picture of a page the owner was logged into — their booking, their
     address, whatever the confirmation page showed. Twilio fetches MediaUrl
     from its own infrastructure with no credential of ours. The window is
-    fifteen minutes and five fetches (backend/pb_hooks/evidence.pb.js), and
+    fifteen minutes and five fetches (migration/workers/src/assets.ts), and
     Twilio's own copy and the handset's copy last forever. design/LOCAL-FIRST
     rule 3 does not obviously permit that, and this code deliberately does not
     settle the question on the owner's behalf.
 
-    Reading a stored boolean is not a rule reading anybody's words: PocketBase
+    Reading a stored boolean is not a rule reading anybody's words: the backend
     serialises a bool field as JSON true/false, and the two string forms below
     are the same value arriving over a form post. Nothing here interprets a
     sentence.
@@ -423,7 +423,7 @@ def owner_wants_evidence_photos(owner_ref: str = "") -> bool:
         profile = _latest_profile(owner_ref)
         answer = profile.get(PHOTO_SETTING) if profile else None
         if answer is None and owner_ref:
-            r = pb.get(f"{PB}/api/collections/owners/records/{owner_ref}",
+            r = backend.get(f"{PB}/api/collections/owners/records/{owner_ref}",
                        timeout=10)
             if getattr(r, "ok", False):
                 answer = (r.json() or {}).get(PHOTO_SETTING)
@@ -442,7 +442,7 @@ def _has_spoken_to_owner(owner_ref: str = "") -> bool | None:
     for an owner who has none — a welcomed number returns before this.
     """
     try:
-        r = pb.get(
+        r = backend.get(
             f"{PB}/api/collections/events/records",
             params={"perPage": 1, "fields": "id",
                     "filter": _scoped_filter('kind="anticipy_says"', owner_ref)},
@@ -961,16 +961,16 @@ def reachable_by_twilio(url: str) -> str:
 def webhook_target() -> tuple[str, str]:
     """THE one URL the owner's number must point at, or ("", why not).
 
-    THE SINGLE CORRECT VALUE is the public https origin of the PocketBase
+    THE SINGLE CORRECT VALUE is the public https origin of the the backend
     service plus /sms/inbound — that service is the one serving the route
-    (backend/pb_hooks/sms.pb.js), and the hook authenticates whatever URL
+    (migration/workers/src/routes/sms.ts), and the hook authenticates whatever URL
     Twilio actually requested. ANTICIPY_PB *is* that origin: it is the address
     this process already uses to read and write the database. So the value is
     DERIVED from something already proven to work, not configured a second
     time in a second service where it can drift.
 
     Drift is not hypothetical. ANTICIPY_TWILIO_WEBHOOK_URL had to be identical
-    on the worker (which binds the number) and on PocketBase (which validated
+    on the worker (which binds the number) and on the backend (which validated
     against it); on 2026-08-12→15 they disagreed and every inbound text 403ed
     for three days. The hook no longer needs the variable at all. The worker
     keeps honouring it as a PIN for the one case derivation cannot cover — a
@@ -1074,7 +1074,7 @@ def post_event(kind: str, text: str, decision: str = "", goal: str = "",
     durable_id = str(external_event_id or "").strip()
     if durable_id:
         body["external_event_id"] = durable_id
-    response = pb.post(f"{PB}/api/collections/events/records", json=body, timeout=10)
+    response = backend.post(f"{PB}/api/collections/events/records", json=body, timeout=10)
     response.raise_for_status()
 
 
@@ -1104,7 +1104,7 @@ AGENT_FRESH_SECONDS = 90  # the extension heartbeats far more often than this
 # job delivery is deliberately the exception: its app result is primary and is
 # persisted before the optional SMS attempt, whose outcome is recorded in a
 # separate notification_status event.
-# post_event ends in raise_for_status(), so a PocketBase write outage — a
+# post_event ends in raise_for_status(), so a the backend write outage — a
 # restart, or the nightly backup holding the write lock while reads keep
 # succeeding — means the text went out and nothing recorded it. Two seconds
 # later the same job is re-read, every durable guard says "never mentioned",
@@ -1172,7 +1172,7 @@ STUCK_ASKS_CEILING = 2
 # parked ask), fail-OPEN to 0 on any non-ok response or exception, and looking
 # for an "uninvited" tag in `params` — a field the events schema does not
 # carry (1700000000_anticipy.js), which nothing in the tree ever wrote. So it
-# counted parked asks alone: a flaky PocketBase removed the cap outright, two
+# counted parked asks alone: a flaky the backend removed the cap outright, two
 # workers for one owner both read the same count and both sent, a send whose
 # record failed was invisible to the next count, and the clock, the
 # overheard-plan receipt and the meeting digest never touched it at all — up
@@ -1216,7 +1216,7 @@ def browser_reachable(owner_ref: str = "") -> bool:
     happens, forever, with no word to him. Answering by text away from the
     desk is the normal case, not the edge case."""
     try:
-        r = pb.get(f"{PB}/api/collections/agents/records",
+        r = backend.get(f"{PB}/api/collections/agents/records",
                    params={"filter": _scoped_filter("paired=true", owner_ref), "sort": "-updated",
                            "perPage": 1}, timeout=10)
         if not r.ok:
@@ -1234,7 +1234,7 @@ def browser_reachable(owner_ref: str = "") -> bool:
 def task_access_offer(anticipy, job: dict) -> str | None:
     """Ask the API about the stored task; it owns the real account catalog."""
     try:
-        reply = pb.post(f"{anticipy.backend_url}/worker/task-access", json={
+        reply = backend.post(f"{anticipy.backend_url}/worker/task-access", json={
             "owner_ref": anticipy.owner_ref, "job_id": job["id"],
         }, timeout=45)
         if reply.status_code == 200:
@@ -1407,7 +1407,7 @@ def report_unclaimed_device_work(anticipy) -> None:
         # that selector on purpose: a page of ten filled by api rows the
         # selector discards is the device lane going quiet by another route.
         # DELIBERATELY NOT `lane~"device_calendar"`: no filter in this repo
-        # uses that operator against the live PocketBase, and a filter the
+        # uses that operator against the live the backend, and a filter the
         # server rejects comes back `ok=False`, which the line below reads as
         # "nothing to report" — trading a narrow silence for a total one.
         filt = (f'(status="queued" || status="running")'
@@ -1466,7 +1466,7 @@ def release_stranded_research(anticipy,
     if scope:
         filt = f"({filt}) && {scope}"
     try:
-        r = pb.get(f"{base}/api/collections/jobs/records",
+        r = backend.get(f"{base}/api/collections/jobs/records",
                    params={"filter": filt, "perPage": 20, "sort": "updated"},
                    timeout=10)
         if not getattr(r, "ok", False):
@@ -1498,7 +1498,7 @@ def release_stranded_research(anticipy,
             body["params"] = json.dumps(put_in_params(params, workflow))
             headers = {"X-Anticipy-Lease": job.get("lease_token") or ""}
         try:
-            back = pb.patch(f"{base}/api/collections/jobs/records/{job['id']}",
+            back = backend.patch(f"{base}/api/collections/jobs/records/{job['id']}",
                             json=body, headers=headers, timeout=10)
         except Exception as e:
             print(f"research sweep: {job['id']} could not be handed back: {e}")
@@ -1563,7 +1563,7 @@ def run_preflight_research(anticipy, learner=None) -> None:
         scope = owner_filter(anticipy)
         if scope:
             filt = f"({filt}) && {scope}"
-        r = pb.get(f"{base}/api/collections/jobs/records",
+        r = backend.get(f"{base}/api/collections/jobs/records",
                    params={"filter": filt, "perPage": 5, "sort": "created"},
                    timeout=10)
         if not getattr(r, "ok", False):
@@ -1623,7 +1623,7 @@ def run_preflight_research(anticipy, learner=None) -> None:
                                "browser unresearched rather than parking the "
                                "errand")
             params["_research_gate"] = gate
-            back = pb.patch(f"{base}/api/collections/jobs/records/{job['id']}",
+            back = backend.patch(f"{base}/api/collections/jobs/records/{job['id']}",
                             json={"lane": "", "params": json.dumps(params)},
                             timeout=10)
             if getattr(back, "ok", False):
@@ -1659,7 +1659,7 @@ def run_research_jobs(anticipy, runner=None) -> None:
         scope = owner_filter(anticipy)
         if scope:
             filt = f"({filt}) && {scope}"
-        r = pb.get(f"{base}/api/collections/jobs/records",
+        r = backend.get(f"{base}/api/collections/jobs/records",
                    params={"filter": filt, "perPage": 5, "sort": "created"},
                    timeout=10)
         if not r.ok:
@@ -1704,13 +1704,13 @@ def run_research_jobs(anticipy, runner=None) -> None:
                 params = put_in_params(params, workflow)
                 claim_body.update(workflow.job_fields())
                 claim_body["params"] = json.dumps(params)
-            claim = pb.patch(
+            claim = backend.patch(
                 f"{base}/api/collections/jobs/records/{job['id']}",
                 json=claim_body,
                 timeout=10)
             if not getattr(claim, "ok", False):
                 continue
-            check = pb.get(f"{base}/api/collections/jobs/records/{job['id']}",
+            check = backend.get(f"{base}/api/collections/jobs/records/{job['id']}",
                            timeout=10)
             if not getattr(check, "ok", False):
                 continue
@@ -1769,7 +1769,7 @@ def run_research_jobs(anticipy, runner=None) -> None:
                     continue
             else:
                 finish_body["params"] = json.dumps(params)
-            finished = pb.patch(
+            finished = backend.patch(
                 f"{base}/api/collections/jobs/records/{job['id']}",
                 json=finish_body, headers=finish_headers, timeout=10)
             if not getattr(finished, "ok", False):
@@ -1870,7 +1870,7 @@ def release_stranded_api(anticipy,
     if scope:
         filt = f"({filt}) && {scope}"
     try:
-        r = pb.get(f"{base}/api/collections/jobs/records",
+        r = backend.get(f"{base}/api/collections/jobs/records",
                    params={"filter": filt, "perPage": 20, "sort": "updated"},
                    timeout=10)
         if not getattr(r, "ok", False):
@@ -1924,7 +1924,7 @@ def release_stranded_api(anticipy,
                                "through before anything came back — please "
                                "check the app before I try again.")}
         try:
-            back = pb.patch(f"{base}/api/collections/jobs/records/{job['id']}",
+            back = backend.patch(f"{base}/api/collections/jobs/records/{job['id']}",
                             json=body, headers=headers, timeout=10)
         except Exception as e:
             print(f"api sweep: {job['id']} could not be handed back: {e}")
@@ -1958,7 +1958,7 @@ def _release_api_claim(anticipy, job: dict, params: dict, workflow,
         body["params"] = json.dumps(put_in_params(params, released))
         headers = {"X-Anticipy-Lease": lease_token}
     try:
-        back = pb.patch(f"{anticipy.backend_url}/api/collections/jobs/records/{job['id']}",
+        back = backend.patch(f"{anticipy.backend_url}/api/collections/jobs/records/{job['id']}",
                         json=body, headers=headers, timeout=10)
         if not getattr(back, "ok", False):
             print(f"api hand: {job['id']} release refused "
@@ -1982,7 +1982,7 @@ def run_api_jobs(anticipy, poster=None) -> None:
         scope = owner_filter(anticipy)
         if scope:
             filt = f"({filt}) && {scope}"
-        r = pb.get(f"{base}/api/collections/jobs/records",
+        r = backend.get(f"{base}/api/collections/jobs/records",
                    params={"filter": filt, "perPage": 5, "sort": "created"},
                    timeout=10)
         if not getattr(r, "ok", False):
@@ -1990,7 +1990,7 @@ def run_api_jobs(anticipy, poster=None) -> None:
         jobs = r.json().get("items", [])
         if not jobs:
             return
-        post = poster or pb.post
+        post = poster or backend.post
         for job in jobs:
             note = _api_note(job)
             if note.get("hand") != "api" or note.get("lane") != LANE_API:
@@ -2022,12 +2022,12 @@ def run_api_jobs(anticipy, poster=None) -> None:
                 params = put_in_params(params, workflow)
                 claim_body.update(workflow.job_fields())
                 claim_body["params"] = json.dumps(params)
-            claim = pb.patch(
+            claim = backend.patch(
                 f"{base}/api/collections/jobs/records/{job['id']}",
                 json=claim_body, timeout=10)
             if not getattr(claim, "ok", False):
                 continue
-            check = pb.get(f"{base}/api/collections/jobs/records/{job['id']}",
+            check = backend.get(f"{base}/api/collections/jobs/records/{job['id']}",
                            timeout=10)
             if not getattr(check, "ok", False):
                 continue
@@ -2118,7 +2118,7 @@ def _finished_jobs(filt: str, *, base: str | None = None) -> list[dict]:
     rows: list[dict] = []
     page = 1
     while page <= FINISHED_MAX_PAGES:
-        r = pb.get(f"{base or PB}/api/collections/jobs/records",
+        r = backend.get(f"{base or PB}/api/collections/jobs/records",
                    params={"filter": filt, "perPage": FINISHED_PER_PAGE,
                            "page": page, "sort": "updated"},
                    timeout=10)
@@ -2181,7 +2181,7 @@ def _event_by_external_id(external_event_id: str, owner_ref: str = "",
     if not durable_id:
         return None
     filt = f'external_event_id="{_escaped(durable_id)}"'
-    r = pb.get(
+    r = backend.get(
         f"{PB}/api/collections/events/records",
         params={"filter": _scoped_filter(filt, owner_ref),
                 "perPage": 10, "sort": "-created"},
@@ -2255,7 +2255,7 @@ def persist_stall_notice(job: dict, text: str) -> dict | None:
 def delivered_job_result(job: dict) -> dict | None:
     """Return the result row for this exact job, never merely the same goal.
 
-    New rows are keyed by PocketBase's globally unique job id. A narrow
+    New rows are keyed by the backend's globally unique job id. A narrow
     timestamp-bounded fallback recognizes rows written by the immediately
     preceding release, which did not yet store that id. The fallback is never
     used without a job timestamp and never accepts an older answer, so a later
@@ -2280,7 +2280,7 @@ def delivered_job_result(job: dict) -> dict | None:
         return None
     filt = (f'kind="anticipy_says" && decision="done"'
             f' && goal="{_escaped(goal)}" && created>="{_escaped(updated)}"')
-    r = pb.get(
+    r = backend.get(
         f"{PB}/api/collections/events/records",
         params={"filter": _scoped_filter(filt, owner_ref),
                 "perPage": 200, "sort": "-created"}, timeout=10)
@@ -2607,8 +2607,8 @@ def claim_stall_notification_attempt(job: dict) -> bool | None:
 #
 # Now every uninvited text takes ONE slot row first: kind="uninvited_slot",
 # external_event_id="uninvited:{owner}:{owner-local day}:{n}", n in 1..3. The
-# partial unique index on external_event_id (backend/pb_migrations/
-# 1700000028_event_sources.js, WHERE external_event_id != '') is the
+# partial unique index on external_event_id (migration/d1/schema.sql
+# (the partial unique index), WHERE external_event_id != '') is the
 # compare-and-set: two processes racing for slot n get one 2xx and one 400,
 # and only the process whose CREATE got an unambiguous 2xx may touch Twilio —
 # the rule claim_notification_attempt above states for done-texts. The slot
@@ -2667,7 +2667,7 @@ def _uninvited_day(now: float | None = None) -> str:
 
 
 def _uninvited_since_utc(now: float | None = None) -> str:
-    """Owner-local midnight as the UTC string PocketBase compares `created` to."""
+    """Owner-local midnight as the UTC string the backend compares `created` to."""
     midnight = _uninvited_local(now).replace(hour=0, minute=0, second=0,
                                              microsecond=0)
     return midnight.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
@@ -2688,7 +2688,7 @@ def _uninvited_slots_today(owner_ref: str, now: float | None = None) -> list[dic
     an unreadable budget is not an empty one."""
     filt = (f'kind="uninvited_slot" && '
             f'created>="{_uninvited_since_utc(now)}"')
-    r = pb.get(f"{PB}/api/collections/events/records",
+    r = backend.get(f"{PB}/api/collections/events/records",
                params={"filter": _scoped_filter(filt, owner_ref),
                        "perPage": 10, "sort": "created"}, timeout=10)
     if not getattr(r, "ok", False):
@@ -2767,7 +2767,7 @@ def reserve_uninvited_text(owner_ref: str, door: str,
             # such column, so stamping it made every slot create a 400 and the
             # uninvited budget unprovable rather than merely spent.
             try:
-                r = pb.post(f"{PB}/api/collections/events/records",
+                r = backend.post(f"{PB}/api/collections/events/records",
                             json=body, timeout=10)
                 if getattr(r, "ok", False) and (r.json() or {}).get("id"):
                     return slot
@@ -3076,7 +3076,7 @@ def is_echo_of_her(line: str, minutes: float = 30.0, owner_ref: str = "",
             cutoff, timezone.utc).strftime("%Y-%m-%d %H:%M:%S.%fZ")
         filt = (f'(kind="anticipy_says" || kind="anticipy_text")'
                 f' && created>="{since}" && created<="{until}"')
-        r = pb.get(f"{PB}/api/collections/events/records",
+        r = backend.get(f"{PB}/api/collections/events/records",
                    params={"filter": _scoped_filter(filt, owner_ref),
                            "perPage": 40, "sort": "-created"}, timeout=10)
         if not r.ok:
@@ -3156,7 +3156,7 @@ def asked_about_recently(goal: str, minutes: float = 45.0,
                  - timedelta(minutes=minutes)).strftime("%Y-%m-%d %H:%M:%S")
         filt = (f'kind="anticipy_says" && decision="needs_user"'
                 f' && created>="{since}"')
-        r = pb.get(f"{PB}/api/collections/events/records",
+        r = backend.get(f"{PB}/api/collections/events/records",
                    params={"filter": _scoped_filter(filt, owner_ref),
                            "perPage": 50, "sort": "-created"}, timeout=10)
         if not r.ok:
@@ -3182,7 +3182,7 @@ def asks_for_goal(goal: str, owner_ref: str = "", within_hours: float = 24.0) ->
         since = (datetime.now(timezone.utc)
                  - timedelta(hours=within_hours)).strftime("%Y-%m-%d %H:%M:%S")
         filt = f'kind="anticipy_says" && decision="needs_user" && created>="{since}"'
-        r = pb.get(f"{PB}/api/collections/events/records",
+        r = backend.get(f"{PB}/api/collections/events/records",
                    params={"filter": _scoped_filter(filt, owner_ref),
                            "perPage": 50, "sort": "-created"}, timeout=10)
         if not getattr(r, "ok", False):
@@ -3213,7 +3213,7 @@ def need_already_asked(goal: str, blocker: str, within_hours: float = 24.0,
         since = (datetime.now(timezone.utc)
                  - timedelta(hours=within_hours)).strftime("%Y-%m-%d %H:%M:%S")
         filt = f'kind="anticipy_says" && created>="{since}"'
-        r = pb.get(f"{PB}/api/collections/events/records",
+        r = backend.get(f"{PB}/api/collections/events/records",
                    params={"filter": _scoped_filter(filt, owner_ref),
                            "perPage": 100, "sort": "-created"}, timeout=10)
         if not r.ok:
@@ -3271,7 +3271,7 @@ def already_raised(goal: str, text: str = "", within_hours: float = 24.0,
             filt += ' && (decision="act" || decision="clock")'
         elif decision:
             filt += f' && decision="{decision}"'
-        r = pb.get(f"{PB}/api/collections/events/records",
+        r = backend.get(f"{PB}/api/collections/events/records",
                    params={"filter": _scoped_filter(filt, owner_ref),
                            "perPage": 100, "sort": "-created"},
                    timeout=10)
@@ -3319,7 +3319,7 @@ def already_said(text: str, within_hours: float = 24.0, overlap: float = 0.6,
         since = (datetime.now(timezone.utc)
                  - timedelta(hours=within_hours)).strftime("%Y-%m-%d %H:%M:%S")
         filt = f'kind="anticipy_says" && created>="{since}"'
-        r = pb.get(f"{PB}/api/collections/events/records",
+        r = backend.get(f"{PB}/api/collections/events/records",
                    params={"filter": _scoped_filter(filt, owner_ref),
                            "perPage": 100, "sort": "-created"}, timeout=10)
         if not r.ok:
@@ -3384,7 +3384,7 @@ def raised_and_ignored(goal: str, text: str = "", owner_ref: str = "") -> bool:
         since = (datetime.now(timezone.utc)
                  - timedelta(days=NAG_WINDOW_DAYS)).strftime("%Y-%m-%d %H:%M:%S")
         filt = f'kind="anticipy_says" && created>="{since}"'
-        r = pb.get(f"{PB}/api/collections/events/records",
+        r = backend.get(f"{PB}/api/collections/events/records",
                    params={"filter": _scoped_filter(filt, owner_ref),
                            "perPage": 200, "sort": "-created"}, timeout=10)
         if not r.ok:
@@ -3952,7 +3952,7 @@ CLOCK_SKEW_MAX_S = 6 * 3600
 
 
 def _ts(value) -> float | None:
-    """PocketBase and the app both hand us ISO-8601; neither is guaranteed."""
+    """the backend and the app both hand us ISO-8601; neither is guaranteed."""
     if not isinstance(value, str) or not value.strip():
         return None
     text = value.strip().replace(" ", "T")
@@ -3971,7 +3971,7 @@ def capture_key(ev: dict) -> float:
     """When it was SAID, falling back to when it arrived.
 
     The phone buffers — offline, backgrounded, no signal, a call holding the
-    mic — and then flushes a lump. Ordering by PocketBase's `created` orders
+    mic — and then flushes a lump. Ordering by the backend's `created` orders
     by the moment the network delivered the row, so a flushed backlog reaches
     the brain shuffled, and a plan reconstructed from shuffled turns is a
     different plan. Omi ships this exact bug (their #6551) and fixed it by
@@ -4003,7 +4003,7 @@ def resolve_owner_ref(legacy_owner: str = "") -> str:
         return ""
     try:
         escaped = legacy_owner.replace('"', '\\"')
-        r = pb.get(f"{PB}/api/collections/owners/records",
+        r = backend.get(f"{PB}/api/collections/owners/records",
                    params={"filter": f'legacy_uuid="{escaped}"',
                            "perPage": 2}, timeout=10)
         items = r.json().get("items", []) if r.ok else []
@@ -4036,7 +4036,7 @@ def fetch_unprocessed(kind: str = "transcript", owner_ref: str = "") -> list[dic
         # Fail closed. The former unscoped poll could hear every person's
         # transcript in the shared database as one owner's life.
         return []
-    r = pb.get(
+    r = backend.get(
         f"{PB}/api/collections/events/records",
         params={"filter": (f'kind="{kind}" && decision="" '
                            f'&& owner_ref="{owner_ref}"'),
@@ -4045,7 +4045,7 @@ def fetch_unprocessed(kind: str = "transcript", owner_ref: str = "") -> list[dic
     )
     r.raise_for_status()
     items = r.json().get("items", [])
-    # Sorted here rather than by PocketBase: `spoken_at` is absent on rows
+    # Sorted here rather than by the backend: `spoken_at` is absent on rows
     # from every build before this one, and an empty string sorts to one end
     # of a server-side sort — which would silently bury exactly the oldest
     # lines rather than ordering them.
@@ -4073,7 +4073,7 @@ def link_candidates(kind: str = "transcript", owner_ref: str = "") -> list[tuple
     down would shift every number after the gap and mis-link silently.
     """
     try:
-        r = pb.get(
+        r = backend.get(
             f"{PB}/api/collections/events/records",
             params={"filter": _scoped_filter(f'kind="{kind}"', owner_ref),
                     "perPage": LINK_WINDOW + 8,
@@ -4114,7 +4114,7 @@ def record_link(event_id: str, parent_id: str) -> None:
     nothing reads it yet, and a failed PATCH here must never cost the line
     itself — the decision has already been acted on by this point."""
     try:
-        pb.patch(f"{PB}/api/collections/events/records/{event_id}",
+        backend.patch(f"{PB}/api/collections/events/records/{event_id}",
                  json={"parent_line": parent_id}, timeout=10)
     except Exception as e:
         print(f"link: {event_id} -> {parent_id} failed: {e}")
@@ -4152,7 +4152,7 @@ def stamp_for(decision: str, said) -> str:
     return "ask" if text.strip() else "ignore"
 
 
-# WHETHER THE BACKEND STORES THE MEASUREMENT. PocketBase drops an unknown
+# WHETHER THE BACKEND STORES THE MEASUREMENT. the backend drops an unknown
 # field silently; the Cloudflare Worker (migration/workers/src/pb/records.ts,
 # `unknown_field`) answers 400 — and until migration/d1/schema.sql and
 # pb/schema.ts carry heard_ms/heard_calls, that 400 would have left every
@@ -4207,10 +4207,10 @@ def mark_processed(event_id: str, decision: str, addressee: str = "",
             if heard_calls is not None:
                 measured["heard_calls"] = heard_calls
         url = f"{PB}/api/collections/events/records/{event_id}"
-        r = pb.patch(url, json={**body, **measured}, timeout=10)
+        r = backend.patch(url, json={**body, **measured}, timeout=10)
         if measured and not getattr(r, "ok", False):
             # THE DECISION LANDS, WHATEVER THE MEASUREMENT DID. Until
-            # 2026-09-05 this retried only on a 400 — the answer PocketBase
+            # 2026-09-05 this retried only on a 400 — the answer the backend
             # and the Worker give for an unknown field. Live on Cloudflare the
             # Worker's column map knew heard_ms/heard_calls while D1 did not,
             # the UPDATE threw, and the answer was a 500 (Cloudflare 1101):
@@ -4232,7 +4232,7 @@ def mark_processed(event_id: str, decision: str, addressee: str = "",
             else:
                 print(f"heard: the measured stamp answered HTTP {status}; "
                       "landing the decision without it this time")
-            r = pb.patch(url, json=body, timeout=10)
+            r = backend.patch(url, json=body, timeout=10)
         return bool(getattr(r, "ok", False))
     except Exception:
         return False
@@ -4254,7 +4254,7 @@ def connection_command(ev: dict, owner_ref: str) -> str:
     if not os.environ.get("ANTICIPY_SERVICE_TOKEN"):
         return "not_for_us"
     try:
-        response = pb.post(f"{PB}/worker/connection-command", json={
+        response = backend.post(f"{PB}/worker/connection-command", json={
             "event_id": ev["id"], "owner_ref": owner_ref,
         }, timeout=120)
         # Compatibility while the new API is rolling out. No connection
@@ -4312,7 +4312,7 @@ def handle_inbound(ev: dict, convo, anticipy) -> str:
     # them with the owner's private pending list.
     #
     # App: the row could only exist if a signed-in account created it --
-    # backend/pb_hooks/guard.pb.js:159 accepts a POST to `events` only when
+    # migration/workers/src/policy/guard.ts accepts a POST to `events` only when
     # `owner_ref === authId`, so an account cannot write a row stamped with
     # someone else's owner_ref. With fetch_unprocessed()'s owner scoping, the
     # row IS the proof of who typed it. Demanding same_phone() here as well
@@ -4405,7 +4405,7 @@ def release_stranded_claims(owner_ref: str = "", older_than_minutes: int = 10) -
     cutoff = (datetime.now(timezone.utc)
               - timedelta(minutes=older_than_minutes)).strftime("%Y-%m-%d %H:%M:%S")
     try:
-        r = pb.get(
+        r = backend.get(
             f"{PB}/api/collections/events/records",
             params={"filter": (f'decision="processing" && owner_ref="{owner_ref}" '
                                f'&& updated<="{cutoff}"'),
@@ -4417,7 +4417,7 @@ def release_stranded_claims(owner_ref: str = "", older_than_minutes: int = 10) -
     freed = 0
     for item in items:
         try:
-            back = pb.patch(
+            back = backend.patch(
                 f"{PB}/api/collections/events/records/{item['id']}",
                 json={"decision": ""}, timeout=10)
             if getattr(back, "ok", False):
@@ -4460,7 +4460,7 @@ def release_stranded_claims(owner_ref: str = "", older_than_minutes: int = 10) -
 # identically forever, so leaving it claimed would retry it every ten minutes
 # for the life of the account and hold the head of the queue while it did.
 _UNREACHABLE = (
-    requests.exceptions.RequestException,   # PocketBase and Twilio (requests)
+    requests.exceptions.RequestException,   # the backend and Twilio (requests)
     httpx.HTTPError,                        # the model (httpx): status, timeout, transport
     ConnectionError,
     TimeoutError,
@@ -4527,7 +4527,7 @@ def report_deafness(anticipy) -> None:
 
     Deduped the way report_stalled_work is: the durable record first, so a
     redeploy mid-outage does not re-announce it, and the process-local key as
-    well, so a PocketBase write outage cannot make every pass believe nothing
+    well, so a the backend write outage cannot make every pass believe nothing
     was said. The dedupe key is a fixed GOAL string, not the sentence:
     already_raised falls back to comparing message text when the goal is
     empty, and _content_words("") is empty, so an empty goal would make the
@@ -4677,7 +4677,7 @@ def publish_worker_status(banner: str, owner_ref: str = "",
         existing = _event_by_external_id(durable_id, ref, owner_id,
                                          kind=WORKER_STATUS_KIND)
         if existing and existing.get("id"):
-            r = pb.patch(
+            r = backend.patch(
                 f"{PB}/api/collections/events/records/{existing['id']}",
                 json={"text": line}, timeout=10)
             if not getattr(r, "ok", False):
@@ -4768,7 +4768,7 @@ def ask_about_stuck_jobs(anticipy, convo) -> None:
                 continue
             # Both guards above end at the same durable record, and that
             # record is written AFTER the text goes out. When the write fails
-            # — a PocketBase restart, the nightly backup holding the write
+            # — a the backend restart, the nightly backup holding the write
             # lock — the text has been sent and nothing knows it, so two
             # seconds later this reads "never asked" and asks again. This one
             # asks the process what it actually sent, so an unrecordable
@@ -5361,7 +5361,7 @@ def main() -> None:
                       f" [{getattr(out['decision'], 'reason', '') or '-'}]")
 
             # THE one answer path. An owner answers a question by text (Twilio
-            # webhook -> pb_hooks -> events) or by typing into the app (the app
+            # webhook -> the Worker -> events) or by typing into the app (the app
             # writes the row itself), and both arrive at the single `on_reply`
             # inside handle_inbound().
             #

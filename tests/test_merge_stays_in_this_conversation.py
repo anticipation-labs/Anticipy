@@ -30,7 +30,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from brain import pb  # noqa: E402
+from brain import backend  # noqa: E402
 from brain.anticipy_core import (Anticipy, LINEAGE_AMEND_WINDOW,  # noqa: E402
                                  OPEN_PLAN_WINDOW)
 
@@ -41,7 +41,7 @@ PHARMACY = "Look up what time the pharmacy on Broadway closes tonight"
 
 
 def _stamp(seconds_ago: float) -> str:
-    """PocketBase's own format, which is what _last_touched parses."""
+    """the backend's own format, which is what _last_touched parses."""
     when = dt.datetime.now(dt.timezone.utc) - dt.timedelta(seconds=seconds_ago)
     return when.strftime("%Y-%m-%d %H:%M:%S") + ".000Z"
 
@@ -110,10 +110,10 @@ def _card(lineage, age_seconds):
 
 
 def _anticipy(monkeypatch, rig, lineage):
-    monkeypatch.setattr(pb, "get", rig.get)
-    monkeypatch.setattr(pb, "post", lambda url, json=None, timeout=None, **k:
+    monkeypatch.setattr(backend, "get", rig.get)
+    monkeypatch.setattr(backend, "post", lambda url, json=None, timeout=None, **k:
                         rig.post(url, json=json, timeout=timeout, **k))
-    monkeypatch.setattr(pb, "patch", lambda url, json=None, timeout=None, **k:
+    monkeypatch.setattr(backend, "patch", lambda url, json=None, timeout=None, **k:
                         rig.patch(url, json=json, timeout=timeout, **k))
     a = Anticipy(owner_id="t")
     a._lineage_key = lineage

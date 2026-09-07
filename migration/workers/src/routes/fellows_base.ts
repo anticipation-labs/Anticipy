@@ -11,7 +11,7 @@
  * did, and are flagged per route.
  */
 import { sha256Hex as _sha256Hex } from "../llm.ts";
-import { newRecordId, pbNow } from "../pb/wire.ts";
+import { newRecordId, pbNow } from "../api/wire.ts";
 
 export interface FellowsEnv {
   DB: D1Database;

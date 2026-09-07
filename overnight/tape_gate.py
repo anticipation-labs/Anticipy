@@ -64,7 +64,7 @@ So this gate does not claim to detect tape. It makes silence expensive instead,
 by requiring THREE INDEPENDENT BOOKS TO AGREE:
 
   1. THE TREE      — `TAPE:` markers in the shipped organs (brain/, extension/,
-                     app/, backend/, proof/, firmware/).
+                     app/, proof/, firmware/).
   2. THE REGISTRY  — KNOWN_TAPE below, which carries a real expiry PREDICATE
                      per entry, not a promise to edit a gate later.
   3. THE LEDGER    — the "Known standing tape" section of HARNESS-LAWS.md.
@@ -233,7 +233,7 @@ AUDIT_DOC = os.path.join("research", "2026-08-24-law1-audit.md")
 # browser download cache, not an organ; the browser arm's code is extension/.
 # A directory in this tuple that leg 1 can read nothing out of is now RED, and
 # that is what removed it: the header printed a scope the leg did not have.
-SHIPPED_DIRS = ("brain", "extension", "app", "backend", "proof", "firmware")
+SHIPPED_DIRS = ("brain", "extension", "app", "proof", "firmware")
 
 # Files leg 1 READS for markers. Anything a `TAPE:` comment could live in and
 # still ship. `.c` and `.s` are here because firmware/ is 142 C files and 3

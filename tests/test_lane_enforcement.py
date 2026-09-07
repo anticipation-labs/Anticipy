@@ -15,12 +15,12 @@ WORKER_RESEARCH_FILTER = 'status="queued" && lane="research"'
 
 
 def _hook_source():
-    return (ROOT / "backend" / "pb_hooks" / "research_lane.pb.js").read_text()
+    return (ROOT / "migration" / "workers" / "src" / "policy" / "research_lane.ts").read_text()
 
 
 def _hook_regex(src, name):
     m = re.search(rf"const {name} = /(.+)/;", src)
-    assert m, f"{name} not found in research_lane.pb.js"
+    assert m, f"{name} not found in research_lane.ts"
     return re.compile(m.group(1))
 
 
@@ -52,25 +52,23 @@ def test_new_extension_claim_filter_excludes_the_lane():
 def test_hook_rewrite_catches_the_old_extensions_poll():
     src = _hook_source()
     queued = _hook_regex(src, "QUEUED_POLL")
-    lane = _hook_regex(src, "MENTIONS_LANE")
     # A 0.2.3 poll: queued, no lane clause -> the server appends one.
     assert queued.search(OLD_EXT_FILTER)
-    assert not lane.search(OLD_EXT_FILTER)
-    # The appended clause parenthesizes the original, so `A || B` cannot be
-    # re-associated by &&'s tighter binding.
-    assert '"(" + filter + ")' in src
+    # The Worker parses the filter into an AST and ANDs the exclusion onto it
+    # (filter-dsl.ts `andNot`), which is what makes `A || B` impossible to
+    # re-associate — the hook did the same with parentheses around a string.
+    assert "andNot" in src and "mentionsField" in src
+    assert "EXCLUDED_LANES" in src
 
 
 def test_hook_rewrite_leaves_lane_aware_polls_alone():
     src = _hook_source()
     queued = _hook_regex(src, "QUEUED_POLL")
-    lane = _hook_regex(src, "MENTIONS_LANE")
-    # The worker's own research poll names the lane -> never rewritten.
+    # The worker's own research poll names the lane and comes from the worker
+    # (`fromWorker`), so it is never rewritten; the rewrite is gated on both.
     assert queued.search(WORKER_RESEARCH_FILTER)
-    assert lane.search(WORKER_RESEARCH_FILTER)
-    # So does the 0.2.4 extension's poll.
-    new_ext = OLD_EXT_FILTER + ' && lane!="research"'
-    assert lane.search(new_ext)
+    assert "!ctx.worker.fromWorker" in src
+    assert 'mentionsField(ast, "lane")' in src or "mentionsField(" in src
 
 
 def test_hook_refuses_a_browser_claim_outright():
@@ -78,18 +76,18 @@ def test_hook_refuses_a_browser_claim_outright():
     # Layer 2: a claim-shaped PATCH (claimed_by / status running) on a
     # research job is 403'd unless it is the worker's.
     assert '"claimed_by" in b' in src
-    assert 'b["status"] === "running"' in src
+    assert 'b.status === "running"' in src
     assert "403" in src
-    assert "X-Anticipy-Worker" in src
+    assert "research jobs run in the worker, never in a browser" in src
     assert 'WORKER_CLAIMANT = "worker-research"' in src
 
 
 def test_worker_requests_carry_the_worker_marker(monkeypatch):
     monkeypatch.delenv("ANTICIPY_SERVICE_TOKEN", raising=False)
-    import brain.pb as pb
-    assert pb.headers().get("X-Anticipy-Worker") == "1"
+    from brain import backend
+    assert backend.headers().get("X-Anticipy-Worker") == "1"
     monkeypatch.setenv("ANTICIPY_SERVICE_TOKEN", "tok")
-    h = pb.headers()
+    h = backend.headers()
     assert h["X-Anticipy-Worker"] == "1" and h["X-Anticipy-Token"] == "tok"
 
 
@@ -97,7 +95,7 @@ def test_worker_claimant_names_agree():
     import brain.worker as W
     src = _hook_source()
     assert f'"{W.RESEARCH_CLAIMANT}"' in src, \
-        "the hook and the worker disagree on the claimant name"
+        "the Worker's lane policy and the brain disagree on the claimant name"
 
 
 # ---- the SMS channel marker degrades gracefully across core versions ------

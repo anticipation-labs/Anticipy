@@ -275,7 +275,7 @@ const A_LINK = /\b(?:https?:\/\/|www\.)\S+/i;
  * or `read_fact` is an event: it leaves the device and is stored. Four legs,
  * each a property of the payload and none a reading of it: it is empty
  * (nothing to transport); it is longer than a line can carry (a transport
- * bound — `backend/pb_hooks/guard.pb.js` holds a second copy at 400
+ * bound — `migration/workers/src/policy/guard.ts` holds a second copy at 400
  * server-side); it carries an email address; it carries a link. Whether the
  * line is a conclusion or a quotation is the OTHER half, and it belongs to
  * `lineVerdict`, which sees the page. Both halves run on every model-authored

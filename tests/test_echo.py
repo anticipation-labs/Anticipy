@@ -53,7 +53,7 @@ def backend(rows):
 # --------------------------------------------------- the real incidents
 
 def test_the_august_data_echo(monkeypatch):
-    monkeypatch.setattr(W.pb, "get", backend(said(
+    monkeypatch.setattr(W.backend, "get", backend(said(
         "hey, the August data is ready to add in the spreadsheet whenever you want to jump in"))[0])
     assert W.is_echo_of_her(
         "OK that one I got a text saying hey the August data is ready to add in "
@@ -69,7 +69,7 @@ def test_the_mothers_contact_echo(monkeypatch):
     the contiguous run from nine to three and let the echo straight through
     on live data. Fixtures now come from the database, not from what a
     message looked like on a phone."""
-    monkeypatch.setattr(W.pb, "get", backend(said(
+    monkeypatch.setattr(W.backend, "get", backend(said(
         "i don't have mother's contact info—can you send that over?"))[0])
     assert W.is_echo_of_her("I don't have your mother's contact can you send it over") is True
 
@@ -79,7 +79,7 @@ def test_small_words_inserted_dropped_and_swapped_still_echo(monkeypatch):
     survives is the ORDER, which is what actually separates reading aloud from
     sharing some vocabulary."""
     hers = "i'll put that together, then send it to you before it goes out to the team"
-    monkeypatch.setattr(W.pb, "get", backend(said(hers))[0])
+    monkeypatch.setattr(W.backend, "get", backend(said(hers))[0])
     assert W.is_echo_of_her(
         "I got a text message saying hey I'll put that together then send it "
         "to you before it goes out to the team") is True
@@ -88,7 +88,7 @@ def test_small_words_inserted_dropped_and_swapped_still_echo(monkeypatch):
 def test_a_long_ramble_sharing_scattered_words_is_not_an_echo(monkeypatch):
     """The second guard. Order alone is not enough if his line is long enough
     to accidentally contain six of her words in sequence."""
-    monkeypatch.setattr(W.pb, "get", backend(said(
+    monkeypatch.setattr(W.backend, "get", backend(said(
         "i'll put that together, then send it to you before it goes out to the team"))[0])
     his = ("so anyway I was thinking that we should probably put together a plan and "
            "then figure out what to send over to everyone else about the whole thing "
@@ -97,7 +97,7 @@ def test_a_long_ramble_sharing_scattered_words_is_not_an_echo(monkeypatch):
 
 
 def test_the_team_email_echo(monkeypatch):
-    monkeypatch.setattr(W.pb, "get", backend(said(
+    monkeypatch.setattr(W.backend, "get", backend(said(
         "i'll put that together, then send it to you before it goes out to the team"))[0])
     assert W.is_echo_of_her(
         "I got a text message saying hey I'll put that together then send it to "
@@ -108,7 +108,7 @@ def test_the_team_email_echo(monkeypatch):
 
 def test_a_genuine_confirmation_is_not_an_echo(monkeypatch):
     """The most dangerous false positive: he agrees, in words she just used."""
-    monkeypatch.setattr(W.pb, "get", backend(said(
+    monkeypatch.setattr(W.backend, "get", backend(said(
         "got it, booking Cactus Club Park Royal for two at 7 PM tomorrow."))[0])
     for reply in ("yeah Cactus Club at 7",
                   "yes book it",
@@ -119,7 +119,7 @@ def test_a_genuine_confirmation_is_not_an_echo(monkeypatch):
 
 
 def test_talking_about_the_same_topic_is_not_an_echo(monkeypatch):
-    monkeypatch.setattr(W.pb, "get", backend(said(
+    monkeypatch.setattr(W.backend, "get", backend(said(
         "i've got the budget spreadsheet open and i'm adding the august numbers now"))[0])
     assert W.is_echo_of_her(
         "I still need to get the August numbers into the budget spreadsheet today") is False
@@ -132,7 +132,7 @@ def test_the_same_words_rearranged_are_not_an_echo(monkeypatch):
     none of them had many shared words in a different ORDER. A person picking
     up her words and answering in their own sentence is not reading aloud."""
     hers = "i've got the budget spreadsheet open and i'm adding the august numbers now"
-    monkeypatch.setattr(W.pb, "get", backend(said(hers))[0])
+    monkeypatch.setattr(W.backend, "get", backend(said(hers))[0])
     his = "the august numbers, the budget — adding those now, i've got the spreadsheet open"
     shared = len(set(W._words(his)) & set(W._words(hers)))
     assert shared >= W.ECHO_RUN, "the fixture must actually share enough words to matter"
@@ -141,13 +141,13 @@ def test_the_same_words_rearranged_are_not_an_echo(monkeypatch):
 
 
 def test_a_short_line_is_never_an_echo(monkeypatch):
-    monkeypatch.setattr(W.pb, "get", backend(said("book a table for two at seven"))[0])
+    monkeypatch.setattr(W.backend, "get", backend(said("book a table for two at seven"))[0])
     for short in ("book a table", "yes", "seven works", "book a table for two"):
         assert W.is_echo_of_her(short) is False, short
 
 
 def test_nothing_she_said_means_nothing_is_an_echo(monkeypatch):
-    monkeypatch.setattr(W.pb, "get", backend([])[0])
+    monkeypatch.setattr(W.backend, "get", backend([])[0])
     assert W.is_echo_of_her("I don't have your mother's contact can you send it over") is False
 
 
@@ -156,17 +156,17 @@ def test_a_backend_failure_never_silences_him(monkeypatch):
     deaf exactly when the backend is struggling."""
     def boom(*a, **k):
         raise RuntimeError("pb down")
-    monkeypatch.setattr(W.pb, "get", boom)
+    monkeypatch.setattr(W.backend, "get", boom)
     assert W.is_echo_of_her("I don't have your mother's contact can you send it over") is False
 
-    monkeypatch.setattr(W.pb, "get", lambda *a, **k: types.SimpleNamespace(
+    monkeypatch.setattr(W.backend, "get", lambda *a, **k: types.SimpleNamespace(
         ok=False, json=lambda: {}))
     assert W.is_echo_of_her("anything at all here that is long enough") is False
 
 
 def test_only_her_own_messages_count(monkeypatch):
     get, seen = backend([])
-    monkeypatch.setattr(W.pb, "get", get)
+    monkeypatch.setattr(W.backend, "get", get)
     W.is_echo_of_her("some line long enough to be considered here")
     assert 'kind="anticipy_says"' in seen["filter"]
     assert 'kind="anticipy_text"' in seen["filter"]

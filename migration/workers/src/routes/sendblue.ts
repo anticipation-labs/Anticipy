@@ -10,7 +10,7 @@
  * retries up to three times on a 5xx, 45 s apart, and wants a 2xx.
  *
  * The shape of every decision here is the Twilio route's (routes/sms.ts) and
- * the oracle's (backend/pb_hooks/sms.pb.js):
+ * the oracle's (migration/workers/src/routes/sms.ts):
  *
  *   configuration problem   503, and it says so -- a 403 here would look like
  *                           a forged request forever and hide a deaf product
@@ -23,7 +23,7 @@
  *                           whose browser to drive
  *   routing uncertain       500 "temporary routing failure" -- Sendblue retries
  *   the row                 the identical events row Twilio lands, through the
- *                           identical code (src/pb/sender.ts): device_id "sms",
+ *                           identical code (src/api/sender.ts): device_id "sms",
  *                           kind "sms_reply", text, decision "", goal = the
  *                           sender, owner_ref, external_event_id = message_handle
  *
@@ -32,7 +32,7 @@
  * sendblue_number, content, media_url, group_id, participants. Nothing else
  * is looked at; nothing is logged but the ids and the last six digits.
  */
-import { landInboundText, last6, type Landing } from "../pb/sender.ts";
+import { landInboundText, last6, type Landing } from "../api/sender.ts";
 import { dispatchConnectionEvent } from "../connections/dispatch.ts";
 import type { TextCommandEnv } from "../connections/wiring.ts";
 
@@ -178,7 +178,7 @@ export async function sendblueInbound(
   // THE TEXT TWIN, the identical call routes/sms.ts makes and for the identical
   // reasons — after the row and never instead of it, the owner from the stored
   // row `landInboundText` resolved, the message verbatim with no pre-filter in
-  // front of it. Both carriers land the same events row (src/pb/sender.ts), and
+  // front of it. Both carriers land the same events row (src/api/sender.ts), and
   // this is what stops them landing in different products.
   if (landed.kind === "written") {
     const run = dispatchConnectionEvent(

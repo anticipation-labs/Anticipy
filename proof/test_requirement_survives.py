@@ -50,10 +50,10 @@ class Resp:
 
 def build(jobs):
     patched = []
-    C.pb.get = lambda url, **kw: Resp(list(jobs))
-    C.pb.patch = lambda url, **kw: patched.append((url.rsplit("/", 1)[-1],
+    C.backend.get = lambda url, **kw: Resp(list(jobs))
+    C.backend.patch = lambda url, **kw: patched.append((url.rsplit("/", 1)[-1],
                                                    kw.get("json") or {})) or Resp()
-    C.pb.post = lambda *a, **k: Resp()
+    C.backend.post = lambda *a, **k: Resp()
     anticipy = types.SimpleNamespace(owner_id="X", backend_url="http://pb", llm=None,
                                      memory=types.SimpleNamespace(recall=lambda *a, **k: []))
     return C.Conversation(anticipy=anticipy, llm=None, transport=None), patched

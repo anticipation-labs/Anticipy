@@ -137,7 +137,7 @@ def test_gap_fill_keys_on_the_set_not_the_literal():
 # ------------------------------------------------------------- 2. capped at 4
 
 class _Event:
-    """One PocketBase event row, as the worker's poll hands it over."""
+    """One the backend event row, as the worker's poll hands it over."""
 
     def __init__(self, **kw):
         self.row = {"id": kw.pop("id", "ev1"), "kind": "read_fact", **kw}

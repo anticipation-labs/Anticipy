@@ -20,20 +20,20 @@ from pathlib import Path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 ROOT = Path(__file__).resolve().parent.parent
-GUARD = (ROOT / "backend/pb_hooks/guard.pb.js").read_text()
-KEY = (ROOT / "backend/pb_hooks/agent_key.pb.js").read_text()
+GUARD = (ROOT / "migration/workers/src/policy/guard.ts").read_text()
+KEY = (ROOT / "migration/workers/src/llm.ts").read_text()
 
 
 # ------------------------------------------------------- 1. pairing hijack
 
 def test_tokenless_claim_refuses_an_owner_ref_it_cannot_verify():
-    branch = GUARD.split("but owner_ref is NOT accepted here")[1][:2600]
+    branch = GUARD.split("// 3. guard.pb.js:511-548 — claiming.")[1][:2600]
     assert '"owner_ref" in b' in branch, "an unverifiable owner_ref must be refused"
     assert "pair from the signed-in app" in branch, "and refused with a reason"
-    allowed = branch.split("const allowed = {")[1].split("}")[0]
+    allowed = branch.split("const allowed = new Set([")[1].split("])")[0]
     assert "owner_ref" not in allowed, "owner_ref must not be tokenlessly writable"
     for k in ("owner", "paired", "last_seen", "browser"):
-        assert k in allowed, f"{k} must stay claimable so pairing still works"
+        assert f'"{k}"' in allowed, f"{k} must stay claimable so pairing still works"
 
 
 def test_the_signed_in_path_still_binds_owner_ref_to_the_account():
@@ -45,25 +45,24 @@ def test_the_signed_in_path_still_binds_owner_ref_to_the_account():
 
 def test_the_model_proxy_requires_a_real_account():
     assert 'this agent is not attached to an account' in KEY
-    assert 'callerOwnerRef' in KEY
-    # ...checked BEFORE any provider key is read INSIDE the /agent/llm
-    # handler, so an unattached agent can never reach the billing path.
-    llm = KEY[KEY.index('routerAdd("POST", "/agent/llm"'):]
-    assert llm.index("callerOwnerRef") < llm.index('$os.getenv("GEMINI_API_KEY")')
+    # ...checked BEFORE any provider key is read INSIDE the proxy handler, so
+    # an unattached agent can never reach the billing path.
+    llm = KEY[KEY.index("export async function llmProxy"):]
+    assert llm.index("not attached to an account") < llm.index("providerKeys(env)")
 
 
 def test_the_model_proxy_meters_every_account():
-    assert "HOURLY_CALL_CEILING" in KEY
+    assert "HOURLY_CALL_CEILING = " in KEY
     assert "429" in KEY and "too many model calls" in KEY
     # The meter lives on the agent row: the audit ledger already filled the
     # 5GB volume once and took production down, so it may not grow per call.
-    assert 'agentRecord.set("llm_calls"' in KEY
-    mig = ROOT / "backend/pb_migrations/1700000035_agent_llm_meter.js"
-    assert mig.exists() and "llm_calls" in mig.read_text()
+    assert "SET llm_calls = CASE WHEN llm_hour" in KEY
+    schema = (ROOT / "migration/d1/schema.sql").read_text()
+    assert '"llm_calls"' in schema and '"llm_hour"' in schema
 
 
 def test_a_meter_failure_never_blocks_real_work():
-    block = KEY.split("HOURLY_CALL_CEILING = ")[1][:1400]
+    block = KEY.split("if (used >= HOURLY_CALL_CEILING)")[1][:1400]
     assert "catch" in block and "meter unavailable" in block
 
 

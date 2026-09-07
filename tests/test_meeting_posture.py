@@ -11,7 +11,7 @@ missing credential is allowed to stand in for a semantic model.
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import brain.pb as pb
+from brain import backend
 from brain.anticipy_core import Anticipy
 from brain.llm import LLM
 from brain.orchestrator import Decision
@@ -29,9 +29,9 @@ class _Resp:
 
 def _dead_backend(monkeypatch):
     # Every write "succeeds" so hear() walks its real path; nothing persists.
-    monkeypatch.setattr(pb, "get", lambda *a, **k: _Resp())
-    monkeypatch.setattr(pb, "post", lambda *a, **k: _Resp({"id": "job1"}))
-    monkeypatch.setattr(pb, "patch", lambda *a, **k: _Resp())
+    monkeypatch.setattr(backend, "get", lambda *a, **k: _Resp())
+    monkeypatch.setattr(backend, "post", lambda *a, **k: _Resp({"id": "job1"}))
+    monkeypatch.setattr(backend, "patch", lambda *a, **k: _Resp())
 
 
 def _anticipy(monkeypatch, sent):

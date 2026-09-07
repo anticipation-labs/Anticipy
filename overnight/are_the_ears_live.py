@@ -160,7 +160,7 @@ def headers() -> dict:
 
 
 def parse_ts(value: str):
-    """PocketBase hands back 'YYYY-MM-DD HH:MM:SS.mmmZ' — tolerate both forms,
+    """the backend hands back 'YYYY-MM-DD HH:MM:SS.mmmZ' — tolerate both forms,
     and always return an AWARE datetime so no caller reads it in the zone of
     whatever laptop happened to run the gate."""
     if not value:

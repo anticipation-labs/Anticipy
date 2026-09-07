@@ -19,7 +19,7 @@ from brain.worker import STUCK_ASKS_CEILING, UNINVITED_TEXTS_PER_DAY  # noqa: E4
 from overnight.is_the_brain_live import evaluate_rules, evaluate_slots  # noqa: E402
 
 
-# `created` is UTC, exactly as PocketBase stores it. The quiet-hours and
+# `created` is UTC, exactly as the backend stores it. The quiet-hours and
 # per-day rules are judged in the OWNER'S zone (CLOCK_TZ, default
 # America/Vancouver = UTC-7 in August), so a fixture hour is NOT the hour the
 # rule sees. Every timestamp below is UTC with its local time in a comment.
@@ -147,7 +147,7 @@ def test_a_message_marked_never_delivered_screams():
 # --------------------------------------------------------------------------
 # THE CLOCK THE ROWS ARE IN IS NOT THE CLOCK THE PROMISE IS IN.
 #
-# PocketBase stamps `created` in UTC. The quiet-hours promise is in the
+# the backend stamps `created` in UTC. The quiet-hours promise is in the
 # OWNER'S hours: brain/worker.py compares `datetime.fromtimestamp(now,
 # CLOCK_TZ).hour` against CLOCK_QUIET_START/END, and CLOCK_TZ is the owner's
 # own zone (worker.py:3078 sets it from their profile). Comparing a UTC hour

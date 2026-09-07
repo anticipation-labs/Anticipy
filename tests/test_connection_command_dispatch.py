@@ -9,7 +9,7 @@ def setup(monkeypatch, status=200, result=None):
     response = SimpleNamespace(status_code=status, json=lambda: result or {
         'status': 'completed', 'outcome': {'kind': 'list_connections', 'replied': True, 'question': False}})
     post = Mock(return_value=response)
-    monkeypatch.setattr(W.pb, 'post', post)
+    monkeypatch.setattr(W.backend, 'post', post)
     return post
 
 

@@ -3,7 +3,7 @@ network delivered it.
 
 This is Omi #6551 in our shape. Their chunks raced each other into the
 database in parallel; ours arrive one at a time, in a strict single-threaded
-loop, but sorted by PocketBase's `created` — the moment the row landed. A
+loop, but sorted by the backend's `created` — the moment the row landed. A
 phone that buffers (offline, backgrounded, no signal, a call holding the mic)
 then hands the brain a flushed lump in delivery order, and a plan
 reconstructed from shuffled turns is a different plan.
@@ -186,7 +186,7 @@ def test_fetch_unprocessed_sorts_and_slices(monkeypatch):
         seen.update(params or {})
         return R()
 
-    monkeypatch.setattr(W.pb, "get", fake_get)
+    monkeypatch.setattr(W.backend, "get", fake_get)
     out = W.fetch_unprocessed(owner_ref="owner-record-a")
 
     assert seen["perPage"] == W.PAGE, "must read wider than it returns"
@@ -205,6 +205,6 @@ def test_fetch_unprocessed_fails_closed_without_an_owner(monkeypatch):
         nonlocal called
         called = True
 
-    monkeypatch.setattr(W.pb, "get", fake_get)
+    monkeypatch.setattr(W.backend, "get", fake_get)
     assert W.fetch_unprocessed() == []
     assert not called

@@ -4,7 +4,7 @@ Models may propose a goal, facts, or a reply.  They do not own state.  This
 module is the one place that answers whether work may be approved, claimed,
 retried, cancelled, or called complete.
 
-The types are deliberately storage-neutral.  PocketBase jobs carry the same
+The types are deliberately storage-neutral.  the backend jobs carry the same
 fields in production, while tests and recovery tools can exercise the exact
 state machine without a network or an LLM.
 """
@@ -49,7 +49,7 @@ class Consequence(str, Enum):
     # own store, and the recipe for undoing it was complete before it ran.
     #
     # It buys NO exemption by being spelled.  `admissible()` below is the
-    # floor, and `backend/pb_hooks/workflow_guard.pb.js` re-runs it at the
+    # floor, and `migration/workers/src/policy/workflow_guard.ts` re-runs it at the
     # queued transition — because a check that runs only in the Python that
     # minted the plan is not a check, it is a comment (spec §5.4).
     REVERSIBLE_LOCAL = "reversible_local"
@@ -651,7 +651,7 @@ class Plan:
     # rather than an implementation detail (§5.4.3): "A check that runs only
     # in the Python that minted the plan is not a check; it is a comment."
     # They ride into the row inside `params._workflow`, which is what
-    # backend/pb_hooks/workflow_guard.pb.js reads and re-checks.
+    # migration/workers/src/policy/workflow_guard.ts reads and re-checks.
     act: Optional[ActDeclaration] = None
     undo: Optional[UndoPlan] = None
     announce: Optional[Obligation] = None
@@ -950,7 +950,7 @@ class Plan:
         return out
 
     def job_fields(self) -> dict[str, Any]:
-        """PocketBase fields that make the canonical state auditable."""
+        """the backend fields that make the canonical state auditable."""
         approval = _canonical(self.as_dict()["approval"]) if self.approval else ""
         receipt = _canonical(self.as_dict()["receipt"]) if self.receipt else ""
         lease_until = self.lease.expires_at.isoformat() if self.lease else ""
@@ -1054,7 +1054,7 @@ def _shelf2_lane(plan: Plan) -> Plan:
 
     This is a TRANSITION rule and never a validity rule.  §3: a law of this
     kind belongs in a transition guard, mirrored in
-    backend/pb_hooks/workflow_guard.pb.js — never in `assert_valid`, where a
+    migration/workers/src/policy/workflow_guard.ts — never in `assert_valid`, where a
     rule that can be false for a legitimately stored row makes that row
     unparseable forever.
     """

@@ -39,7 +39,7 @@ def fetch_all() -> list[dict]:
     # One credential resolver for the whole tree, so this tool keeps working
     # after the owner mints an API key and takes the auth token off the worker
     # service — the token only has to stay where INBOUND signatures are checked
-    # (backend/pb_hooks/sms.pb.js), which is PocketBase, not here.
+    # (migration/workers/src/routes/sms.ts), which is the backend, not here.
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
     from brain.voice_arm import rest_credential
 

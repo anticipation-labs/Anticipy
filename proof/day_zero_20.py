@@ -2,7 +2,7 @@
 """Twenty day-zero capabilities through the packaged Chrome extension.
 
 This is deliberately not the old permissive fake-backend battery. It uses:
-  * a disposable PocketBase with the production migrations and hooks,
+  * a disposable the backend with the production migrations and hooks,
   * a fresh signed-in owner and a server-issued per-agent credential,
   * canonical approved workflows with leases and verified receipts,
   * the packaged MV3 extension in an isolated Chromium profile, and
@@ -421,7 +421,7 @@ def wait_for_job(job_id, timeout=240):
                                headers=headers, timeout=10).json()
             last_row = row
         except requests.RequestException:
-            # A disposable PocketBase or its Railway-env wrapper can restart
+            # A disposable the backend or its Railway-env wrapper can restart
             # between two polls. That is neither a product result nor a reason
             # to discard every already-completed browser action in the cohort.
             time.sleep(1)

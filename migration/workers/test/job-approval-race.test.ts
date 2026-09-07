@@ -1,7 +1,7 @@
 /** Actual SQLite writes: a stale consent cannot restore cancelled/changed work. */
 import assert from 'node:assert/strict';
-import { create, update, view, type RecordsRequest } from '../src/pb/records.ts';
-import { COLLECTIONS } from '../src/pb/schema.ts';
+import { create, update, view, type RecordsRequest } from '../src/api/records.ts';
+import { COLLECTIONS } from '../src/api/schema.ts';
 import { openTestD1 } from './sqlite-d1.ts';
 
 const t = openTestD1();

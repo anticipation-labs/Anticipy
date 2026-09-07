@@ -3,7 +3,7 @@ name: Mac release (Developer ID, notarized)
 # Builds Anticipy for Mac exactly as app/macos/Tools/build_release.sh does on
 # the lab Mac — universal, hardened, Developer-ID-signed, notarized, stapled,
 # Gatekeeper-checked — and opens a pull request that commits the zip over
-# backend/pb_public/mac/Anticipy-for-Mac.zip, which the API Worker serves as a
+# migration/workers/public/mac/Anticipy-for-Mac.zip, which the API Worker serves as a
 # static asset. Dispatch-only; nothing here runs on a push.
 #
 # WHY IT EXISTS. Build 119 was made by hand on the lab Mac on 2026-09-01. The
@@ -151,14 +151,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          cp "$RUNNER_TEMP/macbuild/Anticipy-for-Mac.zip" backend/pb_public/mac/Anticipy-for-Mac.zip
+          cp "$RUNNER_TEMP/macbuild/Anticipy-for-Mac.zip" migration/workers/public/mac/Anticipy-for-Mac.zip
           branch="mac-release/${MAC_VERSION}-b${MAC_BUILD}-${{ github.run_id }}"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -b "$branch"
-          git add backend/pb_public/mac/Anticipy-for-Mac.zip
+          git add migration/workers/public/mac/Anticipy-for-Mac.zip
           git commit -m "Ship notarized Mac recorder build ${MAC_BUILD} (${MAC_VERSION})" \
-            -m "Built by mac-release.yml run ${{ github.run_id }} from ${{ github.sha }}. sha256: $(shasum -a 256 backend/pb_public/mac/Anticipy-for-Mac.zip | cut -d' ' -f1)" \
+            -m "Built by mac-release.yml run ${{ github.run_id }} from ${{ github.sha }}. sha256: $(shasum -a 256 migration/workers/public/mac/Anticipy-for-Mac.zip | cut -d' ' -f1)" \
             -m "After merging: cd migration/workers && npm run deploy — the Worker serves this file as a static asset, and overnight/stranger_gate.py leg 11 compares what /download hands over against these bytes."
           git push -u origin "$branch"
           {

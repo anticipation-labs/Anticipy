@@ -1,4 +1,4 @@
-"""Prove the PocketBase pairing + realtime backend end to end.
+"""Prove the the backend pairing + realtime backend end to end.
 
 Flow: pendant self-registers -> app pairs via short code -> pendant pushes a
 transcript event -> app receives it over the realtime SSE stream.

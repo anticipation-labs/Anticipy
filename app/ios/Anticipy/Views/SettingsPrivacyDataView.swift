@@ -225,7 +225,7 @@ private struct PendingSpeechView: View {
 }
 
 /// The account's transcript archive, paged independently from Home's small
-/// live poll. Each request carries PocketBase's `totalPages`, so the button can
+/// live poll. Each request carries the backend's `totalPages`, so the button can
 /// stop at the real end instead of treating an arbitrary item count as one.
 struct ListeningHistoryView: View {
     @ObservedObject var session: AnticipySession

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { FakeD1, asD1 } from "./fake-d1.ts";
-import { issueToken } from "../src/pb/auth.ts";
+import { issueToken } from "../src/api/auth.ts";
 import { createD1Store } from "../src/connections/store.ts";
 import { connectionsApiRoute, type ConnectionsApiDeps } from "../src/routes/connections_api.ts";
 

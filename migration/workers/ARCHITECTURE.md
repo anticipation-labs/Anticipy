@@ -115,7 +115,7 @@ records-API features this product actually uses:
 
 So "reimplement PocketBase's records API" is not the project it sounds like.
 It is: `filter`, `sort`, `page`, `perPage`, five verbs, one list envelope. That
-is `src/pb/records.ts` — **336 lines**, already written — plus the parser,
+is `src/api/records.ts` — **336 lines**, already written — plus the parser,
 `filter-dsl.ts`, **789 lines with 42 passing tests**. Both exist in this
 directory now. The hard part was the grammar, and the grammar is done.
 
@@ -235,7 +235,7 @@ Two ordering traps, both with incidents behind them, both preserved:
 `filter-dsl.ts`. Grammar, lexer, precedence-climbing parser, AST, and a
 compiler to parameterised SQL. **Nothing is interpolated.** The only text
 concatenated into SQL is a column name already looked up in a compile-time
-schema map (`src/pb/schema.ts`); an unknown identifier is a hard 400.
+schema map (`src/api/schema.ts`); an unknown identifier is a hard 400.
 
 Operators: `= != > >= < <= ~ !~ ?= ?!=` (plus `?~ ?!~ ?> ?>= ?< ?<=`),
 `&& ||` with `&&` binding tighter, parenthesised grouping, single- and
@@ -334,7 +334,7 @@ owner-scoped path, and `records.ts` compiles it into the `WHERE` of every
 list, view, update and delete:
 
 ```ts
-// src/pb/records.ts, buildWhere()
+// src/api/records.ts, buildWhere()
 if (req.forcedScope) {
   parts.push(`${quoteIdent(req.forcedScope.column)} = ?${nextIndex()}`);
   params.push(req.forcedScope.value);
@@ -458,7 +458,7 @@ unpairs every browser — **and it will look like a clean run.**
 
 ### 4.3 Tokens, and the one thing that does log people out
 
-`src/pb/auth.ts` issues an HS256 JWT over `{id, type, collectionName, exp}`,
+`src/api/auth.ts` issues an HS256 JWT over `{id, type, collectionName, exp}`,
 7-day TTL, keyed on `HMAC(ANTICIPY_AUTH_SECRET ‖ tokenKey)`.
 
 Verification order is the security property, and it is not the obvious order:
@@ -604,8 +604,8 @@ The other `$security.*` calls port cleanly and are not one-way doors:
 |---|---|
 | `$security.sha256(s)` | `crypto.subtle.digest("SHA-256", …)` → hex (`src/llm.ts:sha256Hex`) |
 | `$security.equal(a,b)` | `timingSafeEqual` (`src/index.ts`) |
-| `$security.randomStringWithAlphabet(n, α)` | `crypto.getRandomValues` + alphabet (`src/pb/wire.ts:newRecordId`) |
-| `$security.parseJWT(tok, key)` | `crypto.subtle.verify("HMAC", …)` (`src/pb/auth.ts`) |
+| `$security.randomStringWithAlphabet(n, α)` | `crypto.getRandomValues` + alphabet (`src/api/wire.ts:newRecordId`) |
+| `$security.parseJWT(tok, key)` | `crypto.subtle.verify("HMAC", …)` (`src/api/auth.ts`) |
 
 `$security.equal` has ~40 call sites in `internal_hq.pb.js` and **zero** in
 `guard.pb.js:37`, which compares the service token with `===`. Every secret
@@ -744,8 +744,9 @@ Five static files and four zips, `COPY`ed into the image at
 no Worker invocation, cost nothing per request, and version with the code that
 references them — which R2 would not. Total ~1.3 MB.
 
-Staged by `npm run stage:assets` (copies `backend/pb_public/` into
-`migration/workers/public/`) rather than committing a second copy of the zips.
+Committed in `migration/workers/public/` — since 2026-09-07 the only copy.
+(They were staged from `backend/pb_public/` while PocketBase served the same
+files; that directory and the staging step are gone.)
 (The extension zips are 338,456 B each at 0.13.0 as of 2026-09-05; the table
 above is the 2026-09-03 measurement.)
 
@@ -929,8 +930,8 @@ for — passed or explained.**
 ### Phase 1 — read-only shadow
 
 Import a snapshot into D1. Deploy the Worker serving **GET only**, on
-`workers.dev`, with no client pointed at it. `src/pb/records.ts` list + view,
-`src/pb/schema.ts` generated from `schema.sql`, `filter-dsl.ts` wired in.
+`workers.dev`, with no client pointed at it. `src/api/records.ts` list + view,
+`src/api/schema.ts` generated from `schema.sql`, `filter-dsl.ts` wired in.
 
 **Gate:** contract suite `-m "anonymous"` against both. Plus a differential
 replay: take the real filter strings from `extension/background.js:77-90`,
@@ -940,7 +941,7 @@ sends.** Any diff is a parser bug and is fixed before writes exist.
 
 ### Phase 2 — auth
 
-`src/pb/auth.ts` against imported hashes. Sign in as a real test account on
+`src/api/auth.ts` against imported hashes. Sign in as a real test account on
 both.
 
 **Gate:** `-m "needs_account"` against both, plus the bcrypt CPU measurement

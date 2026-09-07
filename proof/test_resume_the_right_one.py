@@ -67,11 +67,11 @@ class Resp:
 def run(jobs, learned):
     """Returns (resumed marker, ids actually re-queued)."""
     requeued = []
-    C.pb.get = lambda url, **kw: Resp(list(jobs))
+    C.backend.get = lambda url, **kw: Resp(list(jobs))
     def patch(url, **kw):
         requeued.append(url.rsplit("/", 1)[-1])
         return Resp()
-    C.pb.patch = patch
+    C.backend.patch = patch
     anticipy = types.SimpleNamespace(owner_id="X", backend_url="http://pb", llm=None,
                                      memory=types.SimpleNamespace(recall=lambda *a, **k: []))
     convo = C.Conversation(anticipy=anticipy, llm=None, transport=None)
@@ -120,8 +120,8 @@ check("learning nothing resumes nothing", requeued == [], f"{requeued}")
 
 # --- the re-queued job carries his authorization ---------------------------
 bodies = []
-C.pb.get = lambda url, **kw: Resp([CACTUS])
-C.pb.patch = lambda url, **kw: bodies.append(kw.get("json") or {}) or Resp()
+C.backend.get = lambda url, **kw: Resp([CACTUS])
+C.backend.patch = lambda url, **kw: bodies.append(kw.get("json") or {}) or Resp()
 anticipy = types.SimpleNamespace(owner_id="X", backend_url="http://pb", llm=None,
                                  memory=types.SimpleNamespace(recall=lambda *a, **k: []))
 C.Conversation(anticipy=anticipy, llm=None, transport=None)._resume_stuck(HIS_DETAILS)

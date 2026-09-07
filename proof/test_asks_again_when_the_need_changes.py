@@ -54,7 +54,7 @@ class Resp:
 
 
 def with_history(events):
-    W.pb.get = lambda url, **kw: Resp(events)
+    W.backend.get = lambda url, **kw: Resp(events)
 
 
 HISTORY = [{"kind": "anticipy_says", "goal": GOAL, "decision": "needs_user",
@@ -95,7 +95,7 @@ check("sharing only filler words does not count as asked",
 
 # A broken backend must not silence her.
 def boom(*a, **k): raise RuntimeError("backend down")
-W.pb.get = boom
+W.backend.get = boom
 check("if the check itself fails she still speaks",
       W.need_already_asked(GOAL, FIRST_NEED) is False)
 

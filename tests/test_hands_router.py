@@ -123,7 +123,7 @@ def offline(monkeypatch):
 
     def tripwire(*a, **k):
         raise AssertionError("a fact was read from the network in an offline test")
-    monkeypatch.setattr(hands.pb, "get", tripwire)
+    monkeypatch.setattr(hands.backend, "get", tripwire)
     monkeypatch.setattr(hands, "_default_llm", lambda: None)
 
 
@@ -453,7 +453,7 @@ def test_connections_are_read_through_the_records_client(monkeypatch):
             {"toolkit": "", "status": "connected"},          # unusable row
             "not a row",
         ])
-    monkeypatch.setattr(hands.pb, "get", fake_get)
+    monkeypatch.setattr(hands.backend, "get", fake_get)
     rows = hands.read_connections('own"1', "https://api.example/")
     assert seen["url"] == "https://api.example/api/collections/connections/records"
     assert seen["params"]["filter"] == 'user_id="own\\"1"'
@@ -463,14 +463,14 @@ def test_connections_are_read_through_the_records_client(monkeypatch):
 
 
 def test_connections_that_cannot_be_read_are_unknown(monkeypatch):
-    monkeypatch.setattr(hands.pb, "get", lambda *a, **k: _R(ok=False, status=404))
+    monkeypatch.setattr(hands.backend, "get", lambda *a, **k: _R(ok=False, status=404))
     assert hands.read_connections("own1", "https://api.example") is None
-    monkeypatch.setattr(hands.pb, "get", lambda *a, **k: (_ for _ in ()).throw(
+    monkeypatch.setattr(hands.backend, "get", lambda *a, **k: (_ for _ in ()).throw(
         RuntimeError("timeout")))
     assert hands.read_connections("own1", "https://api.example") is None
     # An owner with no rows is NOT unknown — it is an owner who connected
     # nothing, and the prompt must say so in different words.
-    monkeypatch.setattr(hands.pb, "get", lambda *a, **k: _R(items=[]))
+    monkeypatch.setattr(hands.backend, "get", lambda *a, **k: _R(items=[]))
     assert hands.read_connections("own1", "https://api.example") == ()
 
 
@@ -485,15 +485,15 @@ def test_browser_online_reads_the_agents_heartbeat(monkeypatch):
     def fake_get(url, params=None, timeout=None, **kw):
         seen["url"], seen["params"] = url, params
         return _R(items=[{"last_seen": seen.get("seen", fresh)}])
-    monkeypatch.setattr(hands.pb, "get", fake_get)
+    monkeypatch.setattr(hands.backend, "get", fake_get)
     assert hands.browser_is_online("own1", "https://api.example") is True
     assert seen["url"] == "https://api.example/api/collections/agents/records"
     assert seen["params"]["filter"] == '(paired=true) && owner_ref="own1"'
     seen["seen"] = stale
     assert hands.browser_is_online("own1", "https://api.example") is False
-    monkeypatch.setattr(hands.pb, "get", lambda *a, **k: _R(items=[]))
+    monkeypatch.setattr(hands.backend, "get", lambda *a, **k: _R(items=[]))
     assert hands.browser_is_online("own1", "https://api.example") is False
-    monkeypatch.setattr(hands.pb, "get", lambda *a, **k: _R(ok=False))
+    monkeypatch.setattr(hands.backend, "get", lambda *a, **k: _R(ok=False))
     assert hands.browser_is_online("own1", "https://api.example") is None
 
 
@@ -505,7 +505,7 @@ def test_freshness_matches_the_worker():
 def test_no_owner_or_no_backend_reads_nothing(monkeypatch):
     def tripwire(*a, **k):
         raise AssertionError("read attempted with no owner or no backend")
-    monkeypatch.setattr(hands.pb, "get", tripwire)
+    monkeypatch.setattr(hands.backend, "get", tripwire)
     monkeypatch.delenv("ANTICIPY_PB", raising=False)
     monkeypatch.delenv("ANTICIPY_OWNER_REF", raising=False)
     monkeypatch.setattr(hands, "active_owner_ref", lambda owner_ref="": "")
@@ -526,7 +526,7 @@ def test_the_owner_never_comes_from_params(monkeypatch):
     monkeypatch.setitem(sys.modules, "brain.worker", fake_worker)
     assert hands.active_owner_ref("") == ""
     reads = []
-    monkeypatch.setattr(hands.pb, "get", lambda *a, **k: reads.append(a) or _R(items=[]))
+    monkeypatch.setattr(hands.backend, "get", lambda *a, **k: reads.append(a) or _R(items=[]))
     monkeypatch.setenv("ANTICIPY_PB", "https://api.example")
     hands.gather_context({"owner": "own1", "owner_ref": "own1", "user_id": "own1"})
     assert reads == []
@@ -583,7 +583,7 @@ def test_the_verdict_rides_on_the_row(monkeypatch, offline):
     def fake_post(url, **kw):
         posted.update(kw.get("json") or {})
         return R()
-    monkeypatch.setattr(core.pb, "post", fake_post)
+    monkeypatch.setattr(core.backend, "post", fake_post)
     monkeypatch.setattr(hands, "_default_llm",
                         lambda: ScriptedLLM(says(HAND_BROWSER, effect="read",
                                                  reason="he asked to see it")))
@@ -1147,7 +1147,7 @@ def test_the_catalog_is_read_through_the_records_client(monkeypatch):
             {"toolkit": "mailer"},                           # no slug: not an entry
             "not a row",
         ])
-    monkeypatch.setattr(hands.pb, "get", fake_get)
+    monkeypatch.setattr(hands.backend, "get", fake_get)
     rows = hands.read_catalog("Mailer", "https://api.example/")
     assert seen["url"] == "https://api.example" + hands.API_HAND_TOOLS_PATH
     assert seen["url"].endswith("/hands/api/tools")
@@ -1161,9 +1161,9 @@ def test_the_catalog_is_read_through_the_records_client(monkeypatch):
     # UNKNOWN, never "no tools": the refused route (the live shape today), a
     # fault, a body with no items, a row naming another toolkit, a page of
     # rows none of which can be read
-    monkeypatch.setattr(hands.pb, "get", lambda *a, **k: _R(ok=False, status=404))
+    monkeypatch.setattr(hands.backend, "get", lambda *a, **k: _R(ok=False, status=404))
     assert hands.read_catalog("mailer", "https://api.example") is None
-    monkeypatch.setattr(hands.pb, "get", lambda *a, **k: (_ for _ in ()).throw(
+    monkeypatch.setattr(hands.backend, "get", lambda *a, **k: (_ for _ in ()).throw(
         RuntimeError("timeout")))
     assert hands.read_catalog("mailer", "https://api.example") is None
     class NoItems:
@@ -1171,28 +1171,28 @@ def test_the_catalog_is_read_through_the_records_client(monkeypatch):
 
         def json(self):
             return {"ok": True}
-    monkeypatch.setattr(hands.pb, "get", lambda *a, **k: NoItems())
+    monkeypatch.setattr(hands.backend, "get", lambda *a, **k: NoItems())
     assert hands.read_catalog("mailer", "https://api.example") is None
-    monkeypatch.setattr(hands.pb, "get", lambda *a, **k: _R(items=[
+    monkeypatch.setattr(hands.backend, "get", lambda *a, **k: _R(items=[
         {"slug": "MAILER_SEARCH", "toolkit": "mailer"},
         {"slug": "OTHER_THING", "toolkit": "other"}]))
     assert hands.read_catalog("mailer", "https://api.example") is None
-    monkeypatch.setattr(hands.pb, "get", lambda *a, **k: _R(items=[{"toolkit": "mailer"}, 7]))
+    monkeypatch.setattr(hands.backend, "get", lambda *a, **k: _R(items=[{"toolkit": "mailer"}, 7]))
     assert hands.read_catalog("mailer", "https://api.example") is None
     # an empty list IS an answer: the vendor lists nothing for this toolkit
-    monkeypatch.setattr(hands.pb, "get", lambda *a, **k: _R(items=[]))
+    monkeypatch.setattr(hands.backend, "get", lambda *a, **k: _R(items=[]))
     assert hands.read_catalog("mailer", "https://api.example") == ()
     # nothing is asked with no toolkit or no backend
     def tripwire(*a, **k):
         raise AssertionError("read attempted with no toolkit or no backend")
-    monkeypatch.setattr(hands.pb, "get", tripwire)
+    monkeypatch.setattr(hands.backend, "get", tripwire)
     assert hands.read_catalog("", "https://api.example") is None
     assert hands.read_catalog("mailer", "") is None
 
 
 def test_gather_context_carries_the_backend_for_the_catalog(monkeypatch):
     reads = []
-    monkeypatch.setattr(hands.pb, "get", lambda *a, **k: reads.append(a) or _R(items=[]))
+    monkeypatch.setattr(hands.backend, "get", lambda *a, **k: reads.append(a) or _R(items=[]))
     monkeypatch.setenv("ANTICIPY_PB", "https://api.example")
     monkeypatch.setattr(hands, "active_owner_ref", lambda owner_ref="": "own1")
     ctx = hands.gather_context({"source": "s"})

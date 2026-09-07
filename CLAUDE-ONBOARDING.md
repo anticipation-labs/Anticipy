@@ -50,7 +50,7 @@ only when genuinely unsure. It lives in the `TEXTING_STYLE` block in
 5. The core code, until you can explain it without looking: `brain/anticipy_core.py`
    (triage, risk gate, memory extraction), `brain/conversation.py` (LLM-first SMS
    understanding, deterministic queue flips), `brain/worker.py` (production loop),
-   `brain/pb.py` (ALL PocketBase access — never bypass it), `brain/memory.py`
+   `brain/backend.py` (ALL backend access — never bypass it), `brain/memory.py`
    (temporal graph), `extension/background.js` + `extension/agent_loop.js` (browser
    arm), `backend/pb_hooks/` (guard.pb.js = the security lock, sms.pb.js = inbound
    SMS, agent_key.pb.js = how paired devices get their keys),

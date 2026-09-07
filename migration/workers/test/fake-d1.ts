@@ -7,7 +7,7 @@
  * Worker cannot control — the `DB` binding — and everything above it is the
  * real code: the real handler, the real statements, the real schema (loaded
  * verbatim from migration/d1/schema.sql, partial-unique indexes included), a
- * real HMAC-signed account token from src/pb/auth.ts.
+ * real HMAC-signed account token from src/api/auth.ts.
  *
  * What it reproduces of D1, and no more:
  *   prepare(sql).bind(...).first([column]) / .all() / .run() / .raw()
@@ -16,7 +16,7 @@
  *                     semantics, and it is what the routes rely on for "the
  *                     transaction rolled back" to mean something.
  *   errors            thrown with the "D1_ERROR: " prefix D1 uses, so the
- *                     column-naming readers in src/pb/records.ts see the same
+ *                     column-naming readers in src/api/records.ts see the same
  *                     text they see in production.
  *
  * `failOn` is how a test says "the database could not answer": a predicate

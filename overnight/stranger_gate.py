@@ -107,7 +107,7 @@ BASE = os.environ.get("ANTICIPY_BACKEND_URL",
 
 # The one URL the setup page hands a stranger. Three names are served from the
 # same bytes (`extension/build-zip.sh` copies the zip to all three); this is the
-# one `backend/pb_public/setup.html` actually links.
+# one `migration/workers/public/setup.html` actually links.
 ZIP_NAME = "anticipy-claude-version-extension.zip"
 
 APP = "app/ios/Anticipy/AnticipyApp.swift"
@@ -120,18 +120,18 @@ ENROLL = "app/ios/Anticipy/Views/VoiceEnrollView.swift"
 SPEAKER_MODEL = "app/ios/Anticipy/Resources/speaker-embedding.onnx"
 WORKER = "brain/worker.py"
 VOICE_ARM = "brain/voice_arm.py"
-GUARD = "backend/pb_hooks/workflow_guard.pb.js"
-SETUP_PAGE = "backend/pb_public/setup.html"
+GUARD = "migration/workers/src/policy/workflow_guard.ts"
+SETUP_PAGE = "migration/workers/public/setup.html"
 EXT_ONBOARDING = "extension/onboarding.html"
 MANIFEST = "extension/manifest.json"
-REPO_ZIP = "backend/pb_public/" + ZIP_NAME
+REPO_ZIP = "migration/workers/public/" + ZIP_NAME
 
 # The Mac meeting recorder. One committed artifact, served as a static asset
 # by the Worker at /mac/Anticipy-for-Mac.zip, and the one URL the public site
 # hands a stranger who taps Download (issue #37).
 SITE = os.environ.get("ANTICIPY_SITE_URL", "https://www.anticipy.ai")
 MAC_DOWNLOAD_PATH = "/download"
-MAC_ZIP = "backend/pb_public/mac/Anticipy-for-Mac.zip"
+MAC_ZIP = "migration/workers/public/mac/Anticipy-for-Mac.zip"
 MAC_PLIST = "AnticipyMac.app/Contents/Info.plist"
 # What the zip is built FROM. A commit touching any of these after the zip's
 # own commit means the served app is not this tree's app.
@@ -1461,8 +1461,8 @@ def leg_6_welcome_respects_the_night(root: str = ROOT) -> str:
 # --------------------------------------------------------------------------
 def leg_7_receipt_is_what_is_shown(root: str = ROOT) -> str:
     guard = strip_comments(read(root, GUARD))
-    if "receipt.verified" not in guard.replace("!receipt.verified",
-                                               "receipt.verified"):
+    if "reconciliation.verified" not in guard.replace("!reconciliation.verified",
+                                                       "reconciliation.verified"):
         raise LegFailed(
             f"{GUARD} no longer demands a verified receipt before a job may go "
             "done, so the column this leg tracks may no longer be the record "
@@ -1538,8 +1538,8 @@ def leg_7_receipt_is_what_is_shown(root: str = ROOT) -> str:
 # Say that precisely, because the loose version of it was WRONG by 2026-08-25
 # and an audit caught it: "MediaUrl appears nowhere in any .py, .js or .swift"
 # is false — the string is in five files across two languages. Every one of
-# them is a test fixture or a comment (tests/test_evidence_host.py,
-# tests/test_stranger_gate.py, backend/pb_hooks/evidence.pb.js), and none is a
+# them is a test fixture or a comment (tests/test_stranger_gate.py,
+# migration/workers/src/assets.ts), and none is a
 # send path, so the LEG was right the whole time and only this sentence was
 # not. A gate whose prose is refutable teaches the next reader that its
 # verdicts are too, which is expensive in a repo where the gates are the only
@@ -1664,7 +1664,7 @@ def leg_8_done_text_can_carry_the_photo(root: str = ROOT) -> str:
             "reaches a phone on this channel — is in no send path in the "
             "product. (It IS in five files: test fixtures and comments in "
             "tests/test_evidence_host.py, tests/test_stranger_gate.py and "
-            "backend/pb_hooks/evidence.pb.js. This leg reads the POST payload "
+            "migration/workers/src/assets.ts. This leg reads the POST payload "
             "out of the syntax tree, so a comment cannot retire it — one once "
             "did.)\n"
             "        WIRE IT ALL step 1 describes the loop as act -> evidence "
@@ -1768,7 +1768,7 @@ def leg_9_guide_names_real_screens(root: str = ROOT, fetch=None,
             "page exists to hand over. An empty 200 and an error page both "
             "contain no dead pointers, so a leg that only searched them for "
             "dead pointers would report the guide clean while a stranger "
-            "reads whatever this is. Deploy pb_public and re-run.\n"
+            "reads whatever this is. Deploy the Worker and re-run.\n"
             "        " + (f"The tree is wrong too: {bad[0]}" if bad
                           else "The copy in the tree is clean."))
     for phrase, home, what in DEAD_POINTERS:
@@ -1787,7 +1787,7 @@ def leg_9_guide_names_real_screens(root: str = ROOT, fetch=None,
               "and concludes they have done something wrong — while holding "
               "the six-digit code that pairs the only executor in the product."
               "\n        Fix the guide (or bring the screen back); then deploy "
-              "pb_public, because the live half of this leg reads production.")
+              "the Worker, because the live half of this leg reads production.")
     return (f"the guide names only screens the app has; first run is: {beats}")
 
 
@@ -1844,12 +1844,20 @@ def mac_zip_facts(blob: bytes, where: str) -> dict:
             "sha256": hashlib.sha256(blob).hexdigest(), "bytes": len(blob)}
 
 
-def git_newest_commit(root: str, paths) -> tuple[str, int] | None:
+def git_newest_commit(root: str, paths, follow: bool = False) -> tuple[str, int] | None:
     """The newest commit touching any of `paths`: (hash, committer epoch).
-    None when history cannot answer — no git, no repository, no commit."""
+    None when history cannot answer — no git, no repository, no commit.
+
+    `follow` is for ONE file whose bytes matter: it follows the file across
+    renames and counts only commits that added or changed its content, so a
+    `git mv` (the zip moved from backend/pb_public to the Worker's public/ on
+    2026-09-07) does not read as a rebuild."""
+    args = ["git", "-C", root, "log", "-1", "--format=%H %ct"]
+    if follow:
+        args += ["--follow", "--diff-filter=AM"]
     try:
         out = subprocess.run(
-            ["git", "-C", root, "log", "-1", "--format=%H %ct", "--", *paths],
+            args + ["--", *paths],
             capture_output=True, text=True, timeout=60)
     except Exception:  # noqa: BLE001
         return None
@@ -1864,7 +1872,7 @@ def git_newest_commit(root: str, paths) -> tuple[str, int] | None:
 def leg_10_mac_app_is_current(root: str = ROOT, newest_commit=None) -> str:
     newest_commit = newest_commit or git_newest_commit
     facts = mac_zip_facts(read_bytes(root, MAC_ZIP), MAC_ZIP)
-    zip_at = newest_commit(root, [MAC_ZIP])
+    zip_at = newest_commit(root, [MAC_ZIP], follow=True)
     src_at = newest_commit(root, list(MAC_SOURCES))
     if zip_at is None or src_at is None:
         raise LegFailed(

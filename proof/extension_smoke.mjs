@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // IS THE BROWSER ARM ACTUALLY WORKING? One command, plain words, no deps.
 //
-//   sh proof/local_rig.sh up          # PocketBase + the brain
+//   sh proof/local_rig.sh up          # the backend + the brain
 //   node proof/extension_smoke.mjs    # this
 //
 // It walks the exact path a real install walks — register, get claimed by the
@@ -18,12 +18,12 @@
 //   * the extension is not loaded in Chrome at all;
 //   * it is loaded but the phone never claimed it (no owner_ref -> claimJob
 //     returns null and says nothing);
-//   * PocketBase has no model key, so /agent/key 503s and every claimed job
+//   * the backend has no model key, so /agent/key 503s and every claimed job
 //     dies at "no LLM key" — the extension never holds a vendor key of its
 //     own, it stores the marker "backend-proxy" and calls POST /agent/llm,
 //     so a missing key on the BACKEND looks exactly like a broken extension;
 //   * the job was written with a nested `params` OBJECT instead of a
-//     JSON-encoded STRING, which PocketBase stores as "" — the agent then
+//     JSON-encoded STRING, which the backend stores as "" — the agent then
 //     runs with no task and start_url=about:blank;
 //   * the job carries lane="research" or no workflow metadata, so the
 //     extension's own poll filter can never see it;
@@ -81,7 +81,7 @@ const START_URL = arg("start-url", "https://example.com/");
 const TASK = arg("task", "open example.com and report the page heading");
 
 // The rig writes the owner it created here; a person should not have to know
-// their own PocketBase id to run a smoke test.
+// their own the backend id to run a smoke test.
 const ownerRefFile = join(process.env.ANTICIPY_RIG_DIR || join(homedir(), ".anticipy-rig"),
                           "state", "owner_ref");
 let OWNER_REF = arg("owner-ref", process.env.ANTICIPY_OWNER_REF || "");
@@ -229,7 +229,7 @@ function verdict() {
     // A hand-back is a legitimate ending and the arm demonstrably worked — but
     // "everything works" is not a thing to print over a run that stopped. Say
     // which ending it was and let the reader judge the reason. (A backend
-    // restart mid-run lands here too: PocketBase reloads itself when a hook
+    // restart mid-run lands here too: the backend reloads itself when a hook
     // file changes, and a model call in that second comes back 502.)
     if (ending && ending.status !== "done") {
       console.log("VERDICT: the chain works — backend, pairing, model, queue, and a real Chrome ran the job.");
@@ -356,7 +356,7 @@ if (!OWNER_REF) {
     fail("a paired browser is given a model", [
       `GET /agent/key -> ${r.status} ${short(r.text, 200)}`,
       r.status === 503
-        ? "PocketBase itself has no OPENROUTER_API_KEY/GEMINI_API_KEY in its environment (backend/pb_hooks/agent_key.pb.js:24). Every job a browser claims then dies at \"no LLM key\" — see the env block in proof/local_rig.sh start_backend."
+        ? "the backend itself has no OPENROUTER_API_KEY/GEMINI_API_KEY in its environment (migration/workers/src/llm.ts). Every job a browser claims then dies at \"no LLM key\" — see the env block in proof/local_rig.sh start_backend."
         : "Without a model the click-loop cannot take a single step.",
     ]);
     await tidy();
@@ -504,7 +504,7 @@ const lineage = `smoke-${randomUUID().slice(0, 8)}`;
   if (typeof raw !== "string" || !raw || !parsed) {
     fail("the queued job survived the write", [
       `params came back as ${typeof raw} ${raw === "" ? "(empty string)" : short(raw, 80)}`,
-      "PocketBase stores a nested object in a text column as \"\" — the agent would run with no task at all.",
+      "the backend stores a nested object in a text column as \"\" — the agent would run with no task at all.",
     ]);
     await tidy();
     verdict();

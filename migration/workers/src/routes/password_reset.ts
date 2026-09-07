@@ -2,7 +2,7 @@
  * POST /auth/reset/request   { email }
  * POST /auth/reset/confirm   { email, code, password }
  *
- * Ported from backend/pb_hooks/password_reset.pb.js. "I forgot my password" by
+ * Ported from migration/workers/src/routes/password_reset.ts. "I forgot my password" by
  * TEXT, because this image has no way to send mail.
  *
  * Both routes sit OUTSIDE /api/collections/, so the data-API guard never sees

@@ -1,5 +1,5 @@
 /**
- * src/policy/workflow_guard.ts — backend/pb_hooks/workflow_guard.pb.js:6-673.
+ * src/policy/workflow_guard.ts — migration/workers/src/policy/workflow_guard.ts.
  * 395 code lines, the largest of the four, registered SIXTH and LAST.
  * migration/spec/CONTRACT.md §1 calls it "the file the whole migration turns
  * on" and spends 430 lines of the contract on it.
@@ -29,7 +29,7 @@
  *     CONTRACT.md §1.2 — and porting it as fail-closed would refuse every
  *     pre-workflow row in production.
  */
-import { refuse, json, pbTime } from "../pb/wire.ts";
+import { refuse, json, pbTime } from "../api/wire.ts";
 import type { Ctx, Policy } from "./chain.ts";
 
 const BASE = "/api/collections/jobs/records";

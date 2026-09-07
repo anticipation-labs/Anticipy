@@ -8,7 +8,7 @@ OUTBOUND AUTHENTICATES WITH AN API KEY; INBOUND CANNOT. Outbound prefers
 TWILIO_API_KEY_SID + TWILIO_API_KEY_SECRET — scoped, revocable, rotatable —
 and falls back to TWILIO_AUTH_TOKEN (see `rest_credential`). Twilio signs
 INBOUND webhooks with the account auth token and offers no API-key
-equivalent, so backend/pb_hooks/sms.pb.js validates against TWILIO_AUTH_TOKEN
+equivalent, so migration/workers/src/routes/sms.ts validates against TWILIO_AUTH_TOKEN
 and always will. The two halves use different credentials on purpose; the
 auth token is not leftovers to be tidied away.
 
@@ -53,7 +53,7 @@ ACCOUNT_ENV = ("TWILIO_ACCOUNT_SID", "TWILIO_PHONE_NUMBER")
 API_KEY_ENV = ("TWILIO_API_KEY_SID", "TWILIO_API_KEY_SECRET")
 # Kept, and kept named, because the auth token is still (a) the fallback
 # outbound credential and (b) the ONLY thing on earth that can validate an
-# INBOUND webhook signature (backend/pb_hooks/sms.pb.js:77). "Finishing" the
+# INBOUND webhook signature (migration/workers/src/routes/sms.ts). "Finishing" the
 # API-key migration by deleting it silently 403s every text he sends.
 REQUIRED_ENV = ("TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_PHONE_NUMBER")
 
@@ -114,7 +114,7 @@ def api_base(env: Optional[Mapping[str, str]] = None) -> str:
     recorder and then asserts the URL, the Authorization header and every
     parameter of the request this file builds — a real send, executed by the
     real code, that no carrier ever hears about. Precedent, same reason:
-    backend/pb_hooks/password_reset.pb.js:104.
+    migration/workers/src/routes/password_reset.ts.
     """
     env = os.environ if env is None else env
     return (env.get("TWILIO_API_BASE") or "https://api.twilio.com").rstrip("/")
@@ -148,7 +148,7 @@ def rest_credential(env: Optional[Mapping[str, str]] = None) -> Credential:
 
     THE AUTH TOKEN IS NOT DEAD, AND MUST NOT BE DELETED. Twilio signs inbound
     webhooks with the account auth token and with nothing else; there is no
-    API-key equivalent, so backend/pb_hooks/sms.pb.js keeps reading
+    API-key equivalent, so migration/workers/src/routes/sms.ts keeps reading
     TWILIO_AUTH_TOKEN forever. Outbound may move; the signature check may not.
     Auth token also stays as the outbound FALLBACK so nothing breaks in the
     window before a key is minted.

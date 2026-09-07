@@ -33,9 +33,9 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from brain import pb  # noqa: E402
+from brain import backend  # noqa: E402
 
-# ---- in-memory PocketBase: everything in brain/ runs for real -------------
+# ---- in-memory the backend: everything in brain/ runs for real -------------
 JOBS: list[dict] = []
 
 
@@ -77,7 +77,7 @@ def _patch(url, json=None, timeout=None, **kw):
     return _R({}, ok=False)
 
 
-pb.get, pb.post, pb.patch = _get, _post, _patch
+backend.get, backend.post, backend.patch = _get, _post, _patch
 
 from brain.anticipy_core import Anticipy  # noqa: E402
 from brain.llm import LLM  # noqa: E402

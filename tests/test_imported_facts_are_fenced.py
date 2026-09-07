@@ -213,5 +213,7 @@ def test_importance_survives_the_trip():
     app = open(os.path.join(root, "app/ios/Anticipy/AnticipyApp.swift")).read()
     assert 'importance: question.importance' in app, "the interview does not send it"
     # And the column has to exist to receive it.
-    mig = open(os.path.join(root, "backend/pb_migrations/1700000040_event_importance.js")).read()
-    assert 'name: "importance"' in mig
+    schema = open(os.path.join(root, "migration/workers/src/api/schema.ts")).read()
+    assert "importance: N" in schema.split("events: {", 1)[1].split("},", 1)[0]
+    d1 = open(os.path.join(root, "migration/d1/schema.sql")).read()
+    assert '"importance"' in d1

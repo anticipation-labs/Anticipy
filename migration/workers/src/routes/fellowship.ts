@@ -14,7 +14,7 @@
  * site reads that same variable.
  */
 import { sha256Hex } from "../llm.ts";
-import { newRecordId, pbNow } from "../pb/wire.ts";
+import { newRecordId, pbNow } from "../api/wire.ts";
 
 export interface FellowEnv {
   DB: D1Database;

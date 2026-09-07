@@ -26,7 +26,7 @@
  * phoneSaveFailed bounce), could not save name/email/birthday, never reported
  * its timezone (quiet hours judged in the server's zone), could not remove its
  * number, and adopted none of its pre-account rows. The three bodies below are
- * the ports of backend/pb_hooks/owner_profile_upsert.pb.js, phone_remove.pb.js
+ * the ports of migration/workers/src/routes/service.ts, phone_remove.pb.js
  * and claim_legacy.pb.js.
  *
  * ONE TRANSACTION, WHERE D1 HAS ONE. All three hooks lean on PocketBase's
@@ -46,8 +46,8 @@
  * two simultaneous first writers is unchanged and is the real one: the partial
  * unique index idx_owner_profile_owner_ref (migration/d1/schema.sql:369-370).
  */
-import { verifyToken, type AuthEnv } from "../pb/auth.ts";
-import { newRecordId, pbNow } from "../pb/wire.ts";
+import { verifyToken, type AuthEnv } from "../api/auth.ts";
+import { newRecordId, pbNow } from "../api/wire.ts";
 
 const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), {
@@ -189,7 +189,7 @@ export async function authClaim(req: Request, env: ServiceEnv): Promise<Response
   // throwaway account, POST it here, and every legacy row moved -- including
   // the owner_profile carrying that person's name, email, phone and birthday.
   // And because an inbound text resolves through owner_profile.phone BEFORE
-  // owners (src/pb/sender.ts), every "yes, go ahead" the real owner texted was
+  // owners (src/api/sender.ts), every "yes, go ahead" the real owner texted was
   // thereafter filed under the stranger and released into their browser.
   // owners.legacy_uuid is UNIQUE, and the app posts back the value it
   // registered, so equality against the recorded one is the entire test -- and
@@ -286,7 +286,7 @@ export async function phoneRemove(req: Request, env: ServiceEnv): Promise<Respon
   const auth = await verifyToken(env, req.headers.get("Authorization") || "");
   if (!auth) return signIn();
   // Structurally unreachable while `owners` is the only auth collection
-  // (pb/auth.ts refuses any other collectionName outright), and kept because
+  // (api/auth.ts refuses any other collectionName outright), and kept because
   // it is the documented refusal and the day a second auth collection exists
   // is the day its absence would be a hole rather than dead code.
   if (auth.claims.collectionName !== "owners") {

@@ -40,7 +40,7 @@
  *   6. workflowGuard.ts                           workflow_guard.pb.js:6
  */
 import type { Node } from "../../filter-dsl.ts";
-import type { CollectionDef } from "../pb/schema.ts";
+import type { CollectionDef } from "../api/schema.ts";
 
 // ---------------------------------------------------------------------------
 // Principals — guard.pb.js recognises exactly three, plus anonymous.

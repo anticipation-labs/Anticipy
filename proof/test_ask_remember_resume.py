@@ -18,7 +18,7 @@ in isolation:
   5. the payload the browser is handed actually contains those facts
 
 Step 5 is the one that would make the other four pointless, and it crosses a
-language boundary (Python worker -> PocketBase hook -> JavaScript extension),
+language boundary (Python worker -> the backend hook -> JavaScript extension),
 which is exactly where a chain like this usually breaks silently.
 
 Usage:  PYTHONPATH=. python3 proof/test_ask_remember_resume.py
@@ -86,9 +86,9 @@ def shared_patch(url, **kw):
     return Resp(single={})
 
 
-assert W.pb is C.pb, "if these ever diverge, patch both"
-W.pb.get, W.pb.patch = shared_get, shared_patch
-W.pb.post = lambda *a, **k: Resp(single={})
+assert W.backend is C.backend, "if these ever diverge, patch both"
+W.backend.get, W.backend.patch = shared_get, shared_patch
+W.backend.post = lambda *a, **k: Resp(single={})
 
 
 class LLM:
@@ -131,16 +131,16 @@ check("and carries his go-ahead",
 check("she does not claim to be blocked any more",
       "still" not in (out.get("reply") or "").lower(), out.get("reply"))
 
-# 5 — the payload the browser is handed. This mirrors backend/pb_hooks/
-#     agent_key.pb.js, which is what the extension actually fetches.
+# 5 — the payload the browser is handed. This mirrors the Worker's key route
+#     (migration/workers/src/routes/agent.ts), which is what the extension fetches.
 owner_payload = {
     "first_name": PROFILE["first_name"], "last_name": PROFILE["last_name"],
     "email": PROFILE["email"], "phone": PROFILE["phone"],
     "birthday": PROFILE["birthday"], "facts": PROFILE["facts"],
 }
-hook_src = open("backend/pb_hooks/agent_key.pb.js").read()
-check("the backend hook really does send facts (not just the fixed columns)",
-      re.search(r"facts:\s*p\.getString\(\"facts\"\)", hook_src) is not None)
+route_src = open("migration/workers/src/routes/agent.ts").read()
+check("the key route really does send facts (not just the fixed columns)",
+      re.search(r"facts:\s*String\(p\.facts", route_src) is not None)
 
 # And the extension renders every one of them into the model's prompt.
 ext = open("extension/agent_loop.js").read()

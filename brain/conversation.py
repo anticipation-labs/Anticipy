@@ -33,7 +33,7 @@ from typing import Callable, Optional
 
 import requests
 
-from . import pb
+from . import backend
 
 from .anticipy_core import TEXTING_STYLE, _missing_fact_question, memory_notes
 from .llm import LLM, decision_budget
@@ -398,7 +398,7 @@ class Conversation:
             #
             # NO PICTURE ON THIS LANE, and none is needed: the app reads the
             # owner's own evidence rows through his signed-in session
-            # (backend/pb_hooks/evidence.pb.js), so an in-app reply does not
+            # (migration/workers/src/assets.ts), so an in-app reply does not
             # need a public URL to exist for a picture to be seen.
             return {"to": phone, "body": body, "via": "in-app"}
         # Conditional for the reason TwilioTransport.send gives: transports
@@ -710,7 +710,7 @@ Use {"facts": {}} when there is nothing durable."""
         and dies with the process; this does not."""
         try:
             # A newly minted DRAFT is also stopped for information. Its legacy
-            # row status stays awaiting_confirm because PocketBase admits new
+            # row status stays awaiting_confirm because the backend admits new
             # workflow rows through that entry state, but the canonical state
             # is what decides whether the owner owes details or approval.
             filt = ('(status="needs_user" || '
@@ -718,7 +718,7 @@ Use {"facts": {}} when there is nothing durable."""
             owner_filter = self._owner_filter()
             if owner_filter:
                 filt += f" && {owner_filter}"
-            r = pb.get(f"{self.anticipy.backend_url}/api/collections/jobs/records",
+            r = backend.get(f"{self.anticipy.backend_url}/api/collections/jobs/records",
                        params={"filter": filt, "perPage": 5, "sort": "-updated"}, timeout=10)
             if not r.ok:
                 return []
@@ -770,7 +770,7 @@ Use {"facts": {}} when there is nothing durable."""
             owner_filter = self._owner_filter()
             if owner_filter:
                 filt += f" && {owner_filter}"
-            r = pb.get(f"{self.anticipy.backend_url}/api/collections/jobs/records",
+            r = backend.get(f"{self.anticipy.backend_url}/api/collections/jobs/records",
                        params={"filter": filt, "perPage": 5, "sort": "-updated"},
                        timeout=10)
             if not r.ok:
@@ -821,7 +821,7 @@ Use {"facts": {}} when there is nothing durable."""
             owner_filter = self._owner_filter()
             if not owner_filter:
                 return {}
-            r = pb.get(f"{base}/api/collections/owner_profile/records",
+            r = backend.get(f"{base}/api/collections/owner_profile/records",
                        params={"filter": owner_filter, "perPage": 1,
                                "sort": "-updated"}, timeout=10)
             items = r.json().get("items", []) if r.ok else []
@@ -875,7 +875,7 @@ Use {"facts": {}} when there is nothing durable."""
                        if not str(rec.get(k) or "").strip()}
             payload = {"facts": json.dumps(known)}
             payload.update(columns)
-            pb.patch(f"{base}/api/collections/owner_profile/records/{rec['id']}",
+            backend.patch(f"{base}/api/collections/owner_profile/records/{rec['id']}",
                      json=payload, timeout=10)
             if columns:
                 print(f"learned about him for good: {sorted(columns)}")
@@ -986,7 +986,7 @@ Use {"facts": {}} when there is nothing durable."""
             owner_filter = self._owner_filter()
             if owner_filter:
                 filt += f" && {owner_filter}"
-            r = pb.get(f"{base}/api/collections/jobs/records",
+            r = backend.get(f"{base}/api/collections/jobs/records",
                        params={"filter": filt, "perPage": 10, "sort": "-updated"}, timeout=10)
             items = r.json().get("items", []) if r.ok else []
             if not items:
@@ -1198,7 +1198,7 @@ Use {"facts": {}} when there is nothing durable."""
             kind_filter = ('(kind="anticipy_says" || kind="sms_reply"'
                            ' || kind="app_reply" || kind="anticipy_text"'
                            ' || (kind="transcript" && source="typed"))')
-            r = pb.get(
+            r = backend.get(
                 f"{self.anticipy.backend_url}/api/collections/events/records",
                 params={"filter": f"{kind_filter} && {owner_filter}",
                         "perPage": limit, "sort": "-created"},
@@ -1232,7 +1232,7 @@ Use {"facts": {}} when there is nothing durable."""
             owner_filter = self._owner_filter()
             if owner_filter:
                 filt += f" && {owner_filter}"
-            r = pb.get(
+            r = backend.get(
                 f"{self.anticipy.backend_url}/api/collections/jobs/records",
                 params={"filter": filt, "perPage": 5, "sort": "-created"},
                 timeout=10,
@@ -1250,7 +1250,7 @@ Use {"facts": {}} when there is nothing durable."""
             owner_filter = self._owner_filter()
             if owner_filter:
                 filt += f" && {owner_filter}"
-            r = pb.get(
+            r = backend.get(
                 f"{self.anticipy.backend_url}/api/collections/jobs/records",
                 params={"filter": filt, "perPage": 5, "sort": "-created"},
                 timeout=10,
@@ -1522,7 +1522,7 @@ Reply ONLY with compact JSON: {"verdict": "go"|"detail"|"no"}
 
     def _fetch(self, job_id: str) -> Optional[dict]:
         try:
-            r = pb.get(
+            r = backend.get(
                 f"{self.anticipy.backend_url}/api/collections/jobs/records/{job_id}",
                 timeout=10)
             if not r.ok:
@@ -1929,7 +1929,7 @@ No model access or insufficient context is unavailable, never answered."""
         'yes', the write 4xx's, and Anticipy says 'On it' about a job that
         never moved."""
         try:
-            r = pb.patch(
+            r = backend.patch(
                 f"{self.anticipy.backend_url}/api/collections/jobs/records/{job_id}",
                 json=fields, timeout=10)
             if not getattr(r, "ok", False):

@@ -1,5 +1,5 @@
 /**
- * src/policy/research_lane.ts — backend/pb_hooks/research_lane.pb.js:272-727.
+ * src/policy/research_lane.ts — migration/workers/src/policy/research_lane.ts.
  * 228 code lines. Registered FIFTH.
  *
  * Two jobs, and the first is the one that makes this migration hard.
@@ -28,7 +28,7 @@
  *   claim. Ported below with their file:line anchors.
  */
 import { parseFilter, andNot, mentionsField, FilterError, type Node } from "../../filter-dsl.ts";
-import { refuse, badRequest, stillInTheFuture } from "../pb/wire.ts";
+import { refuse, badRequest, stillInTheFuture } from "../api/wire.ts";
 import type { Ctx, Policy } from "./chain.ts";
 
 const JOBS_BASE = "/api/collections/jobs/records";

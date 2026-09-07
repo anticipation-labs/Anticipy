@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { FakeD1, asD1 } from "./fake-d1.ts";
-import { issueToken } from "../src/pb/auth.ts";
+import { issueToken } from "../src/api/auth.ts";
 import { notificationPolicy, notificationPolicyAt } from "../src/routes/notification_policy.ts";
 import { QUIET_HOURS_START, QUIET_HOURS_END } from "../src/connections/nudge.ts";
 

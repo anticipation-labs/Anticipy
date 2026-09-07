@@ -26,7 +26,7 @@ from typing import Optional
 
 import requests
 
-from . import pb
+from . import backend
 from . import research
 from .spoken_consent import judge as judge_spoken_consent
 from .speech_request import information_request
@@ -622,7 +622,7 @@ LINEAGE_AMEND_WINDOW = OPEN_PLAN_WINDOW
 # genuine duplicate IS a card that exists on his desk). Deliberately the
 # empty string: falsy, so every truthiness check that already reads this
 # return value keeps behaving exactly as it did, and impossible to confuse
-# with a PocketBase record id, which is always fifteen characters. hear()
+# with a the backend record id, which is always fifteen characters. hear()
 # compares against this constant to tell "already waiting on him" apart from
 # "that errand exists in no system at all".
 QUEUE_WRITE_FAILED = ""
@@ -632,7 +632,7 @@ QUEUE_WRITE_FAILED = ""
 # It is the same string `job_lane` returns for read-only work, and that is the
 # point rather than an accident: the research gate needs a value that is
 # already excluded at BOTH enforcement points HANDS 1 §5.5 names —
-# backend/pb_hooks/research_lane.pb.js's poll rewrite, and every shipped
+# migration/workers/src/policy/research_lane.ts's poll rewrite, and every shipped
 # extension's own `lane!="research"` filter — and a NEW lane string would be
 # excluded by neither. Client code cannot be recalled; a third value would be
 # claimable by every extension in the wild until they all updated, which is
@@ -657,7 +657,7 @@ RESEARCH_LANE = "research"
 #
 # So the value is new, and what the scar demands of a new value is that BOTH
 # enforcement points name it. THIS FILE CANNOT DO THAT — both of them live in
-# `backend/pb_hooks/research_lane.pb.js`, and queuing a row onto a lane the
+# `migration/workers/src/policy/research_lane.ts`, and queuing a row onto a lane the
 # server does not know about is exactly the hole. Verified in the tree at the
 # time of writing, and it is a standing dependency of this constant, not a
 # courtesy:
@@ -706,7 +706,7 @@ DEVICE_CALENDAR_LANE = "device_calendar"
 # the row are the brain's to choose. When
 # `test_the_brain_and_the_phone_spell_the_act_the_same` goes red, the file
 # that moves is `CalendarHandPolicy.swift`, never this one — and the same is
-# true of `backend/pb_hooks/research_lane.pb.js`, which reads `act_type` off
+# true of `migration/workers/src/policy/research_lane.ts`, which reads `act_type` off
 # the row this file wrote. An earlier draft of this block claimed the opposite
 # ("these are the phone's words, not ours"), which is how a client file ends
 # up deciding what the server may mint.
@@ -850,7 +850,7 @@ DEVICE_ACT_LANES: dict[tuple[str, str, str], str] = {
 # (app/ios/Anticipy/Backend/CalendarHandPolicy.swift:110) does the same on the
 # phone, saying why in its own comment: "an orphan is worse than a refusal,
 # because a refusal is countable and an orphan is silence". THE BRAIN WAS THE
-# LAYER THAT DID NOT. Its two readers compared raw strings inside a PocketBase
+# LAYER THAT DID NOT. Its two readers compared raw strings inside a the backend
 # filter, and SQLite's `=` is case-sensitive, so a row stored as
 # `"Device_Calendar"` — which the hook's immutability leg accepts as no change
 # at all, because it normalises both sides before comparing — was a device row
@@ -1257,7 +1257,7 @@ class Anticipy:
         self.voice = voice
         self.owner_phone = owner_phone
         self.owner_id = owner_id
-        # Canonical PocketBase owners-record id. owner_id is the legacy device
+        # Canonical the backend owners-record id. owner_id is the legacy device
         # UUID retained only while old extensions drain.
         self.owner_ref = owner_ref
         self.conversation = conversation
@@ -1329,7 +1329,7 @@ class Anticipy:
         self._last_loop_sweep: float = 0.0
 
     def _owner_filter(self) -> str:
-        """Return the strongest available tenant filter for PocketBase."""
+        """Return the strongest available tenant filter for the backend."""
         if self.owner_ref:
             return f'owner_ref="{self.owner_ref}"'
         return f'owner="{self.owner_id}"' if self.owner_id else ""
@@ -1392,7 +1392,7 @@ class Anticipy:
             owner_filter = self._owner_filter()
             if not owner_filter:
                 return None
-            r = pb.get(f"{self.backend_url}/api/collections/jobs/records",
+            r = backend.get(f"{self.backend_url}/api/collections/jobs/records",
                        params={"filter": f'status="awaiting_confirm" && {owner_filter}',
                                "perPage": 100, "sort": "-created"}, timeout=10)
             if not r.ok:
@@ -1423,7 +1423,7 @@ class Anticipy:
             # The view's ETag advertises that the API supports atomic If-Match.
             # Re-read after the model: even a correct judgment cannot approve a
             # scope another writer changed while it was thinking.
-            latest = pb.get(
+            latest = backend.get(
                 f"{self.backend_url}/api/collections/jobs/records/{job['id']}", timeout=10)
             if not latest.ok or latest.json() != job:
                 return None
@@ -1464,7 +1464,7 @@ class Anticipy:
                 "source_event_id": getattr(self, "_source_event_id", ""),
             }
             fields["params"] = json.dumps(params)
-            pr = pb.patch(
+            pr = backend.patch(
                 f"{self.backend_url}/api/collections/jobs/records/{job['id']}",
                 json=fields, headers={"If-Match": etag}, timeout=10)
             return (job.get("goal") or None) if getattr(pr, "ok", False) else None
@@ -1562,7 +1562,7 @@ class Anticipy:
         truncation at the wrong byte boundary, room noise), and until this rode
         along on the job every decision, card and outcome in the backend was
         provenance-blind: events.source has existed since
-        backend/pb_migrations/1700000004_segments.js:51 ("// phone | pendant")
+        migration/d1/schema.sql ("// phone | pendant")
         and no build ever wrote or read it, so "did the pendant run of this
         errand work as well as the phone run?" had no answer anywhere in the
         data. Empty means UNKNOWN provenance and is never a value: it is left
@@ -3042,7 +3042,7 @@ class Anticipy:
         if evidence["status"] == "not_created":
             return evidence
         try:
-            response = pb.get(f"{self.backend_url}/api/collections/jobs/records/{job_id}",
+            response = backend.get(f"{self.backend_url}/api/collections/jobs/records/{job_id}",
                               timeout=5)
             response.raise_for_status()
             row = response.json()
@@ -3381,7 +3381,7 @@ class Anticipy:
         try:
             fields = {"status": "cancelled", "result": why}
             try:
-                got = pb.get(
+                got = backend.get(
                     f"{self.backend_url}/api/collections/jobs/records/{job_id}",
                     timeout=10)
                 job = got.json() if getattr(got, "ok", False) else {}
@@ -3399,7 +3399,7 @@ class Anticipy:
             # as success — and callers acted on that lie: "scrap the Earls
             # booking" closed the memory loop and told him it was retracted
             # while the card sat on his desk, alive.
-            r = pb.patch(f"{self.backend_url}/api/collections/jobs/records/{job_id}",
+            r = backend.patch(f"{self.backend_url}/api/collections/jobs/records/{job_id}",
                          json=fields, timeout=10)
             if not getattr(r, "ok", False):
                 print(f"cancel REFUSED for {job_id}: "
@@ -3428,7 +3428,7 @@ class Anticipy:
             filt = f'kind="anticipy_says" && created>="{since}"'
             if self.owner_ref:
                 filt += f' && owner_ref="{self.owner_ref}"'
-            r = pb.get(f"{self.backend_url}/api/collections/events/records",
+            r = backend.get(f"{self.backend_url}/api/collections/events/records",
                        params={"filter": filt, "perPage": 50, "sort": "-created"},
                        timeout=10)
             if not getattr(r, "ok", False):
@@ -3579,7 +3579,7 @@ class Anticipy:
             filt = f'status="awaiting_confirm" && lineage_key="{safe}"'
             if self.owner_ref:
                 filt += f' && owner_ref="{self.owner_ref}"'
-            r = pb.get(
+            r = backend.get(
                 f"{self.backend_url}/api/collections/jobs/records",
                 params={"filter": filt, "perPage": 1, "sort": "-created"},
                 timeout=10)
@@ -4225,7 +4225,7 @@ class Anticipy:
                 params.get("commitment_id"))
             if commitment_key:
                 # The read-before-create check makes the common path cheap and
-                # friendly. This field is the race barrier: PocketBase has a
+                # friendly. This field is the race barrier: the backend has a
                 # partial unique index over ACTIVE rows, so two workers that
                 # both saw an empty queue still cannot mint two workflows for
                 # the same promise.
@@ -4238,7 +4238,7 @@ class Anticipy:
                 body["result"] = question
             if self.owner_ref:
                 body["owner_ref"] = self.owner_ref
-            r = pb.post(
+            r = backend.post(
                 f"{self.backend_url}/api/collections/jobs/records",
                 json=body,
                 timeout=10,
@@ -4277,7 +4277,7 @@ class Anticipy:
                             active = ('(status="awaiting_confirm" || '
                                       'status="queued" || status="running" || '
                                       'status="needs_user")')
-                            found = pb.get(
+                            found = backend.get(
                                 f"{self.backend_url}/api/collections/jobs/records",
                                 params={"filter":
                                         f'commitment_key="{commitment_key}" && {active}',
@@ -4300,7 +4300,7 @@ class Anticipy:
                                 return existing_id
                         wid = workflow_fields.get("workflow_id") or ""
                         if wid:
-                            found = pb.get(
+                            found = backend.get(
                                 f"{self.backend_url}/api/collections/jobs/records",
                                 params={"filter": f'workflow_id="{wid}"',
                                         "owner_ref": self.owner_ref or ""},
@@ -4312,7 +4312,7 @@ class Anticipy:
                                 amend = {"goal": goal, "params": json.dumps(params)}
                                 if self.owner_ref:
                                     amend["owner_ref"] = self.owner_ref
-                                r2 = pb.patch(
+                                r2 = backend.patch(
                                     f"{self.backend_url}/api/collections/jobs/records/{existing['id']}",
                                     json=amend, timeout=10,
                                 )
@@ -4711,7 +4711,7 @@ class Anticipy:
             # retained only so a rolling deploy never briefly forks work.
             commitment_key = self._commitment_key(wanted)
             if commitment_key:
-                keyed = pb.get(
+                keyed = backend.get(
                     f"{self.backend_url}/api/collections/jobs/records",
                     params={"filter":
                             f'{filt} && commitment_key="{commitment_key}"',
@@ -4721,7 +4721,7 @@ class Anticipy:
                     rows = (keyed.json() or {}).get("items", [])
                     if rows:
                         return rows[0]
-            r = pb.get(f"{self.backend_url}/api/collections/jobs/records",
+            r = backend.get(f"{self.backend_url}/api/collections/jobs/records",
                        params={"filter": filt, "perPage": 50,
                                "sort": "-created"}, timeout=10)
             if not getattr(r, "ok", False):
@@ -4894,7 +4894,7 @@ class Anticipy:
         # identity; the version bump carries the change.
         fields.pop("workflow_id", None)
         try:
-            r = pb.patch(f"{self.backend_url}/api/collections/jobs/records/{job_id}",
+            r = backend.patch(f"{self.backend_url}/api/collections/jobs/records/{job_id}",
                          json=fields, timeout=10)
             # requests does not raise on 4xx, and this except swallowed the
             # rest — so a rejected amendment read exactly like an applied one
@@ -5126,7 +5126,7 @@ class Anticipy:
             owner_filter = self._owner_filter()
             if owner_filter:
                 filt = f"({filt}) && {owner_filter}"
-            r = pb.get(f"{self.backend_url}/api/collections/jobs/records",
+            r = backend.get(f"{self.backend_url}/api/collections/jobs/records",
                        params={"filter": filt, "perPage": 10, "sort": "-created"},
                        timeout=10)
             return r.json().get("items", []) if r.ok else []
@@ -5140,7 +5140,7 @@ class Anticipy:
             owner_filter = self._owner_filter()
             if owner_filter:
                 filt = f"({filt}) && {owner_filter}"
-            r = pb.get(f"{self.backend_url}/api/collections/jobs/records",
+            r = backend.get(f"{self.backend_url}/api/collections/jobs/records",
                        params={"filter": filt, "perPage": 20, "sort": "-created"},
                        timeout=10)
             return r.json().get("items", []) if r.ok else []
@@ -5218,7 +5218,7 @@ class Anticipy:
             owner_filter = self._owner_filter()
             if owner_filter:
                 filt = f"({filt}) && {owner_filter}"
-            r = pb.get(f"{self.backend_url}/api/collections/jobs/records",
+            r = backend.get(f"{self.backend_url}/api/collections/jobs/records",
                        params={"filter": filt, "perPage": 50, "sort": "-updated"},
                        timeout=10)
             items = r.json().get("items", []) if getattr(r, "ok", False) else []
@@ -5248,7 +5248,7 @@ class Anticipy:
         for loop in self.loops:
             if loop.job_id and loop.status in ("handling", "awaiting_ok"):
                 try:
-                    r = pb.get(
+                    r = backend.get(
                         f"{self.backend_url}/api/collections/jobs/records/{loop.job_id}",
                         timeout=10)
                     status = r.json().get("status")

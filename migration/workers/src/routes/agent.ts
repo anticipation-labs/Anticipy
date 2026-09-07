@@ -6,7 +6,7 @@
  *   POST /agent/llm                  the model proxy
  *   POST /agent/solve-captcha[/result]
  *
- * Ported from backend/pb_hooks/agent_auth.pb.js, agent_key.pb.js and
+ * Ported from migration/workers/src/routes/agent.ts, agent_key.pb.js and
  * captcha_solve.pb.js.
  *
  * THE VENDOR KEY NEVER LEAVES THE SERVER. /agent/key answers `llm_proxy: true`

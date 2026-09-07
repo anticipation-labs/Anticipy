@@ -31,7 +31,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import brain.worker as W  # noqa: E402
 
 
-# The events columns the Worker actually has (migration/workers/src/pb/
+# The events columns the Worker actually has (migration/workers/src/api/
 # schema.ts). Copied deliberately rather than imported: this file is the
 # brain's half of a contract with a TypeScript module, and the day somebody
 # adds `owner` to one side and not the other, this list is what disagrees.
@@ -84,7 +84,7 @@ def backend(monkeypatch):
     fake = FakeWorker()
     monkeypatch.setattr(W, "ACTIVE_OWNER_REF", "qeuy6sv1raof9rw")
     monkeypatch.setattr(W, "ACTIVE_OWNER_ID", "9558c9f6-legacy-uuid")
-    monkeypatch.setattr(W.pb, "post", fake.post)
+    monkeypatch.setattr(W.backend, "post", fake.post)
     return fake
 
 

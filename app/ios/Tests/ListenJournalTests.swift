@@ -60,7 +60,7 @@ struct ListenJournalTests {
               cause.entries.count == 1 && cause.entries[0].contains("routeChange"))
 
         // ------------------------------------------------------------ 4. bounded
-        // backend/start.sh exists in this repo because a disposable log database
+        // the retired backend container's start script exists in this repo because a disposable log database
         // filled a volume and took production down. An unbounded journal on a
         // phone is the same mistake at smaller scale, and the newest events are
         // the ones that explain the failure being investigated.
@@ -172,7 +172,7 @@ struct ListenJournalTests {
         // happened this morning". A file sink can.
         //
         // Bounded and rotated for the reason the class header already gives:
-        // backend/start.sh exists in this repo because a disposable log filled
+        // the retired backend container's start script exists in this repo because a disposable log filled
         // a volume and took production down. Two files, newest wins.
         func tempDir() -> URL {
             let d = FileManager.default.temporaryDirectory

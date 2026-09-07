@@ -17,7 +17,7 @@
  * ported. It is written down in STATUS.md as such.
  */
 import { sha256Hex } from "../llm.ts";
-import { newRecordId, pbNow } from "../pb/wire.ts";
+import { newRecordId, pbNow } from "../api/wire.ts";
 import { hqCors, type HqEnv } from "./hq.ts";
 import { chooseProvider } from "../messaging.ts";
 

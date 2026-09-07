@@ -33,7 +33,7 @@ NOW = datetime(2026, 8, 25, 12, 0, 0, tzinfo=timezone.utc)
 
 
 def seg(*, spoke_ago, arrived_ago, started_ago=120.0, **extra):
-    """A segment row as PocketBase holds one. `last_speech_at` is CAPTURE
+    """A segment row as the backend holds one. `last_speech_at` is CAPTURE
     time (when he stopped talking); `updated` is ARRIVAL time (when the last
     row for it landed). They are different clocks answering different
     questions and this whole rule turns on that."""
@@ -732,7 +732,7 @@ class FakePB:
         self.params = params or {}
         rows = list(self.rows)
         want = self.params.get("sort") or ""
-        # PocketBase sorts server-side. Only the columns it has can be asked
+        # the backend sorts server-side. Only the columns it has can be asked
         # for, and it always answers in the order it was asked.
         if want.lstrip("-") in ("created", "capture_started_at"):
             rows.sort(key=lambda r: r.get(want.lstrip("-")) or "",
@@ -746,7 +746,7 @@ def test_the_context_that_feeds_the_model_is_ordered_by_capture(monkeypatch):
     #6551 as the bug it prevents — and the one function that feeds the model
     breaks it. Our pendant is store-and-forward, so backlog reaches the
     prompt out of order."""
-    from brain import pb
+    from brain import backend
     from brain.segmenter import SegmentStore
     # Spoken A, B, C. Delivered C, A, B — the pendant flushed C from its
     # buffer first. Chosen so that arrival order is wrong in BOTH directions:
@@ -763,7 +763,7 @@ def test_the_context_that_feeds_the_model_is_ordered_by_capture(monkeypatch):
          "created": "2026-08-25T12:09:00.000Z"},
     ]
     fake = FakePB(rows)
-    monkeypatch.setattr(pb, "get", fake.get)
+    monkeypatch.setattr(backend, "get", fake.get)
     got = SegmentStore("http://x").recent_turns("s1")
     assert got == ["the flight is on tuesday", "book it then", "we land at six"]
     assert got != ["we land at six", "the flight is on tuesday", "book it then"]
@@ -772,12 +772,12 @@ def test_the_context_that_feeds_the_model_is_ordered_by_capture(monkeypatch):
 def test_a_turn_with_no_capture_stamp_still_reaches_the_prompt(monkeypatch):
     """Every historical row has no capture stamp. Ordering by a column that
     is empty on 2209 rows must degrade to today's behaviour, not to silence."""
-    from brain import pb
+    from brain import backend
     from brain.segmenter import SegmentStore
     rows = [{"id": "a", "text": "first", "created": "2026-08-25T12:00:00.000Z"},
             {"id": "b", "text": "second", "created": "2026-08-25T12:00:30.000Z"}]
     fake = FakePB(rows)
-    monkeypatch.setattr(pb, "get", fake.get)
+    monkeypatch.setattr(backend, "get", fake.get)
     assert SegmentStore("http://x").recent_turns("s1") == ["first", "second"]
 
 

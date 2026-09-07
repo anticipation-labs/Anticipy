@@ -2539,7 +2539,7 @@ def self_test() -> int:
                           ("https://evil-anticipy.ai", False),
                           ("https://anticipy.ai.example.com", False),
                           ("http://localhost:8787", False),
-                          ("https://anticipy-backend.up.railway.app", False)]:
+                          ("https://anticipy-backend.up.example.net", False)]:
         cases.append((f"leg3    the credential may {'' if allowed else 'NOT '}go to {host}",
                       credential_may_be_sent(host) is allowed))
 
