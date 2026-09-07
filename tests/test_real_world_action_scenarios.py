@@ -228,9 +228,9 @@ def test_finished_work_names_the_channel_that_really_delivered_it(
             feed.append(dict(kwargs.get("json") or {}))
         return _Response()
 
-    monkeypatch.setattr(worker.pb, "get", fake_get)
-    monkeypatch.setattr(worker.pb, "post", fake_post)
-    monkeypatch.setattr(worker.pb, "patch", lambda *args, **kwargs: _Response())
+    monkeypatch.setattr(worker.backend, "get", fake_get)
+    monkeypatch.setattr(worker.backend, "post", fake_post)
+    monkeypatch.setattr(worker.backend, "patch", lambda *args, **kwargs: _Response())
     monkeypatch.setattr(worker, "CLOCK_QUIET_START", 25)
     monkeypatch.setattr(worker, "CLOCK_QUIET_END", 0)
 

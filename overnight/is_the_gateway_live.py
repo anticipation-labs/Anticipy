@@ -26,12 +26,10 @@ Workers Observability telemetry API answers 403 with a developer's OAuth
 token. So the brain writes its boot line to a `worker_status` events row
 instead (brain/worker.py publish_worker_status), refreshed in place every five
 minutes, and this file reads that row from the same backend every other live
-leg reads. `--source railway` keeps the old log path for the Railway worker,
-which is now the thing it is honest about: that worker, not this one.
+leg reads. The Railway log path this file once carried went with Railway
+(stopped 2026-09-05): there is one brain, and one place to read it.
 
-Three legs, the first two over the running brain's status text (or, with
-`--source railway`, over `railway logs -s worker -n 5000 --json`; flags
-confirmed on railway 5.49.2, lines arrive oldest first):
+Three legs, the first two over the running brain's status text:
 
   1  THE BANNER. The newest `worker up ·` line must carry
      `fallback=<name>:<model>`, not `fallback=none` and not nothing.
@@ -88,8 +86,7 @@ own structured log lines — a banner, a tally, a gateway provenance line —
 never over the words of a transcript. The one line family that carries
 speech (`heard: … holding the line`) is COUNTED and never printed.
 
-Read-only against the backend (and against Railway with --source railway).
-Exit code is the verdict:
+Read-only against the backend. Exit code is the verdict:
 
     0   PROVEN
     1   FAIL
@@ -97,7 +94,6 @@ Exit code is the verdict:
         is no banner, or there was nothing to measure
 
     python3 overnight/is_the_gateway_live.py
-    python3 overnight/is_the_gateway_live.py --source railway
     python3 overnight/is_the_gateway_live.py --probe
     python3 overnight/is_the_gateway_live.py --self-test
 """
@@ -125,7 +121,6 @@ import requests  # noqa: E402
 
 OK, BAD, INFO = "PASS", "FAIL", "...."
 SERVICE = "worker"
-LINES = 5000
 
 # Where the running brain writes the line its log cannot carry.
 STATUS_KIND = "worker_status"
@@ -148,31 +143,6 @@ END_MARKS = (" answered the probe", "no transport answered")
 RESCUE_MARK = " answered for "
 TRUNCATION_MARK = "(truncation)"
 HELD_MARK = "holding the line for a retry"
-
-
-def fetch_messages(lines: int = LINES, service: str = SERVICE):
-    """The worker's log lines, oldest first, or None when they cannot be
-    read — which is a different fact from "the log is empty"."""
-    try:
-        proc = subprocess.run(
-            ["railway", "logs", "-s", service, "-n", str(lines), "--json"],
-            capture_output=True, text=True, timeout=120)
-    except (OSError, subprocess.TimeoutExpired):
-        return None
-    if proc.returncode != 0:
-        return None
-    out: list[str] = []
-    for raw in proc.stdout.splitlines():
-        raw = raw.strip()
-        if not raw:
-            continue
-        try:
-            row = json.loads(raw)
-        except ValueError:
-            out.append(raw)
-            continue
-        out.append(str(row.get("message", "")) if isinstance(row, dict) else str(row))
-    return out
 
 
 def backend_url() -> str:
@@ -417,15 +387,6 @@ def self_test() -> int:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--lines", type=int, default=LINES,
-                    help="log lines to read from the worker (default 5000)")
-    ap.add_argument("--service", default=SERVICE,
-                    help="the Railway service name (default worker)")
-    ap.add_argument("--source", choices=("cloudflare", "railway"),
-                    default="cloudflare",
-                    help="which brain to grade: the Cloudflare container via "
-                         "its status row (default), or the Railway worker via "
-                         "its logs")
     ap.add_argument("--probe", action="store_true",
                     help="also make ONE real call with the primary made unreachable")
     ap.add_argument("--self-test", action="store_true",
@@ -436,22 +397,11 @@ def main() -> int:
 
     _env.load_and_announce(ROOT)
     rows = []
-    if args.source == "railway":
-        where = f"railway service `{args.service}`"
-        messages = fetch_messages(args.lines, args.service)
-        if messages is None:
-            rows.append((INFO, "railway logs", "could not be read — not logged "
-                         "in, no linked project, or the CLI is missing"))
-        else:
-            rows.append((INFO, f"log lines read from `{args.service}`",
-                         str(len(messages))))
-    else:
-        where = backend_url()
-        code0, status0, detail0, messages = status_verdict(
-            fetch_status_rows(where))
-        rows.append((status0, "0 THE RUNNING BRAIN", detail0))
-        if code0 != 0:
-            messages = None
+    where = backend_url()
+    code0, status0, detail0, messages = status_verdict(fetch_status_rows(where))
+    rows.append((status0, "0 THE RUNNING BRAIN", detail0))
+    if code0 != 0:
+        messages = None
 
     if messages is None:
         code1 = code2 = 2

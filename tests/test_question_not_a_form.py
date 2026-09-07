@@ -34,7 +34,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from brain import asking  # noqa: E402
-from brain import pb  # noqa: E402
+from brain import backend  # noqa: E402
 import brain.anticipy_core as core  # noqa: E402
 from brain.anticipy_core import Anticipy  # noqa: E402
 from brain.memory import Memory  # noqa: E402
@@ -166,9 +166,9 @@ def _anticipy(monkeypatch, missing):
     """The overheard-plan lane with no model to speak — the fallback path that
     produced the live text."""
     fake = Fake()
-    monkeypatch.setattr(pb, "get", fake.get)
-    monkeypatch.setattr(pb, "post", fake.post)
-    monkeypatch.setattr(pb, "patch", fake.patch)
+    monkeypatch.setattr(backend, "get", fake.get)
+    monkeypatch.setattr(backend, "post", fake.post)
+    monkeypatch.setattr(backend, "patch", fake.patch)
     a = Anticipy(memory=DeadMemory(), owner_id="form")
     # owes="owner" stated since 2026-09-05 (Omi port 10a): the ambient
     # held-card path these legs pin is the path of a plan that is HIS.

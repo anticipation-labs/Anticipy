@@ -64,7 +64,7 @@ def _pb_returning(monkeypatch, items, posts=None):
                 def json():
                     return {"id": "job1", "status": "awaiting_confirm"}
             return Response()
-    monkeypatch.setattr(C, "pb", FakePB)
+    monkeypatch.setattr(C, "backend", FakePB)
 
 
 def test_the_card_records_which_promise_it_is_keeping(monkeypatch):
@@ -148,7 +148,7 @@ def test_the_sweep_does_not_ask_the_backend_on_every_poll(monkeypatch):
                 def json():
                     return {"items": []}
             return Response()
-    monkeypatch.setattr(C, "pb", CountingPB)
+    monkeypatch.setattr(C, "backend", CountingPB)
     a = Anticipy(memory=mem, llm=None, owner_id="t")
     a.review_loops()
     assert len(calls) == 1

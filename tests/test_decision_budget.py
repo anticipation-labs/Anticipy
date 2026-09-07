@@ -163,9 +163,9 @@ def _rig(monkeypatch, transport: Transport, queue: bool = True):
     monkeypatch.setattr(llm, "_post_json", transport)
     monkeypatch.setattr(llm, "_clock", lambda: transport.clock["t"])
     monkeypatch.setattr(llm, "_LAST_SPENT", None)
-    monkeypatch.setattr(core.pb, "get", _refuse)
-    monkeypatch.setattr(core.pb, "post", _refuse)
-    monkeypatch.setattr(core.pb, "patch", _refuse)
+    monkeypatch.setattr(core.backend, "get", _refuse)
+    monkeypatch.setattr(core.backend, "post", _refuse)
+    monkeypatch.setattr(core.backend, "patch", _refuse)
     model = llm.LLM(api_key="test-key")
     assert model.live and not model.gemini_api_key, \
         "the leg must run LLM.chat -> _openrouter -> _post_json for real"
@@ -533,7 +533,7 @@ def test_the_row_carries_the_measurement_only_when_measured(monkeypatch):
         status_code = 200
 
     monkeypatch.setattr(W, "_HEARD_COLUMNS_ACCEPTED", True)
-    monkeypatch.setattr(W.pb, "patch",
+    monkeypatch.setattr(W.backend, "patch",
                         lambda url, **kw: bodies.append(kw["json"]) or _Ok())
     assert W.mark_processed("ev", "act", goal=GOAL, heard_ms=1234, heard_calls=9)
     assert len(bodies) == 1, "an accepted stamp is ONE round trip, as today"
@@ -572,7 +572,7 @@ def test_a_backend_that_throws_on_the_columns_still_lands_the_decision(monkeypat
         return _Reply(500 if measured else 200)
 
     monkeypatch.setattr(W, "_HEARD_COLUMNS_ACCEPTED", True)
-    monkeypatch.setattr(W.pb, "patch", patch)
+    monkeypatch.setattr(W.backend, "patch", patch)
     assert W.mark_processed("ev1", "act", goal=GOAL, heard_ms=1234, heard_calls=9) is True
     assert len(bodies) == 2, "one retry, at once, without the measurement"
     assert "heard_ms" in bodies[0] and bodies[0]["decision"] == "act"
@@ -607,7 +607,7 @@ def test_a_backend_without_the_columns_still_lands_the_decision(monkeypatch):
         return _Reply(400 if unknown else 200)
 
     monkeypatch.setattr(W, "_HEARD_COLUMNS_ACCEPTED", True)
-    monkeypatch.setattr(W.pb, "patch", patch)
+    monkeypatch.setattr(W.backend, "patch", patch)
     assert W.mark_processed("ev1", "act", goal=GOAL, heard_ms=1234, heard_calls=9) is True
     assert len(bodies) == 2, "one retry, at once, without the measurement"
     assert "heard_ms" in bodies[0] and bodies[0]["decision"] == "act"
@@ -636,7 +636,7 @@ def test_a_transient_failure_of_the_stamp_is_not_read_as_missing_columns(monkeyp
         status_code = 503
 
     monkeypatch.setattr(W, "_HEARD_COLUMNS_ACCEPTED", True)
-    monkeypatch.setattr(W.pb, "patch",
+    monkeypatch.setattr(W.backend, "patch",
                         lambda url, **kw: bodies.append(kw["json"]) or _Down())
     assert W.mark_processed("ev", "act", goal=GOAL, heard_ms=1234, heard_calls=9) is False
     assert len(bodies) == 2, "one retry without the measurement, and it fails too: the backend is down"
@@ -659,7 +659,7 @@ def _real_mint_rig(monkeypatch, transport: Transport):
         def json(self):
             return {"id": f"job-{len(posted)}", "status": "awaiting_confirm"}
 
-    monkeypatch.setattr(core.pb, "post",
+    monkeypatch.setattr(core.backend, "post",
                         lambda url, **kw: posted.append(kw.get("json") or {})
                         or _Created())
     a._running_jobs = lambda: [{"id": "running-1", "status": "running",

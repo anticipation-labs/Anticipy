@@ -52,7 +52,7 @@ for i in range(RUNS):
     a = Anticipy(memory=mem, llm=llm)
     fake = FakeJobs()
     import brain.anticipy_core as core
-    core.pb.post = fake.post
+    core.backend.post = fake.post
     out = a.hear(LINE)
     d = out["decision"]
     print(f"\n=== run {i+1} ===")

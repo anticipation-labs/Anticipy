@@ -84,9 +84,9 @@ def wire(monkeypatch, row, patches, key="test-key", tavily_key=None):
         state.update(body)
         return Resp()
 
-    monkeypatch.setattr(W.pb, "get", fake_get)
-    monkeypatch.setattr(W.pb, "patch", fake_patch)
-    monkeypatch.setattr(W.pb, "post", lambda url, **kw: Resp())
+    monkeypatch.setattr(W.backend, "get", fake_get)
+    monkeypatch.setattr(W.backend, "patch", fake_patch)
+    monkeypatch.setattr(W.backend, "post", lambda url, **kw: Resp())
     return state
 
 

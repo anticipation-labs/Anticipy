@@ -64,8 +64,8 @@ def run(agents, jobs, events=None, hour=14):
             return Resp([e for e in evs if not m or e.get("decision") == m.group(1)])
         return Resp()
 
-    W.pb.get = get
-    W.pb.post = lambda url, **kw: posted.append(kw.get("json") or {}) or Resp()
+    W.backend.get = get
+    W.backend.post = lambda url, **kw: posted.append(kw.get("json") or {}) or Resp()
     anticipy = types.SimpleNamespace(
         owner_id="X", notify_owner=lambda m, channel="sms": (sent.append(m), {"sid": "SM1"})[1],
         _voice=lambda ctx: ("That Cactus booking stopped partway — your Chrome "
@@ -126,11 +126,11 @@ check("nor at 11pm", not sent, f"{sent}")
 
 # --- never invent bad news --------------------------------------------------
 def boom(*a, **k): raise RuntimeError("backend down")
-W.pb.get = boom
+W.backend.get = boom
 check("if she cannot tell, she assumes the browser is fine",
       W.browser_reachable() is True)
 
-W.pb.get = lambda url, **kw: Resp(ok=False)
+W.backend.get = lambda url, **kw: Resp(ok=False)
 check("a failed lookup is not treated as an absent browser",
       W.browser_reachable() is True)
 

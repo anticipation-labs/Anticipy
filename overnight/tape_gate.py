@@ -233,7 +233,7 @@ AUDIT_DOC = os.path.join("research", "2026-08-24-law1-audit.md")
 # browser download cache, not an organ; the browser arm's code is extension/.
 # A directory in this tuple that leg 1 can read nothing out of is now RED, and
 # that is what removed it: the header printed a scope the leg did not have.
-SHIPPED_DIRS = ("brain", "extension", "app", "backend", "proof", "firmware")
+SHIPPED_DIRS = ("brain", "extension", "app", "proof", "firmware")
 
 # Files leg 1 READS for markers. Anything a `TAPE:` comment could live in and
 # still ship. `.c` and `.s` are here because firmware/ is 142 C files and 3

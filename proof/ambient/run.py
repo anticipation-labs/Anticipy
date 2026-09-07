@@ -366,7 +366,7 @@ def main() -> int:
                          "and exit; pushes nothing")
     args = ap.parse_args()
 
-    base = check_loopback(args.pb)
+    base = check_loopback(args.backend)
     owner_ref = args.owner_ref or os.environ.get("ANTICIPY_OWNER_REF") or ""
     if not owner_ref:
         ref_file = os.path.join(RIG, "state", "owner_ref")

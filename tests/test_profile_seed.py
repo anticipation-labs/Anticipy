@@ -9,7 +9,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from brain import pb  # noqa: E402
+from brain import backend  # noqa: E402
 from brain.memory import Memory  # noqa: E402
 from brain.worker import seed_profile_identity  # noqa: E402
 
@@ -23,7 +23,7 @@ class _Reply:
 
 
 def _poll(monkeypatch, items):
-    monkeypatch.setattr(pb, "get", lambda url, params=None, timeout=None, **k:
+    monkeypatch.setattr(backend, "get", lambda url, params=None, timeout=None, **k:
                         _Reply({"items": items}))
 
 
@@ -64,7 +64,7 @@ def test_an_empty_or_failing_profile_never_crashes(monkeypatch):
     m = Memory()
     _poll(monkeypatch, [])
     seed_profile_identity(m, _seen={})
-    monkeypatch.setattr(pb, "get", lambda *a, **k: (_ for _ in ()).throw(
+    monkeypatch.setattr(backend, "get", lambda *a, **k: (_ for _ in ()).throw(
         RuntimeError("backend down")))
     seed_profile_identity(m, _seen={})
     assert m.profile_facts() == []

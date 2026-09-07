@@ -58,7 +58,7 @@ class Resp:
 
 def shared_get(url, **kw):
     """One fake for both modules — brain.worker and brain.anticipy_core import
-    the SAME pb module, so assigning W.pb.get and then A.pb.get silently
+    the SAME pb module, so assigning W.backend.get and then A.backend.get silently
     replaces the first with the second. That is how this test first "proved"
     the guard was broken when it was fine: every event query was answered with
     the job list. Honours the decision filter, as the backend does."""
@@ -69,9 +69,9 @@ def shared_get(url, **kw):
     return Resp(list(JOBS))
 
 
-assert W.pb is A.pb, "if these ever diverge, patch both"
-W.pb.get = shared_get
-W.pb.post = lambda url, **kw: Resp()
+assert W.backend is A.backend, "if these ever diverge, patch both"
+W.backend.get = shared_get
+W.backend.post = lambda url, **kw: Resp()
 
 
 def brain(decision: str, goal: str, say: str):

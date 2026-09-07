@@ -54,7 +54,7 @@ def _pb(monkeypatch, mod, job):
         patched.update(kw.get("json") or {})
         return R(job)
 
-    monkeypatch.setattr(mod, "pb", type("PB", (), {
+    monkeypatch.setattr(mod, "backend", type("PB", (), {
         "get": staticmethod(get), "patch": staticmethod(patch)}))
     return patched
 

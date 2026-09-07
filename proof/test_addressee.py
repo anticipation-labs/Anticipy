@@ -319,7 +319,7 @@ check("empty input is not dictation", not looks_like_dictation(""))
 
 # ============================================================= worker plumbing
 
-assert W.pb is A.pb, "if these ever diverge, patch both"
+assert W.backend is A.backend, "if these ever diverge, patch both"
 
 
 class Resp:
@@ -354,7 +354,7 @@ def fake_patch(url, **kw):
     return Resp()
 
 
-W.pb.get, W.pb.post, W.pb.patch = fake_get, fake_post, fake_patch
+W.backend.get, W.backend.post, W.backend.patch = fake_get, fake_post, fake_patch
 
 # --- the decision AND the addressee land on the event record
 W.mark_processed("ev1", "ignore", addressee="dictation")

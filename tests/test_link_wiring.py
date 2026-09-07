@@ -62,7 +62,7 @@ def test_blanks_are_dropped_where_ids_and_texts_leave_together(monkeypatch):
         {"id": "",  "text": "no id",  "created": "2026-08-05 10:00:03.000Z"},
         {"id": "5", "text": "charlie", "created": "2026-08-05 10:00:04.000Z"},
     ]
-    monkeypatch.setattr(W.pb, "get", lambda *a, **k: types.SimpleNamespace(
+    monkeypatch.setattr(W.backend, "get", lambda *a, **k: types.SimpleNamespace(
         raise_for_status=lambda: None, json=lambda: {"items": rows}))
     got = W.link_candidates()
     assert got == [("1", "alpha"), ("3", "bravo"), ("5", "charlie")]
@@ -87,7 +87,7 @@ def test_candidates_come_back_in_speech_order_not_delivery_order(monkeypatch):
                    "created": "2026-08-05 12:00:05.000Z",
                    "capture_started_at": "2026-08-05 11:00:00.000Z"}
     rows = [said_second, said_first]          # delivery order, newest first
-    monkeypatch.setattr(W.pb, "get", lambda *a, **k: types.SimpleNamespace(
+    monkeypatch.setattr(W.backend, "get", lambda *a, **k: types.SimpleNamespace(
         raise_for_status=lambda: None, json=lambda: {"items": list(rows)}))
     assert [i for i, _ in W.link_candidates()] == ["said_first", "said_second"]
 
@@ -100,7 +100,7 @@ def test_unstamped_rows_still_come_back_in_arrival_order(monkeypatch):
         {"id": "a", "text": "first", "created": "2026-08-05 10:00:01.000Z"},
         {"id": "b", "text": "second", "created": "2026-08-05 10:00:02.000Z"},
     ]
-    monkeypatch.setattr(W.pb, "get", lambda *a, **k: types.SimpleNamespace(
+    monkeypatch.setattr(W.backend, "get", lambda *a, **k: types.SimpleNamespace(
         raise_for_status=lambda: None, json=lambda: {"items": rows}))
     assert [i for i, _ in W.link_candidates()] == ["a", "b", "c"]
 
@@ -108,14 +108,14 @@ def test_unstamped_rows_still_come_back_in_arrival_order(monkeypatch):
 def test_a_backend_failure_asks_no_question_rather_than_crashing(monkeypatch):
     def boom(*a, **k):
         raise RuntimeError("pb down")
-    monkeypatch.setattr(W.pb, "get", boom)
+    monkeypatch.setattr(W.backend, "get", boom)
     assert W.link_candidates() == []
 
 
 def test_the_window_is_bounded(monkeypatch):
     rows = [{"id": f"i{n}", "text": f"line {n}",
              "created": f"2026-08-05 10:00:{n:02d}.000Z"} for n in range(60)]
-    monkeypatch.setattr(W.pb, "get", lambda *a, **k: types.SimpleNamespace(
+    monkeypatch.setattr(W.backend, "get", lambda *a, **k: types.SimpleNamespace(
         raise_for_status=lambda: None, json=lambda: {"items": rows}))
     got = W.link_candidates()
     assert len(got) == W.LINK_WINDOW
@@ -125,7 +125,7 @@ def test_the_window_is_bounded(monkeypatch):
 def test_a_failed_patch_never_raises(monkeypatch):
     def boom(*a, **k):
         raise RuntimeError("nope")
-    monkeypatch.setattr(W.pb, "patch", boom)
+    monkeypatch.setattr(W.backend, "patch", boom)
     W.record_link("a", "b")          # must not raise: the line already ran
 
 

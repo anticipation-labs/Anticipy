@@ -22,7 +22,7 @@ import re
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from . import pb
+from . import backend
 
 # --- boundary parameters (CAPTURE-ARCHITECTURE.md) ------------------------
 CONTINUE_S = 45          # silence below this = same conversation, zero cost
@@ -317,7 +317,7 @@ class SegmentStore:
             owner_filter = self._owner_filter()
             if owner_filter:
                 filt += f" && {owner_filter}"
-            r = pb.get(f"{self.base}/api/collections/segments/records",
+            r = backend.get(f"{self.base}/api/collections/segments/records",
                        params={"filter": filt, "sort": "-last_speech_at", "perPage": 1})
             items = r.json().get("items", []) if r.ok else []
             return items[0] if items else None
@@ -330,7 +330,7 @@ class SegmentStore:
             owner_filter = self._owner_filter()
             if owner_filter:
                 filt += f" && {owner_filter}"
-            r = pb.get(f"{self.base}/api/collections/segments/records",
+            r = backend.get(f"{self.base}/api/collections/segments/records",
                        params={"filter": filt, "sort": "-ended_at", "perPage": 1})
             items = r.json().get("items", []) if r.ok else []
             return items[0] if items else None
@@ -360,7 +360,7 @@ class SegmentStore:
             owner_filter = self._owner_filter()
             if owner_filter:
                 filt += f" && {owner_filter}"
-            r = pb.get(f"{self.base}/api/collections/events/records",
+            r = backend.get(f"{self.base}/api/collections/events/records",
                        params={"filter": filt,
                                "sort": "-created",
                                "perPage": max(limit * 4, limit)})
@@ -390,7 +390,7 @@ class SegmentStore:
             owner_filter = self._owner_filter()
             if owner_filter:
                 filt += f" && {owner_filter}"
-            r = pb.get(f"{self.base}/api/collections/events/records",
+            r = backend.get(f"{self.base}/api/collections/events/records",
                        params={"filter": filt, "sort": "-created",
                                "perPage": limit})
             items = r.json().get("items", []) if r.ok else []
@@ -412,7 +412,7 @@ class SegmentStore:
         the summary as thread context, so this call is never wasted — which is
         exactly why a SHADOW run must never make it."""
         try:
-            pb.patch(f"{self.base}/api/collections/segments/records/{segment['id']}",
+            backend.patch(f"{self.base}/api/collections/segments/records/{segment['id']}",
                      json={"summary": summary,
                            "entities": json.dumps([str(e) for e in entities][:40]),
                            "triaged_through_seq": int(through or 0),
@@ -431,7 +431,7 @@ class SegmentStore:
             }
             if self.owner_ref:
                 body["owner_ref"] = self.owner_ref
-            r = pb.post(f"{self.base}/api/collections/segments/records",
+            r = backend.post(f"{self.base}/api/collections/segments/records",
                         json=body)
             return r.json() if r.ok else None
         except Exception:
@@ -445,7 +445,7 @@ class SegmentStore:
             entities = set()
         entities |= proper_nouns(text)
         try:
-            pb.patch(f"{self.base}/api/collections/segments/records/{segment['id']}", json={
+            backend.patch(f"{self.base}/api/collections/segments/records/{segment['id']}", json={
                 "last_speech_at": iso(ended),
                 "turn_count": int(segment.get("turn_count") or 0) + 1,
                 "word_count": int(segment.get("word_count") or 0) + len(text.split()),
@@ -456,14 +456,14 @@ class SegmentStore:
 
     def close(self, segment: dict, ended: datetime) -> None:
         try:
-            pb.patch(f"{self.base}/api/collections/segments/records/{segment['id']}",
+            backend.patch(f"{self.base}/api/collections/segments/records/{segment['id']}",
                      json={"status": "closed", "ended_at": iso(ended)})
         except Exception:
             pass
 
     def stamp_event(self, event_id: str, segment_id: str) -> None:
         try:
-            pb.patch(f"{self.base}/api/collections/events/records/{event_id}",
+            backend.patch(f"{self.base}/api/collections/events/records/{event_id}",
                      json={"segment": segment_id})
         except Exception:
             pass

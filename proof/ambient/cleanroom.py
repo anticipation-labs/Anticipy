@@ -64,7 +64,7 @@ def _install_pb_stub():
     """Capture jobs in memory. A live PocketBase here would pollute the rig's
     queue with replay rows AND let dedupe leak back in through the database —
     the exact state this file exists to exclude."""
-    from brain import pb
+    from brain import backend
 
     def _get(url, params=None, timeout=None, **kw):
         if "/jobs/" not in url:
@@ -90,7 +90,7 @@ def _install_pb_stub():
                 return _R(j)
         return _R({}, ok=False)
 
-    pb.get, pb.post, pb.patch = _get, _post, _patch
+    backend.get, backend.post, backend.patch = _get, _post, _patch
 
 
 def rate(sample) -> str:

@@ -186,7 +186,7 @@ def test_fetch_unprocessed_sorts_and_slices(monkeypatch):
         seen.update(params or {})
         return R()
 
-    monkeypatch.setattr(W.pb, "get", fake_get)
+    monkeypatch.setattr(W.backend, "get", fake_get)
     out = W.fetch_unprocessed(owner_ref="owner-record-a")
 
     assert seen["perPage"] == W.PAGE, "must read wider than it returns"
@@ -205,6 +205,6 @@ def test_fetch_unprocessed_fails_closed_without_an_owner(monkeypatch):
         nonlocal called
         called = True
 
-    monkeypatch.setattr(W.pb, "get", fake_get)
+    monkeypatch.setattr(W.backend, "get", fake_get)
     assert W.fetch_unprocessed() == []
     assert not called

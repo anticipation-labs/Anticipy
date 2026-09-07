@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from brain import pb
+from brain import backend
 from brain.anticipy_core import Anticipy
 
 
@@ -12,7 +12,7 @@ from brain.anticipy_core import Anticipy
 def test_voice_gets_persisted_state_without_inventing_step_receipts(monkeypatch, status):
     a = Anticipy.__new__(Anticipy)
     a.backend_url = "http://fixture.invalid"
-    monkeypatch.setattr(pb, "get", lambda *args, **kwargs: SimpleNamespace(
+    monkeypatch.setattr(backend, "get", lambda *args, **kwargs: SimpleNamespace(
         raise_for_status=lambda: None,
         json=lambda: {"id": "job-one", "status": status}))
     evidence = a._execution_evidence("job-one")
@@ -25,7 +25,7 @@ def test_unreadable_queue_is_unknown_not_started(monkeypatch):
     a.backend_url = "http://fixture.invalid"
     def unavailable(*args, **kwargs):
         raise ConnectionError("offline")
-    monkeypatch.setattr(pb, "get", unavailable)
+    monkeypatch.setattr(backend, "get", unavailable)
     assert a._execution_evidence("job-one")["status"] == "unverified"
     assert a._execution_evidence(None)["status"] == "not_created"
 

@@ -96,8 +96,8 @@ def paged_jobs(monkeypatch, jobs, per_page=None, events=()):
             "totalPages": max(1, -(-len(rows) // size)),
         })
 
-    monkeypatch.setattr(W.pb, "get", fake_get)
-    monkeypatch.setattr(W.pb, "post", lambda *a, **k: Resp())
+    monkeypatch.setattr(W.backend, "get", fake_get)
+    monkeypatch.setattr(W.backend, "post", lambda *a, **k: Resp())
     return asked
 
 
@@ -210,8 +210,8 @@ def test_two_jobs_with_identical_goals_each_deliver_once(monkeypatch):
         events.append(dict(kw.get("json") or {}))
         return Resp()
 
-    monkeypatch.setattr(W.pb, "get", fake_get)
-    monkeypatch.setattr(W.pb, "post", fake_post)
+    monkeypatch.setattr(W.backend, "get", fake_get)
+    monkeypatch.setattr(W.backend, "post", fake_post)
 
     W.report_finished_jobs(anticipy(notified))
     assert notified == ["first note sent", "second note sent"]
@@ -238,13 +238,13 @@ def test_a_research_job_a_dead_worker_left_running_is_handed_back(monkeypatch):
     it never needs his Chrome, and the extension's sweep needs Chrome open —
     the one thing this lane exists not to need."""
     patches = []
-    monkeypatch.setattr(W.pb, "get",
+    monkeypatch.setattr(W.backend, "get",
                         lambda *a, **k: Resp({"items": [dict(STRANDED)]}))
 
     def fake_patch(url, **kw):
         patches.append(kw.get("json") or {})
         return Resp()
-    monkeypatch.setattr(W.pb, "patch", fake_patch)
+    monkeypatch.setattr(W.backend, "patch", fake_patch)
 
     assert W.release_stranded_research(anticipy([])) == 1
     assert patches[0]["status"] == "queued"
@@ -258,7 +258,7 @@ def test_the_sweep_only_takes_back_claims_this_worker_abandoned(monkeypatch):
     def fake_get(url, **kw):
         seen["filter"] = (kw.get("params") or {}).get("filter", "")
         return Resp({"items": []})
-    monkeypatch.setattr(W.pb, "get", fake_get)
+    monkeypatch.setattr(W.backend, "get", fake_get)
     W.release_stranded_research(anticipy([]))
     assert f'claimed_by="{W.RESEARCH_CLAIMANT}"' in seen["filter"]
     assert 'lane="research"' in seen["filter"]
@@ -277,13 +277,13 @@ def test_a_stranded_workflow_plan_is_recovered_not_just_restatused(monkeypatch):
     row = dict(STRANDED, params=json.dumps(put_in_params({}, claimed)),
                lease_token=claimed.lease.token)
     patches, headers = [], []
-    monkeypatch.setattr(W.pb, "get", lambda *a, **k: Resp({"items": [row]}))
+    monkeypatch.setattr(W.backend, "get", lambda *a, **k: Resp({"items": [row]}))
 
     def fake_patch(url, **kw):
         patches.append(kw.get("json") or {})
         headers.append(kw.get("headers") or {})
         return Resp()
-    monkeypatch.setattr(W.pb, "patch", fake_patch)
+    monkeypatch.setattr(W.backend, "patch", fake_patch)
 
     assert W.release_stranded_research(anticipy([])) == 1
     recovered = from_params(json.loads(patches[0]["params"]))
@@ -324,9 +324,9 @@ def test_the_research_lease_outlives_a_real_research_run(monkeypatch):
         state.update(body)
         return Resp()
 
-    monkeypatch.setattr(W.pb, "get", fake_get)
-    monkeypatch.setattr(W.pb, "patch", fake_patch)
-    monkeypatch.setattr(W.pb, "post", lambda *a, **k: Resp())
+    monkeypatch.setattr(W.backend, "get", fake_get)
+    monkeypatch.setattr(W.backend, "patch", fake_patch)
+    monkeypatch.setattr(W.backend, "post", lambda *a, **k: Resp())
     W.run_research_jobs(
         anticipy([]),
         runner=lambda *a, **k: {"ok": True,
@@ -348,11 +348,11 @@ def blind_backend(monkeypatch, jobs, writes_fail=True):
     """Reads keep working, writes do not — a PB restart, or the nightly
     backup holding the write lock. Exactly the shape that made one
     notification into one text every two seconds."""
-    monkeypatch.setattr(W.pb, "get", lambda url, **kw: Resp(
+    monkeypatch.setattr(W.backend, "get", lambda url, **kw: Resp(
         {"items": [] if "/collections/events/" in url else list(jobs)}))
-    monkeypatch.setattr(W.pb, "post",
+    monkeypatch.setattr(W.backend, "post",
                         lambda *a, **k: Resp(ok=not writes_fail))
-    monkeypatch.setattr(W.pb, "patch", lambda *a, **k: Resp())
+    monkeypatch.setattr(W.backend, "patch", lambda *a, **k: Resp())
 
 
 def test_a_write_outage_cannot_turn_one_question_into_a_text_storm(monkeypatch):
@@ -419,8 +419,8 @@ def test_app_only_lanes_retry_the_feed_without_ever_texting(monkeypatch, job):
         feed.append(dict(kw.get("json") or {}))
         return Resp()
 
-    monkeypatch.setattr(W.pb, "get", fake_get)
-    monkeypatch.setattr(W.pb, "post", fake_post)
+    monkeypatch.setattr(W.backend, "get", fake_get)
+    monkeypatch.setattr(W.backend, "post", fake_post)
 
     for _ in range(3):
         W.report_finished_jobs(anticipy(notified))

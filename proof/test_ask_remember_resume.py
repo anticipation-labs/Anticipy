@@ -86,9 +86,9 @@ def shared_patch(url, **kw):
     return Resp(single={})
 
 
-assert W.pb is C.pb, "if these ever diverge, patch both"
-W.pb.get, W.pb.patch = shared_get, shared_patch
-W.pb.post = lambda *a, **k: Resp(single={})
+assert W.backend is C.backend, "if these ever diverge, patch both"
+W.backend.get, W.backend.patch = shared_get, shared_patch
+W.backend.post = lambda *a, **k: Resp(single={})
 
 
 class LLM:

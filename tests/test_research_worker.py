@@ -43,7 +43,7 @@ def make_anticipy(notified, owner_ref=""):
 
 def wire(monkeypatch, job, patches, posts, key="test-key", stamp_survives=True,
          tavily_key=None):
-    """Point brain.pb at an in-memory job row; record every write."""
+    """Point brain.backend at an in-memory job row; record every write."""
     if key is None:
         monkeypatch.delenv("BRAVE_API_KEY", raising=False)
     else:
@@ -83,9 +83,9 @@ def wire(monkeypatch, job, patches, posts, key="test-key", stamp_survives=True,
         posts.append(kw.get("json") or {})
         return Resp()
 
-    monkeypatch.setattr(W.pb, "get", fake_get)
-    monkeypatch.setattr(W.pb, "patch", fake_patch)
-    monkeypatch.setattr(W.pb, "post", fake_post)
+    monkeypatch.setattr(W.backend, "get", fake_get)
+    monkeypatch.setattr(W.backend, "patch", fake_patch)
+    monkeypatch.setattr(W.backend, "post", fake_post)
     return fake_get
 
 
@@ -295,7 +295,7 @@ def test_stalled_work_never_flags_the_research_lane(monkeypatch):
         seen["filter"] = (kw.get("params") or {}).get("filter", "")
         return Resp({"items": []})
 
-    monkeypatch.setattr(W.pb, "get", fake_get)
+    monkeypatch.setattr(W.backend, "get", fake_get)
     W.report_stalled_work(make_anticipy([]))
     assert 'lane!="research"' in seen["filter"]
 

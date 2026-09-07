@@ -299,7 +299,7 @@ def leg_3_judges() -> str:
 # --------------------------------------------------------------------------
 def leg_4_does_it() -> str:
     try:
-        from brain import pb
+        from brain import backend
         from brain.anticipy_core import Anticipy, is_consequential
     except Exception as e:
         raise LegFailed(f"brain/anticipy_core.py will not import: {e}")
@@ -345,14 +345,14 @@ def leg_4_does_it() -> str:
                 r.update(json or {})
         return _Reply({})
 
-    real = (pb.get, pb.post, pb.patch)
+    real = (backend.get, backend.post, backend.patch)
     try:
-        pb.get, pb.post, pb.patch = _get, _post, _patch
+        backend.get, backend.post, backend.patch = _get, _post, _patch
         job_id = Anticipy(owner_id="gate")._queue_job(goal, {"source": "gate"})
     except Exception as e:
         raise LegFailed(f"queueing a judged plan raised: {e}")
     finally:
-        pb.get, pb.post, pb.patch = real
+        backend.get, backend.post, backend.patch = real
 
     if not job_id or not rows:
         raise LegFailed(

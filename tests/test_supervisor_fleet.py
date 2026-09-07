@@ -108,7 +108,7 @@ def test_discovery_reports_everyone_it_found(monkeypatch):
                          {"id": "bbbbbbbb2", "legacy_uuid": "b"},
                          {"id": "cccccccc3", "legacy_uuid": "c"}],
                "totalPages": 1}
-    monkeypatch.setattr(S.pb, "get", lambda *a, **k: types.SimpleNamespace(
+    monkeypatch.setattr(S.backend, "get", lambda *a, **k: types.SimpleNamespace(
         ok=True, json=lambda: payload, raise_for_status=lambda: None))
     assert [o["id"] for o in S.discover_owners()] == [
         "aaaaaaaa1", "bbbbbbbb2", "cccccccc3"]

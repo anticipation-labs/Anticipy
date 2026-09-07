@@ -32,7 +32,7 @@ REPLY = sys.argv[1] if len(sys.argv) > 1 else \
 WRITES: list[tuple[str, str, dict]] = []
 SENT: list[str] = []
 
-_real_patch, _real_post = C.pb.patch, C.pb.post
+_real_patch, _real_post = C.backend.patch, C.backend.post
 
 
 def blocked_patch(url, **kw):
@@ -52,7 +52,7 @@ def blocked_post(url, **kw):
     return R()
 
 
-C.pb.patch, C.pb.post = blocked_patch, blocked_post
+C.backend.patch, C.backend.post = blocked_patch, blocked_post
 
 llm = LLM()
 if not llm.live:

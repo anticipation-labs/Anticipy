@@ -23,7 +23,7 @@ from datetime import datetime, timedelta, timezone
 import httpx
 import requests
 
-from . import pb
+from . import backend
 from . import research
 
 from .anticipy_core import (DEVICE_CALENDAR_LANE, RESEARCH_LANE, Anticipy,
@@ -140,7 +140,7 @@ def _latest_profile(owner_ref: str = "") -> dict | None:
     params = {"sort": "-updated", "perPage": 1}
     if ref:
         params["filter"] = _scoped_filter("", ref)
-    r = pb.get(
+    r = backend.get(
         f"{PB}/api/collections/owner_profile/records",
         params=params,
         timeout=10,
@@ -240,7 +240,7 @@ def fetch_owner_phone(owner_ref: str = "") -> str | None:
     if not ref:
         return None
     try:
-        r = pb.get(
+        r = backend.get(
             f"{PB}/api/collections/owner_profile/records",
             params={"filter": _scoped_filter("", ref),
                     "sort": "-updated", "perPage": 1},
@@ -264,7 +264,7 @@ def fetch_owner_phone(owner_ref: str = "") -> str | None:
     # This fallback is ACCOUNT-BOUND: it reads the phone belonging to THIS
     # owner_ref only, so it cannot resurrect the cross-account leak.
     try:
-        r = pb.get(f"{PB}/api/collections/owners/records/{ref}", timeout=10)
+        r = backend.get(f"{PB}/api/collections/owners/records/{ref}", timeout=10)
         if getattr(r, "ok", False):
             phone = str((r.json() or {}).get("phone") or "").strip()
             if phone:
@@ -421,7 +421,7 @@ def owner_wants_evidence_photos(owner_ref: str = "") -> bool:
         profile = _latest_profile(owner_ref)
         answer = profile.get(PHOTO_SETTING) if profile else None
         if answer is None and owner_ref:
-            r = pb.get(f"{PB}/api/collections/owners/records/{owner_ref}",
+            r = backend.get(f"{PB}/api/collections/owners/records/{owner_ref}",
                        timeout=10)
             if getattr(r, "ok", False):
                 answer = (r.json() or {}).get(PHOTO_SETTING)
@@ -440,7 +440,7 @@ def _has_spoken_to_owner(owner_ref: str = "") -> bool | None:
     for an owner who has none — a welcomed number returns before this.
     """
     try:
-        r = pb.get(
+        r = backend.get(
             f"{PB}/api/collections/events/records",
             params={"perPage": 1, "fields": "id",
                     "filter": _scoped_filter('kind="anticipy_says"', owner_ref)},
@@ -1169,7 +1169,7 @@ def post_event(kind: str, text: str, decision: str = "", goal: str = "",
     durable_id = str(external_event_id or "").strip()
     if durable_id:
         body["external_event_id"] = durable_id
-    response = pb.post(f"{PB}/api/collections/events/records", json=body, timeout=10)
+    response = backend.post(f"{PB}/api/collections/events/records", json=body, timeout=10)
     response.raise_for_status()
 
 
@@ -1311,7 +1311,7 @@ def browser_reachable(owner_ref: str = "") -> bool:
     happens, forever, with no word to him. Answering by text away from the
     desk is the normal case, not the edge case."""
     try:
-        r = pb.get(f"{PB}/api/collections/agents/records",
+        r = backend.get(f"{PB}/api/collections/agents/records",
                    params={"filter": _scoped_filter("paired=true", owner_ref), "sort": "-updated",
                            "perPage": 1}, timeout=10)
         if not r.ok:
@@ -1361,7 +1361,7 @@ def report_stalled_work(anticipy) -> None:
         scope = owner_filter(anticipy)
         if scope:
             filt = f"({filt}) && {scope}"
-        r = pb.get(f"{PB}/api/collections/jobs/records",
+        r = backend.get(f"{PB}/api/collections/jobs/records",
                    params={"filter": filt, "perPage": 5, "sort": "updated"},
                    timeout=10)
         if not r.ok:
@@ -1531,7 +1531,7 @@ def report_unclaimed_device_work(anticipy) -> None:
             filt = f"({filt}) && {scope}"
         # Ten, not five: the page is now a superset, and a page filled by rows
         # this function will discard is silence again by another route.
-        r = pb.get(f"{anticipy.backend_url}/api/collections/jobs/records",
+        r = backend.get(f"{anticipy.backend_url}/api/collections/jobs/records",
                    params={"filter": filt, "perPage": 10, "sort": "updated"},
                    timeout=10)
         if not getattr(r, "ok", False):
@@ -1652,7 +1652,7 @@ def release_stranded_research(anticipy,
     if scope:
         filt = f"({filt}) && {scope}"
     try:
-        r = pb.get(f"{base}/api/collections/jobs/records",
+        r = backend.get(f"{base}/api/collections/jobs/records",
                    params={"filter": filt, "perPage": 20, "sort": "updated"},
                    timeout=10)
         if not getattr(r, "ok", False):
@@ -1684,7 +1684,7 @@ def release_stranded_research(anticipy,
             body["params"] = json.dumps(put_in_params(params, workflow))
             headers = {"X-Anticipy-Lease": job.get("lease_token") or ""}
         try:
-            back = pb.patch(f"{base}/api/collections/jobs/records/{job['id']}",
+            back = backend.patch(f"{base}/api/collections/jobs/records/{job['id']}",
                             json=body, headers=headers, timeout=10)
         except Exception as e:
             print(f"research sweep: {job['id']} could not be handed back: {e}")
@@ -1749,7 +1749,7 @@ def run_preflight_research(anticipy, learner=None) -> None:
         scope = owner_filter(anticipy)
         if scope:
             filt = f"({filt}) && {scope}"
-        r = pb.get(f"{base}/api/collections/jobs/records",
+        r = backend.get(f"{base}/api/collections/jobs/records",
                    params={"filter": filt, "perPage": 5, "sort": "created"},
                    timeout=10)
         if not getattr(r, "ok", False):
@@ -1809,7 +1809,7 @@ def run_preflight_research(anticipy, learner=None) -> None:
                                "browser unresearched rather than parking the "
                                "errand")
             params["_research_gate"] = gate
-            back = pb.patch(f"{base}/api/collections/jobs/records/{job['id']}",
+            back = backend.patch(f"{base}/api/collections/jobs/records/{job['id']}",
                             json={"lane": "", "params": json.dumps(params)},
                             timeout=10)
             if getattr(back, "ok", False):
@@ -1844,7 +1844,7 @@ def run_research_jobs(anticipy, runner=None) -> None:
         scope = owner_filter(anticipy)
         if scope:
             filt = f"({filt}) && {scope}"
-        r = pb.get(f"{base}/api/collections/jobs/records",
+        r = backend.get(f"{base}/api/collections/jobs/records",
                    params={"filter": filt, "perPage": 5, "sort": "created"},
                    timeout=10)
         if not r.ok:
@@ -1874,7 +1874,7 @@ def run_research_jobs(anticipy, runner=None) -> None:
                 # forever. Hand it to the browser lane — slower and noisier,
                 # but it runs. Queue-time routing already does this; this
                 # catches rows queued before the key went away.
-                pb.patch(f"{base}/api/collections/jobs/records/{job['id']}",
+                backend.patch(f"{base}/api/collections/jobs/records/{job['id']}",
                          json={"lane": ""}, timeout=10)
                 print(f"research: no search-provider key — {job['id']} handed "
                       "to the browser lane")
@@ -1900,13 +1900,13 @@ def run_research_jobs(anticipy, runner=None) -> None:
                 params = put_in_params(params, workflow)
                 claim_body.update(workflow.job_fields())
                 claim_body["params"] = json.dumps(params)
-            claim = pb.patch(
+            claim = backend.patch(
                 f"{base}/api/collections/jobs/records/{job['id']}",
                 json=claim_body,
                 timeout=10)
             if not getattr(claim, "ok", False):
                 continue
-            check = pb.get(f"{base}/api/collections/jobs/records/{job['id']}",
+            check = backend.get(f"{base}/api/collections/jobs/records/{job['id']}",
                            timeout=10)
             if not getattr(check, "ok", False):
                 continue
@@ -1951,7 +1951,7 @@ def run_research_jobs(anticipy, runner=None) -> None:
                     finish_headers = {"X-Anticipy-Lease": lease_token}
                 except Exception:
                     continue
-            finished = pb.patch(
+            finished = backend.patch(
                 f"{base}/api/collections/jobs/records/{job['id']}",
                 json=finish_body, headers=finish_headers, timeout=10)
             if not getattr(finished, "ok", False):
@@ -2052,7 +2052,7 @@ def release_stranded_api(anticipy,
     if scope:
         filt = f"({filt}) && {scope}"
     try:
-        r = pb.get(f"{base}/api/collections/jobs/records",
+        r = backend.get(f"{base}/api/collections/jobs/records",
                    params={"filter": filt, "perPage": 20, "sort": "updated"},
                    timeout=10)
         if not getattr(r, "ok", False):
@@ -2106,7 +2106,7 @@ def release_stranded_api(anticipy,
                                "through before anything came back — please "
                                "check the app before I try again.")}
         try:
-            back = pb.patch(f"{base}/api/collections/jobs/records/{job['id']}",
+            back = backend.patch(f"{base}/api/collections/jobs/records/{job['id']}",
                             json=body, headers=headers, timeout=10)
         except Exception as e:
             print(f"api sweep: {job['id']} could not be handed back: {e}")
@@ -2140,7 +2140,7 @@ def _release_api_claim(anticipy, job: dict, params: dict, workflow,
         body["params"] = json.dumps(put_in_params(params, released))
         headers = {"X-Anticipy-Lease": lease_token}
     try:
-        back = pb.patch(f"{anticipy.backend_url}/api/collections/jobs/records/{job['id']}",
+        back = backend.patch(f"{anticipy.backend_url}/api/collections/jobs/records/{job['id']}",
                         json=body, headers=headers, timeout=10)
         if not getattr(back, "ok", False):
             print(f"api hand: {job['id']} release refused "
@@ -2164,7 +2164,7 @@ def run_api_jobs(anticipy, poster=None) -> None:
         scope = owner_filter(anticipy)
         if scope:
             filt = f"({filt}) && {scope}"
-        r = pb.get(f"{base}/api/collections/jobs/records",
+        r = backend.get(f"{base}/api/collections/jobs/records",
                    params={"filter": filt, "perPage": 5, "sort": "created"},
                    timeout=10)
         if not getattr(r, "ok", False):
@@ -2172,7 +2172,7 @@ def run_api_jobs(anticipy, poster=None) -> None:
         jobs = r.json().get("items", [])
         if not jobs:
             return
-        post = poster or pb.post
+        post = poster or backend.post
         for job in jobs:
             note = _api_note(job)
             if note.get("hand") != "api" or note.get("lane") != LANE_API:
@@ -2204,12 +2204,12 @@ def run_api_jobs(anticipy, poster=None) -> None:
                 params = put_in_params(params, workflow)
                 claim_body.update(workflow.job_fields())
                 claim_body["params"] = json.dumps(params)
-            claim = pb.patch(
+            claim = backend.patch(
                 f"{base}/api/collections/jobs/records/{job['id']}",
                 json=claim_body, timeout=10)
             if not getattr(claim, "ok", False):
                 continue
-            check = pb.get(f"{base}/api/collections/jobs/records/{job['id']}",
+            check = backend.get(f"{base}/api/collections/jobs/records/{job['id']}",
                            timeout=10)
             if not getattr(check, "ok", False):
                 continue
@@ -2300,7 +2300,7 @@ def _finished_jobs(filt: str) -> list[dict]:
     rows: list[dict] = []
     page = 1
     while page <= FINISHED_MAX_PAGES:
-        r = pb.get(f"{PB}/api/collections/jobs/records",
+        r = backend.get(f"{PB}/api/collections/jobs/records",
                    params={"filter": filt, "perPage": FINISHED_PER_PAGE,
                            "page": page, "sort": "updated"},
                    timeout=10)
@@ -2363,7 +2363,7 @@ def _event_by_external_id(external_event_id: str, owner_ref: str = "",
     if not durable_id:
         return None
     filt = f'external_event_id="{_escaped(durable_id)}"'
-    r = pb.get(
+    r = backend.get(
         f"{PB}/api/collections/events/records",
         params={"filter": _scoped_filter(filt, owner_ref),
                 "perPage": 10, "sort": "-created"},
@@ -2462,7 +2462,7 @@ def delivered_job_result(job: dict) -> dict | None:
         return None
     filt = (f'kind="anticipy_says" && decision="done"'
             f' && goal="{_escaped(goal)}" && created>="{_escaped(updated)}"')
-    r = pb.get(
+    r = backend.get(
         f"{PB}/api/collections/events/records",
         params={"filter": _scoped_filter(filt, owner_ref),
                 "perPage": 200, "sort": "-created"}, timeout=10)
@@ -2870,7 +2870,7 @@ def _uninvited_slots_today(owner_ref: str, now: float | None = None) -> list[dic
     an unreadable budget is not an empty one."""
     filt = (f'kind="uninvited_slot" && '
             f'created>="{_uninvited_since_utc(now)}"')
-    r = pb.get(f"{PB}/api/collections/events/records",
+    r = backend.get(f"{PB}/api/collections/events/records",
                params={"filter": _scoped_filter(filt, owner_ref),
                        "perPage": 10, "sort": "created"}, timeout=10)
     if not getattr(r, "ok", False):
@@ -2949,7 +2949,7 @@ def reserve_uninvited_text(owner_ref: str, door: str,
             # such column, so stamping it made every slot create a 400 and the
             # uninvited budget unprovable rather than merely spent.
             try:
-                r = pb.post(f"{PB}/api/collections/events/records",
+                r = backend.post(f"{PB}/api/collections/events/records",
                             json=body, timeout=10)
                 if getattr(r, "ok", False) and (r.json() or {}).get("id"):
                     return slot
@@ -3258,7 +3258,7 @@ def is_echo_of_her(line: str, minutes: float = 30.0, owner_ref: str = "",
             cutoff, timezone.utc).strftime("%Y-%m-%d %H:%M:%S.%fZ")
         filt = (f'(kind="anticipy_says" || kind="anticipy_text")'
                 f' && created>="{since}" && created<="{until}"')
-        r = pb.get(f"{PB}/api/collections/events/records",
+        r = backend.get(f"{PB}/api/collections/events/records",
                    params={"filter": _scoped_filter(filt, owner_ref),
                            "perPage": 40, "sort": "-created"}, timeout=10)
         if not r.ok:
@@ -3338,7 +3338,7 @@ def asked_about_recently(goal: str, minutes: float = 45.0,
                  - timedelta(minutes=minutes)).strftime("%Y-%m-%d %H:%M:%S")
         filt = (f'kind="anticipy_says" && decision="needs_user"'
                 f' && created>="{since}"')
-        r = pb.get(f"{PB}/api/collections/events/records",
+        r = backend.get(f"{PB}/api/collections/events/records",
                    params={"filter": _scoped_filter(filt, owner_ref),
                            "perPage": 50, "sort": "-created"}, timeout=10)
         if not r.ok:
@@ -3364,7 +3364,7 @@ def asks_for_goal(goal: str, owner_ref: str = "", within_hours: float = 24.0) ->
         since = (datetime.now(timezone.utc)
                  - timedelta(hours=within_hours)).strftime("%Y-%m-%d %H:%M:%S")
         filt = f'kind="anticipy_says" && decision="needs_user" && created>="{since}"'
-        r = pb.get(f"{PB}/api/collections/events/records",
+        r = backend.get(f"{PB}/api/collections/events/records",
                    params={"filter": _scoped_filter(filt, owner_ref),
                            "perPage": 50, "sort": "-created"}, timeout=10)
         if not getattr(r, "ok", False):
@@ -3400,7 +3400,7 @@ def need_already_asked(goal: str, blocker: str, within_hours: float = 24.0,
         since = (datetime.now(timezone.utc)
                  - timedelta(hours=within_hours)).strftime("%Y-%m-%d %H:%M:%S")
         filt = f'kind="anticipy_says" && created>="{since}"'
-        r = pb.get(f"{PB}/api/collections/events/records",
+        r = backend.get(f"{PB}/api/collections/events/records",
                    params={"filter": _scoped_filter(filt, owner_ref),
                            "perPage": 100, "sort": "-created"}, timeout=10)
         if not r.ok:
@@ -3456,7 +3456,7 @@ def already_raised(goal: str, text: str = "", within_hours: float = 24.0,
             filt += ' && (decision="act" || decision="clock")'
         elif decision:
             filt += f' && decision="{decision}"'
-        r = pb.get(f"{PB}/api/collections/events/records",
+        r = backend.get(f"{PB}/api/collections/events/records",
                    params={"filter": _scoped_filter(filt, owner_ref),
                            "perPage": 100, "sort": "-created"},
                    timeout=10)
@@ -3504,7 +3504,7 @@ def already_said(text: str, within_hours: float = 24.0, overlap: float = 0.6,
         since = (datetime.now(timezone.utc)
                  - timedelta(hours=within_hours)).strftime("%Y-%m-%d %H:%M:%S")
         filt = f'kind="anticipy_says" && created>="{since}"'
-        r = pb.get(f"{PB}/api/collections/events/records",
+        r = backend.get(f"{PB}/api/collections/events/records",
                    params={"filter": _scoped_filter(filt, owner_ref),
                            "perPage": 100, "sort": "-created"}, timeout=10)
         if not r.ok:
@@ -3569,7 +3569,7 @@ def raised_and_ignored(goal: str, text: str = "", owner_ref: str = "") -> bool:
         since = (datetime.now(timezone.utc)
                  - timedelta(days=NAG_WINDOW_DAYS)).strftime("%Y-%m-%d %H:%M:%S")
         filt = f'kind="anticipy_says" && created>="{since}"'
-        r = pb.get(f"{PB}/api/collections/events/records",
+        r = backend.get(f"{PB}/api/collections/events/records",
                    params={"filter": _scoped_filter(filt, owner_ref),
                            "perPage": 200, "sort": "-created"}, timeout=10)
         if not r.ok:
@@ -4188,7 +4188,7 @@ def resolve_owner_ref(legacy_owner: str = "") -> str:
         return ""
     try:
         escaped = legacy_owner.replace('"', '\\"')
-        r = pb.get(f"{PB}/api/collections/owners/records",
+        r = backend.get(f"{PB}/api/collections/owners/records",
                    params={"filter": f'legacy_uuid="{escaped}"',
                            "perPage": 2}, timeout=10)
         items = r.json().get("items", []) if r.ok else []
@@ -4221,7 +4221,7 @@ def fetch_unprocessed(kind: str = "transcript", owner_ref: str = "") -> list[dic
         # Fail closed. The former unscoped poll could hear every person's
         # transcript in the shared database as one owner's life.
         return []
-    r = pb.get(
+    r = backend.get(
         f"{PB}/api/collections/events/records",
         params={"filter": (f'kind="{kind}" && decision="" '
                            f'&& owner_ref="{owner_ref}"'),
@@ -4258,7 +4258,7 @@ def link_candidates(kind: str = "transcript", owner_ref: str = "") -> list[tuple
     down would shift every number after the gap and mis-link silently.
     """
     try:
-        r = pb.get(
+        r = backend.get(
             f"{PB}/api/collections/events/records",
             params={"filter": _scoped_filter(f'kind="{kind}"', owner_ref),
                     "perPage": LINK_WINDOW + 8,
@@ -4299,7 +4299,7 @@ def record_link(event_id: str, parent_id: str) -> None:
     nothing reads it yet, and a failed PATCH here must never cost the line
     itself — the decision has already been acted on by this point."""
     try:
-        pb.patch(f"{PB}/api/collections/events/records/{event_id}",
+        backend.patch(f"{PB}/api/collections/events/records/{event_id}",
                  json={"parent_line": parent_id}, timeout=10)
     except Exception as e:
         print(f"link: {event_id} -> {parent_id} failed: {e}")
@@ -4392,7 +4392,7 @@ def mark_processed(event_id: str, decision: str, addressee: str = "",
             if heard_calls is not None:
                 measured["heard_calls"] = heard_calls
         url = f"{PB}/api/collections/events/records/{event_id}"
-        r = pb.patch(url, json={**body, **measured}, timeout=10)
+        r = backend.patch(url, json={**body, **measured}, timeout=10)
         if measured and not getattr(r, "ok", False):
             # THE DECISION LANDS, WHATEVER THE MEASUREMENT DID. Until
             # 2026-09-05 this retried only on a 400 — the answer PocketBase
@@ -4417,7 +4417,7 @@ def mark_processed(event_id: str, decision: str, addressee: str = "",
             else:
                 print(f"heard: the measured stamp answered HTTP {status}; "
                       "landing the decision without it this time")
-            r = pb.patch(url, json=body, timeout=10)
+            r = backend.patch(url, json=body, timeout=10)
         return bool(getattr(r, "ok", False))
     except Exception:
         return False
@@ -4538,7 +4538,7 @@ def release_stranded_claims(owner_ref: str = "", older_than_minutes: int = 10) -
     cutoff = (datetime.now(timezone.utc)
               - timedelta(minutes=older_than_minutes)).strftime("%Y-%m-%d %H:%M:%S")
     try:
-        r = pb.get(
+        r = backend.get(
             f"{PB}/api/collections/events/records",
             params={"filter": (f'decision="processing" && owner_ref="{owner_ref}" '
                                f'&& updated<="{cutoff}"'),
@@ -4550,7 +4550,7 @@ def release_stranded_claims(owner_ref: str = "", older_than_minutes: int = 10) -
     freed = 0
     for item in items:
         try:
-            back = pb.patch(
+            back = backend.patch(
                 f"{PB}/api/collections/events/records/{item['id']}",
                 json={"decision": ""}, timeout=10)
             if getattr(back, "ok", False):
@@ -4810,7 +4810,7 @@ def publish_worker_status(banner: str, owner_ref: str = "",
         existing = _event_by_external_id(durable_id, ref, owner_id,
                                          kind=WORKER_STATUS_KIND)
         if existing and existing.get("id"):
-            r = pb.patch(
+            r = backend.patch(
                 f"{PB}/api/collections/events/records/{existing['id']}",
                 json={"text": line}, timeout=10)
             if not getattr(r, "ok", False):
@@ -4838,7 +4838,7 @@ def ask_about_stuck_jobs(anticipy, convo) -> None:
         scope = owner_filter(anticipy)
         if scope:
             filt += f" && {scope}"
-        r = pb.get(f"{PB}/api/collections/jobs/records",
+        r = backend.get(f"{PB}/api/collections/jobs/records",
                    params={"filter": filt, "perPage": 5, "sort": "-updated"}, timeout=10)
         if not r.ok:
             return

@@ -84,7 +84,7 @@ def backend(monkeypatch):
     fake = FakeWorker()
     monkeypatch.setattr(W, "ACTIVE_OWNER_REF", "qeuy6sv1raof9rw")
     monkeypatch.setattr(W, "ACTIVE_OWNER_ID", "9558c9f6-legacy-uuid")
-    monkeypatch.setattr(W.pb, "post", fake.post)
+    monkeypatch.setattr(W.backend, "post", fake.post)
     return fake
 
 

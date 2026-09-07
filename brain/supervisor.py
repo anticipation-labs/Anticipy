@@ -21,7 +21,7 @@ import sys
 import time
 from typing import Callable
 
-from . import pb
+from . import backend
 from . import state_backup
 from . import worker
 
@@ -51,7 +51,7 @@ def discover_owners() -> list[dict]:
     rows: list[dict] = []
     page = 1
     while True:
-        response = pb.get(
+        response = backend.get(
             f"{PB}/worker/owners",
             params={"page": page, "perPage": 200},
             timeout=10,
@@ -179,7 +179,7 @@ def purge_deleted_owners(*, remove: Callable = shutil.rmtree,
     """
     done = 0
     try:
-        response = pb.get(f"{PB}/api/collections/purges/records",
+        response = backend.get(f"{PB}/api/collections/purges/records",
                           params={"filter": "memory_purged=false", "perPage": 50},
                           timeout=10)
         response.raise_for_status()
@@ -248,7 +248,7 @@ def purge_deleted_owners(*, remove: Callable = shutil.rmtree,
         # Nothing left anywhere is a completed purge, not a failure: the account
         # may simply never have been spoken to.
         try:
-            pb.patch(f"{PB}/api/collections/purges/records/{row.get('id')}",
+            backend.patch(f"{PB}/api/collections/purges/records/{row.get('id')}",
                      json={"memory_purged": True,
                            "purged_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())},
                      timeout=10).raise_for_status()

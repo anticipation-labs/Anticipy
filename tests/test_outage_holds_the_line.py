@@ -225,7 +225,7 @@ def _quiet_backend(monkeypatch, rows=()):
         def json():
             return {"items": list(rows)}
 
-    monkeypatch.setattr(W.pb, "get", lambda *a, **k: Reply())
+    monkeypatch.setattr(W.backend, "get", lambda *a, **k: Reply())
     monkeypatch.setattr(W, "post_event",
                         lambda kind, text, decision="", goal="", **k:
                         posted.append({"kind": kind, "text": text,

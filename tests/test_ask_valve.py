@@ -11,7 +11,7 @@ refused to ship the first version of this valve.
 import sys, os, time
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import brain.pb as pb
+from brain import backend
 import brain.worker as worker
 from brain.anticipy_core import Anticipy, Decision
 from brain.asking import question_line
@@ -31,9 +31,9 @@ class _ScriptedBrain:
 
 
 def _anticipy(monkeypatch, decision, sent):
-    monkeypatch.setattr(pb, "get", lambda *a, **k: _Resp())
-    monkeypatch.setattr(pb, "post", lambda *a, **k: _Resp({"id": "j1"}))
-    monkeypatch.setattr(pb, "patch", lambda *a, **k: _Resp())
+    monkeypatch.setattr(backend, "get", lambda *a, **k: _Resp())
+    monkeypatch.setattr(backend, "post", lambda *a, **k: _Resp({"id": "j1"}))
+    monkeypatch.setattr(backend, "patch", lambda *a, **k: _Resp())
     a = Anticipy(backend_url="http://dead", owner_ref="test-owner")
     a.brain = _ScriptedBrain(decision)
     monkeypatch.setattr(a, "notify_owner",
@@ -276,8 +276,8 @@ def test_invited_questions_never_touch_the_uninvited_budget(monkeypatch):
     DOOR (Omi port 10b): only "clock" and "ambient_act" reserve, so a spent
     day cannot mute an invited kind, and an invited kind never writes a row."""
     posts = []
-    monkeypatch.setattr(worker.pb, "get", lambda *a, **k: _Resp())
-    monkeypatch.setattr(worker.pb, "post", lambda *a, **k: posts.append(k) or _Resp())
+    monkeypatch.setattr(worker.backend, "get", lambda *a, **k: _Resp())
+    monkeypatch.setattr(worker.backend, "post", lambda *a, **k: posts.append(k) or _Resp())
     monkeypatch.setattr(worker, "UNINVITED_SPENT_UNTIL", time.time() + 3600)
     for kind in ("ask", "act", "needs_user", "compute_answer", ""):
         assert worker.SPEAK_ONCE("Quick question — which Priya?",

@@ -17,7 +17,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from brain import pb  # noqa: E402
+from brain import backend  # noqa: E402
 from brain.anticipy_core import Anticipy  # noqa: E402
 
 
@@ -62,9 +62,9 @@ class FakePB:
 
 def _anticipy(monkeypatch):
     fake = FakePB()
-    monkeypatch.setattr(pb, "get", fake.get)
-    monkeypatch.setattr(pb, "post", fake.post)
-    monkeypatch.setattr(pb, "patch", fake.patch)
+    monkeypatch.setattr(backend, "get", fake.get)
+    monkeypatch.setattr(backend, "post", fake.post)
+    monkeypatch.setattr(backend, "patch", fake.patch)
     return Anticipy(owner_id="t"), fake
 
 

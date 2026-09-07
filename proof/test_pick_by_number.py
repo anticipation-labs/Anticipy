@@ -51,9 +51,9 @@ class Resp:
 
 
 def build(thread_events=None):
-    C.pb.get = lambda url, **kw: Resp(thread_events or [])
-    C.pb.post = lambda *a, **k: Resp()
-    C.pb.patch = lambda *a, **k: Resp()
+    C.backend.get = lambda url, **kw: Resp(thread_events or [])
+    C.backend.post = lambda *a, **k: Resp()
+    C.backend.patch = lambda *a, **k: Resp()
     anticipy = types.SimpleNamespace(
         owner_id="X", backend_url="http://pb", llm=None,
         memory=types.SimpleNamespace(recall=lambda *a, **k: []))

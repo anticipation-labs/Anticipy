@@ -75,7 +75,7 @@ def make_anticipy(owner_ref=""):
 
 
 def wire(monkeypatch, job, patches, posts, stamp_survives=True, answer=None):
-    """Point brain.pb at one in-memory job row; record every write. `answer`
+    """Point brain.backend at one in-memory job row; record every write. `answer`
     is what the Worker door says to the POST — a Resp, or an Exception."""
     state = dict(job)
 
@@ -106,9 +106,9 @@ def wire(monkeypatch, job, patches, posts, stamp_survives=True, answer=None):
             {"ok": True, "job": state.get("id"), "outcome": "ran", "status": "done",
              "lane": "api", "effect_uncertain": False})
 
-    monkeypatch.setattr(W.pb, "get", fake_get)
-    monkeypatch.setattr(W.pb, "patch", fake_patch)
-    monkeypatch.setattr(W.pb, "post", fake_post)
+    monkeypatch.setattr(W.backend, "get", fake_get)
+    monkeypatch.setattr(W.backend, "patch", fake_patch)
+    monkeypatch.setattr(W.backend, "post", fake_post)
     return fake_get
 
 
@@ -322,7 +322,7 @@ def test_the_browser_stall_notice_skips_the_api_lane(monkeypatch):
     def fake_get(url, **kw):
         seen["filter"] = (kw.get("params") or {}).get("filter", "")
         return Resp({"items": []})
-    monkeypatch.setattr(W.pb, "get", fake_get)
+    monkeypatch.setattr(W.backend, "get", fake_get)
     W.report_stalled_work(make_anticipy())
     assert 'lane!="api"' in seen["filter"]
     assert 'lane!="research"' in seen["filter"]
@@ -335,7 +335,7 @@ def test_the_device_notice_names_the_api_lane_out(monkeypatch):
     def fake_get(url, **kw):
         seen["filter"] = (kw.get("params") or {}).get("filter", "")
         return Resp({"items": []})
-    monkeypatch.setattr(W.pb, "get", fake_get)
+    monkeypatch.setattr(W.backend, "get", fake_get)
     W.report_unclaimed_device_work(make_anticipy())
     assert 'lane!="api"' in seen["filter"]
 

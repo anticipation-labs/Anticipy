@@ -121,7 +121,7 @@ def _queue(monkeypatch, goal, key="test-key"):
         posted.update(kw.get("json") or {})
         return R()
 
-    monkeypatch.setattr(core.pb, "post", fake_post)
+    monkeypatch.setattr(core.backend, "post", fake_post)
     a = Anticipy(owner_id="own1")
     monkeypatch.setattr(a, "_same_pending", lambda goal, **_k: None)
     a._queue_job(goal, {"source": "test", "now": "now"})
@@ -174,7 +174,7 @@ def test_an_sms_ask_is_marked_on_the_job(monkeypatch):
         def json(self):
             return {"id": "j1"}
 
-    monkeypatch.setattr(core.pb, "post",
+    monkeypatch.setattr(core.backend, "post",
                         lambda url, **kw: (posted.update(kw.get("json") or {}),
                                            R())[1])
     a = _offline_anticipy(owner_id="own1")
@@ -196,7 +196,7 @@ def test_a_pendant_line_carries_no_channel(monkeypatch):
         def json(self):
             return {"id": "j1"}
 
-    monkeypatch.setattr(core.pb, "post",
+    monkeypatch.setattr(core.backend, "post",
                         lambda url, **kw: (posted.update(kw.get("json") or {}),
                                            R())[1])
     a = _offline_anticipy(owner_id="own1")

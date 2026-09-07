@@ -30,7 +30,7 @@ def _events(monkeypatch, items):
         captured["filter"] = (params or {}).get("filter", "")
         return _R(items)
 
-    monkeypatch.setattr(W.pb, "get", fake_get)
+    monkeypatch.setattr(W.backend, "get", fake_get)
     return captured
 
 

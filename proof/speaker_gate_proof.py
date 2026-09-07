@@ -24,7 +24,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from brain import pb  # noqa: E402
+from brain import backend  # noqa: E402
 
 JOBS: list[dict] = []
 
@@ -41,7 +41,7 @@ class _R:
             raise RuntimeError("http error")
 
 
-pb.get = lambda url, params=None, timeout=None, **kw: _R(
+backend.get = lambda url, params=None, timeout=None, **kw: _R(
     {"items": [j for j in JOBS if j["status"] in
                ((params or {}).get("filter", "") or "")]}) \
     if "/jobs/" in url else _R({"items": []})
@@ -56,8 +56,8 @@ def _post(url, json=None, timeout=None, **kw):
     return _R(rec)
 
 
-pb.post = _post
-pb.patch = lambda url, json=None, timeout=None, **kw: _R({})
+backend.post = _post
+backend.patch = lambda url, json=None, timeout=None, **kw: _R({})
 
 from brain.anticipy_core import Anticipy  # noqa: E402
 from brain.llm import LLM  # noqa: E402

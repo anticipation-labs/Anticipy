@@ -520,7 +520,7 @@ def test_leg6_red_when_the_welcome_itself_is_gone(tmp_path):
 # ==========================================================================
 # LEG 7 — THE VERIFIED RECEIPT IS WHAT IS SHOWN
 # ==========================================================================
-GUARD_JS = ('if (!receipt.verified || receipt.effect_key !== effect) '
+GUARD_JS = ('if (!reconciliation.verified || reconciliation.effect_key !== effect) '
             'return reject("done needs a receipt");\n')
 
 JOB_WITHOUT = ('struct AgentJob: Decodable {\n'
@@ -1057,7 +1057,7 @@ def test_leg7_is_not_satisfied_by_a_commented_out_server_check(tmp_path):
     """If the server stops demanding a receipt the leg must say so. A
     commented-out check is not the server demanding anything."""
     root = receipt_tree(tmp_path, JOB_WITH, CARD_RECEIPT,
-                        guard="// if (!receipt.verified) return reject();\n")
+                        guard="// if (!reconciliation.verified) return reject();\n")
     why = fails(sg.leg_7_receipt_is_what_is_shown, root)
     assert "Re-point the leg" in why
 
@@ -1335,7 +1335,7 @@ def mac_tree(tmp_path, blob=None) -> str:
 def commits_of(zip_at: int | None, source_at: int | None):
     """A stand-in for git: the newest commit touching the zip, and the newest
     touching the Mac sources, as (hash, epoch) — or None for no answer."""
-    def newest(root, paths):
+    def newest(root, paths, follow=False):
         if sg.MAC_ZIP in paths:
             return None if zip_at is None else ("zipzipzip", zip_at)
         return None if source_at is None else ("srcsrcsrc", source_at)
@@ -1433,9 +1433,24 @@ def test_leg10_reads_the_real_repo_history():
     """The default `newest_commit` is git. Against the real tree it must at
     least ANSWER for both paths; the verdict itself is not pinned, because a
     red-today expectation would go red the day somebody rebuilds the app."""
-    assert sg.git_newest_commit(ROOT, [sg.MAC_ZIP]) is not None
+    assert sg.git_newest_commit(ROOT, [sg.MAC_ZIP], follow=True) is not None
     assert sg.git_newest_commit(ROOT, list(sg.MAC_SOURCES)) is not None
     assert sg.git_newest_commit(ROOT, ["no/such/path/anywhere"]) is None
+
+
+def test_leg10_follows_the_zip_across_a_rename(tmp_path):
+    """A `git mv` of the zip is not a rebuild. The follow flag reaches the
+    commit that last wrote the bytes, and a rename commit is not one."""
+    mac_tree_root = mac_tree(tmp_path)
+    seen = []
+
+    def newest(root, paths, follow=False):
+        seen.append((tuple(paths), follow))
+        return ("c", 100)
+
+    sg.leg_10_mac_app_is_current(mac_tree_root, newest_commit=newest)
+    assert ((sg.MAC_ZIP,), True) in seen, "the zip must be followed across renames"
+    assert all(not f for p, f in seen if sg.MAC_ZIP not in p), "the sources are directories; no follow"
 
 
 # ------------------------------------------------------------------ leg 11

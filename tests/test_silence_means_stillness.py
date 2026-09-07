@@ -29,7 +29,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from brain import pb  # noqa: E402
+from brain import backend  # noqa: E402
 from brain.anticipy_core import Anticipy, is_consequential  # noqa: E402
 from brain.memory import Memory  # noqa: E402
 from brain.orchestrator import Decision  # noqa: E402
@@ -95,9 +95,9 @@ class DeadMemory(Memory):
 
 def _anticipy(monkeypatch, decision):
     fake = Fake()
-    monkeypatch.setattr(pb, "get", fake.get)
-    monkeypatch.setattr(pb, "post", fake.post)
-    monkeypatch.setattr(pb, "patch", fake.patch)
+    monkeypatch.setattr(backend, "get", fake.get)
+    monkeypatch.setattr(backend, "post", fake.post)
+    monkeypatch.setattr(backend, "patch", fake.patch)
     a = Anticipy(memory=DeadMemory(), owner_id="silence")
     monkeypatch.setattr(a, "_decide", lambda *args, **kw: decision)
     monkeypatch.setattr(a, "_voice", lambda *a_, **k_: "i'm on it, ok to send?")
@@ -247,7 +247,7 @@ def test_a_failing_cancel_never_takes_hearing_down(monkeypatch):
 
     def boom(*a_, **k_):
         raise RuntimeError("backend down")
-    monkeypatch.setattr(pb, "patch", boom)
+    monkeypatch.setattr(backend, "patch", boom)
     out = a.hear(LINE, may_say=SAY_NOTHING)          # must not raise
     assert out and "decision" in out
 

@@ -85,8 +85,8 @@ def run_ask(events, send_works=True):
             return Resp([e for e in events if not m or e.get("decision") == m.group(1)])
         return Resp()
 
-    W.pb.get = get
-    W.pb.post = lambda url, **kw: posted.append(kw.get("json") or {}) or Resp()
+    W.backend.get = get
+    W.backend.post = lambda url, **kw: posted.append(kw.get("json") or {}) or Resp()
 
     def notify(msg, channel="sms"):
         sent.append(msg)

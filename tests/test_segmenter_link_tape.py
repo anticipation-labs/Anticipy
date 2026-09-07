@@ -369,9 +369,11 @@ COLUMN = "parent_segment"
 SCAN_DIRS = tg.SHIPPED_DIRS
 SKIP_DIRS = {".git", "node_modules", "__pycache__", ".venv", "venv", "build",
              "dist", "DerivedData", ".build", "Pods", ".pytest_cache"}
-# The only file allowed to name the column outside python: the migration that
-# DEFINES it. A schema is not a reader.
-SCHEMA_ONLY = ("backend/pb_migrations/",)
+# Files allowed to name the column outside python: the schema that DEFINES it.
+# A schema is not a reader. (The D1 schema lives under migration/, which the
+# shipped organs above do not include; the tuple stays so the exclusion is
+# explicit rather than accidental.)
+SCHEMA_ONLY = ("migration/d1/",)
 
 
 def _python_files(root):

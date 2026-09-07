@@ -17,7 +17,7 @@ from datetime import datetime
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from brain import pb  # noqa: E402
+from brain import backend  # noqa: E402
 from brain import worker  # noqa: E402
 from brain.worker import maybe_welcome_new_owner  # noqa: E402
 
@@ -85,7 +85,7 @@ def _rig(monkeypatch, created_ts, saved=None, updated_ts=None, spoken=False):
                                   "updated": _iso(updated_ts),
                                   "first_name": "Omar"}]})
 
-    monkeypatch.setattr(pb, "get", _get)
+    monkeypatch.setattr(backend, "get", _get)
 
     def _save(s):
         if saved is not None:
@@ -167,14 +167,14 @@ def test_a_fresh_number_is_decided_without_asking_the_backend(monkeypatch):
     asked = []
     now = MID_MORNING
     _rig(monkeypatch, now - 7 * 24 * 3600, updated_ts=now - 60, spoken=False)
-    inner = pb.get
+    inner = backend.get
 
     def _watch(url, *a, **k):
         if "/events/records" in url:
             asked.append(url)
         return inner(url, *a, **k)
 
-    monkeypatch.setattr(pb, "get", _watch)
+    monkeypatch.setattr(backend, "get", _watch)
     a, state = _Anticipy(), {}
 
     assert maybe_welcome_new_owner(a, state, now=now) is True
@@ -237,7 +237,7 @@ def test_a_failed_send_leaves_no_stamp_so_it_retries(monkeypatch):
 
 
 def test_backend_failure_never_crashes_or_texts(monkeypatch):
-    monkeypatch.setattr(pb, "get", lambda *a, **k: (_ for _ in ()).throw(
+    monkeypatch.setattr(backend, "get", lambda *a, **k: (_ for _ in ()).throw(
         RuntimeError("down")))
     a = _Anticipy()
     assert maybe_welcome_new_owner(a, {}, now=MID_MORNING) is False

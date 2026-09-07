@@ -9,7 +9,7 @@ from pathlib import Path
 
 import requests
 
-from brain import pb
+from brain import backend
 from brain.anticipy_core import Anticipy
 
 
@@ -42,25 +42,26 @@ def test_commitment_identity_cannot_consult_language_or_similarity():
     })
 
 
-def test_database_has_a_supported_unique_barrier_and_terminal_release_hook():
-    src = (ROOT / "backend/pb_migrations/1700000055_active_commitment_identity.js") \
-        .read_text()
-    assert "CREATE UNIQUE INDEX `idx_jobs_active_commitment`" in src
-    assert "ON `jobs` (`commitment_key`)" in src
-    # PocketBase accepts this partial predicate; status IN() is rejected by
-    # its collection index validator even though bare SQLite accepts it.
-    predicate = src.split("CREATE UNIQUE INDEX", 1)[1].split("\n    ]", 1)[0]
-    assert "commitment_key` != ''" in predicate
+def test_database_has_a_supported_unique_barrier_and_terminal_release():
+    """The barrier is the D1 schema's partial unique index; the release is the
+    Worker's writer clearing the key on every terminal status. Both halves are
+    read from the code that runs (migration/d1, migration/workers), never from
+    the PocketBase migration and hook they were ported from."""
+    schema = (ROOT / "migration/d1/schema.sql").read_text()
+    assert 'CREATE UNIQUE INDEX IF NOT EXISTS "idx_jobs_active_commitment"' in schema
+    predicate = schema.split('"idx_jobs_active_commitment"', 1)[1].split(";", 1)[0]
+    assert '"commitment_key" != \'\'' in predicate
     assert " IN " not in predicate
-    hook = (ROOT / "backend/pb_hooks/job_commitment_identity.pb.js").read_text()
-    assert 'onRecordCreate(releaseTerminalCommitment, "jobs")' in hook
-    assert 'onRecordUpdate(releaseTerminalCommitment, "jobs")' in hook
-    assert "done" not in predicate
-    assert "failed" not in predicate
-    assert "cancelled" not in predicate
     for status in ("done", "failed", "cancelled"):
-        assert f'status === "{status}"' in hook
-    assert 'e.record.set("commitment_key", "")' in hook
+        assert status not in predicate
+    records = (ROOT / "migration/workers/src/api/records.ts").read_text()
+    release = records.split("export function releasesCommitment", 1)[1].split("}", 1)[0]
+    assert 'def.name !== "jobs"' in release
+    assert "TERMINAL_STATUSES.includes" in release
+    terminal = records.split("TERMINAL_STATUSES = ", 1)[1].split("]", 1)[0]
+    for status in ("done", "failed", "cancelled"):
+        assert f'"{status}"' in terminal
+    assert 'body.commitment_key = ""' in records
 
 
 def test_storage_rejects_two_live_rows_but_allows_history_then_retry():
@@ -114,10 +115,10 @@ def test_a_create_race_absorbs_by_commitment_key_not_words(monkeypatch):
         response._content = b'{"message":"unique constraint"}'
         raise requests.HTTPError(response=response)
 
-    monkeypatch.setattr(pb, "get", get)
-    monkeypatch.setattr(pb, "post", post)
+    monkeypatch.setattr(backend, "get", get)
+    monkeypatch.setattr(backend, "post", post)
     monkeypatch.setattr(
-        pb, "patch",
+        backend, "patch",
         lambda *_a, **_k: (_ for _ in ()).throw(
             AssertionError("a clock paraphrase must not rewrite the winner")))
 

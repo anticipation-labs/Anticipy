@@ -55,7 +55,7 @@ def test_the_real_zoom_burst_is_silenced(monkeypatch):
     rows = [{"kind": "anticipy_says", "decision": "needs_user", "goal": GOAL,
              "text": t, "created": stamp(n)} for n, t in enumerate(said, 1)]
     get, _ = fake_events(rows)
-    monkeypatch.setattr(W.pb, "get", get)
+    monkeypatch.setattr(W.backend, "get", get)
     assert W.asked_about_recently(GOAL) is True
 
 
@@ -65,7 +65,7 @@ def test_wording_is_never_consulted(monkeypatch):
     rows = [{"kind": "anticipy_says", "decision": "needs_user", "goal": GOAL,
              "text": "zzz qqq", "created": stamp(2)}]
     get, _ = fake_events(rows)
-    monkeypatch.setattr(W.pb, "get", get)
+    monkeypatch.setattr(W.backend, "get", get)
     assert W.asked_about_recently(GOAL) is True
 
 
@@ -74,7 +74,7 @@ def test_a_different_task_is_not_silenced(monkeypatch):
     rows = [{"kind": "anticipy_says", "decision": "needs_user",
              "goal": "Book dinner at Cactus Club", "text": "x", "created": stamp(2)}]
     get, _ = fake_events(rows)
-    monkeypatch.setattr(W.pb, "get", get)
+    monkeypatch.setattr(W.backend, "get", get)
     assert W.asked_about_recently(GOAL) is False
 
 
@@ -84,7 +84,7 @@ def test_she_is_not_muted_forever(monkeypatch):
     rows = [{"kind": "anticipy_says", "decision": "needs_user", "goal": GOAL,
              "text": "x", "created": stamp(500)}]
     get, seen = fake_events(rows)
-    monkeypatch.setattr(W.pb, "get", get)
+    monkeypatch.setattr(W.backend, "get", get)
     W.asked_about_recently(GOAL, minutes=45)
     # The window is enforced server-side, so prove it is actually in the query
     # rather than trusting the fixture to have filtered.
@@ -95,14 +95,14 @@ def test_only_asks_count_not_everything_she_says(monkeypatch):
     """A chatty FYI about the same task must not silence a real question, so
     the query itself has to narrow to asks."""
     get, seen = fake_events([])
-    monkeypatch.setattr(W.pb, "get", get)
+    monkeypatch.setattr(W.backend, "get", get)
     W.asked_about_recently(GOAL)
     assert 'decision="needs_user"' in seen["filter"]
     assert 'kind="anticipy_says"' in seen["filter"]
 
 
 def test_no_goal_never_silences(monkeypatch):
-    monkeypatch.setattr(W.pb, "get", fake_events([])[0])
+    monkeypatch.setattr(W.backend, "get", fake_events([])[0])
     assert W.asked_about_recently("") is False
     assert W.asked_about_recently(None) is False
 
@@ -112,10 +112,10 @@ def test_a_backend_failure_does_not_mute_her(monkeypatch):
     an error is worse than one repeat: the task dies with nobody told."""
     def boom(*a, **k):
         raise RuntimeError("pb down")
-    monkeypatch.setattr(W.pb, "get", boom)
+    monkeypatch.setattr(W.backend, "get", boom)
     assert W.asked_about_recently(GOAL) is False
 
-    monkeypatch.setattr(W.pb, "get", lambda *a, **k: types.SimpleNamespace(
+    monkeypatch.setattr(W.backend, "get", lambda *a, **k: types.SimpleNamespace(
         ok=False, json=lambda: {}))
     assert W.asked_about_recently(GOAL) is False
 
@@ -187,7 +187,7 @@ def test_a_parked_question_is_not_reasked_every_45_minutes(monkeypatch):
     rows = [{"kind": "anticipy_says", "decision": "needs_user", "goal": BOOK,
              "text": prior, "created": stamp(90)}]
     get, _ = fake_events(rows)
-    monkeypatch.setattr(W.pb, "get", get)
+    monkeypatch.setattr(W.backend, "get", get)
     assert W.need_already_asked(BOOK, BLOCKER) is True
 
 
@@ -197,7 +197,7 @@ def test_a_new_requirement_on_the_same_task_is_still_raised(monkeypatch):
     rows = [{"kind": "anticipy_says", "decision": "needs_user", "goal": BOOK,
              "text": prior, "created": stamp(90)}]
     get, _ = fake_events(rows)
-    monkeypatch.setattr(W.pb, "get", get)
+    monkeypatch.setattr(W.backend, "get", get)
     new_blocker = "the form needs a phone number ending in 4 digits to hold the table"
     assert W.need_already_asked(BOOK, new_blocker) is False
 

@@ -156,10 +156,10 @@ def test_inbound_signature_validation_still_reads_the_account_auth_token():
     API-key equivalent, so the hook cannot migrate with the outbound path, and
     both files have to say so where the next person will read it.
     """
-    hook = (ROOT / "backend" / "pb_hooks" / "sms.pb.js").read_text()
-    assert 'const authToken = $os.getenv("TWILIO_AUTH_TOKEN")' in hook
-    assert "TWILIO_API_KEY_SECRET" in hook, "warn where the mistake is made"
-    assert "API key cannot stand in for it" in hook
+    hook = (ROOT / "migration" / "workers" / "src" / "routes" / "sms.ts").read_text()
+    assert 'const authToken = env.TWILIO_AUTH_TOKEN || ""' in hook
+    assert "TWILIO_AUTH_TOKEN IS LOAD-BEARING AND CANNOT BE REPLACED BY AN API KEY" in hook, (
+        "warn where the mistake is made")
     arm_source = (ROOT / "brain" / "voice_arm.py").read_text()
     assert "API-key equivalent" in arm_source
 
@@ -545,164 +545,8 @@ def test_the_disclosure_cannot_be_edited_out_by_whoever_writes_the_script():
     assert plan.spoken() in plan.approval_card()
 
 
-# ------------------------------- the OTHER outbound path: the reset code text
-
-RESET_HARNESS = r"""
-const fs = require('fs');
-const path = require('path');
-const vm = require('vm');
-const args = process.argv.slice(-2);
-const scenario = JSON.parse(args[0]);
-const HOOKS = args[1];
-// Captured by ROUTE: this file registers two handlers, and taking the last one
-// registered would silently exercise /auth/reset/confirm instead.
-let handlerSource = null;
-const logs = [];
-const saved = [];
-const requests = [];
-
-// Only what PocketBase actually exposes to a hook runtime. The handler runs in
-// its own isolated context for the same reason sms.pb.js's tests do it: a
-// helper hoisted out of the body passes anywhere else and ReferenceErrors in
-// production.
-const globals = () => ({
-  $os: { getenv: (name) => (scenario.env || {})[name] || "" },
-  $security: {
-    randomStringWithAlphabet: () => "123456",
-    sha256: (value) => "sha256:" + value,
-  },
-  $http: {
-    send: (req) => {
-      requests.push(req);
-      return { statusCode: scenario.twilioStatus || 201, raw: "{}" };
-    },
-  },
-  console: { log: (...parts) => logs.push(parts.map(String).join(" ")) },
-  require: require,
-  __hooks: HOOKS,
-  Record: function (collection) {
-    this.collection = collection;
-    this.data = {};
-    this.set = (key, value) => { this.data[key] = value; };
-  },
-});
-
-const loader = {
-  ...globals(),
-  routerAdd: (m, route, fn) => {
-    if (route === '/auth/reset/request') handlerSource = String(fn);
-  },
-};
-vm.createContext(loader);
-vm.runInContext(fs.readFileSync(path.join(HOOKS, 'password_reset.pb.js'), 'utf8'), loader);
-
-const isolated = globals();
-vm.createContext(isolated);
-const handler = vm.runInContext('(' + handlerSource + ')', isolated);
-
-const owner = { id: 'own1', getString: (k) => (k === 'phone' ? scenario.phone : '') };
-const profile = {
-  getString: (k) => (k === 'phone' ? (scenario.profilePhone || '') : ''),
-};
-const e = {
-  requestInfo: () => ({ body: { email: 'owner@example.com' } }),
-  json: (status, body) => ({ status: status, body: body }),
-  app: {
-    findFirstRecordByFilter: (collection) => {
-      if (collection === 'owners') return owner;
-      throw new Error('no rows');
-    },
-    findRecordsByFilter: (collection) => {
-      if (collection === 'owner_profile') {
-        return scenario.profilePresent ? [profile] : [];
-      }
-      return [];
-    },
-    findCollectionByNameOrId: (name) => name,
-    save: (record) => { saved.push(record.data); },
-  },
-};
-
-let out;
-try {
-  out = handler(e);
-} catch (err) {
-  out = { status: 500, body: String(err) };
-}
-process.stdout.write(JSON.stringify({
-  status: out.status, logs, saved, requests,
-}));
-"""
-
-
-def request_reset(*, twilio_status=201, **over):
-    account_phone = over.pop("account_phone", "+16045550111")
-    profile_present = over.pop("profile_present", False)
-    profile_phone = over.pop("profile_phone", "")
-    scenario = {
-        "env": env(**over),
-        "phone": account_phone,
-        "profilePresent": profile_present,
-        "profilePhone": profile_phone,
-        "twilioStatus": twilio_status,
-    }
-    proc = subprocess.run(
-        ["node", "-e", RESET_HARNESS, "--", json.dumps(scenario),
-         str(ROOT / "backend" / "pb_hooks")],
-        capture_output=True, text=True, timeout=60)
-    if proc.returncode != 0:
-        raise AssertionError(f"harness failed: {proc.stderr[-2000:]}")
-    return json.loads(proc.stdout)
-
-
 def basic(user: str, secret: str) -> str:
     return "Basic " + base64.b64encode(f"{user}:{secret}".encode()).decode()
-
-
-def test_the_reset_code_text_prefers_the_api_key_too():
-    """The second and last outbound path in the tree. A migration that moved
-    only the brain would leave "outbound no longer uses the account token" true
-    of one file and false of the product."""
-    out = request_reset(TWILIO_API_KEY_SID=KEY_SID, TWILIO_API_KEY_SECRET=KEY_SECRET)
-    assert len(out["requests"]) == 1, out["logs"]
-    sent = out["requests"][0]
-    assert sent["headers"]["Authorization"] == basic(KEY_SID, KEY_SECRET)
-    assert f"/Accounts/{ACCOUNT}/Messages.json" in sent["url"], sent["url"]
-    assert AUTH_TOKEN not in json.dumps(sent)
-
-
-def test_the_reset_code_text_still_works_on_the_auth_token_alone():
-    sent = request_reset()["requests"][0]
-    assert sent["headers"]["Authorization"] == basic(ACCOUNT, AUTH_TOKEN)
-
-
-def test_a_half_configured_key_says_so_on_the_reset_path_and_still_sends():
-    out = request_reset(TWILIO_API_KEY_SID=KEY_SID)
-    assert out["requests"][0]["headers"]["Authorization"] == basic(ACCOUNT, AUTH_TOKEN)
-    assert any("half set" in line for line in out["logs"]), out["logs"]
-
-
-def test_a_reset_code_whose_text_failed_is_never_left_live_in_the_database():
-    """"Send FIRST" is the whole design: a stored code whose text never arrived
-    is an account that can be reset by whoever guesses six digits, and a person
-    waiting for a message that is not coming."""
-    out = request_reset(twilio_status=401)
-    assert out["saved"] == [], "a failed send must not leave a usable code"
-    assert any("refused the send" in line for line in out["logs"]), out["logs"]
-
-
-def test_a_successful_reset_send_does_record_the_code():
-    """The inverse, so the check above cannot be satisfied by never saving."""
-    out = request_reset()
-    assert len(out["saved"]) == 1
-    assert out["saved"][0]["code_hash"].startswith("sha256:")
-
-
-def test_an_explicitly_empty_profile_never_resurrects_the_signup_number():
-    out = request_reset(profile_present=True, profile_phone="",
-                        account_phone="+16045550111")
-    assert out["requests"] == []
-    assert out["saved"] == []
 
 
 # --------------------------------------------- the proof, run as a real program

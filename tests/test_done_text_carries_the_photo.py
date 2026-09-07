@@ -413,7 +413,7 @@ def test_one_evidence_id_in_the_receipt_is_the_picture(monkeypatch):
         asked.append((url, dict(kw.get("json") or {})))
         return _Response({"ok": True, "url": URL, "expires": "later"}, 200)
 
-    monkeypatch.setattr(ev.pb, "post", fake_post)
+    monkeypatch.setattr(ev.backend, "post", fake_post)
     job = {"id": "j1", "owner_ref": "own1",
            "receipt": _receipt("url:https://earls.test/confirm",
                                "proof:booking #55",
@@ -424,7 +424,7 @@ def test_one_evidence_id_in_the_receipt_is_the_picture(monkeypatch):
 
 def test_a_receipt_naming_no_picture_is_not_an_error(monkeypatch):
     door, calls = _open_door()
-    monkeypatch.setattr(ev.pb, "post", door)
+    monkeypatch.setattr(ev.backend, "post", door)
     job = {"id": "j1", "receipt": _receipt("url:https://earls.test/confirm")}
     assert ev.picture_for_done_text(job, _yes, base="http://pb") == []
     assert calls == [], "a share window was opened for a text with no picture"
@@ -433,7 +433,7 @@ def test_a_receipt_naming_no_picture_is_not_an_error(monkeypatch):
 def test_more_than_one_candidate_means_no_picture_and_a_loud_line(monkeypatch):
     """Two ids is a defect in the depositor, not a menu for the sender."""
     door, calls = _open_door()
-    monkeypatch.setattr(ev.pb, "post", door)
+    monkeypatch.setattr(ev.backend, "post", door)
     said: list[str] = []
     job = {"id": "j1", "receipt": _receipt("evidence:rec1111111111aaa",
                                            "evidence:rec2222222222bbb")}
@@ -449,7 +449,7 @@ def test_an_owner_who_never_said_yes_gets_no_picture(monkeypatch):
     — and a floor that lifts itself is not a floor. Nobody has answered means
     no."""
     door, calls = _open_door()
-    monkeypatch.setattr(ev.pb, "post", door)
+    monkeypatch.setattr(ev.backend, "post", door)
     job = {"id": "j1", "receipt": _receipt("evidence:rec1234567890abc")}
     assert ev.picture_for_done_text(job, lambda _ref: False,
                                     base="http://pb") == []
@@ -463,7 +463,7 @@ def test_no_window_is_opened_before_the_moment_of_sending(monkeypatch):
     nothing. Both refusals above must cost zero share calls, which is what
     `_never_called` proves — this test names the property."""
     door, calls = _open_door()
-    monkeypatch.setattr(ev.pb, "post", door)
+    monkeypatch.setattr(ev.backend, "post", door)
     assert ev.picture_for_done_text({"receipt": "{}"}, _yes) == []
     assert ev.picture_for_done_text({}, _yes) == []
     assert calls == []
@@ -476,7 +476,7 @@ def test_no_window_is_opened_before_the_moment_of_sending(monkeypatch):
     lambda url, **kw: _Response({"ok": True, "url": ""}, 200),
 ])
 def test_a_share_door_that_says_no_is_no_picture_not_an_exception(monkeypatch, door):
-    monkeypatch.setattr(ev.pb, "post", door)
+    monkeypatch.setattr(ev.backend, "post", door)
     job = {"id": "j1", "receipt": _receipt("evidence:rec1234567890abc")}
     assert ev.picture_for_done_text(job, _yes, base="http://pb") == []
 
@@ -485,7 +485,7 @@ def test_a_share_door_that_never_answers_is_no_picture(monkeypatch):
     def timeout(url, **kw):
         raise OSError("timed out")
 
-    monkeypatch.setattr(ev.pb, "post", timeout)
+    monkeypatch.setattr(ev.backend, "post", timeout)
     # Directly, so that `picture_for_done_text`'s own outer net cannot answer
     # for this: the share call is what must degrade to "no picture".
     assert ev.open_share_window("rec1234567890abc", base="http://pb",
@@ -502,7 +502,7 @@ def test_an_unparseable_answer_is_no_picture(monkeypatch):
         def json(self):
             raise ValueError("not json")
 
-    monkeypatch.setattr(ev.pb, "post", lambda url, **kw: Garbage())
+    monkeypatch.setattr(ev.backend, "post", lambda url, **kw: Garbage())
     assert ev.open_share_window("rec1234567890abc", base="http://pb",
                                 log=lambda _l: None) == ""
     job = {"id": "j1", "receipt": _receipt("evidence:rec1234567890abc")}

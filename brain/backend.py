@@ -1,9 +1,10 @@
-"""One place that talks to PocketBase, so auth is impossible to forget.
+"""One place that talks to the backend, so auth is impossible to forget.
 
-The collections still carry dev-grade open rules; the backend's guard hook can
-require a shared service token on every mutating request (see
-backend/pb_hooks/guard.pb.js). Every brain-side request goes through here so
-turning that enforcement on is an env change, not a code hunt.
+The backend is the Cloudflare Worker at api.anticipy.ai (migration/workers),
+whose guard (src/policy/guard.ts) requires the shared service token on every
+request the brain makes. Every brain-side request goes through here so a
+change to that enforcement is an env change, not a code hunt. The module was
+called `pb` while PocketBase served this API; the wire is unchanged.
 """
 from __future__ import annotations
 
@@ -15,8 +16,8 @@ TIMEOUT = 10
 
 
 def headers() -> dict:
-    # X-Anticipy-Worker names this process as the brain. The backend's
-    # research_lane hook uses it to keep research-lane jobs out of every
+    # X-Anticipy-Worker names this process as the brain. The Worker's
+    # research_lane policy uses it to keep research-lane jobs out of every
     # browser agent's claim poll — including 0.2.3-and-older extensions in
     # the wild, whose filters cannot be recalled. It is a ROUTING marker,
     # not a credential; the service token is what authenticates.

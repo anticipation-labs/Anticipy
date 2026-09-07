@@ -91,7 +91,7 @@ def run(cases_path: Path, oracle_path: Path, results_path: Path,
     rows = []
     for number, case in enumerate(cases, start + 1):
         rig = PocketBaseRig()
-        core.pb = rig
+        core.backend = rig
         memory = Memory(":memory:", llm=llm)
         anticipy = Anticipy(
             memory=memory, llm=llm, owner_id="certification-owner",

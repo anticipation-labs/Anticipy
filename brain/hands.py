@@ -130,7 +130,7 @@ from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from typing import Optional
 
-from . import pb
+from . import backend
 from .llm import LLM
 
 # ---------------------------------------------------------------- the states
@@ -1029,7 +1029,7 @@ def read_connections(owner_ref: str, backend_url: str) -> Optional[tuple]:
     if not ref or not base:
         return None
     try:
-        r = pb.get(f"{base}/api/collections/connections/records",
+        r = backend.get(f"{base}/api/collections/connections/records",
                    params={"filter": f'user_id="{_escaped(ref)}"',
                            "perPage": 100},
                    timeout=FACT_TIMEOUT)
@@ -1069,7 +1069,7 @@ def read_catalog(toolkit: str, backend_url: str) -> Optional[tuple]:
     if not want or not base:
         return None
     try:
-        r = pb.get(f"{base}{API_HAND_TOOLS_PATH}", params={"toolkit": want},
+        r = backend.get(f"{base}{API_HAND_TOOLS_PATH}", params={"toolkit": want},
                    timeout=CATALOG_TIMEOUT)
         if not r.ok:
             return None
@@ -1102,7 +1102,7 @@ def browser_is_online(owner_ref: str, backend_url: str) -> Optional[bool]:
     if not ref or not base:
         return None
     try:
-        r = pb.get(f"{base}/api/collections/agents/records",
+        r = backend.get(f"{base}/api/collections/agents/records",
                    params={"filter": f'(paired=true) && owner_ref="{_escaped(ref)}"',
                            "sort": "-updated", "perPage": 1},
                    timeout=FACT_TIMEOUT)

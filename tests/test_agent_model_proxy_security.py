@@ -5,55 +5,56 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_agent_key_route_never_returns_server_credentials():
-    source = (ROOT / "backend/pb_hooks/agent_key.pb.js").read_text()
-    key_route = source.split('routerAdd("POST", "/agent/llm"', 1)[0]
-    assert "llm_proxy: true" in key_route
-    assert "openrouter_key" not in key_route.lower()
-    assert "service_token" not in key_route.lower()
-    assert '"Authorization": "Bearer "' not in key_route
-    assert "GEMINI_API_KEY" in key_route
+    source = (ROOT / "migration/workers/src/routes/agent.ts").read_text()
+    answer = source[source.index("llm_proxy: true"):]
+    answer = answer[:answer.index("});")]
+    assert "openrouter" not in answer.lower()
+    assert "service_token" not in answer.lower()
+    assert "Bearer" not in answer
+    assert "key" not in answer.lower(), "no vendor key in the key route's answer"
+    assert "providerKeys(env)" in source, "the route checks a provider exists, and answers llm_proxy"
+    assert "paired(env, agentId, token)" in source, "and only a paired agent gets that answer"
 
 
 def test_model_proxy_requires_private_agent_credential_and_allowlist():
-    source = (ROOT / "backend/pb_hooks/agent_key.pb.js").read_text()
-    proxy = source.split('routerAdd("POST", "/agent/llm"', 1)[1]
-    assert "X-Anticipy-Agent-ID" in proxy
-    assert "X-Anticipy-Agent-Token" in proxy
-    assert "paired = true" in proxy
+    source = (ROOT / "migration/workers/src/llm.ts").read_text()
+    proxy = source.split("export async function llmProxy", 1)[1]
+    agent = (ROOT / "migration/workers/src/routes/agent.ts").read_text()
+    assert "X-Anticipy-Agent-ID" in agent and "X-Anticipy-Agent-Token" in agent
+    assert "AND paired = 1" in agent, "the credential must resolve to a PAIRED row"
+    assert "not a paired agent" in agent
     assert "model is not enabled for browser agents" in proxy
-    assert '"Authorization": "Bearer " + openrouterKey' in proxy
-    assert '"x-goog-api-key": geminiKey' in proxy
+    assert "Bearer" in source and "x-goog-api-key" in proxy
     assert "generateContent" in proxy
     assert "systemInstruction" in proxy
-    assert "inlineData" in proxy
+    assert "inlineData" in source
     assert 'provider: "google"' in proxy
     assert "max_tokens: boundedMax" in proxy
     # 2026-09-05: the floor is 512, not 64 — the browser model thinks before it
     # answers and the thinking counts against the cap; at 64 its one-token
     # verdicts came back cut off (research/evals/login-wall-2026-09-05/).
     # The extension floors at the same number; this pins the proxy's lock.
-    assert "const REPLY_FLOOR = 512;" in proxy
-    assert "Math.max(REPLY_FLOOR," in proxy
-    assert "Math.max(64," not in proxy
-    assert "Math.min(4096" in proxy
-    assert "maxOutputTokens: boundedMax" in proxy
-    assert "const gemini3" in proxy
-    assert "/^gemini-3" in proxy
-    assert 'thinkingLevel: "low"' in proxy
-    assert "thinkingBudget: 0" in proxy
-    assert "if (!gemini3) generationConfig.temperature = 0" in proxy
-    assert 'responseMimeType = "application/json"' in proxy
+    assert "export const REPLY_FLOOR = 512;" in source
+    assert "export const REPLY_CEILING = 4096;" in source
+    assert "Math.max(REPLY_FLOOR," in source
+    assert "Math.max(64," not in source
+    assert "Math.min(REPLY_CEILING" in source
+    assert "maxOutputTokens: boundedMax" in source
+    assert "const gemini3 = isGemini3(" in source
+    assert "/^gemini-3" in source
+    assert 'thinkingLevel: "low"' in source
+    assert "thinkingBudget: 0" in source
+    assert "if (!gemini3) cfg.temperature = 0" in source
+    assert 'responseMimeType = "application/json"' in source
 
 
 def test_model_proxy_routes_the_selected_model_instead_of_the_available_key():
-    source = (ROOT / "backend/pb_hooks/agent_key.pb.js").read_text()
-    proxy = source.split('routerAdd("POST", "/agent/llm"', 1)[1]
-    assert 'model.indexOf("google/") === 0' in proxy
-    assert "if (geminiKey && directGeminiModel)" in proxy
-    assert 'provider_model: directGeminiModel' in proxy
-    assert 'provider_model: model' in proxy
-    assert 'body: serialized' in proxy
-    assert 'if (geminiKey) {' not in proxy
+    source = (ROOT / "migration/workers/src/llm.ts").read_text()
+    proxy = source.split("export async function llmProxy", 1)[1]
+    assert "if (keys.gemini && directGeminiModel)" in proxy
+    assert "provider_model: directGeminiModel" in proxy
+    assert "OpenRouter receives the selected non-Google model unchanged" in proxy
+    assert "if (keys.gemini) {" not in proxy
 
 
 def test_extension_uses_opaque_proxy_marker_for_production_calls():

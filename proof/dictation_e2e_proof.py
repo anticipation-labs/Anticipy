@@ -27,7 +27,7 @@ once put a ghost booking card on his real desk within seconds.
 """
 import sys, os
 sys.path.insert(0, os.path.expanduser("~/AnticipyFleet/control"))
-from brain import pb
+from brain import backend
 rows = []
 class R:
     def __init__(s,p): s._p, s.ok = p, True
@@ -43,7 +43,7 @@ def _patch(url, json=None, timeout=None, **kw):
     for r in rows:
         if r.get("id")==jid: r.update(json or {})
     return R({})
-pb.get, pb.post, pb.patch = _get, _post, _patch
+backend.get, backend.post, backend.patch = _get, _post, _patch
 
 from brain.anticipy_core import Anticipy
 from brain.llm import LLM

@@ -38,7 +38,7 @@ def run(n: int) -> bool:
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S.000Z")
     rows = [dict(r, created=now) for r in EARLIER]
 
-    real_get = W.pb.get
+    real_get = W.backend.get
 
     def fake_get(url, params=None, timeout=None, **k):
         if "anticipy_says" in (params or {}).get("filter", ""):
@@ -46,7 +46,7 @@ def run(n: int) -> bool:
                                          json=lambda: {"items": rows})
         return real_get(url, params=params, timeout=timeout, **k)
 
-    W.pb.get = fake_get
+    W.backend.get = fake_get
     try:
         sent = []
         a = Anticipy(memory=Memory(":memory:"), llm=LLM(),
@@ -62,7 +62,7 @@ def run(n: int) -> bool:
         print(f"  run {n}: OK — {sent[0]!r}")
         return True
     finally:
-        W.pb.get = real_get
+        W.backend.get = real_get
 
 
 if __name__ == "__main__":

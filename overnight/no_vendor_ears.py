@@ -68,8 +68,7 @@ VENDOR_KEYS = ("DEEPGRAM_API_KEY", "ASSEMBLYAI_API_KEY", "SPEECHMATICS_API_KEY")
 
 # Where shipped code lives. Tests, research and docs may DISCUSS a vendor —
 # this whole gate is documentation of one — so they are not scanned.
-SHIPPED = ("backend/pb_hooks", "backend/pb_migrations", "brain",
-           "app/ios/Anticipy", "extension")
+SHIPPED = ("migration/workers/src", "brain", "app/ios/Anticipy", "extension")
 SKIP_DIRS = {"node_modules", ".git", "__pycache__", "tests", "test"}
 # .plist and .html are here because of a miss on 2026-08-26. The gate was
 # GREEN while app/ios/Anticipy/Info.plist still told the owner, in the words iOS
@@ -129,7 +128,7 @@ def main() -> int:
     if not hits:
         print("  [1] PASS  NO SHIPPED CODE SENDS AUDIO TO A VENDOR")
         print("        no live reference to an audio vendor or its credential in")
-        print("        backend/pb_hooks, backend/pb_migrations, brain, app/ios/Anticipy, extension")
+        print("        migration/workers/src, brain, app/ios/Anticipy, extension")
         print("  " + "-" * 62)
         print("  What this cannot see: a vendor whose hostname is not in the")
         print("  registry, audio forwarded by a service outside this repo, or a")

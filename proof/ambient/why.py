@@ -134,7 +134,7 @@ def kind_of(row) -> str:
 def replay(rows):
     """Put each wrong line back through the real brain to read its reason."""
     sys.path.insert(0, REPO)
-    from brain import pb  # noqa: E402
+    from brain import backend  # noqa: E402
 
     JOBS: list[dict] = []
 
@@ -173,7 +173,7 @@ def replay(rows):
                 return _R(j)
         return _R({}, ok=False)
 
-    pb.get, pb.post, pb.patch = _get, _post, _patch
+    backend.get, backend.post, backend.patch = _get, _post, _patch
 
     from brain.anticipy_core import Anticipy  # noqa: E402
     from brain.llm import LLM  # noqa: E402

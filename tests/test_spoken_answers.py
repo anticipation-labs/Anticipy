@@ -210,7 +210,7 @@ def test_a_real_blocked_row_flows_through_untouched(monkeypatch):
         ok = True
         def json(self): return {"items": [row]}
 
-    monkeypatch.setattr(convmod, "pb", type("PB", (), {
+    monkeypatch.setattr(convmod, "backend", type("PB", (), {
         "get": staticmethod(lambda *a, **k: R()),
         "patch": staticmethod(lambda *a, **k: R())}))
 

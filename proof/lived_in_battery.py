@@ -106,8 +106,8 @@ def build():
     except Exception as e:
         print(f"  (consolidation skipped: {e})")
     fake = FakeJobs()
-    core.pb = fake
-    convmod.pb = fake
+    core.backend = fake
+    convmod.backend = fake
     a = Anticipy(memory=mem, llm=llm, owner_id="lived", owner_phone=PHONE)
     a._pending_jobs = lambda: [j for j in fake.jobs
                                if j["status"] in ("awaiting_confirm",

@@ -61,7 +61,7 @@ def _core(monkeypatch, posts, patches):
             class Response:
                 ok = True
             return Response()
-    monkeypatch.setattr(C, "pb", FakePB)
+    monkeypatch.setattr(C, "backend", FakePB)
     return a
 
 

@@ -33,7 +33,7 @@ from typing import Callable, Optional
 
 import requests
 
-from . import pb
+from . import backend
 
 from .anticipy_core import TEXTING_STYLE, _missing_fact_question, memory_notes
 from .llm import LLM
@@ -772,7 +772,7 @@ Use {"facts": {}} when there is nothing durable."""
             owner_filter = self._owner_filter()
             if owner_filter:
                 filt += f" && {owner_filter}"
-            r = pb.get(f"{self.anticipy.backend_url}/api/collections/jobs/records",
+            r = backend.get(f"{self.anticipy.backend_url}/api/collections/jobs/records",
                        params={"filter": filt, "perPage": 5, "sort": "-updated"}, timeout=10)
             if not r.ok:
                 return []
@@ -824,7 +824,7 @@ Use {"facts": {}} when there is nothing durable."""
             owner_filter = self._owner_filter()
             if owner_filter:
                 filt += f" && {owner_filter}"
-            r = pb.get(f"{self.anticipy.backend_url}/api/collections/jobs/records",
+            r = backend.get(f"{self.anticipy.backend_url}/api/collections/jobs/records",
                        params={"filter": filt, "perPage": 5, "sort": "-updated"},
                        timeout=10)
             if not r.ok:
@@ -875,7 +875,7 @@ Use {"facts": {}} when there is nothing durable."""
             owner_filter = self._owner_filter()
             if not owner_filter:
                 return {}
-            r = pb.get(f"{base}/api/collections/owner_profile/records",
+            r = backend.get(f"{base}/api/collections/owner_profile/records",
                        params={"filter": owner_filter, "perPage": 1,
                                "sort": "-updated"}, timeout=10)
             items = r.json().get("items", []) if r.ok else []
@@ -929,7 +929,7 @@ Use {"facts": {}} when there is nothing durable."""
                        if not str(rec.get(k) or "").strip()}
             payload = {"facts": json.dumps(known)}
             payload.update(columns)
-            pb.patch(f"{base}/api/collections/owner_profile/records/{rec['id']}",
+            backend.patch(f"{base}/api/collections/owner_profile/records/{rec['id']}",
                      json=payload, timeout=10)
             if columns:
                 print(f"learned about him for good: {sorted(columns)}")
@@ -1040,7 +1040,7 @@ Use {"facts": {}} when there is nothing durable."""
             owner_filter = self._owner_filter()
             if owner_filter:
                 filt += f" && {owner_filter}"
-            r = pb.get(f"{base}/api/collections/jobs/records",
+            r = backend.get(f"{base}/api/collections/jobs/records",
                        params={"filter": filt, "perPage": 10, "sort": "-updated"}, timeout=10)
             items = r.json().get("items", []) if r.ok else []
             if not items:
@@ -1245,7 +1245,7 @@ Use {"facts": {}} when there is nothing durable."""
                 return []
             kind_filter = ('(kind="anticipy_says" || kind="sms_reply"'
                            ' || kind="anticipy_text")')
-            r = pb.get(
+            r = backend.get(
                 f"{self.anticipy.backend_url}/api/collections/events/records",
                 params={"filter": f"{kind_filter} && {owner_filter}",
                         "perPage": limit, "sort": "-created"},
@@ -1277,7 +1277,7 @@ Use {"facts": {}} when there is nothing durable."""
             owner_filter = self._owner_filter()
             if owner_filter:
                 filt += f" && {owner_filter}"
-            r = pb.get(
+            r = backend.get(
                 f"{self.anticipy.backend_url}/api/collections/jobs/records",
                 params={"filter": filt, "perPage": 5, "sort": "-created"},
                 timeout=10,
@@ -1295,7 +1295,7 @@ Use {"facts": {}} when there is nothing durable."""
             owner_filter = self._owner_filter()
             if owner_filter:
                 filt += f" && {owner_filter}"
-            r = pb.get(
+            r = backend.get(
                 f"{self.anticipy.backend_url}/api/collections/jobs/records",
                 params={"filter": filt, "perPage": 5, "sort": "-created"},
                 timeout=10,
@@ -1583,7 +1583,7 @@ Reply ONLY with compact JSON: {"verdict": "go"|"detail"|"no"}
 
     def _fetch(self, job_id: str) -> Optional[dict]:
         try:
-            r = pb.get(
+            r = backend.get(
                 f"{self.anticipy.backend_url}/api/collections/jobs/records/{job_id}",
                 timeout=10)
             if not r.ok:
@@ -1943,7 +1943,7 @@ Reply ONLY with compact JSON: {"verdict": "go"|"detail"|"no"}
         'yes', the write 4xx's, and Anticipy says 'On it' about a job that
         never moved."""
         try:
-            r = pb.patch(
+            r = backend.patch(
                 f"{self.anticipy.backend_url}/api/collections/jobs/records/{job_id}",
                 json=fields, timeout=10)
             if not getattr(r, "ok", False):

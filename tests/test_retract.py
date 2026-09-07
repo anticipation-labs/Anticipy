@@ -10,7 +10,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from brain import pb  # noqa: E402
+from brain import backend  # noqa: E402
 from brain.anticipy_core import Anticipy  # noqa: E402
 
 JOBS = []
@@ -55,9 +55,9 @@ def _patch(url, json=None, timeout=None, **kw):
 
 def _rig(monkeypatch):
     JOBS.clear()
-    monkeypatch.setattr(pb, "get", _get)
-    monkeypatch.setattr(pb, "post", _post)
-    monkeypatch.setattr(pb, "patch", _patch)
+    monkeypatch.setattr(backend, "get", _get)
+    monkeypatch.setattr(backend, "post", _post)
+    monkeypatch.setattr(backend, "patch", _patch)
     return Anticipy(owner_id="t")
 
 

@@ -110,7 +110,7 @@ def queued(monkeypatch, payload):
         def json(self):
             return {"id": "job1", "status": posted.get("status")}
 
-    monkeypatch.setattr(core.pb, "post", lambda _url, **kw: (
+    monkeypatch.setattr(core.backend, "post", lambda _url, **kw: (
         posted.update(kw["json"]), Response())[1])
     a = core.Anticipy(memory=Memory(":memory:"), llm=Model(payload), owner_id="own1")
     a._same_pending = lambda *_a, **_k: None
@@ -196,7 +196,7 @@ def test_owner_answer_moves_the_real_draft_to_approval(monkeypatch):
         job.update(kwargs.get("json") or {})
         return Response(dict(job))
 
-    monkeypatch.setattr(conversation_module, "pb", types.SimpleNamespace(
+    monkeypatch.setattr(conversation_module, "backend", types.SimpleNamespace(
         get=get, patch=patch))
     anticipy = core.Anticipy(
         memory=Memory(":memory:"), llm=Model(COMPLETE), owner_id="own1")

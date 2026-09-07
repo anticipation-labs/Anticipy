@@ -48,8 +48,8 @@ def fake_post(url, **kw):
     return Resp(rid=rid)
 
 
-A.pb.get = lambda url, **kw: Resp(list(JOBS))
-A.pb.post = fake_post
+A.backend.get = lambda url, **kw: Resp(list(JOBS))
+A.backend.post = fake_post
 
 
 def brain_for(goal: str, say: str, sent: list):

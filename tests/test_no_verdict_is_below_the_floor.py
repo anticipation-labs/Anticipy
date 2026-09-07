@@ -32,7 +32,7 @@ model drops a field:
                 quiet-goal is demoted to plain ignore; explicit lines keep the
                 cheap verdict; unset (prod today) changes nothing.
 
-Every leg drives the REAL code: Anticipy.hear() with `_decide` stubbed and pb
+Every leg drives the REAL code: Anticipy.hear() with `_decide` stubbed and backend
 monkeypatched (jobs really post), the real clock_tick with a prompt-routed
 model double, the real Brain.triage with a fake strong model. Nothing here
 reads a word; the doubles are routed on the system prompt they are handed.
@@ -51,7 +51,7 @@ import pytest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import brain.anticipy_core as core  # noqa: E402
-from brain import pb  # noqa: E402
+from brain import backend  # noqa: E402
 from brain.anticipy_core import Anticipy, CLOCK_SYSTEM  # noqa: E402
 from brain.memory import Memory  # noqa: E402
 from brain.orchestrator import (  # noqa: E402
@@ -148,9 +148,9 @@ class _LLM:
 
 def _anticipy(monkeypatch, decision: Decision, llm=None):
     fake = _Fake()
-    monkeypatch.setattr(pb, "get", fake.get)
-    monkeypatch.setattr(pb, "post", fake.post)
-    monkeypatch.setattr(pb, "patch", fake.patch)
+    monkeypatch.setattr(backend, "get", fake.get)
+    monkeypatch.setattr(backend, "post", fake.post)
+    monkeypatch.setattr(backend, "patch", fake.patch)
     a = Anticipy(memory=_DeadMemory(), llm=llm, owner_id="floor")
     monkeypatch.setattr(a, "_decide", lambda *args, **kw: decision)
     monkeypatch.setattr(a, "_voice", lambda *a_, **k_: None)   # template wording
