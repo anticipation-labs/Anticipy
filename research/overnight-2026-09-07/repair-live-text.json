@@ -1,0 +1,23 @@
+{
+  "revision": "03f0c7f499617bcedea47c1c58f63b09f644a4be",
+  "scope": "API-created owner app_reply through production brain and SendBlue, not a physical phone typing test",
+  "started_at": "2026-09-07T20:09:22.552152+00:00",
+  "provider_delivery_confirmed": true,
+  "reply": "Got it, your delivery check came through.",
+  "reply_count": 1,
+  "attempt_count": 1,
+  "delivery_state": "sms_accepted",
+  "outbox_state": "sms_accepted",
+  "elapsed_seconds": 179.1,
+  "provider_status": "DELIVERED",
+  "provider_status_source": "Authenticated GET https://api.sendblue.com/api/status for saved message handle",
+  "observed_gap": "Provider confirmed delivery while app attempt remained sms_accepted for180seconds",
+  "status_api_reference": "https://docs.sendblue.com/api/python/resources/messages/methods/get_status",
+  "reconciliation_source": "production brain read-only status lookup",
+  "reconciled_at": "2026-09-07T20:25:37.666943+00:00",
+  "final_delivery_state": "sms_delivered",
+  "final_outbox_state": "sms_delivered",
+  "repair_revision": "b9a388b2c933e294da2ce4128f5b30d388433861",
+  "new_test_input_for_reconciliation": false,
+  "delivery_record_reconciled": true
+}

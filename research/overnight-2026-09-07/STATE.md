@@ -707,3 +707,34 @@ and held-out/API-connection tests, clean synthetic accounts, update visual PDF.
   arbitrary API work, actual personal browser pairing and latency remain open.
   Budget: gatewaycap30/nativecap19; native16.631602 reserved; no new model calls
   during repo comparison. Local gateway observed all reservations returned.
+
+
+## Latest repair release: 2026-09-07 20:25 UTC
+
+- Source repair:03f0c7f4; iOS pin correction/build167:1f2d8f67;
+  receipt recovery:b9a388b2. All pushed to cloudflare-backend.
+- API03f0c7f4 verified HTTP200; three published extension0.17.0 aliases
+  verified byte-identical to tested source.
+- Brainb9a388b2 deployed;8/8 running expected source with current snapshots,
+  zero failures. See repair-live-release.json for source hash and CI ids.
+- Build167 independently confirmed VALID/Internal installable by ASC34159127874.
+- One authorized real-owner app-to-SendBlue check produced one reply/attempt;
+  provider confirmed DELIVERED. New production receipt reconciliation recovered
+  its stuck accepted state without replacement input or manual status write.
+- FinalCI:3,001 Python passed,2 skipped;83 browser suites;Worker checks passed.
+- New native EventKit hand proved in isolated simulator; no hardware sync claim.
+- Current owner browser heartbeat is paired but extension0.15.0. Updating and
+  reloading that personal installation is still open; protected Chrome
+  extension-management UI was not bypassed.
+- Pendantdecoder absent/no callback consumer; no pending audio callbackqueue.
+  Deferred, with findings in pendant-audio-status.md. No Mac source work.
+- Other discovery inputs and legacy semantic tape remain. Do not claimglobal
+  zero-hardcoding oreverywebsite/API coverage. The pre-repair harness-map is
+  explicitly historical; repair-status-2026-09-07.md is the current report.
+- Paid-call caps remain30gateway+19native=49within50authorized. Gateway stopped;
+  normal local Worker8787 retained. No paid calls or messages should be started
+  merely to repeat this release verification.
+
+- Update20:28UTC: Sanket167 private group attached; Apple IN_BETA_TESTING and
+  tester INVITED, verified in34159516762. Earlier pending-review state is
+  superseded. No public link or developer role was granted.

@@ -1,3 +1,5 @@
+> Historical architecture snapshot, recorded before the calendar, browser, discovery and reply-delivery repairs. For the subsequent implementation and live release evidence, read [the repair report](../repair-status-2026-09-07.md). The original findings below are preserved as baseline evidence.
+
 # Anticipy: the harness explained
 
 Audit source: `e370340e8089dad7e0e905024c35ee50b60bc659` on `cloudflare-backend`. 7 September 2026.
