@@ -1,0 +1,18 @@
+{
+  "checked_at": "2026-09-07T18:53:49.172017+00:00",
+  "/api/health": {
+    "http": 200,
+    "revision": null
+  },
+  "/admin/brain/status": {
+    "http": 200,
+    "checked_at": 1788807270688,
+    "served": 8,
+    "failed": [],
+    "version": {
+      "id": "664fabf6-380a-4a60-9d20-3b3d23f73224",
+      "tag": "a4f4871aeab8a0b5e576a3b3a56d82c62d13a63a",
+      "timestamp": "2026-09-07T18:07:26.787352Z"
+    }
+  }
+}

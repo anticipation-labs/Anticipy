@@ -1,0 +1,2643 @@
+{
+  "revision": "e370340e8089dad7e0e905024c35ee50b60bc659",
+  "tracked_files": 2723,
+  "areas": {
+    ".agents": 1,
+    ".gitattributes": 1,
+    ".github": 7,
+    ".gitignore": 1,
+    ".railwayignore": 1,
+    "AGENTS.md": 1,
+    "AUDIT-2026-07-21.md": 1,
+    "BACKLOG.md": 1,
+    "CAPTURE-ARCHITECTURE.md": 1,
+    "CLAUDE-INTAKE-PROMPT.md": 1,
+    "CLAUDE-ONBOARDING.md": 1,
+    "CLAUDE.md": 1,
+    "HANDOFF-2026-08-08.md": 1,
+    "HANDOFF-TRANSCRIPT.md": 1,
+    "HANDOFF.md": 1,
+    "HARNESS-LAWS.md": 1,
+    "ORCHESTRATOR-HANDOFF.md": 1,
+    "PROOF_REPORT.md": 1,
+    "README.md": 1,
+    "REVERT.sh": 1,
+    "TESTING-PASS-2026-08-21-ROUND2.md": 1,
+    "TESTING-PASS-2026-08-21.md": 1,
+    "WHAT-CHANGED-2026-08-02.md": 1,
+    "WHAT-I-FOUND-2026-08-11.md": 1,
+    "app": 293,
+    "backend": 97,
+    "brain": 34,
+    "design": 18,
+    "docs": 30,
+    "extension": 125,
+    "firmware": 250,
+    "formdiag.jsonl": 1,
+    "formfix.jsonl": 1,
+    "formfix2.jsonl": 1,
+    "formfix3.jsonl": 1,
+    "formfix4.jsonl": 1,
+    "formfix5.jsonl": 1,
+    "formfresh.jsonl": 1,
+    "fullbattery.jsonl": 1,
+    "migration": 201,
+    "output": 7,
+    "overnight": 44,
+    "proof": 1015,
+    "pytest.ini": 1,
+    "research": 330,
+    "spike": 39,
+    "tests": 200,
+    "website": 1
+  },
+  "brain_modules": 31,
+  "brain_not_statically_reachable": [
+    "__init__",
+    "links"
+  ],
+  "brain_imports": {
+    "pb": [],
+    "worker": [
+      "anticipy_core",
+      "conversation",
+      "evidence",
+      "hands",
+      "llm",
+      "memory",
+      "pb",
+      "question_delivery",
+      "research",
+      "segmenter",
+      "sendblue_arm",
+      "server_work",
+      "sorter",
+      "workflow"
+    ],
+    "anticipy_core": [
+      "asking",
+      "compute",
+      "content_context",
+      "effects",
+      "grounding",
+      "hands",
+      "llm",
+      "memory",
+      "orchestrator",
+      "pb",
+      "readiness",
+      "research",
+      "speech_request",
+      "spoken_consent",
+      "workflow"
+    ],
+    "effects": [
+      "orchestrator"
+    ],
+    "question_delivery": [
+      "orchestrator"
+    ],
+    "hands": [
+      "llm",
+      "pb"
+    ],
+    "server_work": [
+      "orchestrator"
+    ],
+    "memory": [
+      "anticipy_core"
+    ],
+    "research": [
+      "orchestrator"
+    ],
+    "container_entry": [
+      "runtime_status",
+      "state_backup"
+    ],
+    "supervisor": [
+      "pb",
+      "state_backup",
+      "worker"
+    ],
+    "conversation": [
+      "anticipy_core",
+      "llm",
+      "orchestrator",
+      "pb",
+      "workflow"
+    ],
+    "content_context": [
+      "orchestrator"
+    ],
+    "spoken_consent": [
+      "orchestrator"
+    ],
+    "__init__": [],
+    "llm": [],
+    "links": [],
+    "state_backup": [],
+    "voice_arm": [
+      "evidence"
+    ],
+    "speech_request": [
+      "orchestrator"
+    ],
+    "sorter": [
+      "anticipy_core",
+      "segmenter"
+    ],
+    "asking": [],
+    "orchestrator": [
+      "anticipy_core",
+      "content_context",
+      "llm",
+      "memory"
+    ],
+    "segmenter": [
+      "pb"
+    ],
+    "sendblue_arm": [
+      "evidence",
+      "voice_arm"
+    ],
+    "workflow": [],
+    "runtime_status": [],
+    "readiness": [
+      "orchestrator"
+    ],
+    "grounding": [
+      "orchestrator"
+    ],
+    "evidence": [
+      "pb"
+    ],
+    "compute": []
+  },
+  "brain_symbols": {
+    "pb": [
+      {
+        "name": "headers",
+        "line": 17
+      },
+      {
+        "name": "_headers",
+        "line": 30
+      },
+      {
+        "name": "get",
+        "line": 36
+      },
+      {
+        "name": "post",
+        "line": 42
+      },
+      {
+        "name": "patch",
+        "line": 48
+      }
+    ],
+    "worker": [
+      {
+        "name": "_in_quiet_hours",
+        "line": 86
+      },
+      {
+        "name": "owner_filter",
+        "line": 108
+      },
+      {
+        "name": "_escaped",
+        "line": 117
+      },
+      {
+        "name": "_active_owner_ref",
+        "line": 121
+      },
+      {
+        "name": "_scoped_filter",
+        "line": 125
+      },
+      {
+        "name": "_latest_profile",
+        "line": 140
+      },
+      {
+        "name": "run_nightly_consolidation",
+        "line": 156
+      },
+      {
+        "name": "fetch_owner_phone",
+        "line": 232
+      },
+      {
+        "name": "refresh_owner_phone",
+        "line": 281
+      },
+      {
+        "name": "canonical_phone_allows_effect",
+        "line": 304
+      },
+      {
+        "name": "install_canonical_notification_guard",
+        "line": 327
+      },
+      {
+        "name": "fetch_owner_timezone",
+        "line": 354
+      },
+      {
+        "name": "fetch_owner_first_name",
+        "line": 373
+      },
+      {
+        "name": "owner_wants_evidence_photos",
+        "line": 398
+      },
+      {
+        "name": "_has_spoken_to_owner",
+        "line": 435
+      },
+      {
+        "name": "maybe_welcome_new_owner",
+        "line": 458
+      },
+      {
+        "name": "seed_profile_identity",
+        "line": 603
+      },
+      {
+        "name": "ingest_profile_events",
+        "line": 627
+      },
+      {
+        "name": "ingest_read_facts",
+        "line": 732
+      },
+      {
+        "name": "ingest_read_vetoes",
+        "line": 824
+      },
+      {
+        "name": "same_phone",
+        "line": 862
+      },
+      {
+        "name": "_clock_state",
+        "line": 872
+      },
+      {
+        "name": "_save_clock_state",
+        "line": 879
+      },
+      {
+        "name": "clock_should_run",
+        "line": 896
+      },
+      {
+        "name": "reachable_by_twilio",
+        "line": 929
+      },
+      {
+        "name": "webhook_target",
+        "line": 961
+      },
+      {
+        "name": "inbound_ear_note",
+        "line": 1005
+      },
+      {
+        "name": "sms_banner",
+        "line": 1014
+      },
+      {
+        "name": "ensure_inbound_webhook",
+        "line": 1028
+      },
+      {
+        "name": "post_event",
+        "line": 1033
+      },
+      {
+        "name": "_content_words",
+        "line": 1090
+      },
+      {
+        "name": "sent_moments_ago",
+        "line": 1123
+      },
+      {
+        "name": "mark_sent",
+        "line": 1130
+      },
+      {
+        "name": "ambient_job",
+        "line": 1195
+      },
+      {
+        "name": "browser_reachable",
+        "line": 1210
+      },
+      {
+        "name": "task_access_offer",
+        "line": 1234
+      },
+      {
+        "name": "publish_stall_notice",
+        "line": 1248
+      },
+      {
+        "name": "report_stalled_work",
+        "line": 1282
+      },
+      {
+        "name": "report_unclaimed_device_work",
+        "line": 1364
+      },
+      {
+        "name": "release_stranded_research",
+        "line": 1457
+      },
+      {
+        "name": "held_for_research",
+        "line": 1513
+      },
+      {
+        "name": "run_preflight_research",
+        "line": 1537
+      },
+      {
+        "name": "run_research_jobs",
+        "line": 1642
+      },
+      {
+        "name": "_says_no_such_job",
+        "line": 1834
+      },
+      {
+        "name": "_api_note",
+        "line": 1844
+      },
+      {
+        "name": "release_stranded_api",
+        "line": 1853
+      },
+      {
+        "name": "_release_api_claim",
+        "line": 1939
+      },
+      {
+        "name": "run_api_jobs",
+        "line": 1970
+      },
+      {
+        "name": "_finished_jobs",
+        "line": 2106
+      },
+      {
+        "name": "job_result_event_id",
+        "line": 2135
+      },
+      {
+        "name": "job_sms_event_id",
+        "line": 2141
+      },
+      {
+        "name": "job_stall_event_id",
+        "line": 2148
+      },
+      {
+        "name": "job_stall_sms_event_id",
+        "line": 2155
+      },
+      {
+        "name": "_event_matches_owner",
+        "line": 2165
+      },
+      {
+        "name": "_event_by_external_id",
+        "line": 2176
+      },
+      {
+        "name": "delivered_stall_notice",
+        "line": 2207
+      },
+      {
+        "name": "persist_stall_notice",
+        "line": 2215
+      },
+      {
+        "name": "delivered_job_result",
+        "line": 2255
+      },
+      {
+        "name": "persist_job_result",
+        "line": 2308
+      },
+      {
+        "name": "can_reach_owner",
+        "line": 2352
+      },
+      {
+        "name": "can_reach_owner_fresh",
+        "line": 2374
+      },
+      {
+        "name": "record_notification_status",
+        "line": 2393
+      },
+      {
+        "name": "notification_was_attempted",
+        "line": 2442
+      },
+      {
+        "name": "claim_notification_attempt",
+        "line": 2464
+      },
+      {
+        "name": "record_stall_notification_status",
+        "line": 2517
+      },
+      {
+        "name": "claim_stall_notification_attempt",
+        "line": 2554
+      },
+      {
+        "name": "_uninvited_local",
+        "line": 2660
+      },
+      {
+        "name": "_uninvited_day",
+        "line": 2664
+      },
+      {
+        "name": "_uninvited_since_utc",
+        "line": 2669
+      },
+      {
+        "name": "_uninvited_next_midnight",
+        "line": 2676
+      },
+      {
+        "name": "uninvited_slot_id",
+        "line": 2682
+      },
+      {
+        "name": "_uninvited_slots_today",
+        "line": 2686
+      },
+      {
+        "name": "uninvited_budget_spent",
+        "line": 2701
+      },
+      {
+        "name": "reserve_uninvited_text",
+        "line": 2724
+      },
+      {
+        "name": "_hold_uninvited_slot",
+        "line": 2797
+      },
+      {
+        "name": "take_held_slot",
+        "line": 2811
+      },
+      {
+        "name": "report_finished_jobs",
+        "line": 2818
+      },
+      {
+        "name": "_words",
+        "line": 3014
+      },
+      {
+        "name": "longest_shared_run",
+        "line": 3018
+      },
+      {
+        "name": "is_echo_of_her",
+        "line": 3055
+      },
+      {
+        "name": "_fact_tokens",
+        "line": 3103
+      },
+      {
+        "name": "carries_facts",
+        "line": 3114
+      },
+      {
+        "name": "asked_about_recently",
+        "line": 3135
+      },
+      {
+        "name": "asks_for_goal",
+        "line": 3171
+      },
+      {
+        "name": "need_already_asked",
+        "line": 3199
+      },
+      {
+        "name": "already_raised",
+        "line": 3245
+      },
+      {
+        "name": "already_said",
+        "line": 3301
+      },
+      {
+        "name": "raised_and_ignored",
+        "line": 3359
+      },
+      {
+        "name": "deliver_pending_digest",
+        "line": 3472
+      },
+      {
+        "name": "conversation_context",
+        "line": 3548
+      },
+      {
+        "name": "_shadow_sink",
+        "line": 3589
+      },
+      {
+        "name": "sweep_closed_segments",
+        "line": 3601
+      },
+      {
+        "name": "maybe_ask_parked",
+        "line": 3686
+      },
+      {
+        "name": "meeting_settle_s",
+        "line": 3758
+      },
+      {
+        "name": "meeting_heard",
+        "line": 3763
+      },
+      {
+        "name": "maybe_meeting_digest",
+        "line": 3793
+      },
+      {
+        "name": "SPEAK_ONCE",
+        "line": 3830
+      },
+      {
+        "name": "_brain_fingerprint",
+        "line": 3913
+      },
+      {
+        "name": "_ts",
+        "line": 3954
+      },
+      {
+        "name": "capture_key",
+        "line": 3970
+      },
+      {
+        "name": "resolve_owner_ref",
+        "line": 3997
+      },
+      {
+        "name": "turn_has_time",
+        "line": 4027
+      },
+      {
+        "name": "fetch_unprocessed",
+        "line": 4034
+      },
+      {
+        "name": "link_candidates",
+        "line": 4067
+      },
+      {
+        "name": "resolve_link",
+        "line": 4093
+      },
+      {
+        "name": "record_link",
+        "line": 4112
+      },
+      {
+        "name": "stamp_for",
+        "line": 4123
+      },
+      {
+        "name": "mark_processed",
+        "line": 4170
+      },
+      {
+        "name": "claim",
+        "line": 4241
+      },
+      {
+        "name": "connection_command",
+        "line": 4247
+      },
+      {
+        "name": "handle_inbound",
+        "line": 4280
+      },
+      {
+        "name": "release_stranded_claims",
+        "line": 4390
+      },
+      {
+        "name": "unreachable_model",
+        "line": 4471
+      },
+      {
+        "name": "note_heard",
+        "line": 4488
+      },
+      {
+        "name": "record_failure",
+        "line": 4494
+      },
+      {
+        "name": "report_deafness",
+        "line": 4518
+      },
+      {
+        "name": "gateway_banner",
+        "line": 4603
+      },
+      {
+        "name": "report_gateway",
+        "line": 4621
+      },
+      {
+        "name": "worker_status_line",
+        "line": 4644
+      },
+      {
+        "name": "publish_worker_status",
+        "line": 4657
+      },
+      {
+        "name": "ask_about_stuck_jobs",
+        "line": 4696
+      },
+      {
+        "name": "configure_message_transport",
+        "line": 4937
+      },
+      {
+        "name": "main",
+        "line": 4947
+      }
+    ],
+    "anticipy_core": [
+      {
+        "name": "_required_from_missing",
+        "line": 59
+      },
+      {
+        "name": "_lossless_replacement",
+        "line": 125
+      },
+      {
+        "name": "explicitly_new_task",
+        "line": 158
+      },
+      {
+        "name": "_is_backchannel",
+        "line": 205
+      },
+      {
+        "name": "in_conversation",
+        "line": 213
+      },
+      {
+        "name": "addressed_by_name",
+        "line": 238
+      },
+      {
+        "name": "explicitly_for_memory",
+        "line": 258
+      },
+      {
+        "name": "_someone_elses",
+        "line": 308
+      },
+      {
+        "name": "_resolve_speaker",
+        "line": 324
+      },
+      {
+        "name": "memory_notes",
+        "line": 368
+      },
+      {
+        "name": "is_consequential",
+        "line": 455
+      },
+      {
+        "name": "invented_names",
+        "line": 475
+      },
+      {
+        "name": "shard_too_thin",
+        "line": 507
+      },
+      {
+        "name": "goal_tokens",
+        "line": 546
+      },
+      {
+        "name": "calendar_act_declaration",
+        "line": 735
+      },
+      {
+        "name": "_calendar_undo",
+        "line": 751
+      },
+      {
+        "name": "_missing_fact_question",
+        "line": 783
+      },
+      {
+        "name": "normalized_lane",
+        "line": 872
+      },
+      {
+        "name": "is_device_lane",
+        "line": 877
+      },
+      {
+        "name": "needs_no_browser",
+        "line": 882
+      },
+      {
+        "name": "device_lane",
+        "line": 893
+      },
+      {
+        "name": "exact_message_continuation",
+        "line": 956
+      },
+      {
+        "name": "progressive_action_continuation",
+        "line": 974
+      },
+      {
+        "name": "progressive_continuation",
+        "line": 989
+      },
+      {
+        "name": "job_lane",
+        "line": 1015
+      },
+      {
+        "name": "LoopRecord",
+        "line": 1230
+      },
+      {
+        "name": "Anticipy",
+        "line": 1239
+      }
+    ],
+    "effects": [
+      {
+        "name": "Effect",
+        "line": 37
+      },
+      {
+        "name": "task_effect",
+        "line": 42
+      }
+    ],
+    "question_delivery": [
+      {
+        "name": "coverage_verdict",
+        "line": 21
+      }
+    ],
+    "hands": [
+      {
+        "name": "ConnectedApp",
+        "line": 249
+      },
+      {
+        "name": "CatalogTool",
+        "line": 263
+      },
+      {
+        "name": "HandContext",
+        "line": 320
+      },
+      {
+        "name": "HandVerdict",
+        "line": 345
+      },
+      {
+        "name": "ToolVerdict",
+        "line": 375
+      },
+      {
+        "name": "_extract_json",
+        "line": 480
+      },
+      {
+        "name": "facts_block",
+        "line": 495
+      },
+      {
+        "name": "_read_reply",
+        "line": 521
+      },
+      {
+        "name": "_floors",
+        "line": 543
+      },
+      {
+        "name": "_default_llm",
+        "line": 572
+      },
+      {
+        "name": "choose_hand",
+        "line": 581
+      },
+      {
+        "name": "lane_for",
+        "line": 635
+      },
+      {
+        "name": "hint_effect",
+        "line": 717
+      },
+      {
+        "name": "tighten",
+        "line": 734
+      },
+      {
+        "name": "_schema_type",
+        "line": 749
+      },
+      {
+        "name": "render_catalog",
+        "line": 765
+      },
+      {
+        "name": "catalog_block",
+        "line": 814
+      },
+      {
+        "name": "_read_tool_reply",
+        "line": 825
+      },
+      {
+        "name": "_find_tool",
+        "line": 859
+      },
+      {
+        "name": "_missing_required",
+        "line": 877
+      },
+      {
+        "name": "choose_tool",
+        "line": 883
+      },
+      {
+        "name": "catalog_for",
+        "line": 981
+      },
+      {
+        "name": "plan_api_step",
+        "line": 1005
+      },
+      {
+        "name": "_escaped",
+        "line": 1038
+      },
+      {
+        "name": "read_connections",
+        "line": 1042
+      },
+      {
+        "name": "read_catalog",
+        "line": 1078
+      },
+      {
+        "name": "browser_is_online",
+        "line": 1115
+      },
+      {
+        "name": "active_owner_ref",
+        "line": 1144
+      },
+      {
+        "name": "gather_context",
+        "line": 1160
+      }
+    ],
+    "server_work": [
+      {
+        "name": "_judge",
+        "line": 81
+      },
+      {
+        "name": "plan",
+        "line": 95
+      },
+      {
+        "name": "verify",
+        "line": 100
+      },
+      {
+        "name": "run",
+        "line": 106
+      }
+    ],
+    "memory": [
+      {
+        "name": "Promisee",
+        "line": 215
+      },
+      {
+        "name": "_promisee",
+        "line": 240
+      },
+      {
+        "name": "Extraction",
+        "line": 254
+      },
+      {
+        "name": "_confidence_band",
+        "line": 539
+      },
+      {
+        "name": "_horizon",
+        "line": 549
+      },
+      {
+        "name": "_fact_kind",
+        "line": 566
+      },
+      {
+        "name": "_days_ago",
+        "line": 570
+      },
+      {
+        "name": "_retired_note",
+        "line": 580
+      },
+      {
+        "name": "_decay",
+        "line": 597
+      },
+      {
+        "name": "_provenance_window",
+        "line": 604
+      },
+      {
+        "name": "ProcedureStore",
+        "line": 649
+      },
+      {
+        "name": "Memory",
+        "line": 708
+      },
+      {
+        "name": "_bumped",
+        "line": 2430
+      },
+      {
+        "name": "_speaker_tag",
+        "line": 2452
+      },
+      {
+        "name": "_speaker_verdict",
+        "line": 2465
+      },
+      {
+        "name": "_extract_json",
+        "line": 2481
+      },
+      {
+        "name": "_looks_like_json",
+        "line": 2486
+      },
+      {
+        "name": "_extractor_verdict",
+        "line": 2509
+      },
+      {
+        "name": "_fact_tokens",
+        "line": 2530
+      }
+    ],
+    "research": [
+      {
+        "name": "query_from_goal",
+        "line": 76
+      },
+      {
+        "name": "BraveClient",
+        "line": 102
+      },
+      {
+        "name": "TavilyClient",
+        "line": 132
+      },
+      {
+        "name": "_search_failure_label",
+        "line": 168
+      },
+      {
+        "name": "_is_open_web",
+        "line": 212
+      },
+      {
+        "name": "_addresses_for",
+        "line": 231
+      },
+      {
+        "name": "fetch_is_permitted",
+        "line": 258
+      },
+      {
+        "name": "fetch_page",
+        "line": 272
+      },
+      {
+        "name": "_summarize",
+        "line": 307
+      },
+      {
+        "name": "run_research",
+        "line": 331
+      },
+      {
+        "name": "GateVerdict",
+        "line": 470
+      },
+      {
+        "name": "gate_holds_the_browser",
+        "line": 509
+      },
+      {
+        "name": "research_gate",
+        "line": 517
+      },
+      {
+        "name": "_now_ms",
+        "line": 587
+      },
+      {
+        "name": "procedure_is_live",
+        "line": 591
+      },
+      {
+        "name": "recall_procedure",
+        "line": 610
+      },
+      {
+        "name": "Recall",
+        "line": 683
+      },
+      {
+        "name": "procedure_applies",
+        "line": 692
+      },
+      {
+        "name": "recall_confirmed_procedure",
+        "line": 731
+      },
+      {
+        "name": "_extract_json_text",
+        "line": 760
+      },
+      {
+        "name": "_trim",
+        "line": 766
+      },
+      {
+        "name": "_clean_procedure",
+        "line": 772
+      },
+      {
+        "name": "remember_procedure",
+        "line": 807
+      },
+      {
+        "name": "task_shape",
+        "line": 925
+      },
+      {
+        "name": "_ipv4_number",
+        "line": 1001
+      },
+      {
+        "name": "_ends_in_a_number",
+        "line": 1020
+      },
+      {
+        "name": "_ipv4_address",
+        "line": 1035
+      },
+      {
+        "name": "ParsedHost",
+        "line": 1066
+      },
+      {
+        "name": "parse_host",
+        "line": 1078
+      },
+      {
+        "name": "host_of",
+        "line": 1142
+      },
+      {
+        "name": "is_researchable",
+        "line": 1151
+      },
+      {
+        "name": "rank_sources",
+        "line": 1250
+      },
+      {
+        "name": "_parse_json_object",
+        "line": 1278
+      },
+      {
+        "name": "learn_procedure",
+        "line": 1290
+      }
+    ],
+    "container_entry": [
+      {
+        "name": "_log",
+        "line": 83
+      },
+      {
+        "name": "_r2",
+        "line": 88
+      },
+      {
+        "name": "_r2_key",
+        "line": 103
+      },
+      {
+        "name": "assert_bucket_reachable",
+        "line": 108
+      },
+      {
+        "name": "pull_state",
+        "line": 142
+      },
+      {
+        "name": "_is_not_found",
+        "line": 188
+      },
+      {
+        "name": "snapshot_once",
+        "line": 203
+      },
+      {
+        "name": "_snapshot_once",
+        "line": 219
+      },
+      {
+        "name": "backup_env",
+        "line": 237
+      },
+      {
+        "name": "snapshot_loop",
+        "line": 257
+      },
+      {
+        "name": "_Control",
+        "line": 286
+      },
+      {
+        "name": "start_control_server",
+        "line": 319
+      },
+      {
+        "name": "start_child",
+        "line": 327
+      },
+      {
+        "name": "_handle_sigterm",
+        "line": 332
+      },
+      {
+        "name": "main",
+        "line": 353
+      }
+    ],
+    "supervisor": [
+      {
+        "name": "discover_owners",
+        "line": 38
+      },
+      {
+        "name": "child_environment",
+        "line": 76
+      },
+      {
+        "name": "ensure_state_directory",
+        "line": 118
+      },
+      {
+        "name": "spawn_owner",
+        "line": 125
+      },
+      {
+        "name": "stop_child",
+        "line": 132
+      },
+      {
+        "name": "owner_state_dir",
+        "line": 143
+      },
+      {
+        "name": "purge_deleted_owners",
+        "line": 150
+      },
+      {
+        "name": "reconcile_children",
+        "line": 264
+      },
+      {
+        "name": "main",
+        "line": 305
+      }
+    ],
+    "conversation": [
+      {
+        "name": "MockTransport",
+        "line": 199
+      },
+      {
+        "name": "TwilioTransport",
+        "line": 220
+      },
+      {
+        "name": "Turn",
+        "line": 286
+      },
+      {
+        "name": "Conversation",
+        "line": 292
+      }
+    ],
+    "content_context": [
+      {
+        "name": "ContentContext",
+        "line": 45
+      },
+      {
+        "name": "judge",
+        "line": 50
+      }
+    ],
+    "spoken_consent": [
+      {
+        "name": "judge",
+        "line": 37
+      }
+    ],
+    "__init__": [],
+    "llm": [
+      {
+        "name": "owner_tz",
+        "line": 56
+      },
+      {
+        "name": "who_line",
+        "line": 70
+      },
+      {
+        "name": "where_line",
+        "line": 99
+      },
+      {
+        "name": "now_line",
+        "line": 111
+      },
+      {
+        "name": "DeadlineExceeded",
+        "line": 224
+      },
+      {
+        "name": "CallCeilingExceeded",
+        "line": 235
+      },
+      {
+        "name": "Budget",
+        "line": 247
+      },
+      {
+        "name": "decision_budget",
+        "line": 265
+      },
+      {
+        "name": "_spend",
+        "line": 293
+      },
+      {
+        "name": "budget_spent_last",
+        "line": 315
+      },
+      {
+        "name": "_attempt_timeout",
+        "line": 321
+      },
+      {
+        "name": "_refuse_retry_past_deadline",
+        "line": 329
+      },
+      {
+        "name": "_sleep_before_retry",
+        "line": 341
+      },
+      {
+        "name": "_post_json",
+        "line": 346
+      },
+      {
+        "name": "_raise_the_one_that_leaves",
+        "line": 456
+      },
+      {
+        "name": "LLMResult",
+        "line": 478
+      },
+      {
+        "name": "_caller",
+        "line": 528
+      },
+      {
+        "name": "_record",
+        "line": 537
+      },
+      {
+        "name": "LLM",
+        "line": 563
+      }
+    ],
+    "links": [
+      {
+        "name": "_key",
+        "line": 57
+      },
+      {
+        "name": "_spoken",
+        "line": 61
+      },
+      {
+        "name": "resolve_parents",
+        "line": 73
+      },
+      {
+        "name": "_break_cycles",
+        "line": 113
+      },
+      {
+        "name": "conversations",
+        "line": 139
+      },
+      {
+        "name": "conversation_of",
+        "line": 194
+      }
+    ],
+    "state_backup": [
+      {
+        "name": "backup_config",
+        "line": 30
+      },
+      {
+        "name": "state_files",
+        "line": 55
+      },
+      {
+        "name": "_sha256",
+        "line": 67
+      },
+      {
+        "name": "_snapshot_sqlite",
+        "line": 75
+      },
+      {
+        "name": "build_archive",
+        "line": 84
+      },
+      {
+        "name": "_client",
+        "line": 127
+      },
+      {
+        "name": "_prune",
+        "line": 138
+      },
+      {
+        "name": "backup_state_to_s3",
+        "line": 153
+      }
+    ],
+    "voice_arm": [
+      {
+        "name": "VoiceNotConfigured",
+        "line": 98
+      },
+      {
+        "name": "SendFailed",
+        "line": 102
+      },
+      {
+        "name": "CallRefused",
+        "line": 106
+      },
+      {
+        "name": "api_base",
+        "line": 110
+      },
+      {
+        "name": "Credential",
+        "line": 124
+      },
+      {
+        "name": "rest_credential",
+        "line": 139
+      },
+      {
+        "name": "muzzle_flag",
+        "line": 191
+      },
+      {
+        "name": "muzzled",
+        "line": 205
+      },
+      {
+        "name": "has_credentials",
+        "line": 222
+      },
+      {
+        "name": "CallPlan",
+        "line": 231
+      },
+      {
+        "name": "twiml_for",
+        "line": 287
+      },
+      {
+        "name": "_cannot_reach_a_phone",
+        "line": 298
+      },
+      {
+        "name": "_rig_reason",
+        "line": 323
+      },
+      {
+        "name": "VoiceArm",
+        "line": 363
+      }
+    ],
+    "speech_request": [
+      {
+        "name": "InformationRequest",
+        "line": 29
+      },
+      {
+        "name": "information_request",
+        "line": 34
+      }
+    ],
+    "sorter": [
+      {
+        "name": "_arrival",
+        "line": 71
+      },
+      {
+        "name": "closable",
+        "line": 82
+      },
+      {
+        "name": "late_disposition",
+        "line": 144
+      },
+      {
+        "name": "backfill_ready",
+        "line": 185
+      },
+      {
+        "name": "may_revise",
+        "line": 208
+      },
+      {
+        "name": "_clock",
+        "line": 223
+      },
+      {
+        "name": "render_payload",
+        "line": 227
+      },
+      {
+        "name": "_payload_text",
+        "line": 302
+      },
+      {
+        "name": "needs_flush",
+        "line": 350
+      },
+      {
+        "name": "_blank",
+        "line": 372
+      },
+      {
+        "name": "_side_of",
+        "line": 389
+      },
+      {
+        "name": "parse_verdict",
+        "line": 393
+      },
+      {
+        "name": "unevidenced_tokens",
+        "line": 489
+      },
+      {
+        "name": "evidence_texts",
+        "line": 495
+      },
+      {
+        "name": "invents_beyond_evidence",
+        "line": 501
+      },
+      {
+        "name": "mode",
+        "line": 521
+      },
+      {
+        "name": "writes_back",
+        "line": 528
+      },
+      {
+        "name": "judge_segment",
+        "line": 594
+      },
+      {
+        "name": "_json_slice",
+        "line": 625
+      },
+      {
+        "name": "fast_lane",
+        "line": 639
+      },
+      {
+        "name": "context_segment",
+        "line": 666
+      }
+    ],
+    "asking": [
+      {
+        "name": "_tokens",
+        "line": 81
+      },
+      {
+        "name": "_stem",
+        "line": 95
+      },
+      {
+        "name": "_key",
+        "line": 104
+      },
+      {
+        "name": "_clip",
+        "line": 122
+      },
+      {
+        "name": "speakable",
+        "line": 131
+      },
+      {
+        "name": "_mid_sentence",
+        "line": 158
+      },
+      {
+        "name": "_as_question",
+        "line": 172
+      },
+      {
+        "name": "ask_line",
+        "line": 177
+      },
+      {
+        "name": "question_line",
+        "line": 198
+      }
+    ],
+    "orchestrator": [
+      {
+        "name": "Decision",
+        "line": 405
+      },
+      {
+        "name": "Brain",
+        "line": 437
+      },
+      {
+        "name": "_numbers",
+        "line": 714
+      },
+      {
+        "name": "unsupported_counts",
+        "line": 731
+      },
+      {
+        "name": "unsupported_names",
+        "line": 764
+      },
+      {
+        "name": "own_words",
+        "line": 855
+      },
+      {
+        "name": "appended_context",
+        "line": 860
+      },
+      {
+        "name": "_content",
+        "line": 898
+      },
+      {
+        "name": "_substance",
+        "line": 914
+      },
+      {
+        "name": "states_a_need",
+        "line": 1016
+      },
+      {
+        "name": "points_outward",
+        "line": 1025
+      },
+      {
+        "name": "inherited_errand",
+        "line": 1032
+      },
+      {
+        "name": "fill_gaps_from_memory",
+        "line": 1113
+      },
+      {
+        "name": "party_verdict",
+        "line": 1250
+      },
+      {
+        "name": "CalendarPlanVerdict",
+        "line": 1335
+      },
+      {
+        "name": "calendar_plan_verdict",
+        "line": 1341
+      },
+      {
+        "name": "ends_in_the_world",
+        "line": 1412
+      },
+      {
+        "name": "work_is_licensed",
+        "line": 1509
+      },
+      {
+        "name": "plan_is_settled",
+        "line": 1580
+      },
+      {
+        "name": "check_sufficiency",
+        "line": 1599
+      },
+      {
+        "name": "_continues",
+        "line": 1655
+      },
+      {
+        "name": "_extract_json",
+        "line": 1689
+      }
+    ],
+    "segmenter": [
+      {
+        "name": "parse_ts",
+        "line": 95
+      },
+      {
+        "name": "iso",
+        "line": 128
+      },
+      {
+        "name": "content_words",
+        "line": 132
+      },
+      {
+        "name": "proper_nouns",
+        "line": 137
+      },
+      {
+        "name": "capture_span",
+        "line": 143
+      },
+      {
+        "name": "decide_link",
+        "line": 151
+      },
+      {
+        "name": "should_close",
+        "line": 200
+      },
+      {
+        "name": "is_late",
+        "line": 213
+      },
+      {
+        "name": "_as_prev_segment",
+        "line": 219
+      },
+      {
+        "name": "segment_all",
+        "line": 232
+      },
+      {
+        "name": "SegmentStore",
+        "line": 300
+      },
+      {
+        "name": "place_turn",
+        "line": 472
+      }
+    ],
+    "sendblue_arm": [
+      {
+        "name": "SendblueNotConfigured",
+        "line": 72
+      },
+      {
+        "name": "api_base",
+        "line": 76
+      },
+      {
+        "name": "has_credentials",
+        "line": 88
+      },
+      {
+        "name": "choose_provider",
+        "line": 95
+      },
+      {
+        "name": "key_tail",
+        "line": 109
+      },
+      {
+        "name": "_cannot_reach_a_phone",
+        "line": 114
+      },
+      {
+        "name": "SendblueArm",
+        "line": 128
+      },
+      {
+        "name": "_status_of",
+        "line": 289
+      },
+      {
+        "name": "_nothing_went_out",
+        "line": 298
+      },
+      {
+        "name": "_picture_this_channel_can_carry",
+        "line": 308
+      }
+    ],
+    "workflow": [
+      {
+        "name": "WorkflowViolation",
+        "line": 23
+      },
+      {
+        "name": "PlanState",
+        "line": 27
+      },
+      {
+        "name": "Consequence",
+        "line": 38
+      },
+      {
+        "name": "_consequence_or_safe",
+        "line": 79
+      },
+      {
+        "name": "_state_or_safe",
+        "line": 86
+      },
+      {
+        "name": "_state_after_unreadable",
+        "line": 93
+      },
+      {
+        "name": "utcnow",
+        "line": 127
+      },
+      {
+        "name": "_at",
+        "line": 131
+      },
+      {
+        "name": "_canonical",
+        "line": 138
+      },
+      {
+        "name": "_digest",
+        "line": 143
+      },
+      {
+        "name": "_clean_facts",
+        "line": 147
+      },
+      {
+        "name": "Provenance",
+        "line": 195
+      },
+      {
+        "name": "Refusal",
+        "line": 213
+      },
+      {
+        "name": "UndoInput",
+        "line": 252
+      },
+      {
+        "name": "UndoPlan",
+        "line": 268
+      },
+      {
+        "name": "ActDeclaration",
+        "line": 288
+      },
+      {
+        "name": "Obligation",
+        "line": 322
+      },
+      {
+        "name": "UndoOf",
+        "line": 347
+      },
+      {
+        "name": "Gesture",
+        "line": 356
+      },
+      {
+        "name": "AdmittedAct",
+        "line": 376
+      },
+      {
+        "name": "_resolves_one",
+        "line": 453
+      },
+      {
+        "name": "_resolves",
+        "line": 475
+      },
+      {
+        "name": "admissible",
+        "line": 484
+      },
+      {
+        "name": "compensation_is_current",
+        "line": 555
+      },
+      {
+        "name": "Approval",
+        "line": 590
+      },
+      {
+        "name": "Lease",
+        "line": 607
+      },
+      {
+        "name": "Receipt",
+        "line": 619
+      },
+      {
+        "name": "Plan",
+        "line": 628
+      },
+      {
+        "name": "put_in_params",
+        "line": 978
+      },
+      {
+        "name": "from_params",
+        "line": 984
+      },
+      {
+        "name": "new_plan",
+        "line": 991
+      },
+      {
+        "name": "_shelf2_lane",
+        "line": 1046
+      },
+      {
+        "name": "_undo_with_owner_facts",
+        "line": 1071
+      },
+      {
+        "name": "merge",
+        "line": 1097
+      },
+      {
+        "name": "approve",
+        "line": 1147
+      },
+      {
+        "name": "approve_by_gesture",
+        "line": 1188
+      },
+      {
+        "name": "claim",
+        "line": 1253
+      },
+      {
+        "name": "heartbeat",
+        "line": 1278
+      },
+      {
+        "name": "needs_user",
+        "line": 1293
+      },
+      {
+        "name": "succeed",
+        "line": 1307
+      },
+      {
+        "name": "fail",
+        "line": 1326
+      },
+      {
+        "name": "cancel",
+        "line": 1338
+      },
+      {
+        "name": "recover_expired",
+        "line": 1351
+      }
+    ],
+    "runtime_status": [
+      {
+        "name": "source_hash",
+        "line": 8
+      },
+      {
+        "name": "health",
+        "line": 17
+      }
+    ],
+    "readiness": [
+      {
+        "name": "Readiness",
+        "line": 54
+      },
+      {
+        "name": "task_readiness",
+        "line": 59
+      }
+    ],
+    "grounding": [
+      {
+        "name": "grounding_verdict",
+        "line": 26
+      }
+    ],
+    "evidence": [
+      {
+        "name": "_backend",
+        "line": 74
+      },
+      {
+        "name": "ids_in_receipt",
+        "line": 78
+      },
+      {
+        "name": "open_share_window",
+        "line": 104
+      },
+      {
+        "name": "picture_for_done_text",
+        "line": 139
+      },
+      {
+        "name": "one_url",
+        "line": 172
+      }
+    ],
+    "compute": [
+      {
+        "name": "_label",
+        "line": 65
+      },
+      {
+        "name": "compute_answer",
+        "line": 71
+      }
+    ]
+  },
+  "route_dispatch_evidence": [
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 168,
+      "code": "if (path === \"/api/health\" && method === \"GET\") {"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 178,
+      "code": "if (path === \"/auth/reset/request\" && method === \"POST\") {"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 181,
+      "code": "if (path === \"/auth/reset/confirm\" && method === \"POST\") {"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 185,
+      "code": "if (path === \"/me/delete\" && method === \"POST\") {"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 191,
+      "code": "if (path === \"/agent/register\" && method === \"POST\") {"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 194,
+      "code": "if (path === \"/agent/key\" && method === \"GET\") {"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 197,
+      "code": "if (path === \"/agent/llm\" && method === \"POST\") {"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 200,
+      "code": "if (path.startsWith(\"/agent/solve-captcha\") && method === \"POST\") {"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 203,
+      "code": "if (path === \"/agent/upgrade-credential\" && method === \"POST\") {"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 209,
+      "code": "if (path === \"/admin/brain/status\") return adminBrainStatus(request, env);"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 210,
+      "code": "if (path === \"/admin/account-reset\") return adminAccountReset(request, env as never);"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 211,
+      "code": "if (path === \"/worker/connection-command\") return connectionCommand(request, env);"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 212,
+      "code": "if (path === \"/worker/task-access\") return taskAccess(request, env);"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 213,
+      "code": "if (path === \"/worker/owners\" && method === \"GET\") {"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 216,
+      "code": "if (path === \"/admin/purge-audit\" && method === \"POST\") {"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 219,
+      "code": "if (path === \"/auth/claim\" && method === \"POST\") {"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 222,
+      "code": "if (path === \"/me/phone/remove\" && method === \"POST\") {"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 225,
+      "code": "if (path === \"/me/profile/upsert\" && method === \"POST\") {"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 228,
+      "code": "if (path === \"/me/context-request\") return contextRequest(request, env);"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 229,
+      "code": "if (path === \"/me/notification-policy\") return notificationPolicy(request, env);"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 235,
+      "code": "if (path === HANDS_API_RUN_PATH) {"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 240,
+      "code": "if (path === HANDS_API_TOOLS_PATH) {"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 245,
+      "code": "if (path === ADMIN_CONNECT_LINK_PATH) {"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 248,
+      "code": "if (path === ADMIN_SMS_LINES_PATH) {"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 253,
+      "code": "if (path === \"/sms/inbound\" && method === \"POST\") {"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 261,
+      "code": "if (path === \"/sms/sendblue\" && method === \"POST\") {"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 264,
+      "code": "if (path === \"/transcription/token\" && method === \"POST\") {"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 281,
+      "code": "if (path === CONNECTIONS_WEBHOOK_PATH) {"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 298,
+      "code": "if (path === \"/me/connections\" || path.startsWith(\"/me/connections/\")) {"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 318,
+      "code": "if (path.startsWith(\"/c/\")) {"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 340,
+      "code": "if (path.startsWith(\"/r/\") && method === \"GET\") {"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 352,
+      "code": "if (path.startsWith(\"/fellows/\") && path !== \"/fellows/hq\") {"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 354,
+      "code": "if (path === \"/fellows/health\" && method === \"GET\") return fellowsHealth(request, f);"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 355,
+      "code": "if (path === \"/fellows/code\" && method === \"POST\") return fellowsCode(request, f);"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 356,
+      "code": "if (path === \"/fellows/verify\" && method === \"POST\") return fellowsVerify(request, f);"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 357,
+      "code": "if (path === \"/fellows/start\" && method === \"POST\") return fellowsStart(request, f);"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 358,
+      "code": "if (path === \"/fellows/confirm\" && method === \"GET\") return fellowsConfirm(request, f);"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 359,
+      "code": "if (path === \"/fellows/me\" && method === \"GET\") return fellowsMe(request, f);"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 360,
+      "code": "if (path === \"/fellows/apply\" && method === \"POST\") return fellowsApply(request, f);"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 361,
+      "code": "if (path === \"/fellows/progress\" && method === \"POST\") return fellowsProgress(request, f);"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 362,
+      "code": "if (path === \"/fellows/profile\" && method === \"POST\") return fellowsProfile(request, f);"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 363,
+      "code": "if (path === \"/fellows/submissions\" && method === \"POST\") return fellowsSubmissions(request, f);"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 364,
+      "code": "if (path === \"/fellows/submissions/remove\" && method === \"POST\") return fellowsSubmissionsRemove(request, f);"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 365,
+      "code": "if (path === \"/fellows/guardian/link\" && method === \"POST\") return fellowsGuardianLink(request, f);"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 366,
+      "code": "if (path === \"/fellows/guardian\" && method === \"GET\") return fellowsGuardianGet(request, f);"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 367,
+      "code": "if (path === \"/fellows/guardian\" && method === \"POST\") return fellowsGuardianPost(request, f);"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 374,
+      "code": "if (path.startsWith(\"/internal/\") || path === \"/fellows/hq\") {"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 385,
+      "code": "if (path === \"/internal/health\" && method === \"GET\") return hqHealth(request, hq);"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 386,
+      "code": "if (path === \"/internal/login\" && method === \"POST\") return hqLogin(request, hq);"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 387,
+      "code": "if (path === \"/fellows/hq\" && method === \"GET\") return hqPage(request, hq);"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 397,
+      "code": "if (path === \"/internal/session\" && method === \"POST\") return hqSession(request, hq);"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 398,
+      "code": "if (path === \"/internal/session/end\" && method === \"POST\") return hqSessionEnd(request, hq);"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 402,
+      "code": "if (path === \"/internal/me\" && method === \"GET\") return hqMe(request, hq);"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 403,
+      "code": "if (path === \"/internal/me/password\" && method === \"POST\") return hqMePassword(request, hq);"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 408,
+      "code": "if (path === \"/internal/people/faces\" && method === \"GET\") {"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 413,
+      "code": "if (path === \"/internal/fellows\" && method === \"GET\") return hqFellows(request, hq);"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 420,
+      "code": "if (path === \"/internal/fellows/remove\" && method === \"POST\") {"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 423,
+      "code": "if (path === \"/internal/fellows/submissions/remove\" && method === \"POST\") {"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 426,
+      "code": "if (path === \"/internal/fellows/submissions/release\" && method === \"POST\") {"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 429,
+      "code": "if (path === \"/internal/state\" && method === \"GET\") return hqState(request, hq);"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 430,
+      "code": "if (path === \"/internal/people\" && method === \"POST\") return hqPeopleCreate(request, hq);"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 431,
+      "code": "if (path === \"/internal/people\" && method === \"PATCH\") return hqPeopleUpdate(request, hq);"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 432,
+      "code": "if (path === \"/internal/todos\" && method === \"POST\") return hqTodoCreate(request, hq);"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 433,
+      "code": "if (path === \"/internal/todos\" && method === \"PATCH\") return hqTodoUpdate(request, hq);"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 434,
+      "code": "if (path === \"/internal/todos/delete\" && method === \"POST\") return hqTodoDelete(request, hq);"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 435,
+      "code": "if (path === \"/internal/events\" && method === \"POST\") return hqEventCreate(request, hq);"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 436,
+      "code": "if (path === \"/internal/events/delete\" && method === \"POST\") return hqEventDelete(request, hq);"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 437,
+      "code": "if (path === \"/internal/tracks\" && method === \"POST\") return hqTrackUpsert(request, hq);"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 438,
+      "code": "if (path === \"/internal/tracks/delete\" && method === \"POST\") return hqTrackDelete(request, hq);"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 439,
+      "code": "if (path === \"/internal/expenses\" && method === \"POST\") return hqExpenseCreate(request, hq);"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 440,
+      "code": "if (path === \"/internal/expenses/delete\" && method === \"POST\") return hqExpenseDelete(request, hq);"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 441,
+      "code": "if (path === \"/internal/notes\" && method === \"POST\") return hqNoteUpsert(request, hq);"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 442,
+      "code": "if (path === \"/internal/notes/delete\" && method === \"POST\") return hqNoteDelete(request, hq);"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 443,
+      "code": "if (path === \"/internal/passwords\" && method === \"POST\") return hqPasswordUpsert(request, hq);"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 444,
+      "code": "if (path === \"/internal/passwords/reveal\" && method === \"POST\") return hqPasswordReveal(request, hq);"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 445,
+      "code": "if (path === \"/internal/passwords/delete\" && method === \"POST\") return hqPasswordDelete(request, hq);"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 446,
+      "code": "if (path === \"/internal/people/code\" && method === \"POST\") return hqPeopleCode(request, hq);"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 447,
+      "code": "if (path === \"/internal/notifs/read\" && method === \"POST\") return hqNotifsRead(request, hq);"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 448,
+      "code": "if (path === \"/internal/settings\" && method === \"POST\") return hqSettings(request, hq);"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 449,
+      "code": "if (path === \"/internal/comments\" && method === \"POST\") return hqCommentCreate(request, hq);"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 450,
+      "code": "if (path === \"/internal/comments\" && method === \"PATCH\") return hqCommentUpdate(request, hq);"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 451,
+      "code": "if (path === \"/internal/comments/delete\" && method === \"POST\") return hqCommentDelete(request, hq);"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 452,
+      "code": "if (path === \"/internal/reminders\" && method === \"POST\") return hqReminderCreate(request, hq);"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 453,
+      "code": "if (path === \"/internal/reminders/delete\" && method === \"POST\") return hqReminderDelete(request, hq);"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 454,
+      "code": "if (path === \"/internal/assistant\" && method === \"POST\") return hqAssistant(request, hq);"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 455,
+      "code": "if (path.startsWith(\"/internal/cal/\") && method === \"GET\") {"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 461,
+      "code": "if (path === \"/internal/clerk/exchange\" && method === \"POST\") {"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 476,
+      "code": "if (path === \"/api/collections/owners/auth-with-password\" && method === \"POST\") {"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 479,
+      "code": "if (path === \"/api/collections/owners/auth-refresh\" && method === \"POST\") {"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 490,
+      "code": "if (path === \"/api/realtime\" && method !== \"GET\") {"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 507,
+      "code": "if (path === \"/api/realtime\") {"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 526,
+      "code": "if (path.startsWith(\"/api/files/\") && method === \"GET\") {"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 531,
+      "code": "if (path === \"/evidence/share\" && method === \"POST\") {"
+    },
+    {
+      "file": "migration/workers/src/index.ts",
+      "line": 795,
+      "code": "return STATIC_PREFIXES.some((p) => path === p || path.startsWith(p))"
+    },
+    {
+      "file": "migration/workers/src/routes/admin_sms_lines.ts",
+      "line": 17,
+      "code": "export const ADMIN_SMS_LINES_PATH = \"/admin/sms/lines\";"
+    },
+    {
+      "file": "migration/workers/src/routes/connect_auth.ts",
+      "line": 1003,
+      "code": "*     if (path.startsWith(\"/c/\")) {"
+    },
+    {
+      "file": "migration/workers/src/routes/admin_connect_link.ts",
+      "line": 33,
+      "code": "export const ADMIN_CONNECT_LINK_PATH = \"/admin/connect-link\";"
+    },
+    {
+      "file": "migration/workers/src/routes/hands_api.ts",
+      "line": 113,
+      "code": "export const HANDS_API_RUN_PATH = \"/hands/api/run\";"
+    },
+    {
+      "file": "migration/workers/src/routes/connections_webhook.ts",
+      "line": 192,
+      "code": "export const CONNECTIONS_WEBHOOK_PATH = \"/connections/events\";"
+    },
+    {
+      "file": "migration/workers/src/routes/hands_api_tools.ts",
+      "line": 24,
+      "code": "export const HANDS_API_TOOLS_PATH = \"/hands/api/tools\";"
+    }
+  ],
+  "limits": "File inventory is exhaustive for tracked paths. Static imports are evidence of connection, not execution or complete dynamic-call reachability. No binary content audit.",
+  "ts_js_import_reachability": {
+    "roots": [],
+    "reachable_files": [
+      "extension/agent_loop.js",
+      "extension/background.js",
+      "extension/config.js",
+      "extension/learn.js",
+      "extension/login_wall.js",
+      "extension/popup.js",
+      "extension/private_places.js",
+      "extension/recipes.js",
+      "extension/reconcile.js",
+      "extension/side_trip.js",
+      "extension/supervised_read.js",
+      "extension/workflow_state.js",
+      "migration/workers/brain/src/fleet_status.ts",
+      "migration/workers/brain/src/index.ts",
+      "migration/workers/brain/src/owner_lifecycle.ts",
+      "migration/workers/brain/src/plan.ts",
+      "migration/workers/brain/src/purge.ts",
+      "migration/workers/brain/src/runtime_refresh.ts",
+      "migration/workers/filter-dsl.ts",
+      "migration/workers/src/assets.ts",
+      "migration/workers/src/connections/api_hand.ts",
+      "migration/workers/src/connections/ask.ts",
+      "migration/workers/src/connections/dispatch.ts",
+      "migration/workers/src/connections/due.ts",
+      "migration/workers/src/connections/nudge.ts",
+      "migration/workers/src/connections/provider.ts",
+      "migration/workers/src/connections/signals.ts",
+      "migration/workers/src/connections/store.ts",
+      "migration/workers/src/connections/task_access.ts",
+      "migration/workers/src/connections/text_commands.ts",
+      "migration/workers/src/connections/wait.ts",
+      "migration/workers/src/connections/wiring.ts",
+      "migration/workers/src/connections/words.ts",
+      "migration/workers/src/cron.ts",
+      "migration/workers/src/do/PairCodeCounter.ts",
+      "migration/workers/src/index.ts",
+      "migration/workers/src/llm.ts",
+      "migration/workers/src/messaging.ts",
+      "migration/workers/src/pb/auth.ts",
+      "migration/workers/src/pb/records.ts",
+      "migration/workers/src/pb/schema.ts",
+      "migration/workers/src/pb/sender.ts",
+      "migration/workers/src/pb/wire.ts",
+      "migration/workers/src/policy/chain.ts",
+      "migration/workers/src/policy/guard.ts",
+      "migration/workers/src/policy/owner_profile_owner.ts",
+      "migration/workers/src/policy/research_lane.ts",
+      "migration/workers/src/policy/workflow_guard.ts",
+      "migration/workers/src/routes/account_delete.ts",
+      "migration/workers/src/routes/admin_account_reset.ts",
+      "migration/workers/src/routes/admin_brain_status.ts",
+      "migration/workers/src/routes/admin_connect_link.ts",
+      "migration/workers/src/routes/admin_sms_lines.ts",
+      "migration/workers/src/routes/agent.ts",
+      "migration/workers/src/routes/connect.ts",
+      "migration/workers/src/routes/connect_auth.ts",
+      "migration/workers/src/routes/connection_command.ts",
+      "migration/workers/src/routes/connections_api.ts",
+      "migration/workers/src/routes/connections_webhook.ts",
+      "migration/workers/src/routes/context_request.ts",
+      "migration/workers/src/routes/fellows.ts",
+      "migration/workers/src/routes/fellows_base.ts",
+      "migration/workers/src/routes/fellowship.ts",
+      "migration/workers/src/routes/hands_api.ts",
+      "migration/workers/src/routes/hands_api_tools.ts",
+      "migration/workers/src/routes/hq.ts",
+      "migration/workers/src/routes/hq_assistant.ts",
+      "migration/workers/src/routes/hq_boards.ts",
+      "migration/workers/src/routes/hq_data.ts",
+      "migration/workers/src/routes/hq_fellows.ts",
+      "migration/workers/src/routes/hq_people.ts",
+      "migration/workers/src/routes/hq_threads.ts",
+      "migration/workers/src/routes/hq_todos.ts",
+      "migration/workers/src/routes/hq_vault.ts",
+      "migration/workers/src/routes/notification_policy.ts",
+      "migration/workers/src/routes/password_reset.ts",
+      "migration/workers/src/routes/sendblue.ts",
+      "migration/workers/src/routes/service.ts",
+      "migration/workers/src/routes/sms.ts",
+      "migration/workers/src/routes/task_access.ts",
+      "spike/two-hands/src/connections/contract.ts",
+      "spike/two-hands/src/contract.ts"
+    ],
+    "api_modules_not_statically_reached": [],
+    "limits": "Static literal import/export traversal, includes type-only edges. Injection scripts and HTML entrypoints require separate inspection; reachability does not prove a function is called."
+  }
+}

@@ -1,0 +1,159 @@
+{
+  "revision": "e370340e8089dad7e0e905024c35ee50b60bc659",
+  "features": [
+    {
+      "feature": "Phone speech",
+      "status": "Connected",
+      "behavior": "On-device transcription -> buffered event upload -> worker. Capture quality still needs device use.",
+      "source": "app/ios/Anticipy/AnticipyApp.swift:2028"
+    },
+    {
+      "feature": "Mac speech",
+      "status": "Merged in source",
+      "behavior": "Mic/system meeting capture -> TranscriptWire -> same Cloudflare API. Installation of the repaired Mac binary is separate.",
+      "source": "app/macos/AnticipyMac/MacApp.swift:40"
+    },
+    {
+      "feature": "Pendant",
+      "status": "Disconnected",
+      "behavior": "BLE/battery/gap handling exists. The app sets onOpusFrame to nil; no Opus-to-PCM decoder feeds transcription.",
+      "source": "app/ios/Anticipy/AnticipyApp.swift:2090"
+    },
+    {
+      "feature": "Typed + text input",
+      "status": "Connected",
+      "behavior": "app_reply and sms_reply converge in handle_inbound, after owner checks and shared connection-command dispatch.",
+      "source": "brain/worker.py:4324"
+    },
+    {
+      "feature": "Device context",
+      "status": "Connected, bounded",
+      "behavior": "Consent-based contact names and upcoming calendar titles/times become profile evidence. This is not full inbox/file access.",
+      "source": "app/ios/Anticipy/LifeContext.swift:61"
+    },
+    {
+      "feature": "Speech judgment",
+      "status": "Connected",
+      "behavior": "Contextual destination, ownership, readiness and effect judgments feed the task decision. Legacy meaning rules remain.",
+      "source": "brain/anticipy_core.py:1575"
+    },
+    {
+      "feature": "Memory",
+      "status": "Connected",
+      "behavior": "Ingestion, retrieval, open loops, profile consolidation, expiry, imported-fact provenance and veto paths exist.",
+      "source": "brain/memory.py:708"
+    },
+    {
+      "feature": "Proactive clock",
+      "status": "Connected",
+      "behavior": "Worker reviews open loops on a schedule; pending input, local quiet hours and outreach budgets constrain interruptions.",
+      "source": "brain/worker.py:5155"
+    },
+    {
+      "feature": "Conversation sorter",
+      "status": "Observation only",
+      "behavior": "Default off. Requesting on is explicitly downgraded to shadow; it cannot replace the live per-event funnel.",
+      "source": "brain/worker.py:3660"
+    },
+    {
+      "feature": "Training examples",
+      "status": "Embedded in prompts",
+      "behavior": "Examples are copied into Python prompts. Editing EXEMPLARS.md alone does not change runtime behavior.",
+      "source": "brain/orchestrator.py:18"
+    },
+    {
+      "feature": "Task lifecycle",
+      "status": "Connected",
+      "behavior": "Versioned plans, scoped approval, claims/leases, cancellation, needs-user states and receipts. These reduce duplicate effects; they do not prove every provider action.",
+      "source": "brain/workflow.py:991"
+    },
+    {
+      "feature": "Server hand",
+      "status": "Live example proven",
+      "behavior": "Public research and private composition run on the server. A separate result review checks whether the requested artifact was actually produced.",
+      "source": "brain/worker.py:5411"
+    },
+    {
+      "feature": "Connected API hand",
+      "status": "Connected, limited proof",
+      "behavior": "Model selects a real catalog tool, validates arguments/account/effects; worker invokes /hands/api/run. Broad multi-app sequences are not established.",
+      "source": "brain/hands.py:1005"
+    },
+    {
+      "feature": "Chrome hand",
+      "status": "Live fixture proof",
+      "behavior": "Paired extension claims browser jobs, reads pages, asks the model, clicks/types, heartbeats and records outcomes. Login and uncertain effects can hand back.",
+      "source": "extension/background.js:1639"
+    },
+    {
+      "feature": "Browser memory",
+      "status": "Connected",
+      "behavior": "Procedure and recipe recall are imported by the browser loop. Stored recipes are checked for applicability before reuse.",
+      "source": "extension/agent_loop.js:8"
+    },
+    {
+      "feature": "Supervised reading",
+      "status": "Connected",
+      "behavior": "Separate browser lane gathers witnessed facts, with narration/veto-related memory ingestion. Distinct from unrestricted background account access.",
+      "source": "extension/background.js:1159"
+    },
+    {
+      "feature": "Native calendar hand",
+      "status": "Missing executor",
+      "behavior": "Policy, lane declarations and queue UI exist; no EventKit event-write executor was found in app source. Calendar reads do exist.",
+      "source": "app/ios/Anticipy/Views/ContentView.swift:2909"
+    },
+    {
+      "feature": "App connections",
+      "status": "Live offer/command proof",
+      "behavior": "Task access offers + consent links + OAuth provider adapter + durable command retries. Link creation is not completed OAuth consent.",
+      "source": "migration/workers/src/connections/dispatch.ts:1"
+    },
+    {
+      "feature": "App + text delivery",
+      "status": "Connected, uneven",
+      "behavior": "Task questions/notices are persisted; direct in-app replies suppress SMS. Direct SMS replies still have a send-before-app-history failure window.",
+      "source": "brain/conversation.py:371"
+    },
+    {
+      "feature": "Lifecycle + privacy",
+      "status": "Connected",
+      "behavior": "Owner containers, backups, deletion fences, auth, account reset and fleet status are wired. UI-free local environment has no model brain running.",
+      "source": "migration/workers/brain/src/index.ts:215"
+    }
+  ],
+  "gaps": [
+    {
+      "gap": "1. Calendar promise without a writer",
+      "finding": "The app says an iPhone calendar change will be picked up, but only policy/display references to that lane were found. LifeContext reads EventKit; it does not save events. Do not describe this native hand as working."
+    },
+    {
+      "gap": "2. Pendant audio stops at the phone",
+      "finding": "startPendantTranscription explicitly clears the audio callback. Firmware receipts also say not built/not flashed. BLE connection is not usable listening."
+    },
+    {
+      "gap": "3. Whole-conversation action path",
+      "finding": "sorter.mode defaults off; worker forces on -> shadow because the shared action funnel is not extracted. Individual events still own live judgment."
+    },
+    {
+      "gap": "4. Proactive app-discovery inputs",
+      "finding": "recordUserSaidIt, recordObservedHost, recordSignUpDomain, recordLinksSeen and recordAnswerToAsk have wrappers but no external production caller found. The connected-account sweep is wired."
+    },
+    {
+      "gap": "5. Periodic app nudges",
+      "finding": "cron.ts handles a five-minute nudge/reminder tick, but checked-in production wrangler.jsonc registers only the nightly tick. The live schedule was not independently re-read. Task-specific access offers are a separate working path."
+    },
+    {
+      "gap": "6. Alternative conversation grouping",
+      "finding": "brain/links.py has no static import path from the deployed Python entry points. The worker does persist continuation links; this alternate grouping helper is not the live brain implementation."
+    },
+    {
+      "gap": "7. Meaning rules still survive",
+      "finding": "shard_too_thin still uses word/novel-token counts to suppress actions. Anaphoric linking and degraded third-person filtering remain registered legacy tape. The no-hardcoded-meaning goal is not fully met."
+    },
+    {
+      "gap": "8. Text-first is not uniform",
+      "finding": "reply_in_app intentionally suppresses direct SMS replies. Conversation.say records a turn before sending; transport failure can precede the app-history write and a repeat can be deduped. This is a delivery architecture gap, not just nighttime."
+    }
+  ]
+}

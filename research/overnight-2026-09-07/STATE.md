@@ -1,5 +1,27 @@
 # Anticipy overnight repair — 7 September 2026
 
+## Latest harness source audit — approximately 19:00 UTC
+
+- User requested a fast, evidence-based explanation, not another repair run.
+  Source snapshot `e370340e`; full 2,723 tracked-file census, 20-feature matrix,
+  static imports and route-dispatch evidence: `harness-map/REPORT.md`,
+  `harness-map/inventory.json`, `harness-map/sources.md`.
+- New high-priority source findings: native calendar queue/UI/policy exists but
+  no EventKit write executor was found in app sources; pendant callback remains
+  explicitly nil; whole-conversation sorter forces requested on mode to shadow.
+- App usage signal wrappers have no external production callers except the
+  connected-account sweep. Five-minute nudge handler is absent from checked-in
+  production schedules; actual live schedule not independently queried.
+- Python links.py has no static production import path. Direct in-app replies
+  suppress SMS; direct SMS send can fail before app-history persistence, after
+  the thread was already updated. Legacy meaning tape remains in live source.
+- 132 targeted checks pass. Fresh live HTTP health passes and fleet status
+  reports eight served/no failed entries at brain release a4f4871a. No paid
+  models or product mutations were run by this audit.
+- Seven-page illustrated output: `output/pdf/Anticipy-harness-explained-2026-09-07.pdf`.
+  Every page rendered and inspected. Existing larger proof scope is kept
+  separate from these new source findings; no universal functionality claim.
+
 ## Latest workspace sync — after the 18:32 UTC Mac merge
 
 - User requested local/cloud synchronization. Fast-forwarded the main checkout
