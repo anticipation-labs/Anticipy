@@ -25,7 +25,7 @@ on:
         description: 'Backend component to deploy'
         required: true
         type: choice
-        options: [brain, api]
+        options: [brain, api, inspect]
         default: brain
       confirm:
         description: 'Type DEPLOY to deploy the selected component'
@@ -42,7 +42,7 @@ concurrency:
 
 jobs:
   deploy:
-    if: ${{ github.ref == 'refs/heads/cloudflare-backend' && github.event.inputs.confirm == 'DEPLOY' && github.event.inputs.component != 'api' }}
+    if: ${{ github.ref == 'refs/heads/cloudflare-backend' && github.event.inputs.confirm == 'DEPLOY' && github.event.inputs.component != 'api' && github.event.inputs.component != 'inspect' }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
@@ -145,3 +145,15 @@ jobs:
         run: npx --no-install wrangler deploy --config wrangler.jsonc --keep-vars --tag "$GITHUB_SHA"
       - name: Verify the active version and exercise signup, ownership and deletion over the live URL
         run: python proof/audit/live_api_release.py --base https://api.anticipy.ai --verify-deployment
+
+  inspect:
+    if: ${{ github.ref == 'refs/heads/cloudflare-backend' && github.event.inputs.component == 'inspect' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read deployed database structure without customer rows
+        run: python3 -m proof.audit.live_schema
