@@ -204,6 +204,8 @@ jobs:
         with: { node-version: '24' }
       - name: Install the existing deployment CLI
         run: npm ci --prefix migration/workers --ignore-scripts
+      - name: Read the authored draft probe error without customer content
+        run: python3 -m proof.audit.live_messaging_error
       - name: Observe webhook response codes without message content
         run: |
           set +e

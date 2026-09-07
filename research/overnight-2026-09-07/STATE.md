@@ -610,3 +610,19 @@ and held-out/API-connection tests, clean synthetic accounts, update visual PDF.
   Updated synthetic narration97.45s, mean-15.9dB/max-1.9dB.
   Main task unfinished; existing15min repairheartbeat staysACTIVE.
   No new ambient source changes in this status continuation.
+
+## 2026-09-07 17:50 UTC — native texting failure isolated, repair active
+- Real harmless private-draft iMessage reached SendBlue but initial message
+  never landed. Provider existing webhook signing secret differed from Worker.
+  Matched GitHub/Worker to provider's existing secret; CI34148364804 succeeded.
+  Current signed malformed request reaches route (400), old secret rejects403.
+- Retried actual iMessage landed sms_reply but decision=error; no source-linked
+  job or app reply. Do not call texting fixed. Historical probe-specific
+  Cloudflare log query being added; no more texts until error isolated.
+- Ambient contextual replacement is uncommitted: model contrasts30/30;
+  Python3133 passed2 skipped; whole worker12/12 intended planning outcomes,
+  NOT12 completed tasks. Legacy proof/test_addressee fixture still19 failures.
+- Gateway operating cap30 and native cap19 preserve combined49 maximum;
+  native reserved16.631602, gateway actual approximately18.5. Preserve ledgers.
+- iOS165 unchanged. Personal browser pairing and full carrier reply/task/result
+  remain open. Prior PDF is stale on this latest native test finding.
