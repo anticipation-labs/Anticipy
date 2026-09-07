@@ -129,8 +129,11 @@ jobs:
           codesign --verify --deep --strict --verbose=2 "$app"
           xcrun stapler validate "$app"
           spctl -a -vvv -t exec "$app"
-          strings "$app/Contents/MacOS/AnticipyMac" | grep -q 'https://api.anticipy.ai'
-          if strings "$app/Contents/MacOS/AnticipyMac" | grep -q 'railway.app'; then
+          # Into a file, not a pipe: `grep -q` quits on the first match and a
+          # pipefail'd `strings` then dies of SIGPIPE — a pass reported as red.
+          strings "$app/Contents/MacOS/AnticipyMac" > "$RUNNER_TEMP/binary-strings.txt"
+          grep -q 'https://api.anticipy.ai' "$RUNNER_TEMP/binary-strings.txt"
+          if grep -q 'railway.app' "$RUNNER_TEMP/binary-strings.txt"; then
             echo "::error::the binary still names the retired Railway backend"
             exit 1
           fi
