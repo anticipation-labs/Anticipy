@@ -1,0 +1,139 @@
+{
+  "scope": "real models; isolated D1/vendor; no SMS; no provider account",
+  "model": "anthropic/claude-sonnet-4.6",
+  "source_sha256": "b2fa5c13c8d66c5b5f5473f1bcbdca61d1cdb129cb54b6f78799a9155a810417",
+  "cases": [
+    {
+      "id": "list",
+      "text": "What apps have I connected so far?",
+      "prior": "",
+      "want": "list_connections",
+      "got": "list_connections",
+      "passed": true,
+      "link_count": 0,
+      "calls": 1,
+      "milliseconds": 1276,
+      "reply_count": 1
+    },
+    {
+      "id": "connect",
+      "text": "Please connect Zellibrix so you can help with my team notes.",
+      "prior": "",
+      "want": "connect",
+      "got": "connect",
+      "passed": true,
+      "link_count": 1,
+      "calls": 3,
+      "milliseconds": 3837,
+      "reply_count": 1
+    },
+    {
+      "id": "accept-context",
+      "text": "Yes, please.",
+      "prior": "I can use Zellibrix to read the briefing. Would you like to connect it?",
+      "want": "connect",
+      "got": "connect",
+      "passed": true,
+      "link_count": 1,
+      "calls": 3,
+      "milliseconds": 3555,
+      "reply_count": 1
+    },
+    {
+      "id": "targeted-card",
+      "text": "Yes, please.",
+      "prior": "Would you like to connect Zellibrix?",
+      "want": "not_for_us",
+      "got": "not_for_us",
+      "passed": true,
+      "link_count": 0,
+      "calls": 1,
+      "milliseconds": 1188,
+      "reply_count": 0
+    },
+    {
+      "id": "answer-other-question",
+      "text": "Yes, please.",
+      "prior": "What time does the meeting end?",
+      "want": "not_for_us",
+      "got": "not_for_us",
+      "passed": true,
+      "link_count": 0,
+      "calls": 1,
+      "milliseconds": 1332,
+      "reply_count": 0
+    },
+    {
+      "id": "reported-complete",
+      "text": "I already connected Zellibrix yesterday. Anyway, the launch was great.",
+      "prior": "",
+      "want": "not_for_us",
+      "got": "not_for_us",
+      "passed": true,
+      "link_count": 0,
+      "calls": 1,
+      "milliseconds": 1367,
+      "reply_count": 0
+    },
+    {
+      "id": "quoted-command",
+      "text": "The document says \"disconnect Zellibrix\". Explain what that sentence means; leave my connections alone.",
+      "prior": "",
+      "want": "not_for_us",
+      "got": "not_for_us",
+      "passed": true,
+      "link_count": 0,
+      "calls": 1,
+      "milliseconds": 1034,
+      "reply_count": 0
+    },
+    {
+      "id": "unknown-app",
+      "text": "Connect the app we were discussing.",
+      "prior": "",
+      "want": "ask_which_app",
+      "got": "ask_which_app",
+      "passed": true,
+      "link_count": 0,
+      "calls": 3,
+      "milliseconds": 3709,
+      "reply_count": 1
+    },
+    {
+      "id": "ordinary-greeting",
+      "text": "Hi, how are you? Good, good yourself. I'm good.",
+      "prior": "",
+      "want": "not_for_us",
+      "got": "not_for_us",
+      "passed": true,
+      "link_count": 0,
+      "calls": 1,
+      "milliseconds": 1132,
+      "reply_count": 0
+    },
+    {
+      "id": "decline-context",
+      "text": "No, leave it for now.",
+      "prior": "Would you like to connect Zellibrix?",
+      "want": "not_for_us",
+      "got": "not_for_us",
+      "passed": true,
+      "link_count": 0,
+      "calls": 1,
+      "milliseconds": 1173,
+      "reply_count": 0
+    },
+    {
+      "id": "disconnect-context",
+      "text": "Remove that connection, please.",
+      "prior": "Zellibrix is the notes app you asked about.",
+      "want": "disconnect",
+      "got": "disconnect",
+      "passed": true,
+      "link_count": 0,
+      "calls": 3,
+      "milliseconds": 4096,
+      "reply_count": 1
+    }
+  ]
+}

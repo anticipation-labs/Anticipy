@@ -640,6 +640,9 @@ How to answer it:
 - Arguments are a JSON object using the tool's own parameter names, filled
   from the STEP and from what was HEARD. Every parameter marked required must
   be present. Leave optional ones out unless the step needs them.
+- A search query is composed from the described target; it is not an opaque
+  record id the owner must supply. For a named report, its title can be the
+  query. Never substitute a title for a parameter that actually requires an id.
 - Never invent a fact the call needs. An event or message id, a person's
   address, a place, a time that neither the step nor what was heard supplies
   is not yours to make up, and a person's name is not an address or an id:
@@ -650,6 +653,10 @@ How to answer it:
   not one call, and a tool that would also touch what the step did not name
   is not that step's tool: the verdict is "unclear", and the reason says
   what the lookup would have to find or what the tool would touch besides.
+  For an information request, returning the needed source content is enough:
+  the assistant can reason over or summarize those returned facts afterward.
+  The tool need not itself write the final conversational answer. Search
+  snippets alone are not the full content when the requested answer needs it.
 - Relative times ("tomorrow", "Thursday afternoon") are resolved from the
   current date, time and time zone you were given, and written the way the
   parameter asks (an RFC3339 timestamp with an offset when it asks for one).

@@ -4094,11 +4094,22 @@ class Anticipy:
             if calendar.state == CALENDAR_YES:
                 act = calendar_act_declaration()
                 params = dict(params, **calendar.facts)
-        # Route read-only work to the worker's research arm (roadmap §6).
-        # Without a Brave key the worker has no way to run it, so the job
-        # keeps the browser lane rather than queueing for an executor that
-        # does not exist — graceful fallback, never a dead queue.
-        lane = job_lane(goal, params) if os.environ.get("BRAVE_API_KEY") else ""
+        # API/browser routing exists independently of the public-search key.
+        # Previously an absent search credential skipped the entire router,
+        # including connected APIs, without ever asking which hand was useful.
+        device = device_lane(act)
+        lane = device or job_lane(goal, params, owner_ref=self.owner_ref or self.owner_id,
+                                 backend_url=self.backend_url, llm=self.llm)
+        if lane == RESEARCH_LANE and not os.environ.get("BRAVE_API_KEY"):
+            hand = params.get("_hand") or {}
+            # Only an actual research verdict licenses this executor fallback.
+            # A missing model verdict stays unlicensed; it cannot acquire the
+            # owner's browser merely because a search secret is absent.
+            if hand.get("hand") == "research":
+                lane = ""
+                params["_hand"] = dict(hand, lane=lane,
+                    reason=str(hand.get("reason") or "")
+                           + " — server search unavailable; browser fallback")
         # AND THEN THE DEVICE LANE, WHICH OUTRANKS BOTH OF THE ABOVE.
         #
         # Deliberately OUTSIDE the Brave-key conditional. Brave is what the
@@ -4120,7 +4131,6 @@ class Anticipy:
         # question the confirmation floor asks is "did the model DECLARE an
         # act this phone executes", which does not stop being true because
         # the browser was held off it.
-        device = device_lane(act)
         lane = device or lane
         # THE RESEARCH GATE (HANDS 1 spec §5.4), asked here and only here.
         #

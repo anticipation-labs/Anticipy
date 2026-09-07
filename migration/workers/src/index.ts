@@ -47,6 +47,7 @@ import {
 import type { FellowsEnv } from "./routes/fellows_base.ts";
 import { smsInbound, transcriptionToken, type SmsEnv } from "./routes/sms.ts";
 import { sendblueInbound, type SendblueEnv } from "./routes/sendblue.ts";
+import { connectionCommand } from "./routes/connection_command.ts";
 import { contextRequest } from "./routes/context_request.ts";
 import { notificationPolicy } from "./routes/notification_policy.ts";
 import { connectRoute, installConnectWiring, type ConnectEnv } from "./routes/connect.ts";
@@ -206,6 +207,7 @@ export default {
     // else -- it is authorised by a shared token every worker carries.
     if (path === "/admin/brain/status") return adminBrainStatus(request, env);
     if (path === "/admin/account-reset") return adminAccountReset(request, env as never);
+    if (path === "/worker/connection-command") return connectionCommand(request, env);
     if (path === "/worker/owners" && method === "GET") {
       return workerOwners(request, env as unknown as ServiceEnv);
     }

@@ -1,6 +1,56 @@
 # Anticipy overnight repair — 7 September 2026
 
-## Latest checkpoint — 2026-09-07 11:51 UTC
+## Latest checkpoint — 2026-09-07 12:43 UTC
+
+- iOS163 commit970f31d shipped through CI34120389837. Independent ASC34121890032
+  confirms VALID, internal IN_BETA_TESTING, account ok***@icloud.com in Internal.
+  Uploaded05:24Vancouver. External review remains separate; do not claim Sanket
+  can install163. Simulator pairing/retry/disconnect verified, personal unpacked
+  extension still0.15 because extension-settings automation was blocked.
+- Local Wrangler original session46940 exited unexpectedly. Restarted same D1
+  state in session89202, log overnight-local-worker-2.log, port8787. New command
+  migration NOT yet applied locally. UI brain81515 is older code; restart before
+  current full-flow UI tests. Simulator installed163; Browser Not connected.
+- Router wire2/wire3 pass: API selected without Brave, no invented opaque ID.
+- Connection repair ready for release: new durable connection_command_runs,
+  shared /worker/connection-command plus carrier dispatcher, full context and
+  card target, independent app reply/link creation, uncertain-effect recovery.
+  Full Python3090passed2skipped; API full6+typecheck6 and real model5(11cases).
+  New table is included in erasure triggers/cleanup and CI migration step.
+  Must deploy API first, verify live, then brain cap100 and verify8/8 source.
+- Earlier connection model1–4 found missing minter wiring/SMS dependency and
+  an operation-vs-target ambiguity. Model5 actually persists links and passes.
+- Remaining: proactive spoken API offers, draft-before-approval, multistep API,
+  full browser queue proof/readable results, semantic legacy removal, final50
+  profiles, capture/performance QA and final visual PDF. Keep working.
+
+## Previous checkpoint — 2026-09-07 11:51 UTC
+
+### 11:56 UTC continuation
+- Readiness commit82b092968794099aad8193ec89b5b445547ee60e now LIVE, verified
+  by34118717669 at11:54:39UTC:8/8 workers/current snapshots, source
+  d75c3585b0bdbdd86d2e0fcdc2a93166dbfcbd1f374789213df176da5416ca87.
+- UNCOMMITTED next repair: `_queue_job` always consults hand routing independent
+  of Brave, with owner/backend/model explicitly supplied. A declared device act
+  skips that model question. Only a positive research verdict can fall back to
+  Chrome when server search is unavailable; absent verdict stays unlicensed.
+  Tests added for API routing without search credentials and no-verdict refusal.
+  Focused first run166passed/2skipped/1obsolete test pin; that pin was corrected
+  to inspect the research-reuse question rather than unrelated router calls.
+  Full run `work/audit/overnight-router-full-1.log` is underway.
+- Next API work: `connections/wiring.ts::handleInboundText` is only called from
+  routes/sendblue.ts and sms.ts. It requires messaging configuration and a phone,
+  so calling it unchanged from app input would still fail phone-less accounts.
+  `runTextCommandPlan` has a local `reply()` sending SMS; it needs channel-aware
+  durable reply delivery. The current SMS waitUntil callback also races the
+  brain's event claim, explicitly accepting duplicate answers in comments.
+  Use the worker's already-owned event path to sequence connection handling
+  before ordinary conversation; derive owner/text from the persisted event,
+  make outcomes replayable/idempotent, and never execute a disconnect on quoted
+  or other-speaker speech. Full conversation and measured source go to the judge.
+  Do not add keyword filtering. Merely wiring explicit connect commands does
+  not fix proactive API offers: those also need the existing model/catalog
+  usage-signal path, currently missing a writer for ordinary speech/app input.
 
 - Speech commit66fa7d4 verified LIVE by34116628621:8/8 workers, current snapshots,
   revision matched, runtime source c2d1def0e0368610ee16394b8d8c741b02889c85094f955af3bbd0c03e01b8d0.

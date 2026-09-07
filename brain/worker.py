@@ -4427,6 +4427,39 @@ def claim(event_id: str) -> bool:
     return mark_processed(event_id, "processing")
 
 
+def connection_command(ev: dict, owner_ref: str) -> str:
+    """Sequence the shared connection handler before ordinary conversation.
+
+    The API reads the persisted event itself. It cannot be redirected with a
+    caller's transcription or recipient. Pending work is retried by event id,
+    against the API's durable lease, never reinterpreted as a second task.
+    """
+    if not os.environ.get("ANTICIPY_SERVICE_TOKEN"):
+        return "not_for_us"
+    try:
+        response = pb.post(f"{PB}/worker/connection-command", json={
+            "event_id": ev["id"], "owner_ref": owner_ref,
+        }, timeout=120)
+        # Compatibility while the new API is rolling out. No connection
+        # executor exists on this endpoint in an older release.
+        if response.status_code == 404:
+            return "not_for_us"
+        if response.status_code != 200:
+            return "pending"
+        result = response.json()
+        if result.get("status") != "completed":
+            return "pending"
+        outcome = result.get("outcome") or {}
+        if outcome.get("kind") == "not_for_us":
+            return "not_for_us"
+        if not outcome.get("replied"):
+            return "pending"
+        return "ask" if outcome.get("question") else "ignore"
+    except Exception as error:
+        print(f"connection command awaiting reconciliation: {type(error).__name__}")
+        return "pending"
+
+
 def handle_inbound(ev: dict, convo, anticipy) -> str:
     """Handle ONE answer from the owner, whichever channel it arrived on.
 
@@ -4475,6 +4508,13 @@ def handle_inbound(ev: dict, convo, anticipy) -> str:
     if not claim(ev["id"]):
         print(f"{lane}: could not claim, retrying later")
         return "unclaimed"
+
+    connection = connection_command(ev, anticipy.owner_ref)
+    if connection != "not_for_us":
+        # Reset only our processing claim, retaining the original event id.
+        # The connection service owns the external-effect retry fence.
+        mark_processed(ev["id"], "" if connection == "pending" else connection)
+        return "unclaimed" if connection == "pending" else connection
 
     # An answer typed in the app is answered in the app. This is NOT a ruling on
     # whether SMS is primary or a backstop -- that question stays open -- only

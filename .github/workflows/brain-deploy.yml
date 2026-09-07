@@ -139,6 +139,9 @@ jobs:
       - name: Apply the non-destructive account erasure write fence
         working-directory: migration/workers
         run: npx --no-install wrangler d1 execute anticipy-backend --remote --config wrangler.jsonc --file ../d1/2026-09-07-account-erasure-fence.sql
+      - name: Apply the connection command retry fence
+        working-directory: migration/workers
+        run: npx --no-install wrangler d1 execute anticipy-backend --remote --config wrangler.jsonc --file ../d1/2026-09-07-connection-command-runs.sql
       - name: Deploy the API while preserving separately configured provider variables
         working-directory: migration/workers
         run: npx --no-install wrangler deploy --config wrangler.jsonc --keep-vars --tag "$GITHUB_SHA"

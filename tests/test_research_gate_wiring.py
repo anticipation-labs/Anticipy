@@ -172,7 +172,7 @@ def test_a_cached_procedure_for_a_DIFFERENT_errand_does_not_satisfy(monkeypatch)
     assert gate_of(posted)["verdict"] == research.GATE_RESEARCH
 
 
-def test_a_stale_procedure_costs_no_model_call_at_all(monkeypatch):
+def test_a_stale_procedure_never_spends_a_model_call_on_reuse(monkeypatch):
     """The free sift stays in front of the floor: an expired record is a miss
     at zero cost, so the common case never buys a question."""
     memory = Memory()
@@ -183,7 +183,9 @@ def test_a_stale_procedure_costs_no_model_call_at_all(monkeypatch):
     llm = FakeLLM()
     queue(monkeypatch, "dispute the hydro bill", touches="world", llm=llm,
           memory=memory)
-    assert llm.asked == []
+    # The hand router independently asks which executor can perform the task.
+    # A stale procedure must not spend the separate recall/applicability call.
+    assert all(system != research.RECALL_SYSTEM for system, _ in llm.asked)
 
 
 # --------------------------------------------------------- the dead gate

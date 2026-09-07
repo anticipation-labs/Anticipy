@@ -1110,7 +1110,7 @@ await check("THE TEXT TWIN: a vendor name carrying a forbidden term never reache
 
 await check("THE TEXT TWIN: the two carriers and the entry point are wired the same", () => {
   for (const [name, source] of [["sms.ts", SMS_SOURCE], ["sendblue.ts", SENDBLUE_SOURCE]] as const) {
-    assert.equal(source.split("handleInboundText(").length - 1, 1,
+    assert.equal(source.split("dispatchConnectionEvent(").length - 1, 1,
       `${name} must call the twin exactly once`);
     assert.ok(/landed\.kind === "written"/.test(source),
       `${name} must only run the twin for a message that actually landed`);

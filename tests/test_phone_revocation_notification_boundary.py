@@ -68,7 +68,8 @@ class Composer:
 
 
 @pytest.fixture(autouse=True)
-def clean_worker_state():
+def clean_worker_state(monkeypatch):
+    monkeypatch.setattr(W, "connection_command", lambda ev, owner: "not_for_us")
     W.REPORTED.clear()
     W._SENT_RECENTLY.clear()
     W._last_blocker.clear()

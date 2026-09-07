@@ -33,7 +33,8 @@
  * is looked at; nothing is logged but the ids and the last six digits.
  */
 import { landInboundText, last6, type Landing } from "../pb/sender.ts";
-import { handleInboundText, type TextCommandEnv } from "../connections/wiring.ts";
+import { dispatchConnectionEvent } from "../connections/dispatch.ts";
+import type { TextCommandEnv } from "../connections/wiring.ts";
 
 const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), {
@@ -180,8 +181,8 @@ export async function sendblueInbound(
   // front of it. Both carriers land the same events row (src/pb/sender.ts), and
   // this is what stops them landing in different products.
   if (landed.kind === "written") {
-    const run = handleInboundText(
-      env as unknown as TextCommandEnv, landed.owner_ref, content, landed.id);
+    const run = dispatchConnectionEvent(
+      env as unknown as TextCommandEnv, landed.owner_ref, landed.id);
     if (ctx) ctx.waitUntil(run); else await run;
   }
 

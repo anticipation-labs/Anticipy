@@ -161,6 +161,29 @@ def test_no_brave_key_falls_back_to_the_browser_lane(monkeypatch):
     assert posted["status"] == "queued"
 
 
+def test_missing_search_key_does_not_skip_a_connected_api_hand(monkeypatch):
+    routed = []
+    def router(goal, params, **context):
+        routed.append(context)
+        params["_hand"] = {"hand":"api", "app":"fixture-documents", "effect":"read", "lane":"api"}
+        return "api"
+    monkeypatch.setattr(core, "job_lane", router)
+    posted = _queue(monkeypatch, "Read the project document", key=None)
+    assert posted["lane"] == "api"
+    assert len(routed) == 1 and routed[0]["owner_ref"] == "own1"
+    assert "backend_url" in routed[0] and "llm" in routed[0]
+
+
+def test_missing_search_key_cannot_turn_no_verdict_into_browser_authority(monkeypatch):
+    def router(goal, params, **context):
+        params["_hand"] = {"hand":"unanswered", "lane":"research"}
+        return "research"
+    monkeypatch.setattr(core, "job_lane", router)
+    posted = _queue(monkeypatch, "Read the project document", key=None)
+    assert posted["lane"] == "research"
+    assert json.loads(posted["params"])["_hand"]["hand"] == "unanswered"
+
+
 def test_an_sms_ask_is_marked_on_the_job(monkeypatch):
     """channel rides in params so the finished answer can go back in-thread
     instead of landing silently on the desk."""

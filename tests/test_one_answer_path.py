@@ -69,6 +69,7 @@ class Recorder:
 @pytest.fixture
 def wired(monkeypatch):
     """Capture every side effect handle_inbound has on the world."""
+    monkeypatch.setattr(W, "connection_command", lambda ev, owner: "not_for_us")
     seen = {"marks": [], "events": [], "claims": []}
 
     monkeypatch.setattr(W, "mark_processed",

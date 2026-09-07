@@ -437,9 +437,16 @@ function newToken(): string {
 /** The base the link is built on. Same precedence as routes/connect.ts's own
  *  `wired.baseUrl ?? env.CONNECT_BASE_URL ?? CONNECT_URL_BASE`, because a link
  *  minted on one base and a callback built on another is a broken connect. */
-function baseOf(env: NudgeEnv | null | undefined, deps?: NudgeDeps | null): string {
+function baseOf(env: NudgeEnv | null | undefined, deps?: {baseUrl?: string} | null): string {
   return deps?.baseUrl ?? env?.CONNECT_BASE_URL ?? CONNECT_URL_BASE;
 }
+
+/** Minting a page writes a token; it does not need a phone or SMS provider. */
+export type LinkMintDeps = {
+  store: Pick<NudgeStore, "put" | "putAll">;
+  now?: () => number;
+  baseUrl?: string;
+};
 
 /**
  * Mint one link: single use, ten minutes, bound to this owner and this app.
@@ -461,7 +468,7 @@ export async function mintConnectLink(
   owner: OwnerId | string,
   toolkit: Toolkit,
   alias: AccountAlias | null = null,
-  injected?: NudgeDeps | null,
+  injected?: LinkMintDeps | null,
 ): Promise<MintedLink> {
   return mintConnectPage(env, owner, [toolkit], alias, injected);
 }
@@ -510,7 +517,7 @@ export async function mintConnectPage(
   owner: OwnerId | string,
   toolkits: readonly (Toolkit | string)[],
   alias: AccountAlias | null = null,
-  injected?: NudgeDeps | null,
+  injected?: LinkMintDeps | null,
 ): Promise<MintedLink> {
   const deps = injected ?? WIRING(env);
   // BOTH PORTS, and `put` is not vestigial here. A store wired before this file

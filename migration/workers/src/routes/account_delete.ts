@@ -37,6 +37,7 @@ export const ACCOUNT_TABLES = [
   ["agent_llm_audit", "owner_ref", null],
   ["agent_audit_sessions", "owner_ref", null],
   ["evidence", "owner_ref", null],
+  ["connection_command_runs", "owner_ref", null],
   ["events", "owner_ref", null],
   ["password_resets", "owner", null],
   ["connect_codes", "user_id", null],
