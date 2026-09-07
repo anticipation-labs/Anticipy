@@ -302,7 +302,10 @@ class _Control(BaseHTTPRequestHandler):
                           has_s3=present("ANTICIPY_BACKUP_S3_BUCKET"),
                           models={key: os.environ.get(key) for key in
                                   ("ANTICIPY_MODEL", "ANTICIPY_GEMINI_MODEL", "ANTICIPY_STRONG_MODEL")},
-                          gemini_configured=present("GEMINI_API_KEY"))
+                          gemini_configured=present("GEMINI_API_KEY"),
+                          messaging={"sender": os.environ.get("SENDBLUE_FROM_NUMBER", ""),
+                              "credentials_present": present("SENDBLUE_API_KEY_ID")
+                                  and present("SENDBLUE_API_SECRET_KEY")})
             body = json.dumps(status).encode()
             self.send_response(200 if status["ok"] else 503)
             self.send_header("content-type", "application/json")

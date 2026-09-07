@@ -25,7 +25,7 @@ on:
         description: 'Backend component to deploy'
         required: true
         type: choice
-        options: [brain, api, inspect, inspect-api, messaging-secret]
+        options: [brain, api, inspect, inspect-api, messaging-secret, messaging-sender]
         default: brain
       confirm:
         description: 'Type DEPLOY to deploy the selected component'
@@ -162,6 +162,19 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install only the webhook secret and verify live authentication without a message
         run: python3 proof/audit/configure_sendblue_webhook.py
+
+  messaging-sender:
+    if: ${{ github.ref == 'refs/heads/cloudflare-backend' && github.event.inputs.confirm == 'DEPLOY' && github.event.inputs.component == 'messaging-sender' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      SENDBLUE_FROM_NUMBER: ${{ vars.SENDBLUE_FROM_NUMBER }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Align API and brain with the verified existing provider line
+        run: python3 -m proof.audit.configure_sendblue_sender
 
   inspect:
     if: ${{ github.ref == 'refs/heads/cloudflare-backend' && github.event.inputs.component == 'inspect' }}

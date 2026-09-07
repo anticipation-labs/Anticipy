@@ -187,10 +187,20 @@ class SendblueArm:
             # A 401 is the credential, and the credential is named by its
             # tail so the operator knows WHICH key Sendblue rejected without
             # the log ever holding what it rejected it for.
+            try:
+                failure = response.json()
+            except ValueError:
+                failure = {}
+            if not isinstance(failure, dict):
+                failure = {}
+            # The provider may echo the entire request before its error keys.
+            # Report the error itself, never a truncated customer payload.
+            detail = " ".join(str(failure.get(key) or "") for key in
+                              ("error_code", "error_message", "error")).strip()
             raise va.SendFailed(self._scrub(
                 f"Sendblue refused the {what} to {str(to)[:6]}… using "
                 f"{self.credential}: HTTP {response.status_code} "
-                f"{response.text[:200]}"))
+                f"{detail[:300]}"))
         try:
             out = response.json()
         except ValueError as exc:
