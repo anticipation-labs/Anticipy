@@ -99,6 +99,12 @@ def prove(base, verify_deployment=False):
             "owner_ref": owner["id"], "kind": "profile", "source": "import",
             "text": "Synthetic API release check", "device_id": "release-proof"}, owner["token"])
         check(status == 200 and bool(event.get("id")), "Owned event persisted")
+        status, _, _ = request(base, "POST", "/me/context-request", {
+            "eventID": event["id"], "availableSources": ["contacts"]})
+        check(status == 401, "Context requests require sign-in")
+        status, _, _ = request(base, "POST", "/me/context-request", {
+            "eventID": event["id"], "availableSources": ["contacts"]}, stranger["token"])
+        check(status == 404, "Context requests cannot read another owner's conversation")
         event_path = "/api/collections/events/records/" + event["id"]
         status, _, _ = request(base, "GET", event_path, token=stranger["token"])
         check(status in (403, 404), "Other account cannot read the event")

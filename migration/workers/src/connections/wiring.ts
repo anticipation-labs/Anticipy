@@ -230,7 +230,7 @@ function connectModel(env: LlmEnv & { ANTICIPY_CONNECT_MODEL?: string }): string
   return named || DEFAULT_CONNECT_MODEL;
 }
 
-async function callModel(env: LlmEnv, messages: ChatMessage[]): Promise<string> {
+export async function callModel(env: LlmEnv, messages: ChatMessage[]): Promise<string> {
   const model = connectModel(env);
   const keys = providerKeys(env);
   const bounded = boundMaxTokens(SENTENCE_MAX_TOKENS);

@@ -75,6 +75,27 @@ check(P.captureFace(.offline, heardAnything: false).title == "Listening…",
 check(P.captureFace(.blocked, heardAnything: false).title != "Listening…",
       "a switched-off microphone does")
 
+// A typed message is visible even before the model responds, while the
+// identical microphone transcript remains hidden. Wording has no role.
+do {
+    let text = "Please check this when you can."
+    let typed = P.thread(heard: [.init(id: "typed1", text: text, at: "t", source: "typed")], said: [], jobs: [])
+    let mic = P.thread(heard: [.init(id: "mic1", text: text, at: "t", speaker: "owner", source: "phone_mic")], said: [], jobs: [])
+    check(typed.contains { if case .owner(_, let value, _, _) = $0 { return value == text }; return false },
+          "typed submit retains the exact message while awaiting the brain")
+    check(!mic.contains { if case .owner = $0 { return true }; return false },
+          "speaker ownership never turns microphone speech into a typed bubble")
+    let canonical = P.thread(heard: [.init(id: "h", text: text, at: "t", decision: "act", goal: "Family appointment")],
+        said: [], jobs: [.init(id: "j", goal: "Family appointment", consequence: nil, at: "t", placement: .needsYou,
+                              sourceEventIDs: ["h"])])
+    check(canonical.count == 1 && canonical.first?.id == "j",
+          "one canonical task replaces its transcript projection instead of showing working plus approval")
+    let sameWords = P.thread(heard: [], said: [], jobs: [
+        .init(id: "j1", goal: "Same task words", consequence: nil, at: "t", placement: .needsYou),
+        .init(id: "j2", goal: "Same task words", consequence: nil, at: "t", placement: .needsYou)])
+    check(sameWords.count == 2, "distinct jobs are never merged by matching words")
+}
+
 // ------------------------------------------------------------------ thread
 let heard = [
     P.HeardRow(id: "h1", text: "call the plumber tomorrow", at: "2026-09-05T10:00:00Z"),
@@ -305,6 +326,15 @@ check(P.emptyLine(listening: false, everListened: false)
         != P.emptyLine(listening: false, everListened: true),
       "and something different to somebody who has never turned it on")
 check(!P.emptyLine(listening: false, everListened: false).isEmpty, "and is never blank")
+
+// A terminal job still represents its input; finishing must not leave a
+// phantom "working" line after the canonical job leaves the active feed.
+let finishedInput = P.HeardRow(id: "terminal-source", text: "Exact request", at: "2026-09-07",
+                               decision: "act", goal: "An already finished task", source: "typed")
+let finishedTurns = P.thread(heard: [finishedInput], said: [], jobs: [],
+                             representedEventIDs: ["terminal-source"])
+check(finishedTurns.count == 1, "terminal provenance suppresses ghost work and keeps the owner's words")
+if case .owner = finishedTurns.first {} else { check(false, "typed terminal request remains visible") }
 
 if failures == 0 {
     print("DashboardTests: all passed")

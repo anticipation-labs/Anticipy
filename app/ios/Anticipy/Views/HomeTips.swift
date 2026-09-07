@@ -44,7 +44,7 @@ struct HomeTipsOverlay: View {
     }
 
     private static let tips: [Tip] = [
-        Tip(headline: "Just talk. I'm listening.",
+        Tip(headline: "Start with a conversation.",
             body: "Turn listening on from Home whenever you want a conversation captured.",
             button: "Next"),
         Tip(headline: "Nothing sends without your OK",

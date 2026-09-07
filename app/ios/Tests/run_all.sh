@@ -11,6 +11,7 @@ sh "$HERE/run_cursor_tests.sh"
 # recognizer swappable under a cursor that never learns which engine spoke.
 sh "$HERE/run_gap_engine_tests.sh"
 sh "$HERE/run_heard_tests.sh"
+sh "$HERE/run_speaker_work_tests.sh"
 sh "$HERE/run_flush_policy_tests.sh"
 # WHEN the words started and WHEN the flush produced them — two instants, not
 # one number written into three columns. Placed next to the flush policy

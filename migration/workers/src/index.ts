@@ -47,6 +47,7 @@ import {
 import type { FellowsEnv } from "./routes/fellows_base.ts";
 import { smsInbound, transcriptionToken, type SmsEnv } from "./routes/sms.ts";
 import { sendblueInbound, type SendblueEnv } from "./routes/sendblue.ts";
+import { contextRequest } from "./routes/context_request.ts";
 import { notificationPolicy } from "./routes/notification_policy.ts";
 import { connectRoute, installConnectWiring, type ConnectEnv } from "./routes/connect.ts";
 import { connectionsApiRoute, type ConnectionsApiEnv } from "./routes/connections_api.ts";
@@ -220,6 +221,7 @@ export default {
     if (path === "/me/profile/upsert" && method === "POST") {
       return profileUpsert(request, env as unknown as ServiceEnv);
     }
+    if (path === "/me/context-request") return contextRequest(request, env);
     if (path === "/me/notification-policy") return notificationPolicy(request, env);
     // THE API HAND'S ONE DOOR. The brain's run_api_jobs claims a lane="api"
     // row and POSTs its id here; the route reads the step off the row and runs

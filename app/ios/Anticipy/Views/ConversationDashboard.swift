@@ -90,6 +90,9 @@ struct ConversationDashboard<Notices: View, Approval: View, Deck: View, Settings
     /// person back into the thread as if they had pressed done.
     @State private var held = false
     @State private var typed = ""
+    @State private var focusedReply: String?
+    @State private var expandedTurn: DashboardPolicy.Turn?
+    @State private var hasNewReply = false
     @FocusState private var writing: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -134,39 +137,80 @@ struct ConversationDashboard<Notices: View, Approval: View, Deck: View, Settings
     // MARK: - The thread
 
     private var threadFace: some View {
-        VStack(spacing: 0) {
-            header
-            if let pending = DashboardPolicy.pendingApproval(in: turns),
-               case .approval(let id, let goal, _, _) = pending {
-                waitingBar(id: id, goal: goal)
-            }
-            ScrollViewReader { proxy in
+        ScrollViewReader { proxy in
+            VStack(spacing: 0) {
+                header
+                if let pending = DashboardPolicy.pendingApproval(in: turns),
+                   case .approval(let id, let goal, _, _) = pending {
+                    Button {
+                        writing = false
+                        withAnimation(reduceMotion ? nil : Theme.springSlow) {
+                            proxy.scrollTo(id, anchor: .top)
+                        }
+                    } label: { waitingBar(id: id, goal: goal) }
+                    .buttonStyle(.plain)
+                }
+                if hasNewReply {
+                    Button {
+                        writing = false
+                        hasNewReply = false
+                        withAnimation(reduceMotion ? nil : Theme.springSlow) {
+                            proxy.scrollTo(dashboardFoot, anchor: .bottom)
+                        }
+                    } label: {
+                        Label("New reply", systemImage: "arrow.down.circle.fill")
+                            .font(.callout.weight(.medium))
+                            .padding(.vertical, 8)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(OnboardTheme.champagneInk)
+                }
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 18) {
+                    LazyVStack(alignment: .leading, spacing: 18) {
                         notices()
-                        if threadTurns.isEmpty {
-                            emptyLine
-                        } else {
-                            ForEach(threadTurns, id: \.id) { turn in
-                                view(for: turn).id(turn.id)
-                            }
+                        if threadTurns.isEmpty { emptyLine }
+                        ForEach(threadTurns, id: \.id) { turn in
+                            view(for: turn).id(turn.id)
                         }
                         doneDeck()
-                        Color.clear.frame(height: DashMetric.footClearance).id(dashboardFoot)
+                        Color.clear.frame(height: 16).id(dashboardFoot)
                     }
                     .padding(.horizontal, DashMetric.gutter)
                     .padding(.top, 8)
                 }
+                .scrollDismissesKeyboard(.interactively)
                 .refreshable { await onRefresh() }
                 .onAppear { proxy.scrollTo(dashboardFoot, anchor: .bottom) }
-                .onChange(of: turns.count) { _ in
-                    withAnimation(reduceMotion ? nil : Theme.springSlow) {
-                        proxy.scrollTo(dashboardFoot, anchor: .bottom)
-                    }
+                .onChange(of: latestReplyID) { id in
+                    if id != nil { hasNewReply = true }
+                }
+                // Incoming polls must not move the card somebody is reading
+                // or editing. Only an explicit compose action follows the foot.
+                .onChange(of: writing) { editing in
+                    if editing { proxy.scrollTo(dashboardFoot, anchor: .bottom) }
+                }
+                .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidShowNotification)) { _ in
+                    if let id = focusedReply { proxy.scrollTo(id, anchor: .bottom) }
+                    else if writing { proxy.scrollTo(dashboardFoot, anchor: .bottom) }
+                }
+                .onPreferenceChange(DashboardReplyFocusKey.self) { id in
+                    focusedReply = id
+                    if let id { proxy.scrollTo(id, anchor: .bottom) }
                 }
             }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                if focusedReply == nil { foot }
+            }
         }
-        .overlay(alignment: .bottom) { foot }
+    }
+
+    private var latestReplyID: String? {
+        turns.last { turn in
+            switch turn {
+            case .said, .question: return true
+            default: return false
+            }
+        }?.id
     }
 
 
@@ -245,6 +289,7 @@ struct ConversationDashboard<Notices: View, Approval: View, Deck: View, Settings
                    placeholder: "Ask Anticipy, or tell her something…",
                    onSend: send,
                    focus: $writing)
+            if !writing {
             // DERIVED, NEVER HARDWIRED. A button that always says "Listen with
             // phone" is a button that says it over a live microphone — which is
             // how the ✕ above was able to strand a running listener with no way
@@ -283,6 +328,7 @@ struct ConversationDashboard<Notices: View, Approval: View, Deck: View, Settings
             // The onboarding coach mark points here. Home has always reported
             // this anchor; moving the control must not stop it.
             .anchorPreference(key: ListenControlAnchorKey.self, value: .bounds) { $0 }
+            }
         }
         .padding(.horizontal, DashMetric.gutter)
         .padding(.bottom, 10)
@@ -406,19 +452,43 @@ struct ConversationDashboard<Notices: View, Approval: View, Deck: View, Settings
             .padding(.horizontal, DashMetric.gutter)
             .padding(.top, 4)
 
-            VStack(spacing: 12) {
-                ForEach(captureCards, id: \.id) { turn in
-                    CaptureCard(title: title(of: turn), meta: meta(of: turn))
-                        .transition(.asymmetric(
-                            insertion: .move(edge: .top).combined(with: .opacity),
-                            removal: .opacity))
+            ScrollView {
+                LazyVStack(spacing: 12) {
+                    ForEach(captureCards, id: \.id) { turn in
+                        Button { expandedTurn = turn } label: {
+                            CaptureCard(title: title(of: turn), meta: meta(of: turn),
+                                        working: isWorking(turn))
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityHint("Opens the full details")
+                    }
+                }
+                .padding(.horizontal, DashMetric.gutter)
+                .padding(.vertical, 12)
+            }
+            .sheet(item: $expandedTurn) { turn in
+                NavigationStack {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 16) {
+                            if case .approval(let id, _, _, _) = turn {
+                                approval(id)
+                            } else {
+                                Text(title(of: turn))
+                                    .font(.body)
+                                    .textSelection(.enabled)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                        }.padding(20)
+                    }
+                    .navigationTitle("Details")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Done") { expandedTurn = nil }
+                        }
+                    }
                 }
             }
-            .padding(.horizontal, DashMetric.gutter)
-            .padding(.top, 12)
-            .animation(reduceMotion ? nil : Theme.springSlow, value: captureCards.count)
-
-            Spacer(minLength: 24)
 
             VStack(spacing: 6) {
                 Text(face.title)

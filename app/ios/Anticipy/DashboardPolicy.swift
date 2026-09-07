@@ -167,7 +167,7 @@ enum DashboardPolicy {
 
     /// One turn in the conversation. Every case carries a verdict somebody
     /// else made; none of them is inferred from the text.
-    enum Turn: Equatable {
+    enum Turn: Equatable, Identifiable {
         /// Something SOMEBODY said or typed — not necessarily the owner.
         ///
         /// `speaker` is the tagger's verdict: "owner", "other", or nil when the
@@ -248,6 +248,7 @@ enum DashboardPolicy {
         let at: String
         /// `HomeFeedPolicy.placement` has already run. This is its answer.
         let placement: Placement
+        var sourceEventIDs: Set<String> = []
 
         /// NO `done` CASE, and that is a decision rather than an omission.
         /// Finished work goes to the deck at the foot of the thread, which
@@ -290,6 +291,7 @@ enum DashboardPolicy {
         /// Who said it, as the tagger judged. nil means the phone could not say
         /// — which is a real answer and must never be rendered as "the owner".
         var speaker: String? = nil
+        var source: String? = nil
     }
 
     /// Assemble the thread. Oldest first, because a conversation is read
@@ -298,7 +300,8 @@ enum DashboardPolicy {
     ///
     /// Ties are broken by id, so two rows written in the same second do not
     /// swap places between two redraws of the same screen.
-    static func thread(heard: [HeardRow], said: [SaidRow], jobs: [JobRow]) -> [Turn] {
+    static func thread(heard: [HeardRow], said: [SaidRow], jobs: [JobRow],
+                       representedEventIDs: Set<String> = []) -> [Turn] {
         var turns: [Turn] = []
         turns.reserveCapacity(heard.count + said.count + jobs.count)
 
@@ -327,10 +330,15 @@ enum DashboardPolicy {
         // count could never fall, and "3 waiting" would be a standing lie.
         var pendingCount = 0, pendingAt = "", pendingID = ""
         var quietCount = 0, quietAt = "", quietID = ""
+        let representedSources = jobs.reduce(into: representedEventIDs) { $0.formUnion($1.sourceEventIDs) }
         for row in heard where !row.text.isEmpty {
+            if row.source == "typed" {
+                turns.append(.owner(id: row.id, text: row.text, at: row.at, speaker: "owner"))
+            }
+            if representedSources.contains(row.id) { continue }
             if let goal = row.goal?.trimmingCharacters(in: .whitespacesAndNewlines),
                !goal.isEmpty {
-                turns.append(.working(id: row.id, text: goal, at: row.at))
+                turns.append(.working(id: "work." + row.id, text: goal, at: row.at))
                 continue
             }
             // `decision` is a column a MODEL wrote, read back. Nothing here

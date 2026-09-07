@@ -32,7 +32,17 @@ final class SpeakerTagger {
     /// A very long "utterance" is usually several people; judge the tail.
     private let maxSeconds: Double = 8
 
-    let roster = VoiceRoster()
+    let roster: VoiceRoster
+    private let makeEmbedder: () -> VoiceEmbedder?
+    private let modelIsAvailable: Bool
+
+    init(roster: VoiceRoster = VoiceRoster(),
+         modelAvailable: Bool = VoiceEmbedderFactory.modelAvailable,
+         makeEmbedder: @escaping () -> VoiceEmbedder? = VoiceEmbedderFactory.make) {
+        self.roster = roster
+        self.modelIsAvailable = modelAvailable
+        self.makeEmbedder = makeEmbedder
+    }
 
     private var ring: [Float] = []
     private var consumedUpTo = 0          // ring index already tagged
@@ -40,10 +50,20 @@ final class SpeakerTagger {
     private var converter: AVAudioConverter?
     private var converterInputFormat: AVAudioFormat?
 
-    private lazy var embedder: VoiceEmbedder? = VoiceEmbedderFactory.make()
+    private let embeddingQueue = DispatchQueue(label: "ai.anticipy.speaker-work", qos: .userInitiated)
+    // Read and used only on embeddingQueue. Loading ONNX is work too.
+    private lazy var embedder: VoiceEmbedder? = makeEmbedder()
+    private var deliveryGeneration = 0
+
+    /// Account changes invalidate queued voice results before they can learn
+    /// a voice or deliver an old account's words into the new account.
+    func invalidatePendingDeliveries() {
+        deliveryGeneration &+= 1
+        _ = drainWindow()
+    }
 
     /// Can this phone actually judge a voice right now?
-    var available: Bool { embedder != nil }
+    var available: Bool { modelIsAvailable }
     var hasOwnerProfile: Bool { roster.hasOwnerProfile }
 
     // MARK: - audio in (called from the audio thread — keep it cheap)
@@ -94,32 +114,41 @@ final class SpeakerTagger {
     // MARK: - the verdict
 
     /// Who spoke the line that just finished? nil when the phone cannot say.
-    func tagForLatestUtterance() -> String? {
-        guard let embedder else { return nil }
+    func tagForLatestUtterance(completion: @escaping (String?) -> Void) {
+        let generation = deliveryGeneration
+        // Snapshot now, before the next utterance changes the audio window.
         lock.lock()
         let start = min(consumedUpTo, ring.count)
-        var slice = Array(ring[start...])
+        let slice = Array(ring[start...].suffix(Int(Self.sampleRate * maxSeconds)))
         consumedUpTo = ring.count
         lock.unlock()
-
-        let maxSamples = Int(Self.sampleRate * maxSeconds)
-        if slice.count > maxSamples { slice = Array(slice.suffix(maxSamples)) }
-        guard Double(slice.count) / Self.sampleRate >= minSeconds else { return nil }
-        guard let vec = embedder.embed(slice), !vec.isEmpty else { return nil }
-
-        let verdict = roster.identify(vec)
-        // "unknown" is a real answer — it means DO NOT claim anyone — and
-        // the brain reads a missing field the same way, so send nothing.
-        return verdict.tag == "unknown" ? nil : verdict.tag
+        // A serial queue preserves utterance order even when inference is slow.
+        embeddingQueue.async { [weak self] in
+            guard let self else { return }
+            let vec = Double(slice.count) / Self.sampleRate >= self.minSeconds
+                ? self.embedder?.embed(slice) : nil
+            DispatchQueue.main.async { [weak self] in
+                guard let self, generation == self.deliveryGeneration else { return }
+                guard let vec, !vec.isEmpty else { completion(nil); return }
+                let verdict = self.roster.identify(vec)
+                completion(verdict.tag == "unknown" ? nil : verdict.tag)
+            }
+        }
     }
 
-    /// Enrollment: embed a held recording of his voice and store the profile.
-    @discardableResult
-    func enrollOwner(from samples: [Float]) -> Bool {
-        guard let embedder, let vec = embedder.embed(samples), !vec.isEmpty
-        else { return false }
-        roster.enrollOwner(vec)
-        return true
+    /// Enrollment uses the same serialized model work, never the UI thread.
+    func enrollOwner(from samples: [Float], completion: @escaping (Bool) -> Void) {
+        let generation = deliveryGeneration
+        embeddingQueue.async { [weak self] in
+            guard let self else { return }
+            let vec = self.embedder?.embed(samples)
+            DispatchQueue.main.async { [weak self] in
+                guard let self, generation == self.deliveryGeneration else { return }
+                guard let vec, !vec.isEmpty else { completion(false); return }
+                self.roster.enrollOwner(vec)
+                completion(true)
+            }
+        }
     }
 
     /// Take everything currently in the window (used by the enrollment
@@ -148,6 +177,14 @@ enum VoiceEmbedderFactory {
     /// The model lives in the app bundle. Named exactly so a future model
     /// swap is a file swap (see design/briefs/09 for the benchmark rules).
     static let modelName = "speaker-embedding"
+
+    static var modelAvailable: Bool {
+        #if canImport(SherpaOnnx)
+        return Bundle.main.path(forResource: modelName, ofType: "onnx") != nil
+        #else
+        return false
+        #endif
+    }
 
     static func make() -> VoiceEmbedder? {
         #if canImport(SherpaOnnx)

@@ -63,19 +63,9 @@ if ! grep -q 'onLine?(line, wordsAppearedAt, now, continuesPrevious)' "$listener
     exit 2
 fi
 
-# 3. THE PARTING TAIL IS THE FOURTH DELIVERY SITE AND IT BYPASSES `deliver`.
-#    It is the last line of every session, it used to call `onLine?(tail,
-#    Date(), ...)` — teardown time, twice over — and being outside `deliver` it
-#    is exactly the site a signature-driven refactor fixes by hand and forgets.
-if grep -q 'onLine?(tail, Date()' "$listener"; then
-    echo "The parting tail still stamps itself at teardown time."
-    echo "It is the last line of every session and it does not go through"
-    echo "deliver(), so widening the callback did not reach it. It must carry"
-    echo "the same two instants as every other line."
-    exit 2
-fi
-if ! grep -q 'onLine?(tail, partingStartedAt, partingEndedAt' "$listener"; then
-    echo "The parting tail does not name both of its instants."
+# 3. Stop uses the same ordered delivery path and preserves both timestamps.
+if ! grep -q 'deliver(tail, reason: .final, wordsAppearedAt: partingStartedAt,' "$listener"    || ! grep -q 'at: partingEndedAt)' "$listener"; then
+    echo "The parting tail must preserve its capture instants through serial delivery."
     exit 2
 fi
 

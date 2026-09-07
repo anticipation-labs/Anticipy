@@ -124,22 +124,32 @@ struct LiveWave: View {
 /// checkbox: nothing on this screen is completed by tapping it, and a control
 /// that looks tappable and is not is worse than no control — so it is drawn as
 /// a mark, and the whole card is the tap target for opening it later.
+struct DashboardReplyFocusKey: PreferenceKey {
+    static let defaultValue: String? = nil
+    static func reduce(value: inout String?, nextValue: () -> String?) {
+        if let next = nextValue() { value = next }
+    }
+}
+
 struct CaptureCard: View {
     var title: String
     var meta: [CaptureChip] = []
+    var working = false
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            Circle()
-                .strokeBorder(OnboardTheme.champagne.opacity(0.55),
-                              style: StrokeStyle(lineWidth: 1.5, dash: [3, 3]))
+            Image(systemName: working ? "circle.dotted" : "text.bubble")
+                .foregroundStyle(OnboardTheme.champagneInk)
                 .frame(width: 20, height: 20)
                 .padding(.top, 2)
             VStack(alignment: .leading, spacing: 6) {
                 Text(title)
                     .font(.system(size: 17, weight: .medium))
                     .foregroundStyle(OnboardTheme.ink)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .lineLimit(3)
+                Text("View details")
+                    .font(.caption)
+                    .foregroundStyle(OnboardTheme.muted)
                 if !meta.isEmpty {
                     HStack(spacing: 12) {
                         ForEach(meta) { chip in
@@ -404,6 +414,7 @@ struct SaidTurn: View {
     var text: String
     var done: Bool
     var onCopy: () -> Void
+    @State private var expanded = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -417,7 +428,15 @@ struct SaidTurn: View {
                 .font(.system(size: 16))
                 .foregroundStyle(OnboardTheme.ink)
                 .lineSpacing(3)
+                .lineLimit(expanded ? nil : 6)
+                .textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
+            // This is a visual length budget only, never a meaning decision.
+            if text.count > 300 {
+                Button(expanded ? "Show less" : "Read full answer") { expanded.toggle() }
+                    .font(.callout.weight(.medium))
+                    .foregroundStyle(OnboardTheme.champagneInk)
+            }
             Button(action: onCopy) {
                 Image(systemName: "square.on.square")
                     .font(.system(size: 14, weight: .medium))

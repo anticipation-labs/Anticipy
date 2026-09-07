@@ -40,6 +40,7 @@ struct ContextAskSheet: View {
     @State private var receipt: [String]? = nil
 
     var body: some View {
+        ScrollView {
         VStack(alignment: .leading, spacing: Theme.Space.base) {
             LogoMark(size: 56)
                 .accessibilityHidden(true)
@@ -127,7 +128,8 @@ struct ContextAskSheet: View {
         .padding(.horizontal, 28)
         .padding(.top, Theme.Space.section)
         .padding(.bottom, 18)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        }
         .background(Theme.bg.ignoresSafeArea())
         .grainOverlay()
     }

@@ -128,80 +128,24 @@ for source in ContextSource.allCases {
 }
 
 
-// ------------------------------------------------------- 8: when she may ask
-// The trigger is a rule, not a model. It must fire on a real plan and stay
-// quiet on a word in passing, or a just-in-time ask becomes a nag.
+// The model owns meaning. Device policy only validates the proposal and consent.
 do {
     let g = freshGrants()
-    check(ContextTrigger.source(for: "dinner with Priya on Thursday", grants: g) == .calendar,
-          "a plan plus a time asks for the calendar")
-    check(ContextTrigger.source(for: "book a table tomorrow", grants: g) == .calendar,
-          "a booking plus a time asks for the calendar")
-    // A day of the week alone is conversation, not a commitment.
-    let bare = ContextTrigger.source(for: "Thursday was rough", grants: g)
-    check(bare != .calendar, "a bare day of the week does NOT ask for the calendar")
-}
-do {
-    // Once declined, the same sentence must not ask again.
-    let g = freshGrants()
-    g.decline(.calendar)
-    let again = ContextTrigger.source(for: "dinner with Marcus on Friday", grants: g)
-    check(again != .calendar, "a declined source is never asked for again")
-}
-do {
-    // An unfamiliar name is a reason to want the address book; a known one is not.
-    let g = freshGrants()
-    g.decline(.calendar)   // isolate the contacts branch
-    check(ContextTrigger.source(for: "ask Priya about it", knownNames: [], grants: g) == .contacts,
-          "an unknown name asks for contacts")
-    check(ContextTrigger.source(for: "ask Priya about it", knownNames: ["Priya"], grants: g) == nil,
-          "a name she already knows asks for nothing")
-    check(ContextTrigger.unknownName(in: "see you in August", knownNames: []) == nil,
-          "a month is not a person")
-}
-
-// ------------------------------------- 9: the false positives that burn the ask
-// ContextGrants allows exactly ONE ask per source, ever. So a trigger that
-// fires on ordinary conversation does not merely annoy — it spends the only
-// chance the product gets. "am" used to be a time word matched as a SUBSTRING,
-// which fired on family, amazing, Sam, campaign, and on the bare words of
-// "I am busy".
-do {
-    let g = freshGrants()
-    for innocent in ["call my family", "that party was amazing", "coffee with sam",
-                     "I am busy", "I am free", "busy with the campaign",
-                     "the interview came up"] {
-        check(ContextTrigger.source(for: innocent, knownNames: [], grants: g) != .calendar,
-              "\"\(innocent)\" does NOT burn the calendar ask")
+    for verdict in ["unnecessary", "clarify", "unavailable", "unknown"] {
+        check(ContextTrigger.ask(verdict: .init(verdict: verdict, source: "contacts",
+            subject: "Good", reason: "test"), grants: g) == nil,
+            "a non-request verdict cannot open contact access")
     }
-}
-do {
-    // And the real ones still fire.
-    let g = freshGrants()
-    check(ContextTrigger.source(for: "dinner at 7:30pm", grants: g) == .calendar,
-          "a clock time with am/pm fires")
-    check(ContextTrigger.source(for: "meeting at 09:15", grants: g) == .calendar,
-          "an HH:MM time fires")
-    check(ContextTrigger.source(for: "lunch next week", grants: g) == .calendar,
-          "a multi-word phrase fires (it used to be unreachable)")
-}
-
-// ------------------------------------------------- 10: the ask names the thing
-// CLAUDE-ONBOARDING.md's voice law wants the specific thing, not a category.
-do {
-    let g = freshGrants()
-    g.decline(.calendar)
-    guard let hit = ContextTrigger.ask(for: "ask Priya about it", knownNames: [], grants: g) else {
-        failures += 1; print("FAIL: no ask returned for an unknown name"); exit(1)
-    }
-    check(hit.subject == "Priya", "the trigger returns the name it matched on")
-    check(hit.source.ask(subject: hit.subject).contains("Priya"),
-          "the question names the person instead of saying 'your contacts'")
-    check(hit.source.because("ask Priya about it", subject: hit.subject).contains("Priya"),
-          "the reason names the person too")
-    // Without a subject it must still be a sensible question, not a broken one.
-    check(ContextSource.contacts.ask(subject: nil).hasSuffix("?"),
-          "the generic fallback is still one question")
+    let requested = ContextTrigger.Verdict(verdict: "request", source: "contacts",
+                                          subject: "Priya", reason: "Identify the colleague you mentioned")
+    let hit = ContextTrigger.ask(verdict: requested, grants: g)
+    check(hit?.source == .contacts && hit?.subject == "Priya", "a model-proposed person survives unchanged")
+    g.decline(.contacts)
+    check(ContextTrigger.ask(verdict: requested, grants: g) == nil, "a model cannot override declined consent")
+    check(ContextTrigger.ask(verdict: .init(verdict: "request", source: "mail", reason: "test"), grants: g) == nil,
+          "a device context verdict cannot open another kind of source")
+    check(ContextTrigger.ask(verdict: .init(verdict: "request", source: "calendar"), grants: g) == nil,
+          "a request without its reason cannot open a prompt")
 }
 
 // --------------------------------------------- 11: promises match the reader
