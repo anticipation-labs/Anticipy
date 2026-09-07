@@ -171,6 +171,16 @@ def test_every_4xx_and_5xx_raises_rather_than_returning(monkeypatch):
         assert str(status) in str(caught.value)
 
 
+def test_error_after_large_echoed_request_is_visible_without_echoing_payload(monkeypatch):
+    arm, _, _ = _arm(monkeypatch, [(403, {"content": "private message " * 100,
+        "error_code": "sender_not_authorized", "error_message": "Sender is not assigned"})])
+    with pytest.raises(va.SendFailed) as caught:
+        arm.text(US, "private message")
+    assert "sender_not_authorized" in str(caught.value)
+    assert "Sender is not assigned" in str(caught.value)
+    assert "private message" not in str(caught.value)
+
+
 def test_a_401_names_the_key_tail_and_never_the_secret(monkeypatch):
     arm, _, lines = _arm(monkeypatch, [(401, {"status": "ERROR",
                                               "error_message": "bad key"})])

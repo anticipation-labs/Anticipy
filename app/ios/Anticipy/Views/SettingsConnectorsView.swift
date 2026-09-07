@@ -86,6 +86,8 @@ private struct SettingsBrowserConnectorView: View {
     @State private var pairCode = ""
     @State private var pairOutcome: AnticipySession.PairOutcome?
     @State private var pairing = false
+    @State private var disconnecting = false
+    @State private var disconnectError: String?
 
     var body: some View {
         SheetChrome(title: "Browser", leading: .back) {
@@ -120,10 +122,15 @@ private struct SettingsBrowserConnectorView: View {
                     // banner that can never fire can never be proofread by
                     // using the product. That seam is held by the same test.
                     InfoRow("Chrome is running the old extension (\(stale)). "
-                            + "Open chrome://extensions and press Reload to get "
-                            + "\(AnticipySession.expectedExtensionVersion). "
-                            + "Until then it's working from old instructions.",
+                            + "Download version \(AnticipySession.expectedExtensionVersion) from browser setup, replace the installed extension files, "
+                            + "then open chrome://extensions and press Reload. "
+                            + "Reload alone does not download an update.",
                             systemImage: "exclamationmark.triangle")
+                    if let setup = ComputerSetupLinks.browser(baseURL: backendURL) {
+                        ActionRow("Open browser update", systemImage: "arrow.up.right.square") {
+                            UIApplication.shared.open(setup)
+                        }
+                    }
                 }
             }
 
@@ -134,15 +141,28 @@ private struct SettingsBrowserConnectorView: View {
                     // the extension re-pairs from Settings, and no transcript,
                     // receipt or memory is touched. The alerts elsewhere in
                     // Settings guard things that genuinely cannot be undone.
-                    DestructiveRow("Disconnect this browser",
+                    DestructiveRow(disconnecting ? "Disconnecting…" : "Disconnect this browser",
                                    systemImage: "laptopcomputer.slash") {
+                        guard !disconnecting else { return }
                         Haptics.engage()
+                        disconnecting = true
+                        disconnectError = nil
+                        pairOutcome = nil
+                        let account = session.accountID
                         Task {
-                            await session.backend.unpairAgent(owner: session.ownerID)
+                            defer { disconnecting = false }
+                            let disconnected = await session.backend.unpairAgent(owner: session.ownerID)
+                            guard account == session.accountID else { return }
                             await session.refresh()
+                            guard account == session.accountID else { return }
+                            if !disconnected {
+                                disconnectError = "The browser could not be disconnected. Please try again."
+                            }
                         }
                     }
+                    .disabled(disconnecting)
                 }
+                if let disconnectError { FootnoteText(disconnectError) }
                 FootnoteText("Disconnect before pairing Anticipy with a different browser.")
             } else {
                 SectionHeader("Connect")
@@ -183,6 +203,13 @@ private struct SettingsBrowserConnectorView: View {
             let digits = String(value.filter(\.isNumber).prefix(6))
             if digits != value { pairCode = digits }
         }
+        .onChange(of: session.agentPaired) { _ in
+            // Connection status comes from the current server record. An old
+            // successful attempt cannot keep saying connected after unpairing.
+            pairOutcome = nil
+            pairCode = ""
+            disconnectError = nil
+        }
     }
 
     private var status: String {
@@ -194,7 +221,7 @@ private struct SettingsBrowserConnectorView: View {
         switch pairOutcome {
         case .noMatch: return "That code did not match. Check the extension and try again."
         case .unreachable: return "Anticipy could not reach the service. Try again when you have a connection."
-        case .paired: return "Browser connected."
+        case .paired: return nil // The current Status row owns success feedback.
         case nil: return nil
         }
     }

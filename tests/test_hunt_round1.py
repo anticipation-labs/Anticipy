@@ -55,10 +55,20 @@ console.log('ok');
     assert "ok" in out.stdout, out.stderr
 
 
-def test_chat_can_never_trigger_a_group_release():
-    gate = CONV.split("elif (group and intent in")[1][:200]
-    assert '"chat"' not in gate
-    assert "_just_asked" in gate
+def test_chat_can_never_trigger_a_group_release(monkeypatch):
+    from brain.anticipy_core import Anticipy
+    from brain.conversation import Conversation
+    from brain.memory import Memory
+    conv = Conversation(Anticipy(memory=Memory(":memory:"), llm=None), llm=None)
+    monkeypatch.setattr(conv, "_classify", lambda *a: {
+        "intent": "chat", "pending_ids": ["one", "two"], "reply": "Thanks."})
+    monkeypatch.setattr(conv, "_thread", lambda *a: [])
+    monkeypatch.setattr(conv, "_remember_about_owner", lambda *a: {})
+    monkeypatch.setattr(conv, "say", lambda *a: None)
+    monkeypatch.setattr(conv, "_blocked", lambda: [])
+    monkeypatch.setattr(conv, "_release", lambda *a, **k: (_ for _ in ()).throw(AssertionError("chat released work")))
+    monkeypatch.setattr(conv, "_think", lambda *a, **k: (_ for _ in ()).throw(AssertionError("chat became a new task")))
+    assert conv.on_reply("+1", "thanks both of you")["acted"] is None
 
 
 def test_queued_jobs_are_cancellable_and_declines_stay_honest():

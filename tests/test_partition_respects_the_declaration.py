@@ -39,9 +39,8 @@ def _brain(pending):
 
 def test_the_precondition_still_holds():
     """If either half stops being true the tests below prove nothing."""
-    assert not is_consequential(PENDING_LOOKUP), "pending must read read-only"
-    assert not is_consequential(INCOMING_PLAN), \
-        "the incoming goal must READ read-only, or prose already parts them"
+    assert not is_consequential(PENDING_LOOKUP, touches="read")
+    assert is_consequential(INCOMING_PLAN), "missing effect must not infer permission from wording"
     assert is_consequential(INCOMING_PLAN, touches="world"), \
         "and the declaration must be what makes it world-changing"
 
@@ -78,7 +77,7 @@ def test_the_pending_side_believes_the_stored_class_over_its_wording():
     class is the only thing that parts them."""
     a = _brain([{"id": "held-1", "goal": INCOMING_PLAN,
                  "consequence": "consequential"}])
-    assert a._same_pending(PENDING_LOOKUP) is None, \
+    assert a._same_pending(PENDING_LOOKUP, touches="read") is None, \
         "a read-only lookup matched a card the workflow calls consequential"
 
 

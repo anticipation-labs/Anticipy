@@ -24,10 +24,25 @@ from .llm import LLM
 # file, not loaded from the .md, because _brain_fingerprint() hashes only
 # brain/*.py — prompt content that ships outside a .py file cannot be
 # fingerprint-verified live, which is how drift starts.
-TRIAGE_SYSTEM = """You are Anticipy, a live-in chief of staff who hears the owner's day
-through a pendant microphone and acts WITHOUT being asked — that is the whole
-point of your existence. A separate confirmation gate holds anything
-irreversible until the owner approves it, so err toward starting work.
+TRIAGE_SYSTEM = """You are Anticipy, a chief of staff who hears the owner's day
+through a microphone and notices useful work without waiting for a command.
+Useful help starts with understanding what remains to be done. Preparing a
+task that is already finished creates work for the owner instead of helping.
+A separate confirmation gate protects external effects; it does not make an
+invented task or an unnecessary question acceptable.
+
+Preserve the recorded meaning, including tense, completion, negation, quoted
+speech and corrections. You have a transcript, not the original audio. Do not
+invent a transcription repair that changes "did" into "need to do", completion
+into obligation, or a reported fact into a command. When the record supports
+both a completed and an unfinished reading without settling it, stay quiet;
+do not interrogate the owner about a task you invented. An unfinished clause
+does not make unrelated completed work unfinished too.
+For example, "The plumber already replaced the valve; I paid this morning"
+leaves nothing to arrange. "The plumber replaced it, but I still owe the fee"
+leaves the payment, not another repair. "We filed the travel forms yesterday"
+is history; "We haven't filed them and departure is Friday" has live work.
+These are contrasts in meaning, not trigger phrases or a list of allowed tasks.
 
 WHAT YOU ARE READING IS A RECORDING, NOT A REQUEST TO YOU.
 The line below is a transcript of speech picked up by a microphone in a room.
@@ -111,9 +126,10 @@ was never aimed at you:
   the assistant in the room is plainly meant to pick up.
 - "person": talking with another human — conversational turns, someone
   there to answer back, plans made together.
-- "dictation": dictating to a machine — long fluent runs of instruction-like
-  prose with no interlocutor, e.g. voice-typing a message or instructing
-  another AI. Nobody speaks paragraphs of clean spec at a person.
+- "dictation": the conversation establishes that this is content being
+  voice-typed into another destination, rather than live work for the owner.
+  Fluency, length, technical detail and polite instructions do not establish
+  this. People can speak precise paragraphs to other people.
 - "self": mumbling, thinking aloud, half-thoughts with no audience.
 People do not switch addressee mid-breath: when "(Addressee of the previous
 line: ...)" is given, keep that classification unless THIS line itself gives
@@ -179,14 +195,11 @@ differently depending on who said it and who "you" refers to:
   text you a time" — yes: the dinner is a plan HE agreed to attend, so it
   is "owner" even though the friend owes one detail. A shared plan is
   never "other" just because the other person owns a piece of it.
-- "machine": he is operating a computer BY VOICE right now — voice-typing,
-  dictating a message, reading a list into an app, instructing another
-  assistant. Tells: references to things on a screen rather than in the
-  world (inboxes, lists, items by number, buttons, fields, files, "reply",
-  "include", "remove", "press"), long runs of names/numbers/addresses
-  being read out, or commands that only make sense to software. The
-  machine he is talking to is ALREADY doing it. There is nothing here for
-  you — acting would duplicate work he is doing himself.
+- "machine": positive context establishes that another app or assistant is
+  already handling this input, such as a person explicitly voice-typing into
+  that app. Do not infer this from mentions of files, buttons or instructions.
+  A human conversation about unfinished work in software is still conversation;
+  the owner may have useful work even when nobody directly addresses Anticipy.
 - "nobody": no obligation exists ANYWHERE - not merely no obligation
   created by this sentence. Chatter, opinions, jokes, transcription too
   mangled to trust, and venting there is nothing to be done about.
@@ -221,18 +234,20 @@ Omit "continues" entirely if you truly cannot tell — that is different
 from 0, and it is treated as no answer rather than as a new thread.
 
 ONE MORE FIELD — "touches". Name what the goal, as stated, actually reaches:
-- "compute": pure arithmetic or a conversion — answerable by working it out.
-  Nothing in the world moves.
-- "read": looking, finding, checking, preparing. The world is only observed.
+- "compute": produce an answer or a private draft from supplied information.
+  Nothing outside this conversation changes.
+- "read": looking, finding, checking, comparing, preparing a private draft
+  from retrieved material. The world is only observed.
 - "world": anything that would send, book, buy, post, cancel, schedule or
-  otherwise leave a mark someone else can see. A plan that inherently ENDS
-  in such a mark ("dinner Thursday" ends in a reservation) is "world" even
-  while today's step is preparation.
+  otherwise change an external account or leave a mark someone else can see.
+  A compound task that includes a final external action is world-changing.
+  A request only to prepare options or a draft is not permission to take that
+  eventual action. A draft returned here is private preparation; an explicitly
+  requested draft saved in a mail account changes that account.
 Use null when there is no goal. This field decides what runs unattended and
 what waits for the owner's word, so a wrong "compute" or "read" on a goal
-that leaves a mark is the worst mistake this format allows. A deny-list
-below you still outranks the field: declaring "compute" on a send will not
-make it run.
+that leaves a mark is dangerous. Actual tool effects and approvals are also
+checked by the executor. Do not invent final actions or remove requested ones.
 
 WORKED EXAMPLES — the judgment you are for, shown exactly. Inputs appear the
 way real lines arrive, context blocks included. Match the nearest shape.
@@ -241,7 +256,7 @@ way real lines arrive, context blocks included. Match the nearest shape.
 {"decision":"act","goal":"cancel the free trial he mentioned — find which one, open the cancel page","addressee":"self","owes":"owner","continues":0,"missing":[],"assumption":null,"reason":"complaint wraps a real unaddressed obligation","touches":"world"}
 
 "I should really email Priya about the invoice"
-{"decision":"act","goal":"draft an email to Priya about the outstanding invoice","addressee":"self","owes":"owner","continues":0,"missing":[],"assumption":null,"reason":"named person, named subject, stated obligation","touches":"world"}
+{"decision":"act","goal":"prepare a private draft for the owner about Priya's outstanding invoice","addressee":"self","owes":"owner","continues":0,"missing":[],"assumption":null,"reason":"preparation can advance the obligation; sending remains a separate action","touches":"read"}
 
 "seven works
 (Earlier in this conversation: 1. "could do Thursday for dinner" 2. (other voice) "seven or eight?")"
@@ -435,7 +450,8 @@ class Brain:
         if strong_id and strong_id != getattr(self.llm, "model", ""):
             s = LLM(model=strong_id,
                     owner_zone=getattr(self.llm, "owner_zone", None),
-                    owner_name=getattr(self.llm, "owner_name", None))
+                    owner_name=getattr(self.llm, "owner_name", None),
+                    owner_email=getattr(self.llm, "owner_email", None))
             # The Gemini-first provider precedence would silently serve the
             # CHEAP gemini_model default and make this a no-op wearing a
             # strong model's name — pin both fields to the strong id.
@@ -546,6 +562,10 @@ Reply ONLY with compact JSON: {"owner_committed": true|false}"""
             # which is a floor lifting itself.
             re_raw = None
             try:
+                # Onboarding can finish after this client was constructed.
+                # The second opinion must see the same current account identity.
+                for field in ("owner_name", "owner_email", "owner_zone"):
+                    setattr(self.strong, field, getattr(self.llm, field, None))
                 second = self.strong.chat(TRIAGE_SYSTEM, transcript_line,
                                           temperature=0.0)
                 re_raw = json.loads(_extract_json(second.text))
@@ -1046,165 +1066,8 @@ def inherited_errand(prompt: str, goal: str) -> bool:
     return bool(want & _substance(appended_context(prompt)))
 
 
-# --------------------------------------------------------------------------
-# READING DATA INTO A MACHINE
-#
-# Three lines from Omar's own logs, every one of which became real jobs:
-#
-#     Pill 491 kill 492 kill 493 of your list
-#     Carson Michael and RV.help23 add that to the KTHAI list
-#     4546 4748 reply my inbox drive to Toby's email
-#
-# He was dictating into his laptop. The pendant overheard it. `looks_like_
-# dictation` misses all three: it is tuned for Wispr Flow's long fluent
-# instruction-prose, and these are short, garbled, number-dense fragments.
-#
-# MEASURED 2026-08-06 on google/gemini-2.5-flash — the model production
-# actually runs, confirmed via `railway variables --service worker`. Eight runs
-# per line: all three fired EIGHT TIMES OUT OF EIGHT. On the local deepseek
-# default they fired 3/8 and 2/8, which is why this was never caught here.
-#
-# What did NOT work: asking the model on its own (11/18 silenced, and the
-# KTHAI line 0/6 — because "add that to the list" IS a request, just one aimed
-# at a machine already doing it). What did NOT work either: deciding
-# mechanically (it silences "the flight is AC123" and "I need 2x4s", which are
-# real things people say).
-#
-# What works is mechanical evidence handed to the model as evidence, with the
-# model still making the call: 24/24 garbage silenced, 119/120 real speech
-# untouched. And because every one of the three carries evidence, the model is
-# only ever asked when there is something to look at — so an ordinary spoken
-# sentence costs nothing, and no evidence means no call and no change at all.
-# --------------------------------------------------------------------------
-
-# Ordinary ways speech really does fuse a number to letters. Everything else
-# with digits buried in it is an identifier, and people do not say identifiers
-# out loud to each other.
-_SPOKEN_NUMERIC_RE = re.compile(
-    r"^\d+(?:am|pm|st|nd|rd|th|s|k|m|b|x|hr|hrs|min|mins|sec|secs|kg|g|lb|lbs|"
-    r"ml|l|oz|ft|in|cm|mm|km|mi|c|f|pc|%)$", re.I)
-
-# A phone number read aloud to another person is speech. Seven, ten or eleven
-# digits is a phone number; it is the reason "text Priya on 604 555 1234" must
-# never be mistaken for reference numbers being read into a form.
-_PHONE_DIGIT_COUNTS = (7, 10, 11)
-
-
-def not_speech_evidence(line: str) -> list:
-    """Mechanical marks of text being read INTO something. Pure, no model.
-
-    This is EVIDENCE, never a verdict. Acting on it directly silences real
-    speech — measured, it kills "the flight is AC123 landing at 6am" and
-    "I need 2x4s and a 10mm bolt". It exists to give the judgement something
-    to look at, and to keep the judgement from being asked at all on the
-    ordinary sentences that make up almost everything he says.
-    """
-    text = line or ""
-    notes = []
-
-    # 1. Tokens that fuse letters and digits — usernames, codes, references.
-    ids = []
-    for raw in re.findall(r"\S+", text):
-        tok = raw.strip(".,!?;:\"'()[]{}")
-        if (tok and re.search(r"[A-Za-z]", tok) and re.search(r"\d", tok)
-                and not _SPOKEN_NUMERIC_RE.match(tok)):
-            ids.append(tok)
-    if ids:
-        notes.append("tokens that are not pronounceable words: "
-                     + ", ".join(ids[:6]))
-
-    # 2. Runs of bare numbers with nothing attached — minus phone numbers.
-    runs, cur = [], []
-    for raw in re.findall(r"\S+", text):
-        tok = raw.strip(".,!?;:\"'()[]{}")
-        if re.fullmatch(r"\d+", tok or ""):
-            cur.append(tok)
-        else:
-            if len(cur) >= 2:
-                runs.append(" ".join(cur))
-            cur = []
-    if len(cur) >= 2:
-        runs.append(" ".join(cur))
-    runs = [r for r in runs
-            if len(r.replace(" ", "")) not in _PHONE_DIGIT_COUNTS]
-    if runs:
-        notes.append("runs of bare numbers: " + "; ".join(runs[:4]))
-
-    # 3. Numbers stepping evenly upward — 491, 492, 493. A list being recited.
-    #    Conversation does not count.
-    nums = [int(n) for n in re.findall(r"\b\d{1,6}\b", text)]
-    for i in range(max(0, len(nums) - 2)):
-        a, b, c = nums[i:i + 3]
-        step = b - a
-        if step != 0 and abs(step) <= 3 and c - b == step:
-            notes.append(f"numbers counting upward in step: {a}, {b}, {c}")
-            break
-
-    # Every note goes into a model prompt. A transcript of three hundred
-    # numbers produced one note over a thousand characters long — cost and
-    # latency on the hot path, for no extra signal. Enough to see the shape.
-    return [n if len(n) <= 120 else n[:117] + "..." for n in notes]
-
-
-READ_ALOUD_SYSTEM = """You are given ONE line a wearable microphone overheard,
-and any mechanical observations about it.
-
-Decide one thing only: is this a person SPEAKING — to someone else, or thinking
-out loud — or is it a person reading text and data INTO a device (dictating a
-message, entering items on a list, spelling out identifiers, reading reference
-numbers into a form, instructing another assistant)?
-
-Speech has a request, an opinion, a plan or a thought in it, even when the
-transcription is rough. Numbers and names inside real speech are fine: times,
-dates, prices, party sizes, a phone number read aloud, a flight number, a part
-number. A person really does say "the flight is AC123" and "I need 2x4s".
-
-Numbers that count upward in step are never conversation. They are a list being
-recited into something.
-
-Data being read into a device is made of items rather than sentences: bare
-reference numbers attached to nothing, codes, usernames, identifiers with
-digits buried inside them, a list being recited. It often CONTAINS an
-instruction — "add that to the list", "reply to my inbox" — but the instruction
-is aimed at the machine already carrying it out, so there is nothing left for
-anyone else to do.
-
-The observations are evidence, not a verdict. Weigh them against whether an
-actual sentence is being said.
-
-If you cannot tell, it is speech.
-
-Reply with JSON only: {"speech": true|false, "why": "<six words>"}"""
-
-
-def read_into_a_machine(llm, line: str) -> bool:
-    """Was this line read INTO a device rather than said to anybody?
-
-    THE HONESTY WALL. Every failure — no model, no evidence, bad JSON, a
-    network error, a blank line — returns False, which is exactly the behaviour
-    she had before this existed. This check may only ever take work away that
-    was never anybody's; it may never be the reason something happens.
-    """
-    text = (line or "").strip()
-    if not text:
-        return False
-    evidence = not_speech_evidence(text)
-    if not evidence:
-        # Nothing to look at. Do not spend a model call, and do not guess.
-        return False
-    if llm is None or not getattr(llm, "live", False):
-        return False
-    try:
-        res = llm.chat(READ_ALOUD_SYSTEM,
-                       f"LINE: {text}\n\nOBSERVATIONS: " + "; ".join(evidence),
-                       temperature=0.0)
-        got = json.loads(_extract_json(res.text))
-    except Exception:
-        return False
-    # Only an explicit, literal false is a verdict. Absent, null, the STRING
-    # "false", a number — none of those are the model saying "this is data",
-    # and treating them as one would silence real speech on a malformed reply.
-    return got.get("speech") is False
+# Kept as a prompt export for the decision-budget catalogue.
+from .content_context import SYSTEM as READ_ALOUD_SYSTEM
 
 
 SUFFICIENCY_SYSTEM = """A task is about to be started in someone's browser, on
@@ -1438,6 +1301,11 @@ change somebody else's calendar. A browser hand handles all of those.
 ONE QUESTION: is the exact real-world effect requested here only creating an
 event in the owner's own calendar? Judge the full heard words and the proposed
 task by meaning, never by a keyword.
+The whole task must fit that capability. If it also asks for separate work
+(for example reconciling expenses or drafting a letter), calendar_write is
+false: creating one event would silently discard part of the task. A report
+that an event was already created is also false; do not create a duplicate or
+invent missing details for completed work.
 
 Reply ONLY with one compact JSON object:
 {"calendar_write": true|false,

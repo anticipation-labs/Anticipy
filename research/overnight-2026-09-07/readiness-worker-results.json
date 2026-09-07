@@ -1,0 +1,65 @@
+{
+  "scope": "Actual isolated worker, real model, local HTTP/D1. Ingestion and planning only; no provider or browser effects.",
+  "cases": [
+    {
+      "case": "auditperson0009",
+      "label": "overnight-readiness-worker-1",
+      "source_sha256": "1cb3c190ff5527e6db3367ca86eb6885601fadf39d98d6558fed01ee5565038d",
+      "elapsed_seconds": 122.53,
+      "model_calls": 12,
+      "observed_cost_usd": 0.07566826,
+      "jobs": [
+        {
+          "goal": "draft a note to Morgan about the delivery change in the workshop brief",
+          "status": "awaiting_confirm",
+          "lane": "",
+          "result": "",
+          "workflow_state": "awaiting_approval",
+          "missing": null,
+          "assumption": "Morgan is Morgan Lee; details are in the workshop brief",
+          "question_invited": true
+        }
+      ]
+    },
+    {
+      "case": "auditperson0004",
+      "label": "overnight-readiness-worker-2",
+      "source_sha256": "a89c3acb990d83a28d028e778827383d8ab375afc67f2db574eeed5925d9e038",
+      "elapsed_seconds": 114.59,
+      "model_calls": 11,
+      "observed_cost_usd": 0.056388279000000006,
+      "jobs": [
+        {
+          "goal": "schedule 'Supplier review' on your calendar for tomorrow at 3:00 PM",
+          "status": "awaiting_confirm",
+          "lane": "device_calendar",
+          "result": "I still need when it ends.",
+          "workflow_state": "draft",
+          "missing": null,
+          "assumption": null,
+          "question_invited": true
+        }
+      ]
+    },
+    {
+      "case": "auditperson0010",
+      "label": "overnight-readiness-worker-2",
+      "source_sha256": "a89c3acb990d83a28d028e778827383d8ab375afc67f2db574eeed5925d9e038",
+      "elapsed_seconds": 126.56,
+      "model_calls": 12,
+      "observed_cost_usd": 0.070706434,
+      "jobs": [
+        {
+          "goal": "draft a calendar event for the supplier review on September 10 from 11 AM to 12 PM, no invites",
+          "status": "awaiting_confirm",
+          "lane": "device_calendar",
+          "result": "",
+          "workflow_state": "awaiting_approval",
+          "missing": null,
+          "assumption": null,
+          "question_invited": true
+        }
+      ]
+    }
+  ]
+}

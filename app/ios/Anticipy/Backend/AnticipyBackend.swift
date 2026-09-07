@@ -58,6 +58,19 @@ struct AgentJob: Identifiable, Decodable, Equatable {
     /// parsing bug.
     let lane: String?
 
+    /// Link transcript projections to the canonical task by provenance IDs,
+    /// never by matching the goal's wording.
+    var sourceEventIDs: Set<String> {
+        guard let data = params.data(using: .utf8),
+              let row = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+        else { return [] }
+        let workflow = row["_workflow"] as? [String: Any] ?? [:]
+        var ids = Set((row["source_event_ids"] as? [String] ?? [])
+                      + (workflow["source_event_ids"] as? [String] ?? []))
+        if let id = row["source_event_id"] as? String, !id.isEmpty { ids.insert(id) }
+        return ids
+    }
+
     /// THE EVIDENCE THE SERVER ITSELF CHECKED, as the row holds it.
     ///
     /// `migration/workers/src/policy/workflow_guard.ts` refuses to mark ANY job done
@@ -291,6 +304,15 @@ final class AnticipyBackend {
     /// caller's decision turns on the difference: "" means the account has no
     /// number and the phone should stop claiming one, and a thrown error means
     /// nothing has been learned and nothing should change.
+    func fetchContextRequest(eventID: String, availableSources: [String]) async throws -> Data {
+        try await post("me/context-request", body: ["eventID": eventID,
+                                                   "availableSources": availableSources])
+    }
+
+    func fetchNotificationPolicy() async throws -> Data {
+        try await readData(from: baseURL.appendingPathComponent("me/notification-policy"))
+    }
+
     func fetchOwner(id: String) async throws -> Owner {
         let data = try await readData(
             from: baseURL.appendingPathComponent("api/collections/owners/records/\(id)"))

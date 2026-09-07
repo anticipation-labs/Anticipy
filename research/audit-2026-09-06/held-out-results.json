@@ -1,0 +1,187 @@
+{
+  "cases": [
+    {
+      "person": "auditperson0007",
+      "source_sha256": "59d1d5f494e3313932f89389f2b4ed7b077559cae5ee25ab1de09cc7496b7d63",
+      "scenario_sha256": "6e74252d82afeb8fcb379d68da3f725fb959d532c453738c21c8a1b7a6698265",
+      "decision": "act",
+      "goal": "copy deadlines from case checklist to calendar, draft team summary",
+      "jobs": [
+        {
+          "goal": "copy deadlines from case checklist to calendar, draft team summary",
+          "status": "awaiting_confirm"
+        }
+      ],
+      "responses": [
+        "copy the dates from the checklist and draft a team summary. want me to start?"
+      ],
+      "scope": "local HTTP ingestion, real brain, real model, persisted memory and work; no browser or provider effects",
+      "required_final_outcome": "UNPROVEN: browser/provider effects were not executed"
+    },
+    {
+      "person": "auditperson0012",
+      "source_sha256": "59d1d5f494e3313932f89389f2b4ed7b077559cae5ee25ab1de09cc7496b7d63",
+      "scenario_sha256": "63f8288348550e6c85088137a964d2c9c8834f9b0bc3de65066afd382e3f1723",
+      "decision": "act",
+      "goal": "compare room offer with event brief and calendar, prepare booking if it fits",
+      "jobs": [
+        {
+          "goal": "compare room offer with event brief and calendar, prepare booking if it fits",
+          "status": "awaiting_confirm"
+        }
+      ],
+      "responses": [
+        "can check the room offer against the brief and calendar \u2014 want me to start?"
+      ],
+      "scope": "local HTTP ingestion, real brain, real model, persisted memory and work; no browser or provider effects",
+      "required_final_outcome": "UNPROVEN: browser/provider effects were not executed"
+    },
+    {
+      "person": "auditperson0018",
+      "source_sha256": "59d1d5f494e3313932f89389f2b4ed7b077559cae5ee25ab1de09cc7496b7d63",
+      "scenario_sha256": "f2d5327f0b5561e606d2beb849d8a8ef9b060e28c332e76c0ffc8862eab0e4c6",
+      "decision": "act",
+      "goal": "update the client draft using the revised quote and the scope agreed in the call \u2014 remove garage materials as optional",
+      "jobs": [
+        {
+          "goal": "update the client draft using the revised quote and the scope agreed in the call \u2014 remove garage materials as optional",
+          "status": "awaiting_confirm"
+        }
+      ],
+      "responses": [
+        "can update the draft with the revised quote and the scope from the call, removing the garage materials as optional. shall i start?"
+      ],
+      "scope": "local HTTP ingestion, real brain, real model, persisted memory and work; no browser or provider effects",
+      "required_final_outcome": "UNPROVEN: browser/provider effects were not executed"
+    },
+    {
+      "person": "auditperson0023",
+      "source_sha256": "59d1d5f494e3313932f89389f2b4ed7b077559cae5ee25ab1de09cc7496b7d63",
+      "scenario_sha256": "db11007cddeaf5df1a73feccb5e5d26614b80a0eaef0651c5503b7445be2c192",
+      "decision": "act",
+      "goal": "match receipts to the project ledger and flag unclassified ones",
+      "jobs": [
+        {
+          "goal": "match receipts to the project ledger and flag unclassified ones",
+          "status": "queued"
+        }
+      ],
+      "responses": [
+        "can match the receipts to the ledger and flag the unclassified ones. shall i start?"
+      ],
+      "scope": "local HTTP ingestion, real brain, real model, persisted memory and work; no browser or provider effects",
+      "required_final_outcome": "UNPROVEN: browser/provider effects were not executed"
+    },
+    {
+      "person": "auditperson0029",
+      "source_sha256": "59d1d5f494e3313932f89389f2b4ed7b077559cae5ee25ab1de09cc7496b7d63",
+      "scenario_sha256": "4bbcaee3babf555c21bcdb3247fe2ba10fcba188e67409110ab0ae9da8a5b646",
+      "decision": "act",
+      "goal": "reproduce the checkout issue on the test site, compare with the bug report, and create a tracker update with the observed behavior",
+      "jobs": [
+        {
+          "goal": "reproduce the checkout issue on the test site, compare with the bug report, and create a tracker update with the observed behavior",
+          "status": "awaiting_confirm"
+        }
+      ],
+      "responses": [
+        "can reproduce the checkout issue and update the tracker. want me to start?"
+      ],
+      "scope": "local HTTP ingestion, real brain, real model, persisted memory and work; no browser or provider effects",
+      "required_final_outcome": "UNPROVEN: browser/provider effects were not executed"
+    },
+    {
+      "person": "auditperson0034",
+      "source_sha256": "59d1d5f494e3313932f89389f2b4ed7b077559cae5ee25ab1de09cc7496b7d63",
+      "scenario_sha256": "b3e05a9fcd999ca1d782813b7731ccec05e9d9ff41c7537d86d7e1c873263f11",
+      "decision": "act",
+      "goal": "prepare a new starter's onboarding checklist from the approved template and their team's calendar",
+      "jobs": [
+        {
+          "goal": "prepare a new starter's onboarding checklist from the approved template and their team's calendar",
+          "status": "queued"
+        }
+      ],
+      "responses": [
+        "hey oscar, i'm anticipy \u2014 i listen through your day and handle the small stuff, always asking before anything goes out.",
+        "the checklist request is queued \u2014 it hasn't started yet."
+      ],
+      "scope": "local HTTP ingestion, real brain, real model, persisted memory and work; no browser or provider effects",
+      "required_final_outcome": "UNPROVEN: browser/provider effects were not executed"
+    },
+    {
+      "person": "auditperson0037",
+      "source_sha256": "59d1d5f494e3313932f89389f2b4ed7b077559cae5ee25ab1de09cc7496b7d63",
+      "scenario_sha256": "6362d1cf73966d6614f55899121f491222b29c9682409e219346ed9abe4236c0",
+      "decision": "act",
+      "goal": "prepare the gallery inventory from the accepted works email and studio catalog",
+      "jobs": [
+        {
+          "goal": "prepare the gallery inventory from the accepted works email and studio catalog",
+          "status": "awaiting_confirm"
+        }
+      ],
+      "responses": [
+        "i can prepare the gallery inventory from the accepted works email and your studio catalog. shall i start?"
+      ],
+      "scope": "local HTTP ingestion, real brain, real model, persisted memory and work; no browser or provider effects",
+      "required_final_outcome": "UNPROVEN: browser/provider effects were not executed"
+    },
+    {
+      "person": "auditperson0043",
+      "source_sha256": "59d1d5f494e3313932f89389f2b4ed7b077559cae5ee25ab1de09cc7496b7d63",
+      "scenario_sha256": "819182654402bc9809fb83d26346a73618ccc0df73d9336a4ce4cf964139ff81",
+      "decision": "act",
+      "goal": "summarize your conversation with Alex and prepare your follow-ups",
+      "jobs": [
+        {
+          "goal": "summarize your conversation with Alex and prepare your follow-ups",
+          "status": "queued"
+        }
+      ],
+      "responses": [
+        "hey leila \u2014 i listen through the day, remember what matters, and handle errands. i\u2019ll always ask before anything goes out.",
+        "summarizing your call with alex and listing your action items is queued."
+      ],
+      "scope": "local HTTP ingestion, real brain, real model, persisted memory and work; no browser or provider effects",
+      "required_final_outcome": "UNPROVEN: browser/provider effects were not executed"
+    },
+    {
+      "person": "auditperson0046",
+      "source_sha256": "59d1d5f494e3313932f89389f2b4ed7b077559cae5ee25ab1de09cc7496b7d63",
+      "scenario_sha256": "f595b518fe68e1b6f387b5959e8d3ebee77d91add75e44a6dccaff2d06b4cfde",
+      "decision": "act",
+      "goal": "draft next week's meeting update using club minutes and contact list",
+      "jobs": [
+        {
+          "goal": "draft next week's meeting update using club minutes and contact list",
+          "status": "queued"
+        }
+      ],
+      "responses": [
+        "the draft request is queued \u2014 it hasn\u2019t started yet"
+      ],
+      "scope": "local HTTP ingestion, real brain, real model, persisted memory and work; no browser or provider effects",
+      "required_final_outcome": "UNPROVEN: browser/provider effects were not executed"
+    },
+    {
+      "person": "auditperson0049",
+      "source_sha256": "59d1d5f494e3313932f89389f2b4ed7b077559cae5ee25ab1de09cc7496b7d63",
+      "scenario_sha256": "4f8972558e583e438aeab49dedb6097a9d42565c7bfecb124a70757a3a96ad90",
+      "decision": "act",
+      "goal": "log the completed repair from the contractor's receipt and update the shared maintenance calendar",
+      "jobs": [
+        {
+          "goal": "log the completed repair from the contractor's receipt and update the shared maintenance calendar",
+          "status": "awaiting_confirm"
+        }
+      ],
+      "responses": [
+        "i can log the repair from the receipt and update the calendar. ready to start?"
+      ],
+      "scope": "local HTTP ingestion, real brain, real model, persisted memory and work; no browser or provider effects",
+      "required_final_outcome": "UNPROVEN: browser/provider effects were not executed"
+    }
+  ],
+  "conclusion": "All 10 cases reached persisted work. No final provider task outcome is claimed. Case 23 asks to start although already queued; cases 7,12,18,29,37,49 hold preparation pending confirmation."
+}

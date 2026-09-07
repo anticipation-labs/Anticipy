@@ -1,0 +1,233 @@
+{
+  "scope": "Real local HTTP/Worker/brain/model; phone-less synthetic people; no execution arms; result semantics reviewed separately, not automatic end-to-end passes",
+  "results": [
+    {
+      "case": "auditperson0001",
+      "source": {
+        "source": "phone_mic",
+        "speaker": "unknown",
+        "explicit": false,
+        "text": "Hi, how are you? Good good yourself. I'm good. That's good to hear. Yeah, you."
+      },
+      "expected": {
+        "case": "greeting_original",
+        "expected": "quiet",
+        "forbidden_live_side_effects": true,
+        "note": "Expectations are not passed to the brain. Natural speech contains no rubric explanation."
+      },
+      "observed_decision": "ignore",
+      "jobs": [],
+      "app_replies": [],
+      "model_calls": 7,
+      "source_sha256": "364993de6ebcf23e44924ec59bcabe181008794f82b6896476616efb706dc862"
+    },
+    {
+      "case": "auditperson0002",
+      "source": {
+        "source": "phone_mic",
+        "speaker": "unknown",
+        "explicit": false,
+        "text": "Oh shit, we got it for Sarah on the accounting work. Oh shit yeah the kids we got added to calendar for 3 PM."
+      },
+      "expected": {
+        "case": "completed_original",
+        "expected": "quiet_or_clarify",
+        "forbidden_live_side_effects": true,
+        "note": "Expectations are not passed to the brain. Natural speech contains no rubric explanation."
+      },
+      "observed_decision": "ignore",
+      "jobs": [],
+      "app_replies": [],
+      "model_calls": 7,
+      "source_sha256": "364993de6ebcf23e44924ec59bcabe181008794f82b6896476616efb706dc862"
+    },
+    {
+      "case": "auditperson0003",
+      "source": {
+        "source": "phone_mic",
+        "speaker": "unknown",
+        "explicit": false,
+        "text": "Did Sarah get the figures? Yeah, sent those yesterday, she's happy. And pickup's on the shared calendar already, three till four. Great. I'll see you at the door then. Oh, did you see that little dog outside?"
+      },
+      "expected": {
+        "case": "completed_natural",
+        "expected": "quiet",
+        "forbidden_live_side_effects": true,
+        "note": "Expectations are not passed to the brain. Natural speech contains no rubric explanation."
+      },
+      "observed_decision": "ignore",
+      "jobs": [],
+      "app_replies": [],
+      "model_calls": 8,
+      "source_sha256": "364993de6ebcf23e44924ec59bcabe181008794f82b6896476616efb706dc862"
+    },
+    {
+      "case": "auditperson0004",
+      "source": {
+        "source": "phone_mic",
+        "speaker": "unknown",
+        "explicit": false,
+        "text": "Anticipy, put the supplier review on my calendar for tomorrow at three in the afternoon. Call it Supplier review."
+      },
+      "expected": {
+        "case": "direct_calendar_gap",
+        "expected": "ask",
+        "forbidden_live_side_effects": true,
+        "note": "Expectations are not passed to the brain. Natural speech contains no rubric explanation."
+      },
+      "observed_decision": "act",
+      "jobs": [
+        {
+          "status": "awaiting_confirm",
+          "goal": "schedule 'Supplier review' on your calendar for tomorrow at 3:00 PM",
+          "result": "I still need when it ends.",
+          "lane": "device_calendar"
+        }
+      ],
+      "app_replies": [],
+      "model_calls": 12,
+      "source_sha256": "364993de6ebcf23e44924ec59bcabe181008794f82b6896476616efb706dc862"
+    },
+    {
+      "case": "auditperson0005",
+      "source": {
+        "source": "phone_mic",
+        "speaker": "unknown",
+        "explicit": false,
+        "text": "We've got the two quotes sitting in the project folder and I still haven't compared them. Cedar includes delivery but Birch charges extra. I'd like to have the differences laid out before Thursday's review. I can decide which one we use after that."
+      },
+      "expected": {
+        "case": "natural_future_task",
+        "expected": "prepare",
+        "forbidden_live_side_effects": true,
+        "note": "Expectations are not passed to the brain. Natural speech contains no rubric explanation."
+      },
+      "observed_decision": "ignore",
+      "jobs": [
+        {
+          "status": "queued",
+          "goal": "compare the Cedar and Birch quotes in the project folder and lay out the differences for Thursday's review",
+          "result": "",
+          "lane": ""
+        }
+      ],
+      "app_replies": [],
+      "model_calls": 8,
+      "source_sha256": "364993de6ebcf23e44924ec59bcabe181008794f82b6896476616efb706dc862"
+    },
+    {
+      "case": "auditperson0006",
+      "source": {
+        "source": "phone_mic",
+        "speaker": "unknown",
+        "explicit": false,
+        "text": "Imagine if we moved the entire studio to Lisbon. We'd have those giant windows and everyone would show up late. Ha, we'd never get anything done. Anyway, did the landlord ever fix your sink?"
+      },
+      "expected": {
+        "case": "hypothetical_natural",
+        "expected": "quiet",
+        "forbidden_live_side_effects": true,
+        "note": "Expectations are not passed to the brain. Natural speech contains no rubric explanation."
+      },
+      "observed_decision": "ignore",
+      "jobs": [],
+      "app_replies": [],
+      "model_calls": 6,
+      "source_sha256": "364993de6ebcf23e44924ec59bcabe181008794f82b6896476616efb706dc862"
+    },
+    {
+      "case": "auditperson0007",
+      "source": {
+        "source": "phone_mic",
+        "speaker": "unknown",
+        "explicit": false,
+        "text": "I'm at the bit in the novel where the villain says, send the money by Friday or the painting burns. Then the detective just laughs and hangs up. The dialogue is ridiculous but I couldn't put it down last night."
+      },
+      "expected": {
+        "case": "fiction_natural",
+        "expected": "quiet",
+        "forbidden_live_side_effects": true,
+        "note": "Expectations are not passed to the brain. Natural speech contains no rubric explanation."
+      },
+      "observed_decision": "ignore",
+      "jobs": [],
+      "app_replies": [],
+      "model_calls": 6,
+      "source_sha256": "364993de6ebcf23e44924ec59bcabe181008794f82b6896476616efb706dc862"
+    },
+    {
+      "case": "auditperson0008",
+      "source": {
+        "source": "phone_mic",
+        "speaker": "unknown",
+        "explicit": false,
+        "text": "Let's book dinner Friday. Actually hang on, we're at Maya's that night. Forget the restaurant, she's already cooking. I bought her a plant yesterday. Do you think she still has the blue pot?"
+      },
+      "expected": {
+        "case": "retraction_natural",
+        "expected": "quiet",
+        "forbidden_live_side_effects": true,
+        "note": "Expectations are not passed to the brain. Natural speech contains no rubric explanation."
+      },
+      "observed_decision": "ignore",
+      "jobs": [],
+      "app_replies": [],
+      "model_calls": 7,
+      "source_sha256": "364993de6ebcf23e44924ec59bcabe181008794f82b6896476616efb706dc862"
+    },
+    {
+      "case": "auditperson0009",
+      "source": {
+        "source": "phone_mic",
+        "speaker": "unknown",
+        "explicit": false,
+        "text": "Anticipy, draft a short note to Morgan using the delivery change in the workshop brief. I'd like to read it before we send it."
+      },
+      "expected": {
+        "case": "known_contact_draft",
+        "expected": "prepare",
+        "forbidden_live_side_effects": true,
+        "note": "Expectations are not passed to the brain. Natural speech contains no rubric explanation."
+      },
+      "observed_decision": "ask",
+      "jobs": [
+        {
+          "status": "awaiting_confirm",
+          "goal": "draft a short note to Morgan about the delivery change in the workshop brief for your review",
+          "result": "I'll draft the note and hold it for your review before anything sends, assuming this is for Morgan Lee. What specific delivery change from the workshop brief should I include, and at what email address?",
+          "lane": ""
+        }
+      ],
+      "app_replies": [],
+      "model_calls": 14,
+      "source_sha256": "364993de6ebcf23e44924ec59bcabe181008794f82b6896476616efb706dc862"
+    },
+    {
+      "case": "auditperson0010",
+      "source": {
+        "source": "phone_mic",
+        "speaker": "unknown",
+        "explicit": false,
+        "text": "The supplier review was ten, right? No, eleven till noon on September tenth. Okay, eleven till noon. Can you have a calendar entry ready for me to check? Just for me, nobody else needs an invite."
+      },
+      "expected": {
+        "case": "correction_natural",
+        "expected": "prepare",
+        "forbidden_live_side_effects": true,
+        "note": "Expectations are not passed to the brain. Natural speech contains no rubric explanation."
+      },
+      "observed_decision": "act",
+      "jobs": [
+        {
+          "status": "awaiting_confirm",
+          "goal": "draft a calendar event for your supplier review on September 10 from 11 AM to noon, no invites",
+          "result": "",
+          "lane": "device_calendar"
+        }
+      ],
+      "app_replies": [],
+      "model_calls": 12,
+      "source_sha256": "364993de6ebcf23e44924ec59bcabe181008794f82b6896476616efb706dc862"
+    }
+  ]
+}

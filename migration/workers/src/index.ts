@@ -45,8 +45,12 @@ import {
   internalFellowsSubmissionsRelease,
 } from "./routes/fellows.ts";
 import type { FellowsEnv } from "./routes/fellows_base.ts";
-import { smsInbound, transcriptionToken, type SmsEnv } from "./routes/sms.ts";
+import { transcriptionToken, type SmsEnv } from "./routes/sms.ts";
 import { sendblueInbound, type SendblueEnv } from "./routes/sendblue.ts";
+import { connectionCommand } from "./routes/connection_command.ts";
+import { taskAccess } from "./routes/task_access.ts";
+import { contextRequest } from "./routes/context_request.ts";
+import { notificationPolicy } from "./routes/notification_policy.ts";
 import { connectRoute, installConnectWiring, type ConnectEnv } from "./routes/connect.ts";
 import { connectionsApiRoute, type ConnectionsApiEnv } from "./routes/connections_api.ts";
 import {
@@ -63,6 +67,8 @@ import { handsApiRun, HANDS_API_RUN_PATH, type HandsApiEnv } from "./routes/hand
 import { handsApiTools, HANDS_API_TOOLS_PATH, type HandsApiToolsEnv } from "./routes/hands_api_tools.ts";
 import { adminConnectLink, ADMIN_CONNECT_LINK_PATH, type AdminConnectLinkEnv } from "./routes/admin_connect_link.ts";
 import { adminSmsLines, ADMIN_SMS_LINES_PATH, type AdminSmsLinesEnv } from "./routes/admin_sms_lines.ts";
+import { adminBrainStatus } from "./routes/admin_brain_status.ts";
+import { adminAccountReset } from "./routes/admin_account_reset.ts";
 import { agentRegister, agentKey, agentLlm, agentCaptcha, agentUpgradeCredential, type AgentEnv } from "./routes/agent.ts";
 import {
   serveFile, shareEvidence, depositEvidenceImage, discardEvidenceImage, type AssetEnv,
@@ -83,6 +89,7 @@ export { PairCodeCounter } from "./do/PairCodeCounter.ts";
 export interface Env extends CronEnv {
   DB: D1Database;
   WORKER_VERSION?: { id: string; tag?: string };
+  BRAIN?: Fetcher;
   EVIDENCE: R2Bucket;
   ASSETS: Fetcher;
   PAIR_CODE_COUNTER: DurableObjectNamespace;
@@ -199,6 +206,10 @@ export default {
 
     // The small service routes. /worker/owners returns two fields and nothing
     // else -- it is authorised by a shared token every worker carries.
+    if (path === "/admin/brain/status") return adminBrainStatus(request, env);
+    if (path === "/admin/account-reset") return adminAccountReset(request, env as never);
+    if (path === "/worker/connection-command") return connectionCommand(request, env);
+    if (path === "/worker/task-access") return taskAccess(request, env);
     if (path === "/worker/owners" && method === "GET") {
       return workerOwners(request, env as unknown as ServiceEnv);
     }
@@ -214,6 +225,8 @@ export default {
     if (path === "/me/profile/upsert" && method === "POST") {
       return profileUpsert(request, env as unknown as ServiceEnv);
     }
+    if (path === "/me/context-request") return contextRequest(request, env);
+    if (path === "/me/notification-policy") return notificationPolicy(request, env);
     // THE API HAND'S ONE DOOR. The brain's run_api_jobs claims a lane="api"
     // row and POSTs its id here; the route reads the step off the row and runs
     // it on src/connections/api_hand.ts. Service token only, checked before any
@@ -236,19 +249,15 @@ export default {
       return adminSmsLines(request, env as unknown as AdminSmsLinesEnv);
     }
 
-    // Twilio's inbound webhook. TWILIO_AUTH_TOKEN is the only thing that can
-    // validate X-Twilio-Signature -- there is no API-key equivalent.
+    // Retired provider endpoint. Do not parse, persist, or dispatch its body.
     if (path === "/sms/inbound" && method === "POST") {
-      // ctx IS LOAD-BEARING, as it is for /c/{token}/go. The text twin
-      // (src/connections/wiring.ts handleInboundText) spends a model call
-      // AFTER the row is written and after the carrier has its answer; without
-      // waitUntil a Worker cancels that work the moment the TwiML is returned.
-      return smsInbound(request, env as unknown as SmsEnv, ctx);
+      return new Response(JSON.stringify({ error: "messaging_endpoint_retired" }), {
+        status: 410, headers: { "content-type": "application/json" },
+      });
     }
     // Sendblue's webhook: inbound iMessage/SMS AND status updates for texts we
     // sent, on one URL, proven by the dashboard's secret in sb-signing-secret.
-    // It lands the same events row /sms/inbound lands (src/api/sender.ts), so
-    // the brain cannot tell the carriers apart.
+    // Both channels enter the owner-scoped event stream in src/api/sender.ts.
     if (path === "/sms/sendblue" && method === "POST") {
       return sendblueInbound(request, env as unknown as SendblueEnv, ctx);
     }
@@ -569,6 +578,7 @@ async function handleRecords(
   const req: records.RecordsRequest = {
     collection: def, recordId, method, url, body, principal,
     forcedScope: ctx.forcedScope, extraAst: ctx.extraAst,
+    ifMatch: request.headers.get("If-Match"), storedRow: ctx.storedRow,
   };
 
   // THE ONE COLLECTION WITH BYTES. 1700000045_evidence.js has the only

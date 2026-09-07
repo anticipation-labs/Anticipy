@@ -8,10 +8,11 @@ Cancelling a job, from any path, must close the matching open commitment.
 import json
 
 from brain.memory import Memory
+from llm_fakes import FakeLLM
 
 
-def _mem_with_commitment(what: str) -> Memory:
-    mem = Memory(":memory:")
+def _mem_with_commitment(what: str, resolution=None) -> Memory:
+    mem = Memory(":memory:", llm=FakeLLM(resolutions=[resolution] if resolution else []))
     mem.db.execute(
         "INSERT INTO nodes (type, name, created_ts, last_seen_ts, status, attrs) "
         "VALUES ('commitment', ?, 1000, 1000, 'open', ?)",
@@ -21,7 +22,7 @@ def _mem_with_commitment(what: str) -> Memory:
 
 
 def test_close_matching_closes_the_commitment():
-    mem = _mem_with_commitment("get a toothbrush")
+    mem = _mem_with_commitment("get a toothbrush", {"n": 1, "resolution": "cancelled"})
     closed = mem.close_matching("Order toothbrush via Uber Eats to owner's "
                                 "house", "cancelled")
     assert closed == ["get a toothbrush"]
@@ -62,6 +63,7 @@ def test_clock_never_chases_a_cancelled_plan():
         (json.dumps({"source_episode": eid2}),))
     mem.db.commit()
 
+    mem.llm = FakeLLM(resolutions=[{"n": 1, "resolution": "cancelled"}])
     mem.close_matching("Order toothbrush via Uber Eats to owner's house",
                        "cancelled")
 
@@ -85,7 +87,7 @@ def test_sms_decline_closes_the_promise(monkeypatch):
     from brain.conversation import Conversation
     import brain.conversation as convmod
 
-    mem = _mem_with_commitment("get a toothbrush")
+    mem = _mem_with_commitment("get a toothbrush", {"n": 1, "resolution": "cancelled"})
     a = Anticipy(memory=mem, llm=None)
     conv = Conversation(a, llm=None)
 
@@ -99,6 +101,7 @@ def test_sms_decline_closes_the_promise(monkeypatch):
         "get": staticmethod(lambda *a, **k: R()),
         "patch": staticmethod(lambda *a, **k: R()),
     }))
+    monkeypatch.setattr(conv, "_open_work", lambda: [job])
     out = conv._cancel("j1")
     assert out == "cancelled:j1"
     assert mem.open_loops() == []

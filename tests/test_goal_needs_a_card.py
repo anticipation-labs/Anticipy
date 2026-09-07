@@ -150,7 +150,7 @@ def test_quiet_research_that_really_started_keeps_its_goal(monkeypatch):
     """THE LEGITIMATE SHAPE, and the product's whole personality: goal AND
     job, verdict still "ignore". Deleting goals to move the metric would
     break exactly this."""
-    a, posted = build(monkeypatch, {**LOOKUP, "owes": "nobody"})
+    a, posted = build(monkeypatch, {**LOOKUP, "owes": "nobody", "touches": "read"})
     out = a.hear("we should get the boiler looked at at some point")
     assert len(posted.jobs) == 1
     assert posted.jobs[0]["goal"] == LOOKUP["goal"]

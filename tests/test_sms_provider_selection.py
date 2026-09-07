@@ -1,19 +1,6 @@
-"""Which arm the worker texts through, and what only Twilio may touch.
-
-`brain/sendblue_arm.py choose_provider` is the ONE rule: Sendblue when its
-three variables are set, else Twilio when its credentials are, else mock —
-and ANTICIPY_SMS_PROVIDER names one outright. It is read by the worker's
-transport build, the `worker up` banner and overnight/does_she_reach_them.py,
-so a gate can never measure a different vendor than the one texting.
-
-The polarity pinned here: a provider that is NAMED but NOT CONFIGURED is
-mock, never the other vendor. An operator who wrote `sendblue` and forgot the
-secret asked for one channel and must not be answered on another.
-
-And the Twilio-only startup work — reading and rewriting a Twilio number's
-inbound binding — runs ONLY for the Twilio provider. A deployment texting
-through Sendblue with TWILIO_* still in its environment must not touch the
-retired number.
+"""One live provider across the conversational and direct notification paths.
+Retired Twilio settings cannot select a sender or rewrite a webhook. Missing
+SendBlue configuration remains an explicit non-delivery rather than fallback.
 """
 from __future__ import annotations
 
@@ -66,13 +53,13 @@ def test_sendblue_is_the_default_when_its_three_variables_are_set(clean_env):
     assert sb.choose_provider() == "sendblue", "Sendblue wins over Twilio when both are set"
 
 
-def test_twilio_when_only_twilio_is_configured(clean_env):
+def test_retired_twilio_credentials_cannot_select_a_sender(clean_env):
     setenv(clean_env, TWILIO)
-    assert sb.choose_provider() == "twilio"
+    assert sb.choose_provider() == "mock"
     # A key pair alone is a Twilio credential too (voice_arm.rest_credential).
     clean_env.delenv("TWILIO_AUTH_TOKEN")
     setenv(clean_env, TWILIO_API_KEY_SID="SK" + "2" * 32, TWILIO_API_KEY_SECRET="s")
-    assert sb.choose_provider() == "twilio"
+    assert sb.choose_provider() == "mock"
 
 
 def test_two_of_three_sendblue_variables_is_not_sendblue(clean_env):
@@ -81,7 +68,7 @@ def test_two_of_three_sendblue_variables_is_not_sendblue(clean_env):
     setenv(clean_env, partial)
     assert sb.choose_provider() == "mock"
     setenv(clean_env, TWILIO)
-    assert sb.choose_provider() == "twilio"
+    assert sb.choose_provider() == "mock"
 
 
 def test_a_named_provider_that_is_not_configured_is_mock_not_the_other_vendor(clean_env):
@@ -96,7 +83,7 @@ def test_a_named_provider_that_is_not_configured_is_mock_not_the_other_vendor(cl
 
 def test_a_named_provider_that_is_configured_is_honoured_over_the_default(clean_env):
     setenv(clean_env, TWILIO, SENDBLUE, ANTICIPY_SMS_PROVIDER="twilio")
-    assert sb.choose_provider() == "twilio"
+    assert sb.choose_provider() == "mock"
     setenv(clean_env, ANTICIPY_SMS_PROVIDER="Sendblue")
     assert sb.choose_provider() == "sendblue", "case-insensitive"
 
@@ -123,7 +110,7 @@ def test_the_banner_names_the_vendor_and_the_key_tail_never_the_secret(clean_env
     arm = sb.SendblueArm(journal=lambda _l: None)
     assert worker.sms_banner("sendblue", arm) == "sendblue:…4321"
     assert "secret-value" not in worker.sms_banner("sendblue", arm)
-    assert worker.sms_banner("twilio", object()) == "twilio"
+    assert worker.sms_banner("twilio", object()) == "mock"
     assert worker.sms_banner("mock", None) == "mock"
 
 
@@ -132,8 +119,11 @@ def test_the_worker_builds_the_transport_over_the_chosen_arm():
     provider-neutral transport, and prints the banner and the ear line."""
     src = inspect.getsource(worker.main)
     assert "sendblue_arm.choose_provider()" in src
-    assert "sendblue_arm.SendblueArm()" in src
-    assert "MessageTransport(" in src
+    assert "configure_message_transport(anticipy, sms_provider)" in src
+    binding = inspect.getsource(worker.configure_message_transport)
+    assert "sendblue_arm.SendblueArm()" in binding
+    assert "MessageTransport(" in binding
+    assert "ensure_inbound_webhook()" not in src
     assert "sms_banner(sms_provider, arm)" in src
     assert "inbound_ear_note(sms_provider)" in src
     assert "sms={'live'" not in src, "the field names the vendor or says mock"
@@ -172,14 +162,14 @@ def test_the_twilio_ear_check_is_skipped_for_the_sendblue_provider(clean_env):
     assert printed == [], "silent every beat; the one line is printed at startup"
 
 
-def test_the_twilio_ear_check_runs_for_the_twilio_provider(clean_env):
+def test_retired_provider_setting_cannot_rebind_a_twilio_number(clean_env):
     setenv(clean_env, TWILIO, SENDBLUE, ANTICIPY_SMS_PROVIDER="twilio")
     reads = _Reads()
     clean_env.setattr(worker, "requests", reads)
     clean_env.setattr(worker, "PB", "https://backend.example.com")
     clean_env.setattr("builtins.print", lambda *a, **k: None)
     worker.ensure_inbound_webhook()
-    assert reads.gets and "IncomingPhoneNumbers" in reads.gets[0]
+    assert reads.gets == []
 
 
 def test_the_twilio_ear_check_stays_quiet_with_no_provider(clean_env):
@@ -187,11 +177,41 @@ def test_the_twilio_ear_check_stays_quiet_with_no_provider(clean_env):
     worker.ensure_inbound_webhook()
 
 
-def test_the_supervisor_watchdog_goes_through_the_same_gate():
-    """The supervisor calls the same function, so the fleet's watchdog is
-    gated by the same provider rule without a second switch to forget."""
-    import brain.supervisor as supervisor
-    assert "worker.ensure_inbound_webhook()" in inspect.getsource(supervisor.main)
+def test_missing_sendblue_clears_the_retired_direct_send_arm(clean_env):
+    from types import SimpleNamespace
+    from brain.anticipy_core import Anticipy
+    class RetiredArm:
+        def text(self, *args, **kwargs):
+            raise AssertionError("retired arm reached a phone")
+    setenv(clean_env, TWILIO, ANTICIPY_SMS_PROVIDER="sendblue")
+    owner = SimpleNamespace(voice=RetiredArm(), conversation=None, owner_phone="+12025550123")
+    arm, transport = worker.configure_message_transport(owner, sb.choose_provider())
+    assert arm is None and owner.voice is None
+    assert transport.send(owner.owner_phone, "test only")["mock"] is True
+    assert Anticipy.notify_owner(owner, "test only") == {"skipped": "no transport"}
+
+
+def test_sendblue_binds_both_surfaces_and_preserves_destination_guard(clean_env):
+    from types import SimpleNamespace
+    calls = []
+    class SelectedArm:
+        def text(self, to, text, **kwargs):
+            calls.append((to, text))
+            return {"message_handle": "synthetic", "status": "SENT"}
+    selected = SelectedArm()
+    clean_env.setattr(sb, "SendblueArm", lambda: selected)
+    clean_env.setattr(worker, "canonical_phone_allows_effect", lambda owner, to: to == owner.owner_phone)
+    owner = SimpleNamespace(voice=None, owner_phone="+12025550123")
+    arm, transport = worker.configure_message_transport(owner, "sendblue")
+    assert arm is selected and owner.voice is selected
+    transport.send(owner.owner_phone, "synthetic message")
+    assert transport.send("+12025550124", "wrong owner") is None
+    assert calls == [(owner.owner_phone, "synthetic message")]
+
+
+def test_startup_uses_the_shared_transport_binding():
+    assert "configure_message_transport(anticipy, sms_provider)" in inspect.getsource(worker.main)
+    assert "VoiceArm()" not in inspect.getsource(worker.main).split("sms_provider =", 1)[1]
 
 
 def test_the_sendblue_startup_line_names_the_dashboard_and_the_derived_url(clean_env):
@@ -199,5 +219,5 @@ def test_the_sendblue_startup_line_names_the_dashboard_and_the_derived_url(clean
     line = worker.inbound_ear_note("sendblue")
     assert "Developer → Webhooks" in line
     assert "https://api.anticipy.example/sms/sendblue" in line
-    assert "every beat" in worker.inbound_ear_note("twilio")
+    assert "nothing to point" in worker.inbound_ear_note("twilio")
     assert "nothing to point" in worker.inbound_ear_note("mock")

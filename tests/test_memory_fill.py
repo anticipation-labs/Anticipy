@@ -124,8 +124,10 @@ def test_a_made_up_detail_is_never_ratified_by_memory():
     quietly confirming a hallucination books the wrong thing politely."""
     src = open(os.path.join(os.path.dirname(os.path.dirname(
         os.path.abspath(__file__))), "brain", "anticipy_core.py")).read()
-    i = src.index("if gap and not made_up:")
-    assert "fill_gaps_from_memory" in src[i:i + 300]
+    i = src.index('if support != "supported":')
+    j = src.index("fill_gaps_from_memory", i)
+    assert 'return {"memory": mem' in src[i:j]
+    assert 'goal=None' in src[i:j]
 
 
 def test_filled_answers_reach_the_job_params_in_both_lanes():
@@ -135,5 +137,5 @@ def test_filled_answers_reach_the_job_params_in_both_lanes():
         os.path.abspath(__file__))), "brain", "anticipy_core.py")).read()
     assert src.count("for k, v in filled.items():") == 1          # ambient lane
     assert '_memory_filled' in src                                 # direct lane
-    i = src.index('params = {"source": authority_source, "now": self._now_line()}')
-    assert "_memory_filled" in src[i:i + 500]
+    i = src.index('if decision.decision == "act" and decision.goal:\n            # The executor needs temporal')
+    assert "_memory_filled" in src[i:i + 1800]

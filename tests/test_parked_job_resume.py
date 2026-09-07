@@ -52,6 +52,7 @@ def _pb(monkeypatch, job):
 
 
 def test_answer_resumes_a_parked_run(monkeypatch):
+    monkeypatch.setattr(Conversation, "_resolve_question", lambda *args: {"verdict": 'answered', "changes": {'time': 'noon'}, "remaining_question": ""})
     job = {"id": "j1", "goal": "Book lunch at Earls for tomorrow at noon",
            "status": "needs_user",
            "result": "showing 6:30 PM today; task says tomorrow at noon",

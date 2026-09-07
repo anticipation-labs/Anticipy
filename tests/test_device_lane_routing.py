@@ -95,7 +95,7 @@ def test_the_wording_decides_nothing():
                  "schedule the standup for 9am tomorrow",
                  "book Thursday 7pm"):
         assert device_lane(None) == ""
-        assert job_lane(goal) == "", goal
+        assert job_lane(goal) == core.RESEARCH_LANE, goal
 
 
 def test_a_goal_that_never_says_calendar_still_reaches_the_phone():
@@ -414,7 +414,7 @@ def test_the_device_stall_notice_is_not_repeated(monkeypatch):
     _stall_backend(monkeypatch, [_device_row()], writes_fail=True)
     for _ in range(8):
         W.report_unclaimed_device_work(_anticipy(said))
-    assert len(said) == 1, said
+    assert said == [], "A failed primary app write permits no phone effect"
 
 
 def test_the_device_stall_notice_respects_quiet_hours(monkeypatch):
@@ -426,10 +426,9 @@ def test_the_device_stall_notice_respects_quiet_hours(monkeypatch):
     assert said == []
 
 
-def test_an_undelivered_device_notice_is_not_recorded_as_sent(monkeypatch):
-    """`notify_owner` returning falsy means it did not go. Recording it
-    anyway is how she stamped his questions delivered and sent nothing for
-    ten hours."""
+def test_an_uncertain_device_text_is_not_repeated(monkeypatch):
+    """An ambiguous send result must not authorize a second phone effect.
+    The durable app notice stays available regardless of that result."""
     said = []
     _stall_backend(monkeypatch, [_device_row()])
     a = _anticipy(said)
@@ -438,7 +437,7 @@ def test_an_undelivered_device_notice_is_not_recorded_as_sent(monkeypatch):
     assert len(said) == 1
     a.notify_owner = lambda msg, channel="sms": (said.append(msg), {"ok": 1})[1]
     W.report_unclaimed_device_work(a)
-    assert len(said) == 2, "a failed send must be retried, not swallowed"
+    assert len(said) == 1, "An ambiguous provider result cannot authorize a duplicate text"
 
 
 # ------------------------------------------------------------------ harness

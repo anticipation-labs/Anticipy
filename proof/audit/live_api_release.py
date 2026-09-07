@@ -12,10 +12,11 @@ import urllib.error
 import urllib.request
 
 
-def request(base, method, path, data=None, token=None):
+def request(base, method, path, data=None, token=None, extra_headers=None):
     headers = {"Content-Type": "application/json", "User-Agent": "Anticipy-release-proof/1"}
     if token:
         headers["Authorization"] = "Bearer " + token
+    headers.update(extra_headers or {})
     req = urllib.request.Request(base + path, method=method, headers=headers,
                                  data=None if data is None else json.dumps(data).encode())
     try:
@@ -41,6 +42,13 @@ def prove(base, verify_deployment=False):
         checks.append(name)
         print(name + ": PASS", flush=True)
 
+    if verify_deployment:
+        status, _, _ = request(base, "POST", "/sms/sendblue", {})
+        check(status == 403, "SendBlue webhook is configured and rejects unsigned input")
+        status, _, _ = request(base, "POST", "/sms/inbound", {})
+        check(status == 410, "Retired texting endpoint cannot accept input")
+        status, _, _ = request(base, "POST", "/worker/task-access", {})
+        check(status == 401, "Task connection planning requires the internal service identity")
     status, body, headers = request(base, "GET", "/api/health")
     check(status == 200 and body.get("code") == 200, "API liveness")
     if verify_deployment:
@@ -81,15 +89,58 @@ def prove(base, verify_deployment=False):
         status, _, _ = request(base, "POST", "/me/profile/upsert", {
             "name": "Release verification", "timezone": "America/Vancouver"}, owner["token"])
         check(status == 200, "Profile saved through the phone route")
+        status, policy, _ = request(base, "GET", "/me/notification-policy", token=owner["token"])
+        check(status == 200 and policy.get("timeZone") == "America/Vancouver"
+              and policy.get("startHour") == 22 and policy.get("endHour") == 8
+              and isinstance(policy.get("quietHoursActive"), bool)
+              and 0 < policy.get("expiresAt", 0) - policy.get("observedAt", 0) <= 60,
+              "Phone receives current account-scoped quiet-hours policy")
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+        observed_hour = datetime.fromtimestamp(policy["observedAt"], ZoneInfo(policy["timeZone"])).hour
+        check(policy["quietHoursActive"] == (observed_hour >= 22 or observed_hour < 8),
+              "Live quiet-hours answer agrees with the account clock")
+        status, _, _ = request(base, "GET", "/me/notification-policy")
+        check(status == 401, "Quiet-hours profile information requires sign-in")
         status, event, _ = request(base, "POST", "/api/collections/events/records", {
             "owner_ref": owner["id"], "kind": "profile", "source": "import",
             "text": "Synthetic API release check", "device_id": "release-proof"}, owner["token"])
         check(status == 200 and bool(event.get("id")), "Owned event persisted")
+        status, _, _ = request(base, "POST", "/me/context-request", {
+            "eventID": event["id"], "availableSources": ["contacts"]})
+        check(status == 401, "Context requests require sign-in")
+        status, _, _ = request(base, "POST", "/me/context-request", {
+            "eventID": event["id"], "availableSources": ["contacts"]}, stranger["token"])
+        check(status == 404, "Context requests cannot read another owner's conversation")
         event_path = "/api/collections/events/records/" + event["id"]
         status, _, _ = request(base, "GET", event_path, token=stranger["token"])
         check(status in (403, 404), "Other account cannot read the event")
         status, _, _ = request(base, "PATCH", event_path, {"text": "unauthorized"}, stranger["token"])
         check(status in (403, 404), "Other account cannot change the event")
+        # This owner is excluded from the brain fleet. A research-lane fixture
+        # has no browser claimant or provider effect, even for the success case.
+        status, task, _ = request(base, "POST", "/api/collections/jobs/records", {
+            "owner_ref": owner["id"], "goal": "Synthetic approval race check",
+            "device_id": "release-proof", "status": "awaiting_confirm", "lane": "research",
+            "params": json.dumps({"lane": "research", "source": "isolated release fixture"}),
+        }, owner["token"])
+        check(status == 200 and bool(task.get("id")), "Isolated held task created")
+        task_path = "/api/collections/jobs/records/" + task["id"]
+        status, _, task_headers = request(base, "GET", task_path, token=owner["token"])
+        etag = task_headers.get("ETag")
+        check(status == 200 and bool(etag), "Live API supplies task approval precondition")
+        status, _, _ = request(base, "PATCH", task_path, {"goal": "Changed synthetic scope"}, owner["token"])
+        check(status == 200, "Concurrent task amendment saved")
+        status, _, _ = request(base, "PATCH", task_path, {"status": "queued"}, owner["token"], {"If-Match": etag})
+        check(status == 412, "Stale approval refused by live database")
+        status, current, task_headers = request(base, "GET", task_path, token=owner["token"])
+        check(status == 200 and current.get("status") == "awaiting_confirm"
+              and current.get("goal") == "Changed synthetic scope", "Refused approval preserves held corrected task")
+        current_etag = task_headers.get("ETag")
+        status, _, _ = request(base, "PATCH", task_path, {"status": "queued"}, owner["token"], {"If-Match": current_etag})
+        check(status == 200, "Fresh approval precondition accepted")
+        status, _, _ = request(base, "PATCH", task_path, {"status": "queued"}, owner["token"], {"If-Match": current_etag})
+        check(status == 412, "Repeated approval cannot win twice")
         status, _, _ = request(base, "DELETE", "/api/collections/owners/records/" + owner["id"], token=owner["token"])
         check(status == 405, "Generic deletion cannot bypass account cleanup")
         status, _, _ = request(base, "POST", "/me/delete", {"confirm": "delete"}, "a.b.%%%%")
@@ -102,6 +153,28 @@ def prove(base, verify_deployment=False):
         status, _, _ = request(base, "GET", event_path, token=owner["token"])
         check(status in (401, 403, 404), "Old token cannot read deleted data")
         accounts.remove(owner)
+        if os.environ.get("ANTICIPY_INTERNAL_KEY"):
+            # This .invalid owner is excluded from the production brain fleet.
+            # A fictional profile number is identity data only; no text is sent.
+            status, _, _ = request(base, "POST", "/me/profile/upsert", {
+                "name": "Operator erasure fixture", "email": stranger["email"],
+                "phone": "+12025550199", "timezone": "America/Vancouver"}, stranger["token"])
+            check(status == 200, "Operator fixture profile saved")
+            payload = {"owner_ref": stranger["id"], "email": stranger["email"],
+                       "phone": "+12025550199", "confirm": "DELETE PRODUCT ACCOUNT"}
+            header = {"X-Internal-Key": os.environ["ANTICIPY_INTERNAL_KEY"]}
+            status, _, _ = request(base, "POST", "/admin/account-reset", payload)
+            check(status == 401, "Operator erasure refuses an unauthenticated request")
+            status, _, _ = request(base, "POST", "/admin/account-reset",
+                                   payload | {"phone": "+12025550198"}, extra_headers=header)
+            check(status == 409, "Operator erasure refuses mismatched identity")
+            status, body, _ = request(base, "POST", "/admin/account-reset", payload, extra_headers=header)
+            check(status == 200 and body.get("account_deleted") is True,
+                  "Verified operator erasure completed through the same cleanup path")
+            status, _, _ = request(base, "POST", "/api/collections/owners/auth-with-password", {
+                "identity": stranger["email"], "password": stranger["password"]})
+            check(status == 400, "Operator-erased fixture cannot log in")
+            accounts.remove(stranger)
     finally:
         failures = 0
         for owner in accounts:

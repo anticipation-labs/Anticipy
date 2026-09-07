@@ -1,0 +1,52 @@
+{
+  "scope": "Live stored-event dispatch, real models/catalog, own phone-less fixture only.\n\nMints owner-bound connect links but does not redeem them, connect accounts,\nmessage a phone, or access a real mailbox. Reserves $2 from the existing native\nAPI audit ceiling before any invocation. Never resets either spending ledger.\n",
+  "revision": "c67a229eb34cc77c372cee4efe625408ca355d42",
+  "cases": [
+    {
+      "id": "list",
+      "expected": "list_connections",
+      "actual": "list_connections",
+      "passed": true,
+      "reply_count": 1,
+      "replay_identical": true,
+      "link_present": false
+    },
+    {
+      "id": "connect",
+      "expected": "connect",
+      "actual": "connect",
+      "passed": true,
+      "reply_count": 1,
+      "replay_identical": true,
+      "link_present": true
+    },
+    {
+      "id": "accept-context",
+      "expected": "connect",
+      "actual": "connect",
+      "passed": true,
+      "reply_count": 1,
+      "replay_identical": true,
+      "link_present": true
+    },
+    {
+      "id": "quoted-command",
+      "expected": "not_for_us",
+      "actual": "not_for_us",
+      "passed": true,
+      "reply_count": 0,
+      "replay_identical": true,
+      "link_present": false
+    },
+    {
+      "id": "targeted-card",
+      "expected": "not_for_us",
+      "actual": "not_for_us",
+      "passed": true,
+      "reply_count": 0,
+      "replay_identical": true,
+      "link_present": false
+    }
+  ],
+  "cleaned_up": true
+}

@@ -16,6 +16,8 @@ context; regexes, word lists, and thresholds must not decide what people mean.
   local Worker, simulator, tools, and commands.
 - [Setup baseline, 2026-09-06](research/2026-09-06-mac-development-setup.md):
   measured checks and remaining limits.
+- [Current audit and delivery status](research/audit-2026-09-06/PLAN.md):
+  deployed repairs, real-model tests, provider checks and unfinished reset work.
 - [Product brief](docs/BRIEF.html): product behavior, screens, and evidence.
 - [iOS release handoff](docs/HANDOFF-SHIP-IOS.md): CI release process. Read the
   actual workflow too; historical instructions can lag the code.

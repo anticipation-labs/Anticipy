@@ -125,23 +125,11 @@ def test_the_question_names_the_trap():
     assert "discoverable once you are underway" in low
 
 
-def test_it_runs_before_the_gate_that_turns_act_into_ask():
-    src = open(os.path.join(os.path.dirname(os.path.dirname(
-        os.path.abspath(__file__))), "brain", "anticipy_core.py")).read()
-    call = src.index("check_sufficiency(self.llm, decision.goal)")
-    gate = src.index('if decision.decision == "act" and decision.missing:')
-    assert call < gate, "the check must feed the gate, not run after it"
-
-
-def test_an_explicit_ask_is_never_second_guessed():
-    """When he says it TO her, he is present and can be asked directly. The
-    check is for work she started off her own back."""
-    src = open(os.path.join(os.path.dirname(os.path.dirname(
-        os.path.abspath(__file__))), "brain", "anticipy_core.py")).read()
-    line = [l for l in src.splitlines() if "check_sufficiency(self.llm" in l][0]
-    idx = src.index(line)
-    window = src[max(0, idx - 400):idx]
-    assert "not explicit" in window
+# The legacy title-only checker remains tested above as a standalone helper.
+# Production readiness now sees conversation, memory and actual access, and
+# reviews both act and ask outcomes. tests/test_readiness.py exercises that
+# behavior; the old pins demanding title-only and ambient-only calls were the
+# failure that made known contact/document details become needless questions.
 
 
 def test_the_gate_keeps_the_second_key():

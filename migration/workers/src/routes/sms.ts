@@ -25,7 +25,8 @@
  * Base64 of the digest is the signature.
  */
 import { landInboundText, last6 } from "../api/sender.ts";
-import { handleInboundText, type TextCommandEnv } from "../connections/wiring.ts";
+import { dispatchConnectionEvent } from "../connections/dispatch.ts";
+import type { TextCommandEnv } from "../connections/wiring.ts";
 
 const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), {
@@ -177,8 +178,8 @@ export async function smsInbound(
   // prints for /c/{token}/go. With no ctx it is awaited instead, so a caller
   // that cannot pass one still gets the behaviour rather than silence.
   if (landed.kind === "written") {
-    const run = handleInboundText(
-      env as unknown as TextCommandEnv, landed.owner_ref, body, landed.id);
+    const run = dispatchConnectionEvent(
+      env as unknown as TextCommandEnv, landed.owner_ref, landed.id);
     if (ctx) ctx.waitUntil(run); else await run;
   }
 

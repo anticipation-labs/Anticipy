@@ -46,7 +46,7 @@ from pathlib import Path
 import pytest
 
 from brain import memory as memory_module
-from brain.memory import Memory, _DONE_RE, _extractor_verdict
+from brain.memory import Memory, _extractor_verdict
 
 from llm_fakes import FakeExtractor
 
@@ -433,10 +433,8 @@ PROMISE = "I'll send Sarah the pitch deck tomorrow."
 REPORT = "Sarah has the pitch deck now, so that whole thread is behind us."
 
 
-def test_the_report_line_is_beyond_the_verb_list():
-    """Guards the guard: the moment _DONE_RE could match this sentence, the
-    test below would pass without the model verdict ever being read."""
-    assert not _DONE_RE.search(REPORT)
+def test_no_completion_verb_list_remains():
+    assert not hasattr(memory_module, "_DONE_RE")
 
 
 def test_the_models_completed_verdict_is_used_at_the_ingest_layer():
@@ -449,7 +447,7 @@ def test_the_models_completed_verdict_is_used_at_the_ingest_layer():
     llm = FakeExtractor(per_line={
         PROMISE: {"people": ["Sarah"], "commitment": "send Sarah the deck"},
         REPORT: {"completed": "sent Sarah the deck"},
-    })
+    }, resolution={"n": 1, "resolution": "done"})
     m = Memory(":memory:", llm=llm)
     m.ingest(PROMISE, speaker="owner")
     assert [loop["what"] for loop in m.open_loops()] == ["send Sarah the deck"]

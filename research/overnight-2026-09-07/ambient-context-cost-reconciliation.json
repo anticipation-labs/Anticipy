@@ -1,0 +1,86 @@
+[
+  {
+    "person": "auditperson0001",
+    "original_state": "observed_needs_semantic_review",
+    "returned": true,
+    "calls": 8,
+    "observed_cost_usd": 0.029554359
+  },
+  {
+    "person": "auditperson0002",
+    "original_state": "observed_needs_semantic_review",
+    "returned": true,
+    "calls": 7,
+    "observed_cost_usd": 0.017940893000000003
+  },
+  {
+    "person": "auditperson0003",
+    "original_state": "observed_needs_semantic_review",
+    "returned": true,
+    "calls": 7,
+    "observed_cost_usd": 0.017764579
+  },
+  {
+    "person": "auditperson0004",
+    "original_state": "observed_needs_semantic_review",
+    "returned": true,
+    "calls": 8,
+    "observed_cost_usd": 0.033765582999999995
+  },
+  {
+    "person": "auditperson0005",
+    "original_state": "observed_needs_semantic_review",
+    "returned": true,
+    "calls": 7,
+    "observed_cost_usd": 0.018803323000000004
+  },
+  {
+    "person": "auditperson0006",
+    "original_state": "observed_needs_semantic_review",
+    "returned": true,
+    "calls": 8,
+    "observed_cost_usd": 0.018395647
+  },
+  {
+    "person": "auditperson0007",
+    "original_state": "observed_needs_semantic_review",
+    "returned": true,
+    "calls": 11,
+    "observed_cost_usd": 0.05802364
+  },
+  {
+    "person": "auditperson0008",
+    "original_state": "observed_needs_semantic_review",
+    "returned": true,
+    "calls": 7,
+    "observed_cost_usd": 0.021394538
+  },
+  {
+    "person": "auditperson0009",
+    "original_state": "infrastructure_or_runtime_failure",
+    "returned": true,
+    "calls": 14,
+    "observed_cost_usd": 0.0999827226
+  },
+  {
+    "person": "auditperson0010",
+    "original_state": "infrastructure_or_runtime_failure",
+    "returned": true,
+    "calls": 14,
+    "observed_cost_usd": 0.094883249
+  },
+  {
+    "person": "auditperson0011",
+    "original_state": "observed_needs_semantic_review",
+    "returned": true,
+    "calls": 11,
+    "observed_cost_usd": 0.05593359
+  },
+  {
+    "person": "auditperson0012",
+    "original_state": "infrastructure_or_runtime_failure",
+    "returned": true,
+    "calls": 15,
+    "observed_cost_usd": 0.12607559699999998
+  }
+]

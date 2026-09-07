@@ -49,7 +49,7 @@ def _guard_block() -> str:
     `elif self._may_say(..., decision.goal, "ask")` line below it, and every
     assertion about decision.goal then passes for the wrong reason."""
     i = SRC.index('if decision.addressee == "self" and not explicit')
-    j = SRC.index("print(", i)
+    j = SRC.index("handled = None", i)
     return SRC[i:j]
 
 
@@ -95,19 +95,16 @@ def test_an_explicit_question_is_never_suppressed():
     assert "not explicit" in _guard_block()
 
 
-def test_the_dedupe_that_replaces_the_guard_is_keyed_on_the_goal():
-    """The whole argument for narrowing the guard is that _may_say already
-    stops repeats when a goal exists. If it ever stops keying on the goal, the
-    narrowing becomes unsafe and this must fail."""
-    i = SRC.index("def _may_say(")
-    sig = SRC[i:i + 120]
-    assert "goal" in sig, "_may_say must take the goal"
-    j = SRC.index("may_say(text, goal or \"\", kind)")
-    assert j > i, "_may_say must pass the goal through to the caller's check"
-    # And the ask branch must actually route through it.
-    k = SRC.index('elif self._may_say(may_say, handled, decision.goal, "ask")')
-    assert k > SRC.index('if decision.addressee == "self" and not explicit'), \
-        "the goal-keyed dedupe must be what a self-talk ask falls through to"
+def test_direct_question_persists_for_the_outbox_without_sending_inline(monkeypatch):
+    a, sent = _anticipy(monkeypatch, Decision(
+        decision="ask", goal="Arrange the workshop", reason="need venue",
+        addressee="assistant", owes="owner", missing=["which venue?"]))
+    saved = []
+    monkeypatch.setattr(a, "_queue_job", lambda *args, **kw: saved.append((args, kw)) or "j-question")
+    out = a.hear("Arrange the workshop", explicit=True)
+    assert len(saved) == 1 and saved[0][1]["hold"] is True
+    assert out["anticipy_says"]
+    assert sent == [], "restart-safe outbox, not hear(), sends the saved question"
 
 
 def test_a_broken_dedupe_never_silences_a_question():
@@ -228,8 +225,8 @@ def test_a_question_aimed_at_her_is_always_asked(monkeypatch):
             decision="ask", goal="Book dinner at Earls for tomorrow",
             reason="need the location", addressee=addressee,
             owes="owner", missing=["which location?"]))
-        a.hear("book us Earls tomorrow")
-        assert sent, f"addressee={addressee!r} was silenced"
+        out = a.hear("book us Earls tomorrow")
+        assert out["anticipy_says"], f"addressee={addressee!r} was silenced"
 
 
 def test_the_card_never_promises_a_question_it_does_not_have():

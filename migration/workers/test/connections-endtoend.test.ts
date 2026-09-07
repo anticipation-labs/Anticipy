@@ -1110,15 +1110,15 @@ await check("THE TEXT TWIN: a vendor name carrying a forbidden term never reache
 
 await check("THE TEXT TWIN: the two carriers and the entry point are wired the same", () => {
   for (const [name, source] of [["sms.ts", SMS_SOURCE], ["sendblue.ts", SENDBLUE_SOURCE]] as const) {
-    assert.equal(source.split("handleInboundText(").length - 1, 1,
+    assert.equal(source.split("dispatchConnectionEvent(").length - 1, 1,
       `${name} must call the twin exactly once`);
     assert.ok(/landed\.kind === "written"/.test(source),
       `${name} must only run the twin for a message that actually landed`);
     assert.ok(/ctx\?: ExecutionContext/.test(source),
       `${name} must take a ctx, or a Worker cancels the twin the moment it answers`);
   }
-  assert.equal(INDEX_SOURCE.split("smsInbound(request, env as unknown as SmsEnv, ctx)").length - 1, 1,
-    "src/index.ts does not pass ctx to smsInbound");
+  assert.equal(INDEX_SOURCE.split("smsInbound(request, env as unknown as SmsEnv, ctx)").length - 1, 0,
+    "retired Twilio route must not dispatch commands");
   assert.equal(
     INDEX_SOURCE.split("sendblueInbound(request, env as unknown as SendblueEnv, ctx)").length - 1, 1,
     "src/index.ts does not pass ctx to sendblueInbound");

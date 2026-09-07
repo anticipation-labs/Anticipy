@@ -146,8 +146,7 @@ def test_job_lane_no_longer_routes_on_wording():
     assert "_BROWSER_TARGET_RE" not in src
     assert "_READ_ONLY_RE" not in src
     assert src.count("hands.choose_hand(") == 1
-    # The seatbelt is still there, once, and it is not the decider.
-    assert src.count("_IRREVERSIBLE_RE.search(g)") == 1
+    assert "_IRREVERSIBLE_RE" not in src
 
 
 # ------------------------------------------------------- the four states
@@ -179,7 +178,7 @@ def test_each_verdict_reaches_the_lane_through_job_lane(monkeypatch, offline):
     for hand, lane in ((HAND_BROWSER, ""), (HAND_RESEARCH, "research"),
                        (HAND_HOLD, "")):
         got, params, llm = route(monkeypatch, "sort out the thing with the car",
-                                 says(hand))
+                                 says(hand), params={"_effect": {"touches": "world"}})
         assert got == lane, hand
         assert params["_hand"]["hand"] == hand
         assert params["_hand"]["lane"] == lane
@@ -236,7 +235,8 @@ def test_no_verdict_through_job_lane_is_research(monkeypatch, offline):
     # test_each_verdict_reaches_the_lane_through_job_lane. The read-only case
     # that stays on research is pinned below.
     got, params, _ = route(monkeypatch, "get the car serviced",
-                           "garbage", "more garbage")
+                           "garbage", "more garbage",
+                           params={"_effect": {"touches": "world"}})
     assert got == ""
     assert params["_hand"]["hand"] == HAND_UNANSWERED
     assert params["_hand"]["asked"] == 2
@@ -248,30 +248,14 @@ def test_no_verdict_through_job_lane_is_research(monkeypatch, offline):
     assert params["_hand"]["hand"] == HAND_UNANSWERED
 
 
-# ------------------------------------------------------------ the seatbelt
-@pytest.mark.parametrize("scripted", [
-    says(HAND_BROWSER), says(HAND_API), says(HAND_RESEARCH), says(HAND_HOLD),
-    "garbage", None])
-def test_an_irreversible_verb_is_refused_after_any_verdict(monkeypatch, offline,
-                                                            scripted):
-    """The deny list is the seatbelt Law 1 permits. It holds AFTER the model
-    answered — whatever it answered — and after no answer at all."""
-    replies = () if scripted is None else (scripted, "still garbage")
-    if scripted is None:
-        monkeypatch.setattr(hands, "_default_llm", lambda: None)
-        got, params, _ = job_lane("send the pitch deck to Marcus",
-                                  {"source": "t"}), None, None
-    else:
-        got, params, llm = route(monkeypatch, "send the pitch deck to Marcus",
-                                 *replies)
-        assert len(llm.asked) >= 1          # the model WAS asked...
-    assert got == ""                         # ...and the lane is still held.
-    for goal in ("find a flight to Montreal and book the cheapest",
-                 "research restaurants and reserve one for Friday",
-                 "pay the deposit for Santouka"):
-        monkeypatch.setattr(hands, "_default_llm",
-                            lambda: ScriptedLLM(says(HAND_RESEARCH)))
-        assert job_lane(goal, {"source": "t"}) == "", goal
+# A hand is chosen from model evidence, never from words inside its goal.
+def test_private_draft_is_not_overruled_by_an_email_verb(monkeypatch, offline):
+    for goal in ("draft an email to the client for my review", "compare the proposals"):
+        got, params, model = route(monkeypatch, goal, says(HAND_RESEARCH),
+                                  params={"_effect": {"touches": "read"}})
+        assert got == "research"
+        assert params["_hand"]["effect"] == "read"
+        assert len(model.asked) == 1
 
 
 # --------------------------------------------------------- the api floors
@@ -436,16 +420,15 @@ def test_control_what_did_i_promise_is_research(monkeypatch, offline):
     assert params["_hand"]["hand"] == HAND_RESEARCH
 
 
-def test_a_computable_goal_needs_no_hand(monkeypatch, offline):
-    """Capability, not wording: the calculator can answer it, so it is the
-    server's and the model is not spent on it."""
-    llm = ScriptedLLM()
+@pytest.mark.parametrize("hand,lane", [(HAND_RESEARCH, "research"), (HAND_BROWSER, "")])
+def test_computable_wording_does_not_override_the_requested_hand(monkeypatch, offline, hand, lane):
+    llm = ScriptedLLM(says(hand))
     monkeypatch.setattr(hands, "_default_llm", lambda: llm)
     params = {"source": "t"}
-    assert job_lane("5 PM CST is what in PST", params) == "research"
-    assert params["_hand"]["hand"] == HAND_RESEARCH
-    assert params["_hand"]["asked"] == 0
-    assert llm.asked == []
+    assert job_lane("5 PM CST is what in PST", params) == lane
+    assert params["_hand"]["hand"] == hand
+    assert params["_hand"]["asked"] == 1
+    assert len(llm.asked) == 1
 
 
 # ------------------------------------------------------------- the facts

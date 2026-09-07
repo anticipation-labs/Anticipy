@@ -1266,8 +1266,9 @@ final class PhoneListener: NSObject, ObservableObject {
         // the end and the alias all at once. Sending `now` twice here would
         // compile, satisfy every signature, and be the original bug.
         if let speaker, let onSpeaker {
-            let tag = speaker.tagForLatestUtterance()
-            onSpeaker(line, tag, wordsAppearedAt, now, continuesPrevious)
+            speaker.tagForLatestUtterance { tag in
+                onSpeaker(line, tag, wordsAppearedAt, now, continuesPrevious)
+            }
         } else {
             onLine?(line, wordsAppearedAt, now, continuesPrevious)
         }
@@ -1545,28 +1546,12 @@ final class PhoneListener: NSObject, ObservableObject {
         // thing that deletes what you just said.
         let tail = pendingTail.trimmingCharacters(in: .whitespacesAndNewlines)
         if !tail.isEmpty {
-            ListenJournal.shared.record(
-                .flushed(reason: .final,
-                         words: tail.split(whereSeparator: { $0.isWhitespace }).count))
-            // Stamped as the words leave, not when they are pushed: the push
-            // behind this one may not happen until the network is back.
-            //
-            // THE FOURTH DELIVERY SITE, and the only one that does not go
-            // through `deliver` — so widening that function's callbacks does
-            // not reach it, and it is the last line of every session. It used
-            // to hand over `Date()` alone: teardown time, as the start and the
-            // end at once. Both instants are named here so the same line
-            // cannot answer two different questions with two separate reads of
-            // the clock.
-            //
-            // A parting tail that followed a cut immediately really does carry
-            // on from it; one spoken after a long silence does not, so it is
-            // judged by the same rule as every other line.
+            // Use the same serial delivery path as earlier utterances. A Stop
+            // tail must not overtake a sentence still waiting for its voice tag.
             let partingStartedAt = pendingSince ?? Date()
             let partingEndedAt = Date()
-            onLine?(tail, partingStartedAt, partingEndedAt,
-                    flushPolicy.cutContinues(cutAt: cutAt,
-                                             wordsAppearedAt: partingStartedAt))
+            deliver(tail, reason: .final, wordsAppearedAt: partingStartedAt,
+                    at: partingEndedAt)
         }
         // Outside the branch on purpose: nothing follows this session whether a
         // tail went out or not, and the state a ceiling flush leaves behind is

@@ -563,7 +563,8 @@ def _record(model: str, system: str, user: str, usage: dict, mode: str) -> None:
 class LLM:
     def __init__(self, api_key: Optional[str] = None, model: str = DEFAULT_MODEL,
                  owner_zone: Optional[str] = None,
-                 owner_name: Optional[str] = None):
+                 owner_name: Optional[str] = None,
+                 owner_email: Optional[str] = None):
         # The owner's IANA zone, e.g. "America/Vancouver". None means the
         # server default clock and, since 2026-08-22, a place sentence that
         # says the location is UNKNOWN rather than one that says nothing.
@@ -572,6 +573,7 @@ class LLM:
         # prompts stay exactly as they were — there is no name to mistake for
         # somebody else's.
         self.owner_name = owner_name
+        self.owner_email = owner_email
         self.gemini_api_key = os.environ.get("GEMINI_API_KEY")
         # Passing an API key explicitly preserves the historical meaning:
         # callers asking for one OpenRouter client do not silently use an
@@ -634,7 +636,13 @@ class LLM:
         # account — so there is no empty case to guard. who_line() is the
         # opposite: it says nothing at all until a first name is known, so an
         # account without one sends byte-identical prompts to before.
-        grounding = "\n".join(part for part in (who_line(self.owner_name),
+        identity = ("ACCOUNT OWNER IDENTITY: " + json.dumps({
+            "name": self.owner_name, "email": self.owner_email,
+        }) + ". These fields identify the person using Anticipy. A client, pickup contact, "
+        "or other recipient needs their own evidence; preserve an unresolved role until "
+        "the authorized source identifies them. An assumption cannot invent that identity."
+        ) if self.owner_email else ""
+        grounding = "\n".join(part for part in (identity, who_line(self.owner_name),
                                                 where_line(self.owner_zone),
                                                 now_line(self.owner_zone))
                               if part)

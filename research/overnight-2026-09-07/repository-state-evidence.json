@@ -1,0 +1,156 @@
+{
+  "checked_at": "2026-09-07T18:20:00Z",
+  "head": "a4f4871aeab8a0b5e576a3b3a56d82c62d13a63a",
+  "branches": [
+    {
+      "branch": "origin/cloudflare-backend",
+      "common_ancestor": "a4f4871aeab8a0b5e576a3b3a56d82c62d13a63a",
+      "ahead_behind": "0\t0",
+      "product_paths": [
+        "app/ios",
+        "backend",
+        "brain",
+        "migration"
+      ]
+    },
+    {
+      "branch": "origin/issue-37-mac-ears",
+      "common_ancestor": "b2a61f945f661800a9290c7d69f7138046ad2257",
+      "ahead_behind": "49\t11",
+      "product_paths": [
+        "app/ios",
+        "backend",
+        "brain",
+        "migration"
+      ]
+    },
+    {
+      "branch": "origin/retire-pocketbase",
+      "common_ancestor": "b2a61f945f661800a9290c7d69f7138046ad2257",
+      "ahead_behind": "49\t21",
+      "product_paths": [
+        "app/ios",
+        "brain",
+        "migration"
+      ]
+    },
+    {
+      "branch": "origin/jose_anticipy_system",
+      "common_ancestor": "98b547b1ef8cc49823c1bd27de5755bf6ac1033a",
+      "ahead_behind": "357\t2",
+      "product_paths": [
+        "app/ios",
+        "backend",
+        "brain"
+      ]
+    },
+    {
+      "branch": "origin/main",
+      "common_ancestor": null,
+      "ahead_behind": "1032\t474",
+      "product_paths": []
+    }
+  ],
+  "default_branch": "main",
+  "protected": false,
+  "local_untracked": [
+    "output/playwright/",
+    "proof/audit/live_stall_notice.py"
+  ],
+  "local_runtime": {
+    "port": 8787,
+    "cwd": "/private/tmp/anticipy-overnight-998fca6/migration/workers",
+    "persist_to": "/Users/omarebrahim/Anticipy/migration/workers/.wrangler/state"
+  },
+  "retirement_conflicts": [
+    "app/ios/Anticipy.xcodeproj/project.pbxproj",
+    "app/ios/project.yml",
+    "brain/anticipy_core.py",
+    "brain/conversation.py",
+    "brain/worker.py",
+    "migration/workers/src/index.ts",
+    "migration/workers/src/routes/sendblue.ts",
+    "migration/workers/src/routes/sms.ts",
+    "proof/test_addressee.py",
+    "tests/test_ears_ignore_the_probe.py",
+    "tests/test_no_spam.py",
+    "tests/test_owner_profile_pocketbase_runtime.py"
+  ],
+  "retirement_diff": {
+    "files": 404,
+    "insertions": 1230,
+    "deletions": 26814
+  },
+  "live": {
+    "http": 200,
+    "served": 8,
+    "failed_count": 0,
+    "version": {
+      "id": "664fabf6-380a-4a60-9d20-3b3d23f73224",
+      "tag": "a4f4871aeab8a0b5e576a3b3a56d82c62d13a63a",
+      "timestamp": "2026-09-07T18:07:26.787352Z"
+    },
+    "workers": [
+      {
+        "running": true,
+        "source_sha256": "1f390d01715748ba48ed8401df407237049f4a45d1af56937f38177c23b1b80c",
+        "snapshot_current": true
+      },
+      {
+        "running": true,
+        "source_sha256": "1f390d01715748ba48ed8401df407237049f4a45d1af56937f38177c23b1b80c",
+        "snapshot_current": true
+      },
+      {
+        "running": true,
+        "source_sha256": "1f390d01715748ba48ed8401df407237049f4a45d1af56937f38177c23b1b80c",
+        "snapshot_current": true
+      },
+      {
+        "running": true,
+        "source_sha256": "1f390d01715748ba48ed8401df407237049f4a45d1af56937f38177c23b1b80c",
+        "snapshot_current": true
+      },
+      {
+        "running": true,
+        "source_sha256": "1f390d01715748ba48ed8401df407237049f4a45d1af56937f38177c23b1b80c",
+        "snapshot_current": true
+      },
+      {
+        "running": true,
+        "source_sha256": "1f390d01715748ba48ed8401df407237049f4a45d1af56937f38177c23b1b80c",
+        "snapshot_current": true
+      },
+      {
+        "running": true,
+        "source_sha256": "1f390d01715748ba48ed8401df407237049f4a45d1af56937f38177c23b1b80c",
+        "snapshot_current": true
+      },
+      {
+        "running": true,
+        "source_sha256": "1f390d01715748ba48ed8401df407237049f4a45d1af56937f38177c23b1b80c",
+        "snapshot_current": true
+      }
+    ]
+  },
+  "routes": {
+    "old_mac_api": {
+      "status": 404,
+      "final_url": "https://backend-production-61e0a.up.railway.app/api/health",
+      "content_type": "application/json",
+      "length": "101"
+    },
+    "api": {
+      "status": 200,
+      "final_url": "https://api.anticipy.ai/api/health",
+      "content_type": "application/json",
+      "length": null
+    },
+    "mac_download": {
+      "status": 200,
+      "final_url": "https://pub-e97c6305fe2949d8a5d17885f7be2a0e.r2.dev/Anticipy_1.0.0_aarch64.dmg",
+      "content_type": "application/x-apple-diskimage",
+      "length": "2516712351"
+    }
+  }
+}

@@ -367,7 +367,7 @@ export async function redactProviderPayload(value: unknown): Promise<unknown> {
 }
 
 // ---------------------------------------------------------------------------
-// The audit ledger, on D1. agent_llm_audit is NOT in pb/schema.ts COLLECTIONS
+// The audit ledger, on D1. agent_llm_audit is NOT in api/schema.ts COLLECTIONS
 // (it is never exposed over /api/collections), so this writes it directly.
 // Failures are logged and never break execution — certification evidence
 // must not take a customer's browser down (agent_key.pb.js:140-145, :158-160).

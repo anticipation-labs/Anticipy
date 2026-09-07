@@ -11,6 +11,31 @@ func check(_ ok: Bool, _ name: String, _ detail: @autoclosure () -> String = "")
 
 typealias P = DashboardPolicy
 
+// A saved number cannot establish whether a message was sent. The night badge
+// follows an authenticated server snapshot, and disappears when that expires.
+let policyTime = Date(timeIntervalSince1970: 1_788_764_999)
+let nightPolicy = P.NotificationPolicy(quietHoursActive: true, startHour: 22,
+    endHour: 8, timeZone: "America/Vancouver", observedAt: 1_788_764_999,
+    expiresAt: 1_788_765_000)
+let moon = P.notificationCaption(policy: nightPolicy, now: policyTime)
+check(moon.icon == "moon.fill" && moon.title == "Quiet hours · proactive texts paused",
+      "nighttime has an explicit moon and pause explanation")
+check(moon.detail.contains("You can answer here now."), "nighttime offers an immediate way to answer")
+check(P.notificationCaption(policy: nightPolicy,
+    now: Date(timeIntervalSince1970: 1_788_765_000)).icon == "questionmark.circle",
+    "a stale night snapshot cannot claim texting is still paused after its boundary")
+let dayPolicy = P.NotificationPolicy(quietHoursActive: false, startHour: 22,
+    endHour: 8, timeZone: "America/Vancouver", observedAt: 1_788_764_999,
+    expiresAt: 1_788_765_059)
+check(P.notificationCaption(policy: dayPolicy, now: policyTime).title == "Text delivery unconfirmed",
+      "daytime is not a message delivery receipt")
+check(P.notificationCaption(policy: nil, now: policyTime).icon == "questionmark.circle",
+      "failed policy reads remain unknown")
+let invalidPolicy = P.NotificationPolicy(quietHoursActive: true, startHour: 22,
+    endHour: 8, timeZone: "unknown/zone", observedAt: 1_788_764_999,
+    expiresAt: 1_788_765_059)
+check(!invalidPolicy.isCurrent(at: policyTime), "invalid server time zones do not produce a night badge")
+
 // ---------------------------------------------------------------- capture
 // The order is the point: a phone with the microphone switched off in iOS is
 // not "paused", and saying "Listening…" over a dead microphone is the one
@@ -49,6 +74,30 @@ check(P.captureFace(.offline, heardAnything: false).title == "Listening…",
       "an unreachable server does not stop her listening")
 check(P.captureFace(.blocked, heardAnything: false).title != "Listening…",
       "a switched-off microphone does")
+
+// A typed message is visible even before the model responds, while the
+// identical microphone transcript remains hidden. Wording has no role.
+do {
+    let text = "Please check this when you can."
+    let typed = P.thread(heard: [.init(id: "typed1", text: text, at: "t", source: "typed")], said: [], jobs: [])
+    let mic = P.thread(heard: [.init(id: "mic1", text: text, at: "t", speaker: "owner", source: "phone_mic")], said: [], jobs: [])
+    check(typed.contains { if case .owner(_, let value, _, _) = $0 { return value == text }; return false },
+          "typed submit retains the exact message while awaiting the brain")
+    let answered = P.thread(heard: [.init(id: "typed1", text: text, at: "t", decision: "answer", source: "typed")], said: [], jobs: [])
+    check(!answered.contains { if case .quiet = $0 { return true }; return false },
+          "an answered typed message is not labelled ambient speech with nothing needed")
+    check(!mic.contains { if case .owner = $0 { return true }; return false },
+          "speaker ownership never turns microphone speech into a typed bubble")
+    let canonical = P.thread(heard: [.init(id: "h", text: text, at: "t", decision: "act", goal: "Family appointment")],
+        said: [], jobs: [.init(id: "j", goal: "Family appointment", consequence: nil, at: "t", placement: .needsYou,
+                              sourceEventIDs: ["h"])])
+    check(canonical.count == 1 && canonical.first?.id == "j",
+          "one canonical task replaces its transcript projection instead of showing working plus approval")
+    let sameWords = P.thread(heard: [], said: [], jobs: [
+        .init(id: "j1", goal: "Same task words", consequence: nil, at: "t", placement: .needsYou),
+        .init(id: "j2", goal: "Same task words", consequence: nil, at: "t", placement: .needsYou)])
+    check(sameWords.count == 2, "distinct jobs are never merged by matching words")
+}
 
 // ------------------------------------------------------------------ thread
 let heard = [
@@ -280,6 +329,26 @@ check(P.emptyLine(listening: false, everListened: false)
         != P.emptyLine(listening: false, everListened: true),
       "and something different to somebody who has never turned it on")
 check(!P.emptyLine(listening: false, everListened: false).isEmpty, "and is never blank")
+
+// A terminal job still represents its input; finishing must not leave a
+// phantom "working" line after the canonical job leaves the active feed.
+let finishedInput = P.HeardRow(id: "terminal-source", text: "Exact request", at: "2026-09-07",
+                               decision: "act", goal: "An already finished task", source: "typed")
+let finishedTurns = P.thread(heard: [finishedInput], said: [], jobs: [],
+                             representedEventIDs: ["terminal-source"])
+check(finishedTurns.count == 1, "terminal provenance suppresses ghost work and keeps the owner's words")
+if case .owner = finishedTurns.first {} else { check(false, "typed terminal request remains visible") }
+
+let captureHistory: [P.Turn] = [
+    .said(id: "old", text: "That task was cancelled.", at: "later-clock", done: true),
+    .owner(id: "heard", text: "Some speech", at: "now", speaker: "owner"),
+    .question(id: "waiting", text: "When does it end?", at: "earlier-clock"),
+    .said(id: "new", text: "Here is the new result.", at: "earlier-clock", done: true)
+]
+check(P.captureTurns(captureHistory, existingIDs: ["old", "waiting"]).map(\.id) == ["waiting", "new"],
+      "new capture hides old answers, keeps unfinished work and new replies despite clock skew")
+check(P.captureTurns(captureHistory, existingIDs: ["old", "waiting", "new"]).map(\.id) == ["waiting"],
+      "a later capture does not replay the previous session's result")
 
 if failures == 0 {
     print("DashboardTests: all passed")

@@ -1,0 +1,20 @@
+[
+  {
+    "asset": "anticipy-claude-version-extension.zip",
+    "version": "0.16.0",
+    "sha256": "93c3a2d8c29e97031c7c81707a2fb086c01564b3d201b546e2ec1b18aa0a9ba9",
+    "matches_source": true
+  },
+  {
+    "asset": "anticipy-extension.zip",
+    "version": "0.16.0",
+    "sha256": "93c3a2d8c29e97031c7c81707a2fb086c01564b3d201b546e2ec1b18aa0a9ba9",
+    "matches_source": true
+  },
+  {
+    "asset": "anticipy-codex-version-extension.zip",
+    "version": "0.16.0",
+    "sha256": "93c3a2d8c29e97031c7c81707a2fb086c01564b3d201b546e2ec1b18aa0a9ba9",
+    "matches_source": true
+  }
+]

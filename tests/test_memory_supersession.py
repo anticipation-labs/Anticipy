@@ -433,27 +433,19 @@ def test_a_restatement_newer_than_the_retirement_is_judged_afresh():
         "a restatement newer than the retirement accrued on the dead row"
 
 
-def test_a_retired_row_is_never_put_to_the_model():
-    """The prompt asks which stored fact is true NOW. That question has no
-    answer about a fact that already stopped being true, and a "replaces"
-    verdict against a corpse would retire something twice.
-
-    ASSERTED ON THE LIST THE MODEL WAS HANDED, not on whether it was asked at
-    all. Every live row is now a candidate — that is the whole point of the
-    sift no longer excluding anything — so "no call was made" would be green
-    for an empty store and for a store that offered the corpse alongside the
-    live row. What must hold is that the dead row's wording is not in the
-    payload."""
+def test_retired_history_reaches_the_model_only_for_evidence_before_retirement():
     now = time.time()
     m, llm = _breakup_store(now)
     llm.calls.clear()
     llm.relations = ["different", "different"]
     m._relate_fact("partner is away this week", ts=now - 20 * DAY)
-    asked = llm.relation_calls()
-    assert asked, "the live row should still have been judged"
-    offered = [n["note"] for a in asked for n in json.loads(a)["stored_notes"]]
-    assert offered == ["broke up with Dana"], offered
-    assert not any("partner is Dana" in n for n in offered), offered
+    offered = [n for a in llm.relation_calls() for n in json.loads(a)["stored_notes"]]
+    assert {n["note"] for n in offered} == {"partner is Dana", "broke up with Dana"}
+    assert next(n for n in offered if n["note"] == "partner is Dana")["retired_days_ago"] is not None
+    llm.calls.clear()
+    m._relate_fact("partner is away this week", ts=now)
+    offered = [n["note"] for a in llm.relation_calls() for n in json.loads(a)["stored_notes"]]
+    assert offered == ["broke up with Dana"]
 
 
 # ------------------------------------------------- guard 2: the provenance
@@ -778,6 +770,7 @@ def test_a_veto_for_one_short_name_does_not_delete_another():
     m.remember_fact("dinner with Al", importance=4, source="interview", ts=now)
     assert m.forget_fact("dinner with Jo") == 0
     assert [f["fact"] for f in m.profile_facts()] == ["dinner with Al"]
+    m.llm = FakeLLM(vetoes=["outside"])
     assert not m._is_vetoed("dinner with Ed")
 
 

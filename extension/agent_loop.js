@@ -8879,11 +8879,21 @@ export async function runAgentGoal(goal, opts) {
           effectState = auditedState;
           effectKinds = kinds;
           effectBoxes = boxes;
-          performedExternalEffects.add(externalSig);
           // Derived from the FINAL state, after any clearing pass, because
           // what is left in the form is what actually goes out — and it is
           // what the Enter path would read back off the page next step.
           const submitted = submissionDigest(context, controlState, state.url);
+          // Alignment/default clearing can change the payload AFTER the
+          // first duplicate check. Fence what will actually be sent, too.
+          // Otherwise re-filling a field the guard clears submits the same
+          // cleared form repeatedly under a different pre-audit digest.
+          if (submitted && performedExternalEffects.has(submitted)) {
+            history.push(`step ${step}: BLOCKED DUPLICATE EFFECT — the final audited form was already submitted. Inspect its receipt instead of submitting again.`);
+            delete actionCounts[sig];
+            stuckStreak++;
+            continue;
+          }
+          performedExternalEffects.add(externalSig);
           if (submitted) performedExternalEffects.add(submitted);
           // MILESTONE: the last frame before something irreversible. Taken
           // here — after every gate has passed, before the click — so the
@@ -9164,9 +9174,15 @@ export async function runAgentGoal(goal, opts) {
               effectState = auditedState;   // Audit #73: see the click path
               effectKinds = kinds;
               effectBoxes = boxes;
-              performedExternalEffects.add(enterSig);
               const submitted = submissionDigest(
                 enterContext, enterState, beforeEnter.url);
+              if (submitted && performedExternalEffects.has(submitted)) {
+                history.push(`step ${step}: BLOCKED DUPLICATE EFFECT — the final audited form was already submitted. Inspect its receipt instead of submitting again.`);
+                delete actionCounts[sig];
+                stuckStreak++;
+                continue;
+              }
+              performedExternalEffects.add(enterSig);
               if (submitted) performedExternalEffects.add(submitted);
               // The Enter key is the other way a form is submitted, and it has
               // needed every guard the click path has (that is why this branch

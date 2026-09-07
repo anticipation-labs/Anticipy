@@ -68,7 +68,8 @@ class Composer:
 
 
 @pytest.fixture(autouse=True)
-def clean_worker_state():
+def clean_worker_state(monkeypatch):
+    monkeypatch.setattr(W, "connection_command", lambda ev, owner: "not_for_us")
     W.REPORTED.clear()
     W._SENT_RECENTLY.clear()
     W._last_blocker.clear()
@@ -395,3 +396,37 @@ def test_stall_notices_for_duplicate_goals_keep_both_exact_job_ids(monkeypatch):
         "job-stalled:same-goal-b:queued",
     }
     assert transport.effects == []
+
+
+@pytest.mark.parametrize("lane,reporter", [
+    ("", W.report_stalled_work),
+    (W.DEVICE_CALENDAR_LANE, W.report_unclaimed_device_work),
+])
+def test_stall_visible_at_night_then_texted_once_after_quiet_hours(monkeypatch, lane, reporter):
+    """Quiet hours delay the phone effect, never the primary app explanation."""
+    instance, _, _ = assistant()
+    messages = []
+    instance.notify_owner = lambda text: messages.append(text) or {"ok": True}
+    instance._voice = lambda ctx: "The task is waiting for access."
+    monkeypatch.setattr(W, "can_reach_owner_fresh", lambda _: True)
+    monkeypatch.setattr(W, "browser_reachable", lambda *a, **k: False)
+    job = {"id": "quiet-stall", "goal": "the requested task", "status": "queued",
+           "lane": lane, "params": "{}", "owner": "legacy-owner",
+           "owner_ref": "account-one", "updated": "2026-08-31 10:00:00"}
+    events, patches = event_backend(monkeypatch, [job])
+    monkeypatch.setattr(W, "CLOCK_QUIET_START", 0)
+    monkeypatch.setattr(W, "CLOCK_QUIET_END", 25)
+    reporter(instance)
+    reporter(instance)
+    assert messages == []
+    assert len([e for e in events if e.get("decision") == "stalled"]) == 1
+    assert len([e for e in events if e.get("decision") == "sms_deferred"]) == 1
+    assert not any(e.get("decision") == "sms_attempted" for e in events)
+    daytime(monkeypatch)
+    reporter(instance)
+    W._SENT_RECENTLY.clear()  # A restarted process still reads the durable fence.
+    reporter(instance)
+    assert messages == ["The task is waiting for access."]
+    assert len([e for e in events if e.get("decision") == "stalled"]) == 1
+    assert len([e for e in events if e.get("decision") == "sms_attempted"]) == 1
+    assert job["status"] == "queued" and not patches

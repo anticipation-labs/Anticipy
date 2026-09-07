@@ -1,0 +1,57 @@
+{
+  "overnight-router-wire-2": {
+    "scope": "Actual job minting + local D1, real model, synthetic connection catalog.\n\nNo connected-account credential exists and no execution arm is started.\nThis proves route selection/persistence without a public-search credential,\nnot a vendor API effect. The owner fixture is erased in finally.\n",
+    "search_configured": false,
+    "cases": [
+      {
+        "task": "Read the current Orchard briefing note in the document vault and summarize its delivery dates",
+        "lane": "api",
+        "status": "queued",
+        "hand": {
+          "hand": "api",
+          "reason": "The step reads from a connected app (document_vault) and the Mac is offline, allowing api for reads.; tool DOCUMENT_VAULT_SEARCH (The step asks to read a specific named document to find its delivery dates, which matches the search tool's purpose.)",
+          "app": "document_vault",
+          "effect": "read",
+          "asked": 1,
+          "tool": "DOCUMENT_VAULT_SEARCH",
+          "args": {
+            "query": "Orchard briefing note"
+          },
+          "tool_verdict": "tool",
+          "tool_asked": 1,
+          "lane": "api"
+        },
+        "passed": true
+      }
+    ],
+    "cleaned_up": true,
+    "core_source_sha256": "caeb36c8145ce0e0525f9b15153a0a23720c175903a0bb5c4c35373eecc87257"
+  },
+  "overnight-router-wire-3": {
+    "scope": "Actual job minting + local D1, real model, synthetic connection catalog.\n\nNo connected-account credential exists and no execution arm is started.\nThis proves route selection/persistence without a public-search credential,\nnot a vendor API effect. The owner fixture is erased in finally.\n",
+    "search_configured": false,
+    "cases": [
+      {
+        "task": "Read the current Orchard briefing note in the document vault and summarize its delivery dates",
+        "lane": "",
+        "status": "queued",
+        "hand": {
+          "hand": "browser",
+          "reason": "The step reads from a connected app, the Mac is offline, and the api hand can perform reads when offline. \u2014 no tool for the api hand (unclear: The step asks for a specific document by title ('Orchard briefing note'), but the only tool requires an opaque document_id that was not provided.)",
+          "app": "document_vault",
+          "effect": "read",
+          "asked": 1,
+          "tool": "",
+          "args": null,
+          "tool_verdict": "unclear",
+          "tool_asked": 1,
+          "lane": ""
+        },
+        "passed": true
+      }
+    ],
+    "cleaned_up": true,
+    "core_source_sha256": "caeb36c8145ce0e0525f9b15153a0a23720c175903a0bb5c4c35373eecc87257",
+    "requires_opaque_id": true
+  }
+}

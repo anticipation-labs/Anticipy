@@ -1,0 +1,110 @@
+import assert from 'node:assert/strict';
+import {FakeD1,asD1} from './fake-d1.ts';
+import {dispatchConnectionEvent} from '../src/connections/dispatch.ts';
+import {connectionCommand} from '../src/routes/connection_command.ts';
+import {resetConnectionsProvider} from '../src/connections/provider.ts';
+import {eraseVerifiedOwner} from '../src/routes/account_delete.ts';
+
+const owner='ownerdispatch01', stranger='ownerdispatch02';
+const stamp='2026-09-07 12:00:00.000Z';
+let calls=0, prompts:string[]=[];
+const nativeFetch=globalThis.fetch;
+globalThis.fetch=async (_input,init)=>{
+  calls++; prompts.push(String(init?.body??''));
+  return Response.json({choices:[{message:{content:JSON.stringify({kind:'command',command:'list_connected'})}}]});
+};
+function rig(kind='app_reply',source='typed') {
+  calls=0;prompts=[];resetConnectionsProvider();
+  const db=new FakeD1();
+  for(const id of [owner,stranger]) db.db.prepare('INSERT INTO owners(id,email,tokenKey) VALUES(?,?,?)').run(id,`${id}@example.invalid`,id);
+  db.db.prepare('INSERT INTO events(id,device_id,kind,source,text,owner_ref,created) VALUES(?,?,?,?,?,?,?)')
+    .run('inputevent001','fixture',kind,source,'What have I connected?',owner,stamp);
+  const env={DB:asD1(db),ANTICIPY_SERVICE_TOKEN:'service-test',ANTICIPY_AUTH_SECRET:'auth-test',
+    COMPOSIO_API_KEY:'fixture',OPENROUTER_API_KEY:'fixture'};
+  return {db,env};
+}
+function request(body:unknown,token='service-test') {return new Request('https://api.example.invalid/worker/connection-command',{
+  method:'POST',headers:{'X-Anticipy-Token':token,'content-type':'application/json'},body:JSON.stringify(body)});}
+const saved=(db:FakeD1)=>db.db.prepare("SELECT * FROM events WHERE kind='anticipy_text'").all();
+let passed=0;
+async function check(name:string,fn:()=>Promise<void>){try{await fn();passed++;}catch(e){console.error(name,e);process.exitCode=1;}}
+await check('app with no phone saves one reply, concurrent invocation cannot duplicate',async()=>{
+ const {db,env}=rig();
+ const results=await Promise.all([dispatchConnectionEvent(env,owner,'inputevent001'),dispatchConnectionEvent(env,owner,'inputevent001')]);
+ assert.equal(results.filter(x=>x.status==='completed').length,1);
+ assert.equal(results.filter(x=>x.status==='pending').length,1);
+ assert.equal(calls,1);assert.equal(saved(db).length,1);
+ const replay=await dispatchConnectionEvent(env,owner,'inputevent001');
+ assert.equal(replay.status,'completed');assert.equal(calls,1);assert.equal(saved(db).length,1);
+ assert.equal(saved(db)[0].owner_ref,owner);
+});
+await check('route refuses unauthenticated and wrong owner before model or data export',async()=>{
+ const {db,env}=rig();
+ assert.equal((await connectionCommand(request({event_id:'inputevent001',owner_ref:owner},'wrong'),env)).status,401);
+ assert.equal((await connectionCommand(request({event_id:'inputevent001',owner_ref:stranger}),env)).status,404);
+ assert.equal(calls,0);assert.equal(saved(db).length,0);
+});
+await check('context is owner scoped and ends at this event',async()=>{
+ const {db,env}=rig();
+ for(const [id,who,text,date] of [['context000001',owner,'Earlier question','2026-09-07 11:59:00.000Z'],['context000002',stranger,'Private stranger','2026-09-07 11:59:00.000Z'],['context000003',owner,'Future information','2026-09-07 12:01:00.000Z']])
+  db.db.prepare("INSERT INTO events(id,device_id,kind,text,owner_ref,created) VALUES(?,'fixture','anticipy_text',?,?,?)").run(id,text,who,date);
+ const response=await connectionCommand(request({event_id:'inputevent001',owner_ref:owner,text:'disconnect all apps',source:'forged'}),env);
+ assert.equal(response.status,200);
+ assert.ok(prompts[0].includes('Earlier question'));
+ for(const forbidden of ['Private stranger','Future information','disconnect all apps','forged']) assert.ok(!prompts[0].includes(forbidden));
+ assert.ok(prompts[0].includes('What have I connected?'));
+});
+await check('ambient speech is not authorized by a text-only transport',async()=>{
+ const {env}=rig('transcript','phone');
+ const result=await dispatchConnectionEvent(env,owner,'inputevent001');
+ assert.equal(result.status,'completed');assert.equal(calls,0);
+});
+await check('expired plan may retry; expired external effect never repeats',async()=>{
+ const {db,env}=rig();
+ db.db.prepare("INSERT INTO connection_command_runs VALUES(?,?,'planning','old',0,'')").run('inputevent001',owner);
+ assert.equal((await dispatchConnectionEvent(env,owner,'inputevent001')).status,'completed');assert.equal(calls,1);
+ const second=rig();
+ second.db.db.prepare("INSERT INTO connection_command_runs VALUES(?,?,'executing','old',0,'')").run('inputevent001',owner);
+ assert.equal((await dispatchConnectionEvent(second.env,owner,'inputevent001')).status,'completed');
+ assert.equal((await dispatchConnectionEvent(second.env,owner,'inputevent001')).status,'completed');
+ assert.equal(calls,0);assert.equal(saved(second.db).length,1);
+ assert.ok(String(saved(second.db)[0].text).includes("couldn't confirm"));
+});
+await check('failed reply persistence keeps external-effect fence',async()=>{
+ const {db,env}=rig();db.failOn=sql=>sql.includes('INSERT INTO events');
+ const out=await dispatchConnectionEvent(env,owner,'inputevent001');
+ assert.ok(out.status==='completed'||out.status==='unavailable');
+ assert.equal(saved(db).length,0);
+ assert.equal(db.db.prepare('SELECT state FROM connection_command_runs').get()?.state,'executing');
+ assert.equal(calls,1);
+ db.failOn=null;
+ assert.equal((await dispatchConnectionEvent(env,owner,'inputevent001')).status,'completed');
+ assert.equal(calls,1);assert.equal(saved(db).length,1);
+});
+await check('SMS retries share the same reply and make one provider attempt',async()=>{
+ const {db,env}=rig('sms_reply','sms');
+ db.db.prepare('UPDATE owners SET phone=? WHERE id=?').run('+15555550123',owner);
+ const smsEnv={...env,SENDBLUE_API_KEY_ID:'fixture',SENDBLUE_API_SECRET_KEY:'fixture',SENDBLUE_FROM_NUMBER:'+15555550124'};
+ const first=await dispatchConnectionEvent(smsEnv,owner,'inputevent001');
+ assert.equal(first.status,'completed');assert.equal(saved(db).length,1);
+ const firstCalls=calls;assert.equal(firstCalls,2);
+ await dispatchConnectionEvent(smsEnv,owner,'inputevent001');
+ assert.equal(calls,firstCalls);assert.equal(saved(db).length,1);
+});
+await check('a missing or foreign task target cannot redirect an answer',async()=>{
+ const {db,env}=rig();
+ db.db.prepare('UPDATE events SET goal=? WHERE id=?').run(JSON.stringify({reply_to_job_id:'missing'}),'inputevent001');
+ const out=await dispatchConnectionEvent(env,owner,'inputevent001');
+ assert.equal(out.status,'completed');
+ if(out.status==='completed')assert.equal(out.outcome.kind,'not_for_us');
+ assert.equal(calls,0);assert.equal(saved(db).length,0);
+});
+await check('deleting owner removes command history and fences late writes',async()=>{
+ const {db,env}=rig();await dispatchConnectionEvent(env,owner,'inputevent001');
+ const deleted=await eraseVerifiedOwner(owner,env,{connections:async()=>[],disconnect:async()=>({revokeUnavailable:false})} as never);
+ assert.equal(deleted.status,200);
+ assert.equal(db.db.prepare('SELECT count(*) AS n FROM connection_command_runs').get()?.n,0);
+ assert.equal((await dispatchConnectionEvent(env,owner,'inputevent001')).status,'missing');
+});
+globalThis.fetch=nativeFetch;resetConnectionsProvider();
+console.log(`connection dispatch: ${passed} checks passed`);

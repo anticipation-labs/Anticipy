@@ -66,13 +66,13 @@ def test_consequential_goals_keep_the_browser_lane():
                  "buy more coffee beans",
                  "sign up for the newsletter",
                  "draft_and_send_document"):
-        assert job_lane(goal) == "", goal
+        assert job_lane(goal, {"_effect": {"touches": "world"}}) == "", goal
 
 
 def test_a_goal_that_reads_both_ways_is_browser():
     # "find … and book …" leaves his world; the consequential reading wins.
-    assert job_lane("find a flight to Montreal and book the cheapest") == ""
-    assert job_lane("research restaurants and reserve one for Friday") == ""
+    assert job_lane("find a flight to Montreal and book the cheapest", {"_effect": {"touches": "world"}}) == ""
+    assert job_lane("research restaurants and reserve one for Friday", {"_effect": {"touches": "world"}}) == ""
 
 
 def test_explicit_browser_navigation_uses_the_browser_arm():
@@ -102,7 +102,7 @@ def test_explicit_browser_navigation_uses_the_browser_arm():
     assert job_lane("open Wikipedia", {"source": "browser"}) == ""
 
 
-def _queue(monkeypatch, goal, key="test-key"):
+def _queue(monkeypatch, goal, key="test-key", touches="read"):
     """Drive _queue_job with pb mocked; returns the record it would create."""
     if key is None:
         monkeypatch.delenv("BRAVE_API_KEY", raising=False)
@@ -124,7 +124,7 @@ def _queue(monkeypatch, goal, key="test-key"):
     monkeypatch.setattr(core.backend, "post", fake_post)
     a = Anticipy(owner_id="own1")
     monkeypatch.setattr(a, "_same_pending", lambda goal, **_k: None)
-    a._queue_job(goal, {"source": "test", "now": "now"})
+    a._queue_job(goal, {"source": "test", "now": "now"}, touches=touches)
     return posted
 
 
@@ -148,17 +148,40 @@ def test_queue_stamps_the_research_lane(monkeypatch):
 
 
 def test_queue_holds_consequential_goals_in_the_browser_lane(monkeypatch):
-    posted = _queue(monkeypatch, "book a table at Cactus Club")
+    posted = _queue(monkeypatch, "book a table at Cactus Club", touches="world")
     assert posted["lane"] == ""
     assert posted["status"] == "awaiting_confirm"
 
 
-def test_no_brave_key_falls_back_to_the_browser_lane(monkeypatch):
+def test_server_executor_decides_whether_a_search_key_is_actually_required(monkeypatch):
     posted = _queue(monkeypatch,
                     "research: opening hours of the Vancouver aquarium",
                     key=None)
-    assert posted["lane"] == ""              # graceful: extension runs it
+    assert posted["lane"] == "research"  # composition itself needs no search key
     assert posted["status"] == "queued"
+
+
+def test_missing_search_key_does_not_skip_a_connected_api_hand(monkeypatch):
+    routed = []
+    def router(goal, params, **context):
+        routed.append(context)
+        params["_hand"] = {"hand":"api", "app":"fixture-documents", "effect":"read", "lane":"api"}
+        return "api"
+    monkeypatch.setattr(core, "job_lane", router)
+    posted = _queue(monkeypatch, "Read the project document", key=None)
+    assert posted["lane"] == "api"
+    assert len(routed) == 1 and routed[0]["owner_ref"] == "own1"
+    assert "backend_url" in routed[0] and "llm" in routed[0]
+
+
+def test_missing_search_key_cannot_turn_no_verdict_into_browser_authority(monkeypatch):
+    def router(goal, params, **context):
+        params["_hand"] = {"hand":"unanswered", "lane":"research"}
+        return "research"
+    monkeypatch.setattr(core, "job_lane", router)
+    posted = _queue(monkeypatch, "Read the project document", key=None)
+    assert posted["lane"] == "research"
+    assert json.loads(posted["params"])["_hand"]["hand"] == "unanswered"
 
 
 def test_an_sms_ask_is_marked_on_the_job(monkeypatch):

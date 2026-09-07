@@ -1,0 +1,19 @@
+Anticipy is meant to help with the little pieces of work hidden in your day.
+
+You mention an errand. You promise someone a document. A plan changes. You should not have to turn every moment into a perfect command.
+
+Here is the whole harness. The phone turns speech into text on the phone. The text travels with its time, source, and speaker to your account. Your own brain reads the conversation and its notebook. It decides whether to stay quiet, remember, ask a useful question, or prepare work.
+
+A quote is evidence. It is not permission.
+
+We tested that difference. When Anticipy asked whether to send a contract to Priya, a yes released that particular task. Reading the words, the training example says go ahead, did not. And saying, go ahead, but send it to Morgan instead, did not release the old task with the wrong recipient.
+
+These were real model decisions through a local database. We did not send those contracts.
+
+An action needs a hand. That might be a connected app, research, your paired Chrome browser, or an eligible action on the phone. Today, some writes still depend on the browser and your Mac being online. That is a real limitation of this version.
+
+Finally, the result needs evidence. Queued does not mean finished. We tested a browser example where a page claimed success but the saved ledger disagreed. The agent reported that the work was not actually saved.
+
+For the next two days, use your own life. When something fails, keep the time, your exact words, what you expected, and what happened. I will trace the first broken step: hearing, context, judgment, permission, execution, or proof.
+
+The aim is useful help you can trust, including honest silence and an honest, I have not finished that yet.

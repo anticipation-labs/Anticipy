@@ -574,6 +574,7 @@ struct HomeView: View {
     /// provoked it. Transient: a dismissed ask is recorded in ContextGrants,
     /// never here, so it survives the view going away.
     @State private var contextAsk: ContextSource?
+    @State private var contextOffer: ContextTrigger.Verdict?
     @State private var heardForAsk = ""
     /// The word from your own sentence that provoked the ask, so the question
     /// can name it instead of being generic.
@@ -581,6 +582,7 @@ struct HomeView: View {
     /// The newest line already considered. Nil until the first poll populates
     /// the feed, which is what stops a cold launch asking about yesterday.
     @State private var lastSeenLineID: String?
+    @State private var contextViewStartedAt = Date()
     /// The transcript's new home, one tap from the collapsed count that
     /// replaced it on the thread (2026-09-06).
     @State private var showListeningHistory = false
@@ -1155,6 +1157,22 @@ struct HomeView: View {
     /// the thread because they are about the whole screen rather than about
     /// any one thing said, and they keep their own suites' shapes.
     @ViewBuilder private var dashboardNotices: some View {
+        if let offer = contextOffer, let hit = ContextTrigger.ask(verdict: offer) {
+            VStack(alignment: .leading, spacing: 10) {
+                Text(offer.reason ?? "").font(.callout)
+                HStack {
+                    Button("Review access") {
+                        askSubject = hit.subject
+                        contextAsk = hit.source
+                        contextOffer = nil
+                    }.buttonStyle(.glass)
+                    Button("Not now") {
+                        session.declineContext(hit.source)
+                        contextOffer = nil
+                    }.buttonStyle(.ghost)
+                }
+            }.anticipyCard()
+        }
         if micNeedsHelp { micRecoveryCard }
         if verified && showInterviewOffer { interviewOfferCard }
         if mailReadOffer { mailReadCard }
@@ -1174,14 +1192,21 @@ struct HomeView: View {
     /// work out what a line meant, which is law 1 and is why the ordering
     /// lives in `DashboardPolicy` where `run_dashboard_tests.sh` can walk it.
     private var dashboardTurns: [DashboardPolicy.Turn] {
-        let heard = session.transcript.map {
+        var heard = session.transcript.map {
             // The verdict travels with the line. It was dropped here, which is
             // why the dashboard could only ever draw a transcript.
             DashboardPolicy.HeardRow(id: $0.id, text: $0.text, at: $0.created,
-                                     decision: $0.decision, goal: $0.goal)
+                                     decision: $0.decision, goal: $0.goal,
+                                     speaker: $0.speaker, source: $0.source)
+        }
+        heard += session.ownerReplies.compactMap { reply in
+            guard let text = reply.text, !text.isEmpty else { return nil }
+            return DashboardPolicy.HeardRow(id: reply.id, text: text, at: reply.created,
+                                            decision: reply.decision, source: "typed")
         }
         let said = session.anticipySays.compactMap { ev -> DashboardPolicy.SaidRow? in
-            guard ev.kind == "anticipy_says", let text = ev.text, !text.isEmpty else { return nil }
+            guard (ev.kind == "anticipy_says" || ev.kind == "anticipy_text"),
+                  let text = ev.text, !text.isEmpty else { return nil }
             return DashboardPolicy.SaidRow(id: ev.id, text: text, at: ev.created,
                                            decision: ev.decision ?? "")
         }
@@ -1198,9 +1223,16 @@ struct HomeView: View {
             return DashboardPolicy.JobRow(id: job.id, goal: job.goal,
                                           consequence: job.consequence,
                                           at: job.updated ?? job.created,
-                                          placement: placement)
+                                          placement: placement,
+                                          sourceEventIDs: job.sourceEventIDs)
         }
-        return DashboardPolicy.thread(heard: heard, said: said, jobs: rows)
+        // Completed/cancelled jobs still own their source events. Removing a
+        // finished card must not resurrect its transcript as running work.
+        let represented = session.jobs.reduce(into: Set<String>()) {
+            $0.formUnion($1.sourceEventIDs)
+        }
+        return DashboardPolicy.thread(heard: heard, said: said, jobs: rows,
+                                      representedEventIDs: represented)
     }
 
     /// PAST CONVERSATIONS, from the segments the brain already stamped on the
@@ -1251,6 +1283,7 @@ struct HomeView: View {
                 // run_home_copy_tests.sh reads them.
                 ConversationDashboard(
                     turns: dashboardTurns,
+                    initialHistoryReplyIDs: session.initialHistoryReplyIDs ?? [],
                     captureState: dashboardCaptureState,
                     listening: session.listener.isListening,
                     micBlocked: micNeedsHelp,
@@ -1328,6 +1361,13 @@ struct HomeView: View {
             .task(id: "\(verified)|\(session.accountID)") {
                 await refreshCanonicalOwnerForReachability()
             }
+            .onChange(of: session.accountID) { _ in
+                contextOffer = nil
+                contextAsk = nil
+                heardForAsk = ""
+                lastSeenLineID = nil
+                contextViewStartedAt = Date()
+            }
             // WHEN THE PHONE LAST HEARD ANYTHING, asked on the three moments
             // that can change that answer and on no others: the view appearing,
             // `suspended` flipping, and the app coming back to the foreground.
@@ -1351,31 +1391,34 @@ struct HomeView: View {
                     Task { await session.flushPendingContext() }
                 }
             }
-            // The just-in-time ask. It is provoked by a line she actually
-            // heard, decided by ContextTrigger (a rule, not the model), and it
-            // asks at most once per source. Presented as a sheet rather than a
-            // step, because it is a question about the sentence you just said —
-            // not another page of a wizard.
+            // Optional context offers come from a model with the conversation.
+            // They never interrupt typing or open an OS permission by themselves.
             .onChange(of: session.transcript) { _ in
-                // Only ever on a line that is genuinely NEW to this session.
-                //
-                // `transcript` starts empty and the first poll replaces it
-                // wholesale, so without this the sheet opened on every cold
-                // launch quoting a sentence from hours ago — the unexpected,
-                // unexplained ask that CONSUMER-READINESS T4 exists to prevent.
-                // It re-fired again every time the server filled in a
-                // `decision` on an older line, because any element change makes
-                // the array unequal while `last` is unchanged.
-                guard let latest = session.transcript.last else { return }
-                let firstLoad = lastSeenLineID == nil
-                let alreadySeen = latest.id == lastSeenLineID
+                guard let latest = session.transcript.last,
+                      !latest.id.hasPrefix("local-"), latest.id != lastSeenLineID else { return }
                 lastSeenLineID = latest.id
-                guard !firstLoad, !alreadySeen, contextAsk == nil,
-                      let hit = ContextTrigger.ask(for: latest.text, knownNames: knownNames)
-                else { return }
-                heardForAsk = latest.text
-                askSubject = hit.subject
-                contextAsk = hit.source
+                // A fresh account's first utterance is new input too. History
+                // loaded on opening the screen is identified by its timestamp,
+                // not by whether we happened to have seen another line first.
+                guard let created = AnticipySession.parsePBDate(latest.created),
+                      created >= contextViewStartedAt,
+                      contextOffer == nil, contextAsk == nil else { return }
+                let sources = ContextSource.allCases.filter {
+                    $0.isOnDevice && ContextGrants().mayAsk($0)
+                }.map(\.rawValue)
+                guard !sources.isEmpty else { return }
+                let account = session.accountID
+                let backend = session.backend
+                Task {
+                    guard let data = try? await backend.fetchContextRequest(
+                        eventID: latest.id, availableSources: sources),
+                        let verdict = try? JSONDecoder().decode(ContextTrigger.Verdict.self, from: data),
+                        account == session.accountID, session.isSignedIn,
+                        lastSeenLineID == latest.id,
+                        ContextTrigger.ask(verdict: verdict) != nil else { return }
+                    heardForAsk = latest.text
+                    contextOffer = verdict
+                }
             }
             // onDismiss catches the SWIPE. A sheet dismissed by gesture runs
             // neither button, so nothing was recorded and `mayAsk` stayed true —
@@ -1750,6 +1793,7 @@ struct HomeView: View {
     /// accent-coloured second copy that used to sit inside the stuck-queue
     /// block is not still there saying the same thing louder.
     private var unreachableNotice: some View {
+      DisclosureGroup {
         Text("I don't have a number for you, so there's no SMS backstop. "
              + "Local alerts can reach you while Anticipy is running or listening "
              + "in the background if notifications are allowed. Otherwise, open "
@@ -1758,6 +1802,10 @@ struct HomeView: View {
             .foregroundStyle(Theme.text2)
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)
+      } label: {
+          Label("Text updates are off · Reply here", systemImage: "message.badge.filled.fill")
+              .font(.caption).foregroundStyle(Theme.text2)
+      }
     }
 
     /// The one canonical read behind both the standing Home notice and every
@@ -2437,6 +2485,8 @@ struct ConfirmJobCard: View {
     let canonicalPhoneState: OwnerMirror.PhoneState
     @EnvironmentObject var session: AnticipySession
     @State private var answer = ""
+    @FocusState private var editingAnswer: Bool
+    @State private var submittedAnswer = false
 
     init(job: AgentJob,
          canonicalPhoneState: OwnerMirror.PhoneState = .unknown) {
@@ -2465,7 +2515,7 @@ struct ConfirmJobCard: View {
     private var sending: Bool { session.inFlight.contains(job.id) }
     private var failed: Bool { session.failedWrites.contains(job.id) }
     private var unverified: Bool { session.unverifiedWrites.contains(job.id) }
-    private enum NotificationRoute {
+    private enum NotificationRoute: Equatable {
         case textAndApp, appOnly, checking, phoneNeedsAttention
     }
     private var notificationRoute: NotificationRoute {
@@ -2520,6 +2570,14 @@ struct ConfirmJobCard: View {
                     .padding(.vertical, 10)
                     .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Theme.surface))
                     .accessibilityLabel("Your answer for this task")
+                    .focused($editingAnswer)
+                    .preference(key: DashboardReplyFocusKey.self,
+                                value: editingAnswer ? job.id : nil)
+                if submittedAnswer {
+                    Label("Answer received. I'll update this task when I've processed it.",
+                          systemImage: "checkmark.circle")
+                        .font(.caption).foregroundStyle(Theme.text2)
+                }
             }
             // The write failed and the card is still sitting here. Without
             // this row that reads as a UI glitch, and the natural next move
@@ -2536,8 +2594,13 @@ struct ConfirmJobCard: View {
                     .foregroundStyle(Theme.text2)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            VStack(alignment: .leading, spacing: 3) {
-                Label(notificationLabel, systemImage: "bell")
+            if !editingAnswer {
+            TimelineView(.periodic(from: .now, by: 30)) { context in
+              let caption = DashboardPolicy.notificationCaption(
+                policy: session.notificationPolicy, now: context.date)
+              VStack(alignment: .leading, spacing: 3) {
+                Label(notificationRoute == .textAndApp ? caption.title : notificationLabel,
+                      systemImage: notificationRoute == .textAndApp ? caption.icon : "bell")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(Theme.text2)
                 switch notificationRoute {
@@ -2557,11 +2620,13 @@ struct ConfirmJobCard: View {
                         .foregroundStyle(Theme.muted)
                         .fixedSize(horizontal: false, vertical: true)
                 case .textAndApp:
-                    Text("The result is saved in the app first. I'll also try your saved number; carrier delivery can still fail.")
+                    Text(caption.detail)
                         .font(.caption2)
                         .foregroundStyle(Theme.muted)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+              }
+            }
             }
             HStack(spacing: 10) {
                 Button {
@@ -2571,7 +2636,14 @@ struct ConfirmJobCard: View {
                     if unverified {
                         Task { await session.reconcileWrite(job) }
                     } else {
-                        Task { await session.confirm(job, ownerAnswer: answer) }
+                        Task {
+                            let sent = answer
+                            if await session.confirm(job, ownerAnswer: sent) {
+                                if answer == sent { answer = "" }
+                                editingAnswer = false
+                                submittedAnswer = stuck
+                            }
+                        }
                     }
                 } label: {
                     Group {
@@ -2619,11 +2691,13 @@ struct ConfirmJobCard: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .anticipyCard()
+        .onChange(of: job.workflow_version) { _ in submittedAnswer = false }
+        .onChange(of: job.result) { _ in submittedAnswer = false }
     }
 
     private var notificationLabel: String {
         switch notificationRoute {
-        case .textAndApp: return "Updates: In app · I'll also try text"
+        case .textAndApp: return "Text delivery unconfirmed"
         case .appOnly: return "Updates: In app"
         case .checking: return "Updates: In app · checking text setup"
         case .phoneNeedsAttention: return "Updates: In app"
@@ -2646,6 +2720,8 @@ struct AskCard: View {
     let event: BrainEvent
     @EnvironmentObject var session: AnticipySession
     @State private var answer = ""
+    @FocusState private var editingAnswer: Bool
+    @State private var submittedAnswer = false
 
     private var sending: Bool { session.inFlight.contains(event.id) }
     private var failed: Bool { session.failedWrites.contains(event.id) }
@@ -2671,6 +2747,13 @@ struct AskCard: View {
                 .padding(.vertical, 10)
                 .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Theme.surface))
                 .accessibilityLabel("Your answer to her question")
+                .focused($editingAnswer)
+                .preference(key: DashboardReplyFocusKey.self,
+                            value: editingAnswer ? event.id : nil)
+            if submittedAnswer {
+                Label("Answer received", systemImage: "checkmark.circle")
+                    .font(.caption).foregroundStyle(Theme.text2)
+            }
             // Same reason ConfirmJobCard carries this row: a write that failed
             // while the card stayed put reads as a UI glitch, and the natural
             // next move is to send again.
@@ -2695,7 +2778,12 @@ struct AskCard: View {
                     if unverified {
                         await session.reconcileAnswer(event)
                     } else {
-                        await session.answer(event, text: answer)
+                        let sent = answer
+                        if await session.answer(event, text: sent) {
+                            if answer == sent { answer = "" }
+                            editingAnswer = false
+                            submittedAnswer = true
+                        }
                     }
                 }
             } label: {

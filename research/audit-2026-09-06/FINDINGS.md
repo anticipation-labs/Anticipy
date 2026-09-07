@@ -1,7 +1,13 @@
-# Findings under investigation
+# Findings and historical investigation log
 
-This is an active audit ledger. Source observations are not reproduced runtime
-defects until their experiment is recorded. No release verdict has been issued.
+**Current handoff state is in PLAN.md; current deployment evidence is in
+verification.json and BACKEND-CONSENT-REPAIR.md.** The dated entries below preserve
+the investigation history. Statements such as "not deployed" describe those
+checkpoints and must not be read as current status. API and eight brain runtimes
+were verified at 1682d69; the whole audit and fresh-user handoff remain incomplete.
+
+Source observations are not reproduced runtime defects until their experiment is
+recorded.
 
 | Finding | Evidence so far | State / next experiment |
 | --- | --- | --- |
@@ -240,3 +246,130 @@ for every person. It now runs up to eight isolated people concurrently (six in
 the current cohort) with a distinct run tag recorded at the model-budget proxy.
 Twelve budget tests pass, including racing reservations and attribution of
 out-of-order completions. Provider requests still share one locked dollar cap.
+
+## 2026-09-07: completed 50-person ingestion evaluation and release verification repair
+
+All 50 fictional people now have real-model transcript observations; ten held-out cases were opened once after the identity-context correction. See held-out-results.json. This proves ingestion and persisted proposed work, not browser/provider outcomes. Observed paid model cost is US$1.896704, with no unresolved reservations at this checkpoint.
+
+The canonical account email now reaches both model tiers with explicit ownership. The pickup-contact and client-recipient failures no longer substitute the owner in two fresh full-path replays. Some responses still ask to start already-queued work; most preparation remains held. These are recorded defects, not passed tasks.
+
+Adversarial review found that GET /health reconciled the fleet and always asserted success, while the container also said ok:true with a dead child. The repair makes GET read a stored observation only, coalesces overlapping scheduled reconciliations, reads actual container process/snapshot status under the lifecycle lock using raw port transport (no implicit restart), and fingerprints the image source. A private internal-key API route relays only that fixed read. CI now refuses to call the brain verified until the active Worker revision and every observed runtime fingerprint match and their snapshots are current. Unit checks exercise dead process, missing/stale/failed snapshots, stale fleet status and unauthorized transport.
+
+The first live brain verification exposed two deployment details: Cloudflare rejects Python's default user agent (403/1010), while the named release-proof client reaches the internal-key route; and the new Worker was talking to all eight OLD container images. The verifier correctly counted zero verified runtimes. The configured one-hour active grace period measures the connection age, not the shutdown flush budget. The rollout now explicitly targets [25,100] with a five-minute connection-age window; Cloudflare still gives SIGTERM handlers 15 minutes to exit. Sources: https://developers.cloudflare.com/containers/configuration/rollouts/ and https://developers.cloudflare.com/r2/api/s3/api/. No success claim is based on deployment completion alone.
+
+Five browser simulations now run the shipped extension loop with real Sonnet 4.6 model replies and an authored in-memory browser. Four completed their read task correctly: comparison across two stores, revised attendance versus venue capacity, a premature success banner versus the persisted-ledger page, and hostile instructions embedded in club minutes. The gallery case stopped before reading a mailbox and awaits the simulated owner's consent. No actual Chrome or provider operation is claimed by this layer. See browser-simulation-results.json; total paid spend was US$1.988953 before further runs.
+
+The newly observable live image reported that the primary model is DeepSeek v3.2 and the strong second opinion was not configured. The production image now defaults that second opinion to the same Gemini 3.1 Pro Preview tier used by the recorded transcript tests; the live verifier checks that runtime setting too.
+
+Prepared the authenticated operator reset path for the owner's explicit reset request. It checks the internal secret, canonical owner ID, account email, latest profile email and exact E.164 phone before using the existing public erasure implementation. Mismatched identifiers must leave both accounts and the purge queue untouched; the local real-schema test verifies this. CI exercises this path only with its own .invalid fixture, never the owner's account. The real account reset has not yet been executed.
+
+The next observation still showed seven old images and only one image carrying the new runtime fingerprint. The follow-up release uses Cloudflare's default zero connection-age delay and an explicit 100% immediate target, retaining the platform's separate 15-minute SIGTERM drain. The earlier verification-only wait was cancelled after deployment; no running app was cancelled. This replaces the intermediate five-minute policy above. The current eight-process fleet must all pass runtime checks before release is called complete.
+
+### Current verified outcomes and remaining reset work
+
+API release ec42707 passed 22 live checks in run 34085161382, including the
+operator reset using only a synthetic fixture. Five of eight brain containers
+now carry the expected runtime fingerprint, strong model configuration and
+current snapshots. Three still expose the old control response. A read-only CI
+inspection now reports container rollout/instance scalar metadata, excluding all
+environment/configuration values, independently of the serialized deploy job.
+
+The gallery simulation completed after a simulated owner reply using the actual
+extension's resume envelope. Its answer keeps three accepted catalog IDs distinct
+from the waiting-list work. All five browser simulations therefore have correct
+inspected read outcomes. Simulated consent is not the real owner's Google consent.
+Total paid model usage is US$2.017588 with no unresolved reservations.
+
+App Store Connect query 34084961603 independently confirms build 159 is VALID and
+IN_BETA_TESTING. The complete app/ios subtree equals the upload commit
+1b3737cb07390a7ed6634eef4891e005f9782de8 (tree
+b4e48f6ba302f0600be2a79cc2e2bbdec281a7ab). This audit did not change iOS source
+or create that upload. A further upload is unnecessary for the current iOS tree.
+
+Read-only historical archive inspection found a PocketBase data.db whose integrity
+check and agents-table scan fail with corruption. It still contains the verified
+reset subject's account/profile and at least 200 events, nine jobs and five
+segments. Those private rows were not published. Blindly replacing or discarding
+the archive could lose unrelated records; no remote archive rewrite has occurred.
+The account reset and full backup erasure remain unfinished. Source/git/company
+archives are not product-account stores and are excluded from this reset.
+
+The PDF was regenerated with these current outcomes, all 50 exemplars and explicit
+coverage limitations; all 13 pages were rendered and visually reviewed.
+
+Read-only inspection 34085906704 reports the latest container rollout completed
+and five instances on the new image. Three account DOs have no deployment link in
+that listing yet still answer with the old runtime response. This contradicts
+the assumption that more waiting alone will converge. A recovery now compares the
+expected runtime source supplied by CI, checks a recent nonempty R2 memory object,
+and signals an old image once with SIGTERM. It does not use SIGKILL, does not
+restart a matching image waiting for its first snapshot, and cannot repeatedly
+interrupt a flush. Missing/stale snapshots refuse automatic restart. Unit checks
+cover these conditions; live recovery remains to be observed.
+
+Composio's project Users page was inspected through the actual dashboard. It
+shows only the synthetic probe account, with one expired Google Calendar
+connection and no active account. The unused temporary API-key form was
+cancelled without creating a key. No real Google connection is available for
+authenticated integration execution yet.
+
+### Live runtime verification completed
+
+At 05:21 UTC, brain deployment 34086177008 at ebbac06 passed all eight running
+instances against the expected source hash, running process, configured strong
+model and current snapshot. The owner's instance is included. A separate direct
+read returned current:true and ok:true with eight verified instances. The paid
+test gateway was stopped at US$2.017588; there are no outstanding reservations.
+This establishes deployed runtime health, not untested provider outcomes or
+completion of the account reset.
+
+The browser runner was a measurable source of avoidable delay: its 94 isolated
+Node processes ran serially. The successful CI baseline's browser step took
+458 seconds (34085067621). The runner now starts at most eight processes, retains
+the duplicate/unregistered-suite checks and per-suite timeout, and preserves
+nonzero exits. All 94 real suites passed locally in 72.51 seconds. An isolated
+fixture confirmed every suite executes once and one exit-7 child causes the
+parent to exit 1 without skipping the other children. The timing comparison is
+across CI and the Mac, so the next CI run is the comparable measurement.
+
+Comparable CI result: run 34086802463 passed the full system checks at 7267a72.
+Its browser step ran from 05:28:01 to 05:29:14 UTC: 73 seconds for all 94 suites,
+versus 458 seconds in the preceding serial baseline, approximately 6.3 times
+faster. The worker checks and Python suite also passed. No production runtime
+changed for this runner optimization.
+
+## September 7 — memory meaning repair
+
+The old 0.8 overlap shortcut merged different people, reversed roles, changed
+case-sensitive values and numerical corrections without a model call. Its
+dropped-word guard and older tests incorrectly defended this as structural.
+The same family could delete another person’s fact through a veto, collapse
+non-Latin veto keys, or close a task for the wrong recipient. New regressions
+reproduced these failures before edits. All nonidentical fact relations, veto
+coverage and commitment targets now require contextual model judgments. Only
+identical stored bytes use deterministic replay. Corrections preserve the old
+row as retired history; old paraphrases are judged with retirement metadata.
+Unanswered historical or veto comparisons defer writes, preserving retryable
+events. Unknown completion targets leave commitments open.
+
+The default DeepSeek model still failed identity/case distinctions with complete
+notes. Examples improved this but a name correction remained inconsistent. The
+configured stronger model passed all 16 real-model synthetic scenarios; it now
+handles durable memory reconciliation, vetoes, and commitment targets through
+the normal Anticipy initialization path. Extraction retains its existing model.
+Source grounding refreshes on each judgment. See memory-repair-results.json and
+proof/audit/run_memory_relations.py. These runs exercise real model calls and the
+production memory store locally; deployment verification is still pending.
+
+The Python suite passed 3,003 tests with two skips. An unrelated clock test had
+asserted that the substring “0.6” could never appear, then failed on the valid
+age “120.6h”; it now checks the complete age token while retaining its positive
+real-device and elapsed-time assertions.
+
+Voice repair: the composer now uses the configured stronger model with fresh
+owner grounding and a separate Anticipy identity. The prompt distinguishes
+awaiting_confirm from already queued/running work. Twelve real compositions
+passed semantic review; no test messages were sent. Initial six-way execution
+hit the audit gateway’s conservative reservation ceiling after five calls, so
+the incomplete run remains private evidence and the runner uses four concurrent
+calls. Completed results are in voice-state-repair-results.json.

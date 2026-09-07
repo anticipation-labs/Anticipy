@@ -1,5 +1,10 @@
 # What is actually blocking this migration
 
+> **Historical record.** As of 2026-09-07, both API and brain deployments have
+> executed on Cloudflare. These September 3-4 billing/setup blockers no longer
+> describe production. Current verification and account-reset work is tracked
+> in [the active audit](../research/audit-2026-09-06/PLAN.md).
+
 > **STALE AS OF 2026-09-04 — do not plan off the table below without reading
 > this first.** Re-measured on the same account a day later: **Workers Paid has
 > landed and R2 is enabled.** `wrangler containers list` → "No containers

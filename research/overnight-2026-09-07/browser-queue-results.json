@@ -1,0 +1,51 @@
+{
+  "scenario": "compare",
+  "scope": "Real isolated Chrome DOM and CDP; adapted extension plumbing; real model; synthetic website network only",
+  "throughBackend": true,
+  "throughQueue": true,
+  "selectedModel": "google/gemini-3.1-pro-preview",
+  "passed": true,
+  "modelCalls": 4,
+  "elapsedMs": 53258,
+  "modelErrors": [],
+  "refusedNetworkAttempts": [],
+  "consoleErrors": [],
+  "status": "done",
+  "workflow_state": "succeeded",
+  "consequence": "read_only",
+  "result": "[{\"store\":\"shop\",\"price\":\"USD 64.00\",\"url\":\"https://shop.audit.invalid/lamp\",\"is_lower_price\":\"false\"},{\"store\":\"outlet\",\"price\":\"USD 59.00\",\"url\":\"https://outlet.audit.invalid/lamp\",\"is_lower_price\":\"true\"}]",
+  "receipt": {
+    "effect_key": "34739b33d822dc89ff899f02c3e41b7eff1dd90f1df1d2fb968fd33a86152a8c",
+    "summary": "[{\"store\":\"shop\",\"price\":\"USD 64.00\",\"url\":\"https://shop.audit.invalid/lamp\",\"is_lower_price\":\"false\"},{\"store\":\"outlet\",\"price\":\"USD 59.00\",\"url\":\"https://outlet.audit.invalid/lamp\",\"is_lower_price\":\"true\"}]",
+    "evidence": [
+      "evidence:jz8u4de6fyf8wvc",
+      "url:https://outlet.audit.invalid/lamp",
+      "title:",
+      "page:83:92634803|90:da396f1c|2:741638a5",
+      "facts:",
+      "proof:independent-model-audit",
+      "journal:shop.audit.invalid/lamp#96b7c4aa,outlet.audit.invalid/lamp#d4c61755",
+      "shot:verified-done@https://outlet.audit.invalid/lamp"
+    ],
+    "verified": true,
+    "recorded_at": "2026-09-07T12:44:29.736Z"
+  },
+  "source_pages": [
+    {
+      "method": "GET",
+      "url": "https://owner.audit.invalid/reading"
+    },
+    {
+      "method": "GET",
+      "url": "https://shop.audit.invalid/lamp"
+    },
+    {
+      "method": "GET",
+      "url": "https://outlet.audit.invalid/lamp"
+    }
+  ],
+  "cleanup": {
+    "account_deleted": true,
+    "old_credential_status": 403
+  }
+}

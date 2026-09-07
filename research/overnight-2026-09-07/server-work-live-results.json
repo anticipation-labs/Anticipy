@@ -1,0 +1,52 @@
+{
+  "scope": "Observe contextual replies on the designated production probe, phone disabled.\n\nThis records actual replies for semantic review. It never asserts that receiving\nany text proves the right answer, and never exercises a real person's account.\n",
+  "observations": [
+    {
+      "case": "private-artifact",
+      "source": "Please write a short private note asking the team to review the green folder by Friday. Keep it here for my review and do not send or save it in another app.",
+      "decision": "new_request",
+      "replies": [
+        "your request to draft the private note about the green folder by Friday is queued. it'll stay right here for your review once it's ready.",
+        "Here is your private draft. Nothing was sent or saved in any other app.\n\nHi team,\n\nCould you please review the green folder by Friday, September 11? Let me know if you have any questions or need anything else.\n\nThanks,\nE2E"
+      ],
+      "elapsed_seconds": 82.84,
+      "attribution": "new owner-scoped reply rows during one isolated request; ordinary replies have no parent_line",
+      "semantic_review_required": true
+    }
+  ],
+  "real_messages_sent": 0,
+  "artifact": {
+    "passed": true,
+    "result": "Here is your private draft. Nothing was sent or saved in any other app.\n\nHi team,\n\nCould you please review the green folder by Friday, September 11? Let me know if you have any questions or need anything else.\n\nThanks,\nE2E",
+    "execution": {
+      "approach": {
+        "verdict": "compose",
+        "reason": "I can draft the requested note based on the provided instructions without needing external access or research."
+      },
+      "verification": {
+        "verdict": "satisfied",
+        "reason": "The candidate successfully drafted the requested private note asking the team to review the green folder by Friday, correctly identifying the date as September 11."
+      }
+    },
+    "receipt": {
+      "effect_key": "ccd853b9e55ae7402486576a317d1c786064a52f24dedc1a21a120e56f105772",
+      "summary": "Here is your private draft. Nothing was sent or saved in any other app.\n\nHi team,\n\nCould you please review the green folder by Friday, September 11? Let me know if you have any questions or need anything else.\n\nThanks,\nE2E",
+      "evidence": [
+        "text-sha256:2928ae43328c03aee79746286dc1ca12b0c6bc4158de47ead67b867739e10de7"
+      ],
+      "verified": true,
+      "recorded_at": "2026-09-07T16:56:26.334912+00:00"
+    },
+    "app_result_delivered": true
+  },
+  "created_jobs": [
+    {
+      "status": "done",
+      "goal": "draft a private note asking the team to review the green folder by Friday"
+    }
+  ],
+  "tasks_cancelled": [
+    true
+  ],
+  "fixture_phone_restored": true
+}

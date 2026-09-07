@@ -68,6 +68,26 @@ def _spoken(monkeypatch, parsed):
     return c
 
 
+def test_a_computed_memory_answer_replaces_the_classifiers_acknowledgement(monkeypatch):
+    from brain.orchestrator import Decision
+    _pb(monkeypatch, [])
+    c = _spoken(monkeypatch, {"intent": "new_request", "reply": "On it. I'll look it up."})
+    answer = "Alex promised to send the deck. You agreed to review it after it arrives."
+    monkeypatch.setattr(c.anticipy, "hear", lambda *a, **k: {
+        "decision": Decision(decision="answer", goal=None, reason="memory answer"), "anticipy_says": answer})
+    out = c.on_reply("+15550001", "What did I promise Alex?")
+    assert out["reply"] == answer
+
+
+def test_a_request_that_did_not_start_cannot_reuse_a_premature_acknowledgement(monkeypatch):
+    _pb(monkeypatch, [])
+    c = _spoken(monkeypatch, {"intent": "new_request", "reply": "On it. I'll get that done."})
+    monkeypatch.setattr(c, "_think", lambda *a, **k: None)
+    out = c.on_reply("+15550001", "Prepare the comparison")
+    assert out["reply"] == "I couldn't start that request. Please try again."
+    assert out["acted"] is None
+
+
 def _two_held():
     return [{"id": "dinner", "goal": "Book dinner at Earls",
              "status": "awaiting_confirm",
@@ -141,7 +161,7 @@ def test_an_amendment_never_goes_out_as_a_booking_claim(monkeypatch):
     out = c.on_reply("+15550001", "make it 7 instead")
     assert out["acted"] == "amended:dinner"
     assert "booked" not in out["reply"]
-    assert "waiting on your go-ahead" in out["reply"]
+    assert "Ready for me to go ahead?" in out["reply"]
     assert jobs[0]["status"] == "awaiting_confirm"
 
 
@@ -222,6 +242,7 @@ def test_two_tasks_wanting_the_same_noun_resume_neither(monkeypatch):
 # ------------------------------------------------------------- resume paths
 
 def test_a_correction_made_while_parked_rides_in_with_the_answer(monkeypatch):
+    monkeypatch.setattr(Conversation, "_resolve_question", lambda *args: {"verdict": 'answered', "changes": {'location': 'Park Royal'}, "remaining_question": ""})
     """He moved it to 6 while it sat parked; then he answered the question it
     was parked on. Only _release ever folded corrections into the authority,
     so the resumed run read 8pm out of the goal and booked 8pm."""
@@ -325,27 +346,25 @@ def test_a_postal_code_is_not_a_secret():
 
 # -------------------------------------------------------- the offline lane
 
-def test_no_worries_is_not_a_cancellation(monkeypatch):
-    """This fallback runs on ANY malformed model reply, not just an outage.
-    A bare \\bno\\b inside a pleasantry cancelled his only held booking and
-    closed the promise behind it."""
-    _pb(monkeypatch, [{"id": "dinner", "goal": "Book dinner at Earls",
-                       "status": "awaiting_confirm", "params": "{}"}])
-    c = _bare()
-    assert c._classify("+15550001", "no worries, thanks")["intent"] == "chat"
-    assert c._classify("+15550001", "no rush")["intent"] == "chat"
-    assert c._classify("+15550001", "i don't know")["intent"] == "chat"
-    # A real refusal still is one.
-    assert c._classify("+15550001", "no")["intent"] == "decline"
-    assert c._classify("+15550001", "forget it")["intent"] == "decline"
-
-
-def test_offline_refusal_reaches_a_job_parked_for_information(monkeypatch):
+def test_no_model_verdict_never_becomes_consent_or_refusal(monkeypatch):
     jobs = _pb(monkeypatch, [{"id": "dinner", "goal": "Book dinner at Earls",
                               "status": "needs_user", "params": "{}"}])
     c = _bare()
-    assert c._classify("+15550001", "forget it")["intent"] == "decline"
     monkeypatch.setattr(c, "say", lambda *_a, **_k: None)
+    for text in ["no worries, thanks", "no rush", "I don't know", "no", "forget it",
+                 "yes", "the second one", "all of them", "go ahead please"]:
+        assert c._classify("+15550001", text)["intent"] == "unavailable"
+        out = c.on_reply("+15550001", text)
+        assert out["acted"] is None
+        assert "haven't changed any tasks" in out["reply"]
+        assert jobs[0]["status"] == "needs_user"
+
+
+def test_model_refusal_reaches_a_job_parked_for_information(monkeypatch):
+    jobs = _pb(monkeypatch, [{"id": "dinner", "goal": "Book dinner at Earls",
+                              "status": "needs_user", "params": "{}"}])
+    c = _spoken(monkeypatch, {"intent": "decline", "pending_id": "dinner",
+                              "reply": "I'll cancel that."})
     out = c.on_reply("+15550001", "forget it")
     assert out["acted"] == "cancelled:dinner"
     assert jobs[0]["status"] == "cancelled"

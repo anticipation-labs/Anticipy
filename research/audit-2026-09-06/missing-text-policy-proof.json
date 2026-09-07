@@ -1,0 +1,9 @@
+{
+  "observed_at_local": "2026-09-07 00:26:48 America/Vancouver",
+  "test": "production SPEAK_ONCE with frozen capture time",
+  "kind": "ambient_act",
+  "result": "defer",
+  "network_calls": 0,
+  "texts_sent": 0,
+  "scope": "proves the night-time suppression branch; not a Sendblue delivery test"
+}

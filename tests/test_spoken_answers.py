@@ -129,7 +129,10 @@ def test_hear_consults_parked_work_before_triage():
     # already delivers those itself).
     call = hear[hear.index("_spoken_answer_to_parked_work") - 200:
                 hear.index("_spoken_answer_to_parked_work") + 80]
-    assert "not explicit" in call and "not dictated" in call
+    assert "not explicit" in call
+    authored = hear.index('if content.verdict == "authored_content"')
+    answer = hear.index("_spoken_answer_to_parked_work")
+    assert authored < answer and "return {" in hear[authored:answer]
 
 
 # ------------------------------- a card he already knows about survives

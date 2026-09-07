@@ -9,7 +9,8 @@ saying 6. Times, party sizes and counts are exactly the details worth
 updating, and they were the only kind guaranteed to be lost.
 """
 import tempfile, os, pytest
-from brain.memory import Memory, _fact_numbers
+from brain.memory import Memory
+from llm_fakes import FakeLLM
 
 
 @pytest.fixture
@@ -26,19 +27,16 @@ def _facts(m):
     return [r[0] for r in m.db.execute("SELECT fact FROM profile_facts").fetchall()]
 
 
-def test_numbers_are_never_dropped_from_comparison():
-    assert _fact_numbers("dinner with Sarah at 6") == {"6"}
-    assert _fact_numbers("dinner with Sarah at 6") != _fact_numbers("dinner with Sarah at 8")
-    assert _fact_numbers("table for 2 at 7:30") == {"2", "7:30"}
-
-
 def test_a_moved_dinner_updates_the_time(mem):
+    mem.llm = FakeLLM(relations=["replaces"])
     mem.remember_fact("dinner with Sarah at 6", importance=3)
     mem.remember_fact("dinner with Sarah at 8", importance=3)
-    facts = _facts(mem)
+    facts = [f["fact"] for f in mem.profile_facts()]
     assert len(facts) == 1, f"should stay one fact, got {facts}"
     assert "8" in facts[0], f"the NEW time must win, profile says: {facts[0]!r}"
     assert "6" not in facts[0], f"the stale time must be gone, profile says: {facts[0]!r}"
+    assert mem.db.execute("SELECT retired_ts FROM profile_facts WHERE id=1").fetchone()[0] is not None
+    assert len(mem.llm.relation_calls()) == 1
 
 
 def test_a_plain_restatement_still_merges_without_churn(mem):
@@ -54,9 +52,10 @@ def test_genuinely_different_facts_stay_separate(mem):
 
 
 def test_party_size_change_is_kept(mem):
+    mem.llm = FakeLLM(relations=["replaces"])
     mem.remember_fact("table for 2 at Earls", importance=3)
     mem.remember_fact("table for 4 at Earls", importance=3)
-    facts = _facts(mem)
+    facts = [f["fact"] for f in mem.profile_facts()]
     assert len(facts) == 1 and "4" in facts[0], facts
 
 

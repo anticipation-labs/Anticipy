@@ -8,14 +8,13 @@
  *   - which provider is chosen for which environment, and that the owner's
  *     ANTICIPY_SMS_PROVIDER wins over what happens to be configured;
  *   - the exact Sendblue request (URL, both key headers, from_number/number/
- *     content) and the exact Twilio request the two call sites used to build
- *     (URL, Basic auth, form body To/From/Body);
+ *     content), and no network effect from any retired Twilio configuration;
  *   - what "sent" means: QUEUED/SENT are ok with the message_handle; a 2xx
  *     carrying ERROR or DECLINED or an error_code is NOT; a 401 is not; an
  *     unreadable 2xx is not; a thrown fetch is a result, never an exception;
  *   - that no key, token or message body ever reaches a log line, and that
  *     the line carries the provider and the last four digits only;
- *   - that SENDBLUE_API_BASE / TWILIO_API_BASE move the host for loopback only.
+ *   - that SendBlue test host overrides are loopback-only.
  *
  * Mutations this must catch (run by hand, see the commit that added it):
  *   (a) ERROR read as ok           → "2xx + ERROR" case red
@@ -25,7 +24,7 @@
 import assert from "node:assert/strict";
 import {
   sendText, chooseProvider, apiBase, last4,
-  SENDBLUE_BASE, TWILIO_BASE, SEND_TIMEOUT_MS,
+  SENDBLUE_BASE, SEND_TIMEOUT_MS,
   type MessagingEnv, type SendResult,
 } from "../src/messaging.ts";
 
@@ -89,18 +88,18 @@ await check("both configured → Sendblue (the default points at the new provide
   assert.equal(chooseProvider({ ...TWILIO, ...SENDBLUE }), "sendblue");
 });
 
-await check("Twilio is chosen when only TWILIO_* is bound", () => {
-  assert.equal(chooseProvider(TWILIO), "twilio");
+await check("retired Twilio credentials never select a sender", () => {
+  assert.equal(chooseProvider(TWILIO), "none");
   assert.equal(chooseProvider({ TWILIO_ACCOUNT_SID: TW_SID, TWILIO_AUTH_TOKEN: TW_TOKEN, TWILIO_FROM: TW_FROM }),
-    "twilio", "TWILIO_FROM is the second name for the sender");
+    "none", "a retired sender alias is ignored");
   assert.equal(chooseProvider({ TWILIO_ACCOUNT_SID: TW_SID, TWILIO_PHONE_NUMBER: TW_FROM,
     TWILIO_API_KEY_SID: TW_KEY_SID, TWILIO_API_KEY_SECRET: TW_KEY_SECRET }),
-    "twilio", "an API key pair is a credential on its own");
+    "none", "retired credentials cannot authorize sending");
 });
 
 await check("two of three Sendblue names is not Sendblue", () => {
   assert.equal(chooseProvider({ SENDBLUE_API_KEY_ID: SB_KEY_ID, SENDBLUE_API_SECRET_KEY: SB_SECRET }), "none");
-  assert.equal(chooseProvider({ ...TWILIO, SENDBLUE_API_KEY_ID: SB_KEY_ID, SENDBLUE_FROM_NUMBER: SB_FROM }), "twilio");
+  assert.equal(chooseProvider({ ...TWILIO, SENDBLUE_API_KEY_ID: SB_KEY_ID, SENDBLUE_FROM_NUMBER: SB_FROM }), "none");
 });
 
 await check("neither configured → none, and sendText says so without calling anyone", async () => {
@@ -111,22 +110,22 @@ await check("neither configured → none, and sendText says so without calling a
 });
 
 await check("ANTICIPY_SMS_PROVIDER is the owner's word and beats configuration both ways", async () => {
-  assert.equal(chooseProvider({ ...TWILIO, ...SENDBLUE, ANTICIPY_SMS_PROVIDER: "twilio" }), "twilio");
+  assert.equal(chooseProvider({ ...TWILIO, ...SENDBLUE, ANTICIPY_SMS_PROVIDER: "twilio" }), "none");
   assert.equal(chooseProvider({ ...TWILIO, ...SENDBLUE, ANTICIPY_SMS_PROVIDER: "Sendblue " }), "sendblue");
   // Said sendblue, keys absent: a FAILED send, never a fall-through to Twilio.
   const r = await sendText({ ...TWILIO, ANTICIPY_SMS_PROVIDER: "sendblue" }, TO, BODY);
   assert.equal(r.ok, false);
-  assert.equal(r.provider, "sendblue");
+  assert.equal(r.provider, "none");
   assert.equal(calls.length, 0, "Twilio must not have been asked");
   // And the mirror: said twilio, Twilio absent — a failed send, not Sendblue.
   const t = await sendText({ ...SENDBLUE, ANTICIPY_SMS_PROVIDER: "twilio" }, TO, BODY);
-  assert.deepEqual(t, { ok: false, provider: "twilio", status: 0, error: "twilio is not configured" });
+  assert.deepEqual(t, { ok: false, provider: "none", status: 0, error: "no messaging provider configured" });
   assert.equal(calls.length, 0, "Sendblue must not have been asked");
 });
 
-await check("an unrecognised ANTICIPY_SMS_PROVIDER falls back to configuration", () => {
-  assert.equal(chooseProvider({ ...SENDBLUE, ANTICIPY_SMS_PROVIDER: "pigeon" }), "sendblue");
-  assert.equal(chooseProvider({ ...TWILIO, ANTICIPY_SMS_PROVIDER: "pigeon" }), "twilio");
+await check("an unrecognised provider fails closed", () => {
+  assert.equal(chooseProvider({ ...SENDBLUE, ANTICIPY_SMS_PROVIDER: "pigeon" }), "none");
+  assert.equal(chooseProvider({ ...TWILIO, ANTICIPY_SMS_PROVIDER: "pigeon" }), "none");
 });
 
 // --- the Sendblue wire ------------------------------------------------------
@@ -212,8 +211,8 @@ await check("a thrown fetch (timeout, refused) is a result, never an exception",
   const r = await sendText(SENDBLUE, TO, BODY);
   assert.deepEqual(r, { ok: false, provider: "sendblue", status: 0, error: "TimeoutError" });
   reply = () => { throw new TypeError("fetch failed"); };
-  const t = await sendText(TWILIO, TO, BODY);
-  assert.deepEqual(t, { ok: false, provider: "twilio", status: 0, error: "TypeError" });
+  const t = await sendText(SENDBLUE, TO, BODY);
+  assert.deepEqual(t, { ok: false, provider: "sendblue", status: 0, error: "TypeError" });
 });
 
 await check("an empty recipient sends nothing", async () => {
@@ -222,67 +221,35 @@ await check("an empty recipient sends nothing", async () => {
   assert.equal(calls.length, 0);
 });
 
-// --- the Twilio wire, as the two call sites had it ---------------------------
-await check("the Twilio request is exact: URL, Basic sid:token, form body To/From/Body", async () => {
-  reply = () => json(201, { sid: "SM123", status: "queued" });
-  const r = await sendText(TWILIO, TO, BODY);
-  assert.equal(calls.length, 1);
-  const c = calls[0];
-  assert.equal(c.url, `${TWILIO_BASE}/2010-04-01/Accounts/${TW_SID}/Messages.json`);
-  assert.equal(c.url, `https://api.twilio.com/2010-04-01/Accounts/${TW_SID}/Messages.json`);
-  assert.equal(c.method, "POST");
-  assert.equal(c.headers["authorization"], "Basic " + btoa(`${TW_SID}:${TW_TOKEN}`));
-  assert.equal(c.headers["content-type"], "application/x-www-form-urlencoded");
-  assert.equal(c.body, new URLSearchParams({ To: TO, From: TW_FROM, Body: BODY }).toString());
-  assert.equal(c.headers["sb-api-key-id"], undefined);
-  assert.ok(c.signal instanceof AbortSignal);
-  assert.deepEqual(r, { ok: true, provider: "twilio", id: "SM123", status: "queued" });
-});
-
-await check("Twilio prefers the scoped API key pair, as password_reset.ts did; one name alone falls back", async () => {
-  reply = () => json(201, { sid: "SM1", status: "queued" });
-  await sendText({ ...TWILIO, TWILIO_API_KEY_SID: TW_KEY_SID, TWILIO_API_KEY_SECRET: TW_KEY_SECRET }, TO, BODY);
-  assert.equal(calls[0].headers["authorization"], "Basic " + btoa(`${TW_KEY_SID}:${TW_KEY_SECRET}`));
-  assert.ok(calls[0].url.includes("/Accounts/" + TW_SID + "/"), "the URL still carries the account SID");
-  await sendText({ ...TWILIO, TWILIO_API_KEY_SID: TW_KEY_SID }, TO, BODY);
-  assert.equal(calls[1].headers["authorization"], "Basic " + btoa(`${TW_SID}:${TW_TOKEN}`));
-});
-
-await check("TWILIO_FROM is honoured when TWILIO_PHONE_NUMBER is absent", async () => {
-  reply = () => json(201, { sid: "SM1", status: "queued" });
-  await sendText({ TWILIO_ACCOUNT_SID: TW_SID, TWILIO_AUTH_TOKEN: TW_TOKEN, TWILIO_FROM: "+15550003333" }, TO, BODY);
-  assert.equal(new URLSearchParams(calls[0].body).get("From"), "+15550003333");
-});
-
-await check("Twilio: res.ok is the truth, exactly as before", async () => {
-  reply = () => json(400, { code: 21211, message: "invalid To" });
-  const r = await sendText(TWILIO, TO, BODY);
-  assert.deepEqual(r, { ok: false, provider: "twilio", status: 400, error: "21211" });
-  reply = () => new Response("", { status: 201 });
-  assert.equal((await sendText(TWILIO, TO, BODY)).ok, true, "a 2xx with no body was ok before and still is");
+// Retired settings must not make even one outbound request.
+await check("Twilio cannot send with any former credential shape", async () => {
+  for (const env of [TWILIO,
+    {...TWILIO, TWILIO_API_KEY_SID: TW_KEY_SID, TWILIO_API_KEY_SECRET: TW_KEY_SECRET},
+    {...TWILIO, ...SENDBLUE, ANTICIPY_SMS_PROVIDER: "twilio"}]) {
+    const result = await sendText(env, TO, BODY);
+    assert.equal(result.ok, false);
+    assert.equal(calls.length, 0);
+  }
 });
 
 // --- the loopback seatbelt ---------------------------------------------------
-await check("SENDBLUE_API_BASE / TWILIO_API_BASE move the host for loopback only", async () => {
+await check("SendBlue test host overrides are loopback-only", async () => {
   assert.equal(apiBase(undefined, SENDBLUE_BASE, "X"), SENDBLUE_BASE);
   assert.equal(apiBase("", SENDBLUE_BASE, "X"), SENDBLUE_BASE);
   assert.equal(apiBase("http://127.0.0.1:9797/", SENDBLUE_BASE, "X"), "http://127.0.0.1:9797");
   assert.equal(apiBase("http://localhost:9797", SENDBLUE_BASE, "X"), "http://localhost:9797");
   assert.equal(apiBase("http://[::1]:9797", SENDBLUE_BASE, "X"), "http://[::1]:9797");
   assert.equal(apiBase("https://evil.example", SENDBLUE_BASE, "X"), SENDBLUE_BASE);
-  assert.equal(apiBase("http://127.0.0.1.evil.example", TWILIO_BASE, "X"), TWILIO_BASE);
-  assert.equal(apiBase("not a url", TWILIO_BASE, "X"), TWILIO_BASE);
+  assert.equal(apiBase("http://127.0.0.1.evil.example", SENDBLUE_BASE, "X"), SENDBLUE_BASE);
+  assert.equal(apiBase("not a url", SENDBLUE_BASE, "X"), SENDBLUE_BASE);
 
   reply = () => json(200, { message_handle: "mh", status: "QUEUED" });
   await sendText({ ...SENDBLUE, SENDBLUE_API_BASE: "http://127.0.0.1:9797" }, TO, BODY);
   assert.equal(calls[0].url, "http://127.0.0.1:9797/api/send-message");
   await sendText({ ...SENDBLUE, SENDBLUE_API_BASE: "https://evil.example" }, TO, BODY);
   assert.equal(calls[1].url, "https://api.sendblue.com/api/send-message");
-  reply = () => json(201, { sid: "SM", status: "queued" });
   await sendText({ ...TWILIO, TWILIO_API_BASE: "http://127.0.0.1:9798" }, TO, BODY);
-  assert.equal(calls[2].url, `http://127.0.0.1:9798/2010-04-01/Accounts/${TW_SID}/Messages.json`);
-  await sendText({ ...TWILIO, TWILIO_API_BASE: "https://evil.example" }, TO, BODY);
-  assert.equal(calls[3].url, `https://api.twilio.com/2010-04-01/Accounts/${TW_SID}/Messages.json`);
+  assert.equal(calls.length, 2, "retired provider cannot reach even an override host");
 });
 
 await check("the timeout is the sweep's 15 s", () => {
@@ -295,7 +262,7 @@ await check("no secret and no body in any log line; provider and last four are t
   const env = { ...TWILIO, ...SENDBLUE, TWILIO_API_KEY_SID: TW_KEY_SID, TWILIO_API_KEY_SECRET: TW_KEY_SECRET };
   const results: SendResult[] = [];
   // Every branch: Sendblue ok, Sendblue ERROR, Sendblue 401, unreadable, thrown,
-  // Twilio ok, Twilio 400, forced-but-unconfigured, none, loopback ignored.
+  // retired provider settings, forced-but-unconfigured, none, loopback ignored.
   reply = () => json(202, { message_handle: "mh", status: "QUEUED" });
   results.push(await sendText(env, TO, BODY, { tag: "password reset" }));
   reply = () => json(200, { status: "ERROR", error_code: 4004, error_message: "bad " + BODY });
@@ -321,9 +288,9 @@ await check("no secret and no body in any log line; provider and last four are t
     assert.ok(!line.includes(TO), "whole recipient number in: " + line);
   }
   const sent = logs.filter((l) => l.includes("→"));
-  assert.ok(sent.length >= 6, "the provider lines are there");
+  assert.ok(sent.length >= 4, "the provider lines are there");
   for (const line of sent) {
-    assert.ok(line.includes("sendblue") || line.includes("twilio"), "provider named: " + line);
+    assert.ok(line.includes("sendblue") && !line.includes("twilio"), "provider named: " + line);
     assert.ok(line.includes(last4(TO)), "last four: " + line);
     assert.match(line, /http=\d+/, "http status: " + line);
   }

@@ -7,7 +7,7 @@ card appeared whose text — "I'll hold off on booking ... until you give me
 the word" — contradicted the work in motion.
 
 Rules tested here:
-  1. A bare ack with a held card waiting releases that card.
+  1. Only a model verdict selecting the held card can release that card.
   2. A bare ack with nothing waiting and a plan running earns a nod —
      never a trip through triage, never a second card.
   3. A real message still reaches the brain unchanged.
@@ -47,13 +47,13 @@ def test_an_ack_with_a_plan_running_never_reaches_triage(monkeypatch):
     out = c.on_reply("+1", "Sounds good")
     assert not thought, "a bare ack was re-triaged"
     assert out["intent"] == "chat"
-    assert "moving" in sent[0] and "Earls" in sent[0], sent
-    assert "hold off" not in sent[0].lower()
+    assert sent == ["nice!"]  # Keep the model's social reply, without inventing a task.
 
 
-def test_an_ack_with_a_card_waiting_releases_it(monkeypatch):
+def test_a_model_confirm_with_a_card_waiting_releases_it(monkeypatch):
     c = _conv()
-    _classified_chat(c, monkeypatch)
+    monkeypatch.setattr(c, "_classify", lambda phone, text: {
+        "intent": "confirm", "pending_id": "j2", "reply": "On it."})
     monkeypatch.setattr(c, "_pending", lambda: [
         {"id": "j2", "status": "awaiting_confirm", "goal": "book earls"}])
     monkeypatch.setattr(c, "_asked_to_cancel", lambda: False)
@@ -74,7 +74,8 @@ def test_an_ack_with_a_card_waiting_releases_it(monkeypatch):
 
 def test_a_real_message_still_reaches_the_brain(monkeypatch):
     c = _conv()
-    _classified_chat(c, monkeypatch)
+    monkeypatch.setattr(c, "_classify", lambda phone, text: {
+        "intent": "new_request", "pending_id": None, "reply": "Checking."})
     monkeypatch.setattr(c, "_pending", lambda: [])
     monkeypatch.setattr(c, "_running", lambda: [])
     monkeypatch.setattr(c, "_recent_outcomes", lambda: [])

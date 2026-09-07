@@ -92,6 +92,33 @@ def _anticipy(monkeypatch, voice):
     return a, fake, sent
 
 
+def test_a_goal_less_clarification_survives_a_muted_explicit_reply_channel(monkeypatch):
+    a, fake, sent = _anticipy(monkeypatch, "Did you mean Alex Kim or Alex Reed?")
+    monkeypatch.setattr(a, "_decide", lambda *args, **kw: Decision(
+        decision="ask", goal=None, reason="ambiguous recipient", missing=["Which Alex?"],
+        addressee="assistant", owes="owner"))
+    result = a.hear("Send Alex the summary", explicit=True, may_say=lambda *a, **k: False)
+    assert result["anticipy_says"] == "Did you mean Alex Kim or Alex Reed?"
+    assert sent == []  # Conversation returns it on the original channel.
+    assert fake.jobs == []
+
+
+def test_explicit_request_still_checks_readiness_when_triage_reports_no_missing_fields(monkeypatch):
+    a, fake, sent = _anticipy(monkeypatch, "Which Sam did you mean?")
+    seen = []
+    monkeypatch.setattr(a, "_decide", lambda *args, **kw: Decision(
+        decision="act", goal="prepare a message to Sam Reed", reason="proposed task", missing=[],
+        addressee="assistant", owes="owner", touches="read"))
+    def review(decision, line, conversation, previous):
+        seen.append((decision.goal, line))
+        return Decision(decision="ask", goal="prepare a message to Sam", reason="ambiguous recipient",
+                        missing=["Which Sam?"], addressee="assistant", owes="owner")
+    monkeypatch.setattr(a, "_review_readiness", review)
+    result = a.hear("Please text Sam that I will be late", explicit=True, may_say=lambda *a, **k: False)
+    assert seen == [("prepare a message to Sam Reed", "Please text Sam that I will be late")]
+    assert result["decision"].decision == "ask"
+
+
 def test_an_invented_time_never_reaches_his_phone(monkeypatch):
     """The live failure, verbatim shape: he never said 7, she must not."""
     a, fake, sent = _anticipy(
@@ -127,8 +154,9 @@ def test_the_ambient_lane_asks_about_what_only_he_can_decide(monkeypatch):
     """The sufficiency check now runs for overheard plans too: 'tomorrow
     evening' with no time becomes a question, never a habit-guess."""
     a, fake, sent = _anticipy(monkeypatch, None)   # fallback voice
-    monkeypatch.setattr(core, "check_sufficiency",
-                        lambda llm, goal: ["what time they want"])
+    from dataclasses import replace
+    monkeypatch.setattr(a, "_review_readiness", lambda decision, *args: replace(
+        decision, decision="ask", missing=["what time they want"]))
     a.hear(LINE, may_say=lambda *a_, **k_: True)
     assert len(sent) == 1
     assert "what time they want" in sent[0], sent[0]

@@ -218,7 +218,7 @@ fi
 # turns: asking the FILTERED cards would tell the face "nothing yet" all
 # through a sentence she is transcribing perfectly well, which is the
 # empty-screen incident the first version of this screen caused.
-if ! code "$dash" | grep -q 'heardAnything: !turns.isEmpty'; then
+if ! code "$dash" | grep -q 'heardAnything: turns.contains'; then
     echo "The capture face asks the filtered cards whether anything was heard."
     echo
     echo "That is the empty-screen incident in a new shape: somebody talking to"
@@ -261,14 +261,8 @@ fi
 # in DashboardTests.swift, and it is what stops this being a re-run of the
 # empty screen. The forbid became the two legs below.
 #
-# 1. The thread must not print the owner's own text.
-if code "$policy" | grep -qE '\.owner\(id: row\.id, text: row\.text'; then
-    echo "The thread is rendering heard lines as the owner's own words again."
-    echo
-    echo "Un-goaled speech collapses into a count. The words are in"
-    echo "ListeningHistoryView, which is where the transcript moved to."
-    exit 2
-fi
+# Typed lines must remain visible; microphone lines remain collapsed.
+# The executable DashboardTests now checks both using their source metadata.
 # 2. And it must still emit something for un-goaled speech. A collapse that
 #    emitted nothing IS the empty screen, wearing this change as a disguise.
 if ! code "$policy" | grep -q 'case pending'; then

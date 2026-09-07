@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from brain.anticipy_core import Anticipy, explicitly_for_memory
+from brain.anticipy_core import Anticipy
+from brain.speech_request import InformationRequest
 
 
 class MemoryWithCode:
@@ -35,7 +36,11 @@ class MemoryWithCode:
     "Anticipy, what is the pickup code?",
     "hey Anticipy: what is the pickup code?",
 ])
-def test_wake_word_memory_questions_are_answered_not_acted_on(question):
+def test_model_identified_memory_request_is_answered_without_a_job(question, monkeypatch):
+    # This proves routing, not language understanding. The real-model speech
+    # audit measures whether these are requests using the complete conversation.
+    monkeypatch.setattr("brain.anticipy_core.information_request",
+                        lambda *a, **kw: InformationRequest("requested", "memory"))
     memory = MemoryWithCode()
     result = Anticipy(memory=memory).hear(question, explicit=True)
 
@@ -47,7 +52,6 @@ def test_wake_word_memory_questions_are_answered_not_acted_on(question):
 
 def test_declarative_code_for_later_is_memory_not_a_browser_job():
     line = "For later, the pickup code for school is 340097."
-    assert explicitly_for_memory(line)
     memory = MemoryWithCode()
     anticipy = Anticipy(memory=memory)
     anticipy._queue_job = lambda *_args, **_kwargs: pytest.fail(
@@ -56,10 +60,21 @@ def test_declarative_code_for_later_is_memory_not_a_browser_job():
     result = anticipy.hear(line, speaker="owner")
 
     assert result["decision"].decision == "ignore"
-    assert result["decision"].goal == ""
+    assert not result["decision"].goal
     assert result["anticipy_says"] is None
     assert memory.ingested == [line]
 
 
-def test_remember_to_is_not_misclassified_as_a_passive_fact():
-    assert not explicitly_for_memory("Remember to call the dentist tomorrow.")
+@pytest.mark.parametrize("verdict", ["not_requested", "unclear", "unavailable"])
+def test_no_request_verdict_never_reads_memory_as_an_answer(verdict, monkeypatch):
+    monkeypatch.setattr("brain.anticipy_core.information_request",
+                        lambda *a, **kw: InformationRequest(verdict))
+    anticipy = Anticipy(memory=MemoryWithCode())
+    anticipy._answer_from_memory = lambda *_: pytest.fail("answered without a request")
+    out = anticipy.hear("Did you send those figures? Yes, yesterday.", speaker="owner")
+    assert out["anticipy_says"] is None
+
+
+def test_without_a_model_even_a_question_mark_cannot_authorize_an_answer():
+    out = Anticipy(memory=MemoryWithCode()).hear("What is the pickup code?", explicit=True)
+    assert out["anticipy_says"] is None

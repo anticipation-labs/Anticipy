@@ -40,6 +40,7 @@
   // ==========================================================================
   "$schema": "../../node_modules/wrangler/config-schema.json",
   "name": "anticipy-brain",
+  "version_metadata": { "binding": "WORKER_VERSION" },
   "main": "../workers/brain/src/index.ts",
 
   // Matched to the site Worker (repo-root wrangler.jsonc) on purpose: two
@@ -136,13 +137,14 @@
         "regions": ["WNAM"]
       },
 
-      // A rollout must not kill a brain mid-conversation. 25% at a time, and
-      // one hour of grace for an instance that is actively serving before it is
-      // shut down. The container's SIGTERM handler flushes memory.db to R2
-      // (brain/container_entry.py, BRAIN.md §4.3) — the grace period is what
-      // gives that flush somewhere to happen.
-      "rollout_step_percentage": 25,
-      "rollout_active_grace_period": 3600
+      // Start with 25%, then explicitly reach the whole fleet. This is the
+      // minimum connection age before replacement, NOT the shutdown budget.
+      // Cloudflare separately gives SIGTERM handlers 15 minutes to flush.
+      // Long-running brain processes have no short browser session to protect
+      // with an additional connection-age delay. Use the platform default;
+      // process shutdown still gets the full, separate 15-minute drain.
+      "rollout_step_percentage": [25, 100],
+      "rollout_active_grace_period": 0
     }
   ],
 

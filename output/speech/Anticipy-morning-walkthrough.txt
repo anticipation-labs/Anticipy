@@ -1,0 +1,13 @@
+Anticipy should work like a helpful person who remembers the thread of your day.
+
+Your phone hears something, or you type or text it. The system saves the exact words and their context. Then the brain decides whether anything needs doing. Saying, the kids are already on the calendar, is different from asking to add them. A reply like yes only makes sense beside the question it answers.
+
+The harness is everything that makes that reasoning useful: memory, account connections, task storage, permissions, tools, and checking what actually happened.
+
+The tools can read a connected app, use a paired browser, or ask your phone to update its calendar. A task sitting in a queue is not proof that the work happened. Anticipy needs to check the result and bring it back to you.
+
+The overnight work found real failures: a broken SendBlue webhook configuration, a reproduced interface freeze, keyboard overlap, oversized cards, and replies that were generated and then discarded. Build one sixty five is available through internal TestFlight. The audit explains each repair and its evidence.
+
+A live drafting test also returned web instructions and marked the task done. That false completion is now repaired on the tested server path. A live request produced the actual private note, checked it, and returned it to the app. It took eighty three seconds, which is still too slow. The work is incomplete. Fifty fictional people were tested through planning, not fifty completed real errands. Real phone delivery, broader connected-account execution, and several older reasoning shortcuts still need proof or repair. The report makes those limits visible.
+
+This narration uses a computer generated voice.

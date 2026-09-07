@@ -1,0 +1,180 @@
+{
+  "scope": "real model and Conversation with local Worker records; no effect runner; all synthetic accounts deleted",
+  "model": null,
+  "results": [
+    {
+      "case": "yes_one",
+      "passed": true,
+      "owner_text": "yes",
+      "prior_question": "May I prepare the lamp comparison?",
+      "expected": {
+        "0": "queued"
+      },
+      "observed": {
+        "0": "queued"
+      }
+    },
+    {
+      "case": "yes_context",
+      "passed": true,
+      "owner_text": "yes",
+      "prior_question": "May I prepare the room comparison?",
+      "expected": {
+        "0": "awaiting_confirm",
+        "1": "queued"
+      },
+      "observed": {
+        "0": "awaiting_confirm",
+        "1": "queued"
+      }
+    },
+    {
+      "case": "both",
+      "passed": true,
+      "owner_text": "yes, both please",
+      "prior_question": "I can prepare the lamp and room comparisons. Should I do both?",
+      "expected": {
+        "0": "queued",
+        "1": "queued"
+      },
+      "observed": {
+        "0": "queued",
+        "1": "queued"
+      }
+    },
+    {
+      "case": "cancel_done",
+      "passed": true,
+      "owner_text": "I already handled that, don't do it",
+      "prior_question": "May I prepare the lamp comparison?",
+      "expected": {
+        "0": "cancelled"
+      },
+      "observed": {
+        "0": "cancelled"
+      }
+    },
+    {
+      "case": "explain",
+      "passed": true,
+      "owner_text": "What?",
+      "prior_question": "I can compare the three room offers without booking. Want me to?",
+      "expected": {
+        "0": "awaiting_confirm"
+      },
+      "observed": {
+        "0": "awaiting_confirm"
+      }
+    },
+    {
+      "case": "social",
+      "passed": true,
+      "owner_text": "Thank you, that makes sense",
+      "prior_question": "The room comparison would include capacity and prices. I have not started.",
+      "expected": {
+        "0": "awaiting_confirm"
+      },
+      "observed": {
+        "0": "awaiting_confirm"
+      }
+    },
+    {
+      "case": "missing_time",
+      "passed": true,
+      "owner_text": "It ends at 4 PM.",
+      "prior_question": "What time does the family appointment end?",
+      "expected": {
+        "0": "awaiting_confirm"
+      },
+      "observed": {
+        "0": "awaiting_confirm"
+      }
+    },
+    {
+      "case": "two_questions",
+      "passed": true,
+      "owner_text": "Park Royal",
+      "prior_question": "Which location should I use for lunch?",
+      "expected": {
+        "0": "needs_user",
+        "1": "queued"
+      },
+      "observed": {
+        "0": "needs_user",
+        "1": "queued"
+      }
+    },
+    {
+      "case": "correct_premise",
+      "passed": true,
+      "owner_text": "There is no login screen. I can see the public menu; continue there.",
+      "prior_question": "Please sign in to read the menu.",
+      "expected": {
+        "0": "queued"
+      },
+      "observed": {
+        "0": "queued"
+      }
+    },
+    {
+      "case": "partial",
+      "passed": true,
+      "owner_text": "Use four people instead",
+      "prior_question": "What time should I use?",
+      "expected": {
+        "0": "needs_user"
+      },
+      "observed": {
+        "0": "needs_user"
+      }
+    },
+    {
+      "case": "unseen_value",
+      "passed": true,
+      "owner_text": "I sent it",
+      "prior_question": "What is your six digit verification code?",
+      "expected": {
+        "0": "needs_user"
+      },
+      "observed": {
+        "0": "needs_user"
+      }
+    },
+    {
+      "case": "typed_schema",
+      "passed": true,
+      "owner_text": "The Park Royal location",
+      "prior_question": "Which location?",
+      "expected": {
+        "0": "awaiting_confirm"
+      },
+      "observed": {
+        "0": "awaiting_confirm"
+      }
+    },
+    {
+      "case": "decline_queued",
+      "passed": true,
+      "owner_text": "Wait, cancel the comparison",
+      "prior_question": "The lamp comparison is queued.",
+      "expected": {
+        "0": "cancelled"
+      },
+      "observed": {
+        "0": "cancelled"
+      }
+    },
+    {
+      "case": "quoted_yes",
+      "passed": true,
+      "owner_text": "My colleague said \"yes\" to her own project, not this comparison.",
+      "prior_question": "May I prepare the lamp comparison?",
+      "expected": {
+        "0": "awaiting_confirm"
+      },
+      "observed": {
+        "0": "awaiting_confirm"
+      }
+    }
+  ]
+}

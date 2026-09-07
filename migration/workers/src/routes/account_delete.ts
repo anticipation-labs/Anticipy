@@ -37,6 +37,7 @@ export const ACCOUNT_TABLES = [
   ["agent_llm_audit", "owner_ref", null],
   ["agent_audit_sessions", "owner_ref", null],
   ["evidence", "owner_ref", null],
+  ["connection_command_runs", "owner_ref", null],
   ["events", "owner_ref", null],
   ["password_resets", "owner", null],
   ["connect_codes", "user_id", null],
@@ -61,7 +62,12 @@ export async function accountDelete(
   });
   const ref = String(auth.claims.id || "").trim();
   if (!ref) return json(400, { ok: false, message: "No account on that token." });
+  return eraseVerifiedOwner(ref, env, provider);
+}
 
+/** Call only after the public account token or internal operator identity
+ * proof has established the exact canonical owner. Never accept a legacy UUID. */
+export async function eraseVerifiedOwner(ref: string, env: AccountErasureEnv, provider?: ErasureProvider): Promise<Response> {
   const row = await env.DB.prepare("SELECT legacy_uuid FROM owners WHERE id = ?")
     .bind(ref).first<{ legacy_uuid: string }>();
   if (!row) return json(401, { ok: false, message: "Sign in first." });

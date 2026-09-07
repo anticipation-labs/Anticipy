@@ -11,6 +11,9 @@ COPY brain /srv/brain
 # tzdb that zoneinfo falls back to when /usr/share/zoneinfo is absent.
 RUN pip install --no-cache-dir requests httpx tzdata boto3
 ENV PYTHONUNBUFFERED=1
+# The full-context second opinion used by the recorded transcript evaluation.
+# An explicitly configured runtime value can choose a different tier.
+ENV ANTICIPY_STRONG_MODEL=google/gemini-3.1-pro-preview
 # ONE image, two roles, chosen at runtime so this file can be BOTH the live
 # Railway `worker` image AND the Cloudflare per-owner container image without a
 # flag day (BRAIN-ON-CONTAINERS.md §8.2 / §10.4):

@@ -73,7 +73,7 @@ def test_a_booking_is_never_deduped_into_a_lookup(monkeypatch):
     research = "research Cactus Club park location availability for 2 at 7 PM tomorrow"
     booking = "book Cactus Club park location for 2 at 7 PM tomorrow"
 
-    a._queue_job(research, {"source": "x"})
+    a._queue_job(research, {"source": "x"}, touches="read")
     a._queue_job(booking, {"source": "y"}, hold=True)
 
     goals = [j["goal"] for j in fake.jobs]

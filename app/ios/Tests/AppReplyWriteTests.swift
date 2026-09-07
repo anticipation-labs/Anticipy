@@ -29,6 +29,13 @@ check("a server-side validation refusal is a verified refusal",
 check("transport timeout is not called a refusal",
       !ActionWritePolicy.isVerifiedRefusal(status: 408))
 
+let jobAnswer = AppReplyWritePolicy.pending(accountID: "A", eventID: "job1", questionRevision: "question-and-answer-1")!
+let retryAnswer = AppReplyWritePolicy.pending(accountID: "A", eventID: "job1", questionRevision: "question-and-answer-1")!
+let correction = AppReplyWritePolicy.pending(accountID: "A", eventID: "job1", questionRevision: "question-and-answer-2")!
+check("the same task answer retries with one stable event", jobAnswer == retryAnswer)
+check("a corrected task answer gets its own event", jobAnswer.externalEventID != correction.externalEventID)
+check("task answer state stays keyed to the visible card", correction.eventID == "job1")
+
 let stored = AppReplyWritePolicy.upserting(a1, in: [])
 let replaced = AppReplyWritePolicy.upserting(a1Again, in: stored)
 check("persisting the same pending reply is idempotent", replaced == [a1])

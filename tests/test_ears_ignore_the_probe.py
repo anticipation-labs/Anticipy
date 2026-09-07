@@ -20,7 +20,7 @@ row counts, and require the honest verdict.
 """
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 import pytest
 
@@ -140,7 +140,8 @@ def test_a_probe_cannot_reset_the_silence_clock(live_day, capsys):
     # nothing else. Reading the probe instead would print well under an hour.
     assert any(str(h) in out for h in (hours - 1, hours, hours + 1)), (
         f"the silence is {hours}h since 2026-09-01, not an hour: {out}")
-    assert "0.6" not in out, "that is the probe's age, which is the whole bug"
+    # Match the complete age token: "120.6h ago" is real elapsed time.
+    assert "(0.6h ago)" not in out, "the probe cannot stand in for real speech"
 
 
 def test_a_real_phone_still_proves_the_ears(monkeypatch, capsys):
@@ -161,15 +162,9 @@ def test_a_real_phone_still_proves_the_ears(monkeypatch, capsys):
 def test_both_halves_quiet_is_still_unproven_not_deaf(monkeypatch, capsys):
     """The design the file rests on: a silent night is silent on both sides.
     Excluding probes must not turn an idle day into an incident."""
-    # The newest speech is NINE HOURS ago, derived from the clock rather than
-    # written as a date: a fixed date crossed the gate's two-cycle rule on
-    # 2026-09-07 and this test began reporting DEAF for a quiet night — the
-    # exact widening-until-it-stops-complaining trap the file above warns of.
-    from datetime import timedelta
-    recent = (datetime.now(timezone.utc) - timedelta(hours=9)).strftime("%Y-%m-%d %H:%M:%S.000Z")
     backend = Backend(
         real=0, probe=0, server=0,
-        newest_real=_row(recent, "iphone-b124"),
+        newest_real=_row((datetime.now(timezone.utc) - timedelta(hours=26)).strftime("%Y-%m-%d %H:%M:%S.000Z"), "iphone-b124"),
         newest_server=None)
     monkeypatch.setattr(M.requests, "get", backend.get)
     monkeypatch.setattr(sys, "argv", ["are_the_ears_live.py"])

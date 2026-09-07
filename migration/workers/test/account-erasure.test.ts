@@ -7,6 +7,7 @@ import { FakeD1, asD1 } from "./fake-d1.ts";
 import { issueToken } from "../src/api/auth.ts";
 import { accountDelete, ACCOUNT_TABLES } from "../src/routes/account_delete.ts";
 import { ComposioConnections } from "../src/connections/provider.ts";
+import { adminAccountReset } from "../src/routes/admin_account_reset.ts";
 
 let failures = 0;
 let passes = 0;
@@ -37,6 +38,27 @@ async function erase(r: ReturnType<typeof rig>, provider?: Pick<ComposioConnecti
     body: JSON.stringify({ confirm: "delete" }),
   }), r.env, provider);
 }
+
+await check("operator reset requires its secret and both current owner identifiers", async () => {
+  const r = rig();
+  const env = { ...r.env, ANTICIPY_INTERNAL_KEY: "operator-test-secret" };
+  r.db.db.prepare("INSERT INTO owner_profile (id,owner_ref,owner_id,email,phone) VALUES (?,?,?,?,?)")
+    .run("profile-a", A, A, A + "@anticipy-test.invalid", "+12025550100");
+  const body = { owner_ref: A, email: A + "@anticipy-test.invalid", phone: "+12025550100", confirm: "DELETE PRODUCT ACCOUNT" };
+  const call = (key: string, patch = {}) => adminAccountReset(new Request("https://api/admin/account-reset", {
+    method: "POST", headers: { "X-Internal-Key": key }, body: JSON.stringify({ ...body, ...patch }),
+  }), env);
+  assert.equal((await call("wrong")).status, 401);
+  assert.equal((await call("operator-test-secret", { owner_ref: B })).status, 409);
+  assert.equal((await call("operator-test-secret", { phone: "+12025550101" })).status, 409);
+  assert.equal((await call("operator-test-secret", { email: B + "@anticipy-test.invalid" })).status, 409);
+  assert.equal((await call("operator-test-secret", { confirm: "" })).status, 400);
+  assert.equal(r.db.rows("SELECT id FROM owners").length, 2);
+  assert.equal(r.db.rows("SELECT id FROM purges").length, 0);
+  assert.equal((await call("operator-test-secret")).status, 200);
+  assert.equal(r.db.rows("SELECT id FROM owners WHERE id=?", A).length, 0);
+  assert.equal(r.db.rows("SELECT id FROM owners WHERE id=?", B).length, 1);
+});
 
 await check("the deployed purge ledger without synthetic autodates supports cleanup", async () => {
   const r = rig();

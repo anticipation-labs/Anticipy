@@ -1,5 +1,6 @@
 // Offline suite for brief 03 (never-foreground). Run: node extension/tests/run_all.mjs
-import { execFileSync } from "node:child_process";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { readdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -118,17 +119,34 @@ if (missing.length) {
   console.error(`run_all: ${missing.length} suite(s) exist but are NOT registered: ${missing.join(", ")}`);
   process.exit(1);
 }
-let failed = 0;
-for (const s of suites) {
-  try {
-    const out = execFileSync(process.execPath, [join(here, s)], { stdio: "pipe", timeout: 120000 });
-    process.stdout.write(out);
-  } catch (e) {
-    failed++;
-    process.stdout.write(String(e.stdout || ""));
-    process.stderr.write(String(e.stderr || e));
-    console.error(`FAIL: ${s}`);
-  }
+// Each suite already runs in its own process with its own Chrome/model mocks.
+// They read source files but do not share mutable fixture files or servers.
+// Waiting for one process before starting the next serialized all retry timers.
+const concurrency = Number(process.env.ANTICIPY_TEST_CONCURRENCY || 8);
+if (!Number.isInteger(concurrency) || concurrency < 1 || concurrency > 16) {
+  console.error("ANTICIPY_TEST_CONCURRENCY must be an integer from 1 through 16");
+  process.exit(1);
 }
+const execute = promisify(execFile);
+let failed = 0;
+let next = 0;
+const started = performance.now();
+await Promise.all(Array.from({ length: Math.min(concurrency, suites.length) }, async () => {
+  while (next < suites.length) {
+    const s = suites[next++];
+    const suiteStarted = performance.now();
+    try {
+      const { stdout, stderr } = await execute(process.execPath, [join(here, s)], { timeout: 120000 });
+      process.stdout.write(stdout);
+      process.stderr.write(stderr);
+    } catch (e) {
+      failed++;
+      process.stdout.write(String(e.stdout || ""));
+      process.stderr.write(String(e.stderr || e));
+      console.error(`FAIL: ${s}`);
+    }
+    console.log(`FINISHED: ${s} (${((performance.now() - suiteStarted) / 1000).toFixed(2)}s)`);
+  }
+}));
 if (failed) { console.error(`run_all: ${failed}/${suites.length} suites failed`); process.exit(1); }
-console.log(`run_all: all ${suites.length} suites passed`);
+console.log(`run_all: all ${suites.length} suites passed in ${((performance.now() - started) / 1000).toFixed(2)}s (concurrency ${concurrency})`);

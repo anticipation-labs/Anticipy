@@ -11,6 +11,7 @@ Run:  .venv/bin/python -m brain.worker
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -25,9 +26,10 @@ import requests
 
 from . import backend
 from . import research
+from . import server_work
 
 from .anticipy_core import (DEVICE_CALENDAR_LANE, RESEARCH_LANE, Anticipy,
-                            goal_tokens, is_device_lane, needs_no_browser)
+                            goal_tokens, is_device_lane, needs_no_browser, memory_notes)
 from .hands import LANE_API
 from .evidence import picture_for_done_text
 from .memory import Memory
@@ -38,8 +40,8 @@ from .conversation import (Conversation, MockTransport, MessageTransport,
 from . import sendblue_arm
 from .llm import (LLM, TZ as TZ_FALLBACK, DECISION_CALL_CEILING,
                   DECISION_DEADLINE_SECONDS, budget_spent_last)
-from .voice_arm import VoiceArm, has_credentials, rest_credential
 from .workflow import (claim as claim_plan, fail as fail_plan,
+                       needs_user as needs_user_plan,
                        from_params as workflow_from_params,
                        put_in_params, recover_expired as recover_expired_plan,
                        succeed as succeed_plan)
@@ -1001,22 +1003,11 @@ SENDBLUE_INBOUND_PATH = "/sms/sendblue"
 
 
 def inbound_ear_note(provider: str) -> str:
-    """The one startup line about where the owner's texts land, per provider.
-
-    Twilio's binding is READ AND WRITTEN by `ensure_inbound_webhook` every
-    beat, because the number really was repointed at a stranger's app once
-    and nothing said so. Sendblue exposes no per-number binding to this
-    process: its inbound webhook is configured in the dashboard
-    (Developer → Webhooks), so the most this worker can do is say, once,
-    where it has to point — derived from ANTICIPY_PB for the same reason the
-    Twilio target is, so two services cannot disagree about it.
-    """
+    """Describe the active SendBlue webhook configuration without changing it."""
     if provider == "sendblue":
         return (f"inbound texts: Sendblue's webhook is configured in its "
                 f"dashboard (Developer → Webhooks), not by this worker; it "
                 f"must point at {PB.rstrip('/')}{SENDBLUE_INBOUND_PATH}")
-    if provider == "twilio":
-        return "inbound texts: Twilio's binding is checked every beat"
     return "inbound texts: no message provider, nothing to point anywhere"
 
 
@@ -1031,98 +1022,12 @@ def sms_banner(provider: str, arm) -> str:
     """
     if provider == "sendblue":
         return f"sendblue:{sendblue_arm.key_tail(getattr(arm, 'key_id', ''))}"
-    if provider == "twilio":
-        return "twilio"
     return "mock"
 
 
 def ensure_inbound_webhook() -> None:
-    # TWILIO'S EAR, AND ONLY TWILIO'S. Everything below reads and rewrites the
-    # inbound binding of a Twilio number; a deployment texting through
-    # Sendblue has no business touching it, even when TWILIO_* is still in
-    # its environment from before the switch. Silent on purpose: this runs
-    # every beat from the worker and the supervisor alike, and the one line
-    # about where Sendblue's webhook lives is printed once at startup
-    # (`inbound_ear_note`).
-    if sendblue_arm.choose_provider() != "twilio":
-        return
-    sid = os.environ.get("TWILIO_ACCOUNT_SID")
-    number = os.environ.get("TWILIO_PHONE_NUMBER") or os.environ.get("TWILIO_FROM")
-    # Reading the number's configuration is a REST call like any other, so it
-    # authenticates with the same preferred-API-key credential as a send. An
-    # inbound signature is the only thing that still needs the auth token
-    # itself, and that check does not live in this service.
-    credential = rest_credential()
-    if not (sid and number and credential):
-        return          # not our job to guess; stay quiet
-    ours, refusal = webhook_target()
-    if not ours:
-        print(f"NOT repointing inbound SMS: {refusal}. Leaving the existing "
-              f"binding alone.")
-        return
-    try:
-        r = requests.get(
-            f"https://api.twilio.com/2010-04-01/Accounts/{sid}/IncomingPhoneNumbers.json",
-            auth=credential.basic(), timeout=15)
-        if not r.ok:
-            # Was silent, which made "the credential cannot read this account"
-            # and "the binding is fine" the same observation.
-            print(f"could not read the inbound binding from Twilio: HTTP "
-                  f"{r.status_code} using {credential.describes}")
-            return
-        rows = [n for n in r.json().get("incoming_phone_numbers", [])
-                if n.get("phone_number") == number]
-        if not rows:
-            print(f"TWILIO_PHONE_NUMBER …{str(number)[-4:]} is not on this "
-                  f"account — nothing to point at {ours.split('?')[0]}. Her "
-                  f"inbound texts are going somewhere this worker cannot see.")
-            return
-        n = rows[0]
-        current = n.get("sms_url") or ""
-        # An application SID silently overrides every sms_* URL, so a matching
-        # URL with one set is still not a working inbound binding.
-        shadowed = bool(str(n.get("sms_application_sid") or "").strip())
-        # FULL-string equality. Comparing with the query stripped declared a
-        # stale "?token=..." URL healthy for three days while Twilio's
-        # signature — computed over the full URL including the query — failed
-        # against the clean env URL on every single inbound text (found
-        # 2026-08-15: zero inbound events since Aug 12, all 403).
-        if current == ours and not shadowed:
-            return
-        print(f"WEBHOOK HIJACK: inbound SMS was pointing at {current.split('?')[0] or '(empty)'}"
-              f"{' (shadowed by an application SID)' if shadowed else ''} — "
-              f"pointing it back at {ours.split('?')[0]}")
-        # THE URL WE ARE ABOUT TO HAND TWILIO HAS TO BE OUR BACKEND.
-        #
-        # Reachability says the URL is routable from the internet; it says
-        # nothing about what answers there. One GET to /api/health on the same
-        # origin turns "the two services agree" from a claim about environment
-        # variables into an observation: if that origin is not a the backend
-        # that answers, then whatever the number currently points at is likelier
-        # to be right than a URL serving nothing, and the safe move is to leave
-        # the live binding alone and say so.
-        origin = urlparse(ours)
-        health = f"{origin.scheme}://{origin.netloc}/api/health"
-        try:
-            probe = requests.get(health, timeout=10)
-            answered = bool(getattr(probe, "ok", False))
-            detail = f"HTTP {getattr(probe, 'status_code', '?')}"
-        except Exception as exc:
-            answered, detail = False, str(exc)
-        if not answered:
-            print(f"NOT repointing inbound SMS: {health} is not answering as "
-                  f"our the backend ({detail}), so this URL cannot be the one "
-                  f"Twilio should reach. Leaving {current.split('?')[0] or '(empty)'} "
-                  f"in place.")
-            return
-        u = requests.post(
-            f"https://api.twilio.com/2010-04-01/Accounts/{sid}/IncomingPhoneNumbers/{n['sid']}.json",
-            auth=credential.basic(), timeout=15,
-            data={"SmsUrl": ours, "SmsMethod": "POST", "SmsApplicationSid": ""})
-        print("webhook repointed" if u.ok else f"could not repoint the webhook: {u.status_code}")
-    except Exception as e:
-        # This must never be able to stop her hearing or texting.
-        print(f"webhook check failed (harmless): {e}")
+    """Retired compatibility entry point: never reads or rewrites Twilio."""
+    return
 
 
 def post_event(kind: str, text: str, decision: str = "", goal: str = "",
@@ -1326,15 +1231,58 @@ def browser_reachable(owner_ref: str = "") -> bool:
         return True
 
 
+def task_access_offer(anticipy, job: dict) -> str | None:
+    """Ask the API about the stored task; it owns the real account catalog."""
+    try:
+        reply = backend.post(f"{anticipy.backend_url}/worker/task-access", json={
+            "owner_ref": anticipy.owner_ref, "job_id": job["id"],
+        }, timeout=45)
+        if reply.status_code == 200:
+            line = reply.json().get("line")
+            return line.strip() if isinstance(line, str) and line.strip() else None
+    except Exception:
+        pass
+    return None
+
+
+def publish_stall_notice(anticipy, job: dict, situation: str, fallback: str,
+                         *, offer_access: bool = False) -> None:
+    """Keep a blocker visible in-app; quiet hours defer only the optional text."""
+    local_key = f'stalled:{job["id"]}:{job.get("status")}'
+    existing = delivered_stall_notice(job)
+    if existing:
+        said = str(existing.get("text") or "").strip()
+    else:
+        if sent_moments_ago(local_key):
+            return
+        access = task_access_offer(anticipy, job) if offer_access else None
+        said = access or anticipy._voice({"situation": situation,
+                               "task": str(job.get("goal") or "")}) or fallback
+        saved = persist_stall_notice(job, said)
+        if not saved:
+            return
+        said = str(saved.get("text") or "").strip() or said
+        mark_sent(local_key)
+    hour = datetime.now(CLOCK_TZ).hour
+    if CLOCK_QUIET_START <= hour or hour < CLOCK_QUIET_END:
+        record_stall_notification_status(job, "sms_deferred")
+        return
+    if not can_reach_owner_fresh(anticipy):
+        record_stall_notification_status(job, "sms_skipped")
+        return
+    if claim_stall_notification_attempt(job) is not True:
+        return
+    told = anticipy.notify_owner(said)
+    skipped = isinstance(told, dict) and bool(told.get("skipped"))
+    state = "sms_sent" if told and not skipped else (
+        "sms_skipped" if skipped else "sms_failed")
+    record_stall_notification_status(job, state)
+
+
 def report_stalled_work(anticipy) -> None:
     """Say so when work cannot start because his browser is not there."""
     try:
-        if browser_reachable():
-            return
-        # Nothing here is urgent enough to wake him. Same quiet hours the
-        # clock respects — a stalled task at 3am can wait until morning.
-        hour = datetime.now(CLOCK_TZ).hour
-        if CLOCK_QUIET_START <= hour or hour < CLOCK_QUIET_END:
+        if browser_reachable(owner_ref=getattr(anticipy, "owner_ref", "")):
             return
         since = (datetime.now(timezone.utc) - timedelta(minutes=STALL_MINUTES)
                  ).strftime("%Y-%m-%d %H:%M:%S")
@@ -1355,18 +1303,13 @@ def report_stalled_work(anticipy) -> None:
         # The api lane is excluded for the research lane's reason exactly:
         # run_api_jobs below runs it in THIS process, through the Worker's
         # /hands/api/run door, and his browser is not what it waits on.
-        filt = (f'(status="queued" || status="running") && updated<="{since}"'
+        filt = (f'(status="queued" || (status="running" && updated<="{since}"))'
                 f' && lane!="research" && lane!="{DEVICE_CALENDAR_LANE}"'
                 f' && lane!="{LANE_API}"')
         scope = owner_filter(anticipy)
         if scope:
             filt = f"({filt}) && {scope}"
-        r = backend.get(f"{PB}/api/collections/jobs/records",
-                   params={"filter": filt, "perPage": 5, "sort": "updated"},
-                   timeout=10)
-        if not r.ok:
-            return
-        for job in r.json().get("items", []):
+        for job in _finished_jobs(filt):
             goal = (job.get("goal") or "").strip()
             # THE FILTER ABOVE IS AN OPTIMISATION; THIS IS THE DECISION.
             # `lane!="device_calendar"` is SQLite's `=`, which is
@@ -1382,66 +1325,15 @@ def report_stalled_work(anticipy) -> None:
             # worth his attention — it was never something he asked her for.
             if ambient_job(job):
                 continue
-            # The app notice is the delivery.  It is keyed to this exact job
-            # and observed status; fuzzy goal matching made two separate
-            # errands with the same words silence each other.  It is persisted
-            # before any optional phone effect, so no phone/Twilio outage can
-            # recreate the reported Go -> no browser -> indefinite silence.
-            local_key = f'stalled:{job["id"]}:{job.get("status")}'
-            try:
-                existing_notice = delivered_stall_notice(job)
-            except Exception as exc:
-                print(f"stall notice for {job['id']} could not be verified: "
-                      f"{exc}")
-                continue
-            if existing_notice:
-                said = str(existing_notice.get("text") or "").strip()
-            else:
-                # A successful app write whose fake/read replica has not yet
-                # caught up must not become a second SMS in the same process.
-                if sent_moments_ago(local_key):
-                    continue
-                midway = job.get("status") == "running"
-                said = anticipy._voice({
-                    "situation": (
-                        "this stopped partway because their browser closed — "
-                        "say so plainly, no alarm, and that you will pick it "
-                        "up when it is open again" if midway else
-                        "you are ready to do this but their browser is not "
-                        "open, so nothing can run — tell them plainly, no "
-                        "alarm, and that it will go as soon as it is"),
-                    "task": goal,
-                }) or (
-                    f"{goal} stopped partway — your Chrome closed. I'll pick "
-                    f"it up when it's open." if midway else
-                    f"I'm ready to finish {goal} — I just need your Chrome open.")
-                saved_notice = persist_stall_notice(job, said)
-                if not saved_notice:
-                    # No external side effect without the primary app result.
-                    # A later sweep remains free to retry the feed write.
-                    continue
-                said = str(saved_notice.get("text") or "").strip() or said
-                mark_sent(local_key)
-
-            if not can_reach_owner_fresh(anticipy):
-                record_stall_notification_status(job, "sms_skipped")
-                print(f"stalled (no browser): {job['id']} — visible in the "
-                      "app; no verified SMS route")
-                continue
-            attempt_claim = claim_stall_notification_attempt(job)
-            if attempt_claim is not True:
-                print(f"stalled (no browser): {job['id']} — visible in the "
-                      "app; optional text was not repeated")
-                continue
-            # The installed effect guard resolves canonical state once more
-            # inside this call, immediately before the transport is touched.
-            told = anticipy.notify_owner(said)
-            skipped = isinstance(told, dict) and bool(told.get("skipped"))
-            sms_state = "sms_sent" if told and not skipped else (
-                "sms_skipped" if skipped else "sms_failed")
-            record_stall_notification_status(job, sms_state)
-            print(f"stalled (no browser): {job['id']} — visible in the app; "
-                  f"text {sms_state.removeprefix('sms_')}")
+            publish_stall_notice(anticipy, job,
+                "This task cannot run because their Chrome browser is not "
+                "connected and online. You do not know whether Chrome is "
+                "closed or has never been paired. Explain the missing access, "
+                "and point them to Settings → Browser in Anticipy to check "
+                "the connection. Nothing has finished; do not promise a time.",
+                f"{goal} is waiting for your browser. Open Chrome and check "
+                "Settings → Browser in Anticipy to connect it.",
+                offer_access=job.get("status") == "queued")
     except Exception as e:
         print(f"stalled-work report failed: {e}")
 
@@ -1492,11 +1384,6 @@ def report_unclaimed_device_work(anticipy) -> None:
     honest move is to say so and keep waiting.
     """
     try:
-        # Nothing here is urgent enough to wake him — same quiet hours the
-        # clock and the browser stall notice respect.
-        hour = datetime.now(CLOCK_TZ).hour
-        if CLOCK_QUIET_START <= hour or hour < CLOCK_QUIET_END:
-            return
         since = (datetime.now(timezone.utc)
                  - timedelta(minutes=DEVICE_UNCLAIMED_MINUTES)
                  ).strftime("%Y-%m-%d %H:%M:%S")
@@ -1529,14 +1416,7 @@ def report_unclaimed_device_work(anticipy) -> None:
         scope = owner_filter(anticipy)
         if scope:
             filt = f"({filt}) && {scope}"
-        # Ten, not five: the page is now a superset, and a page filled by rows
-        # this function will discard is silence again by another route.
-        r = backend.get(f"{anticipy.backend_url}/api/collections/jobs/records",
-                   params={"filter": filt, "perPage": 10, "sort": "updated"},
-                   timeout=10)
-        if not getattr(r, "ok", False):
-            return
-        for job in r.json().get("items", []):
+        for job in _finished_jobs(filt, base=anticipy.backend_url):
             goal = (job.get("goal") or "").strip()
             # The filter above is the superset; this is the lane decision,
             # read the way the hook and the phone read it.
@@ -1546,76 +1426,10 @@ def report_unclaimed_device_work(anticipy) -> None:
             # ambient errand that cannot run was never something he asked for.
             if ambient_job(job):
                 continue
-            if already_raised(goal, decision="stalled"):
-                continue
-            # ...and the same again when the durable record could not be
-            # written. `already_raised` reads the event `post_event` writes
-            # AFTER the text has gone out, so a write outage made every pass
-            # believe nothing had been said and re-sent the notice every two
-            # seconds.
-            local_key = f'device-stalled:{job["id"]}:{job.get("status")}'
-            if sent_moments_ago(local_key):
-                continue
             midway = job.get("status") == "running"
-            # WHAT THIS FUNCTION IS ALLOWED TO CLAIM, and it is less than the
-            # first draft claimed. "It goes the moment the app is open" is a
-            # statement about the PHONE'S FUTURE BEHAVIOUR, and the brain
-            # cannot see the phone at all — the comment above this function
-            # spends a paragraph on exactly that: there is no heartbeat row,
-            # which is why "sitting at queued" is the only observation there
-            # is. `CalendarHandPolicy.decide` refuses on twenty-four
-            # enumerated causes (CalendarHandPolicy.swift:303-347). The mint
-            # point compares the three the routing key can see — act_type,
-            # reach and executor — so a row delivered here agrees with the
-            # phone about the ACT. The other twenty are invisible from this
-            # process: `.noWritableCalendar`, `.startAlreadyPast`,
-            # `.factsIncomplete`, `.approvalNotOnTheRow`, and so on. Every one
-            # of them produces the same picture — the app IS open, it IS
-            # refusing, and she is texting him that it is about to run.
-            # So the sentence says what was OBSERVED (it is still queued,
-            # nothing has happened) and promises nothing. An owner who is told
-            # the truth opens the app and sees a refusal; an owner promised it
-            # would run waits, and the promise is what makes the wait a lie.
-            said = anticipy._voice({
-                "situation": ("this stopped partway on their phone — say so "
-                              "plainly, no alarm, and that you are still "
-                              "holding it. You cannot see their phone, so you "
-                              "do not know why it stopped: make no promise "
-                              "about when it finishes, do not tell them that "
-                              "opening the app is enough, and never say it is "
-                              "done"
-                              if midway
-                              else "this is queued for their PHONE, not their "
-                              "computer, and the Anticipy app has not picked "
-                              "it up — tell them plainly, no alarm, that "
-                              "nothing has happened yet and you are still "
-                              "holding it. You cannot see their phone: it "
-                              "may be closed, or open and refusing this "
-                              "errand for a reason only it can see. So make "
-                              "no promise about whether or when it runs, do "
-                              "not tell them that opening the app is enough, "
-                              "do not give a time, and never say it is "
-                              "done"),
-                "task": goal,
-            # The goal is a free-form phrase, so the template wraps it rather
-            # than reading it as a noun: "I'm ready to put {goal} in your
-            # calendar" turns "put dinner Thursday 7pm in my calendar" into
-            # a sentence with two calendars in it. Same shape the browser
-            # fallback next door already uses.
-            }) or (f"{goal} stopped partway on your phone. It hasn't "
-                   f"finished, and I'm still holding it." if midway else
-                   f"{goal} — still waiting on your phone. The Anticipy app "
-                   f"hasn't picked it up, and nothing has changed yet.")
-            # A send that did not happen is not a send. `notify_owner` has
-            # returned truthy with no transport before and she stamped his
-            # questions delivered for ten hours.
-            if not anticipy.notify_owner(said):
-                print(f"device stall notice for {job['id']}: send failed, "
-                      f"not recording it")
-                continue
-            mark_sent(local_key)
-            post_event("anticipy_says", said, decision="stalled", goal=goal)
-            print(f"unclaimed on the device lane: {job['id']} — told him")
+            publish_stall_notice(anticipy, job,
+                'this stopped partway on their phone — say so plainly, no alarm, and that you are still holding it. You cannot see their phone, so you do not know why it stopped: make no promise about when it finishes, do not tell them that opening the app is enough, and never say it is done' if midway else 'this is queued for their PHONE, not their computer, and the Anticipy app has not picked it up — tell them plainly, no alarm, that nothing has happened yet and you are still holding it. You cannot see their phone: it may be closed, or open and refusing this errand for a reason only it can see. So make no promise about whether or when it runs, do not tell them that opening the app is enough, do not give a time, and never say it is done',
+                f"{goal} stopped partway on your phone. It hasn't finished, and I'm still holding it." if midway else f"{goal} — still waiting on your phone. The Anticipy app hasn't picked it up, and nothing has changed yet.")
     except Exception as e:
         print(f"device-lane report failed: {e}")
 
@@ -1826,11 +1640,12 @@ def run_preflight_research(anticipy, learner=None) -> None:
 
 
 def run_research_jobs(anticipy, runner=None) -> None:
-    """Run the research lane HERE, in the worker — never in his Chrome.
+    """Compose or research on the server, then verify the actual task result.
 
     Read-only goals are queued with lane="research" (anticipy_core.job_lane);
     the extension's claim filter and the backend's research_lane hook keep
-    every browser agent away from them. Claiming follows the extension's own
+    every browser agent away from them. Composition needs no search key;
+    unread private sources need access, not a web how-to answer. Claiming follows the extension's own
     doctrine — stamp, read back, only run if the stamp survived — so two
     workers can never run the same job. Owner scoping is identical to every
     other job read this file does."""
@@ -1868,17 +1683,6 @@ def run_research_jobs(anticipy, runner=None) -> None:
             # second layer, so one of the two failing does not reopen the hole.
             if held_for_research(job):
                 continue
-            if not api_key and not tavily_api_key:
-                # Graceful fallback: no key means no research arm, and a job
-                # queued for an executor that does not exist would sit
-                # forever. Hand it to the browser lane — slower and noisier,
-                # but it runs. Queue-time routing already does this; this
-                # catches rows queued before the key went away.
-                backend.patch(f"{base}/api/collections/jobs/records/{job['id']}",
-                         json={"lane": ""}, timeout=10)
-                print(f"research: no search-provider key — {job['id']} handed "
-                      "to the browser lane")
-                continue
             try:
                 params = json.loads(job.get("params") or "{}") or {}
             except Exception:
@@ -1915,31 +1719,43 @@ def run_research_jobs(anticipy, runner=None) -> None:
                     or fresh.get("status") != "running" \
                     or (lease_token and fresh.get("lease_token") != lease_token):
                 continue
-            if runner is not None:
-                # Keep the injected executor seam deliberately small: tests
-                # and local proofs implement the original contract and should
-                # not need to impersonate every production provider.
-                out = runner(job.get("goal", ""), params,
-                             llm=anticipy.llm, api_key=api_key)
-            else:
-                out = research.run_research(
-                    job.get("goal", ""), params, llm=anticipy.llm,
+            model = getattr(getattr(anticipy, "brain", None), "strong", None) or anticipy.llm
+            try:
+                from .memory import RETIRED_QUOTED
+                related = memory_notes(anticipy.memory.recall(job.get("goal", ""),
+                    limit=8, retired=RETIRED_QUOTED), budget=4000)
+            except Exception:
+                related = "No related memory is available; do not invent it."
+            def public_read(goal, record):
+                if not api_key and not tavily_api_key:
+                    return {"ok": False, "needs_user": True,
+                        "result": "Public search is unavailable right now. I need a usable browser or search connection to finish this lookup."}
+                if runner is not None:
+                    return runner(goal, record, llm=model, api_key=api_key)
+                return research.run_research(goal, record, llm=model,
                     api_key=api_key, tavily_api_key=tavily_api_key)
-            ok = bool(out.get("ok"))
+            out = server_work.run(job.get("goal", ""), params, model=model,
+                research_runner=public_read, context={"related_memory": related})
+            ok = out.get("ok") is True and out.get("verified") is True
             result = (out.get("result") or "")[:6000]
-            finish_body = {"status": "done" if ok else "failed",
+            needs_user = out.get("needs_user") is True
+            params["_server_work"] = {k: out[k] for k in
+                ("approach", "verification", "candidate") if k in out}
+            finish_body = {"status": "done" if ok else "needs_user" if needs_user else "failed",
                            "result": result}
             finish_headers = None
             if workflow:
-                # A cited URL is independently inspectable evidence.  An
-                # executor saying "ok" without one is not proof of research.
-                evidence = [u.rstrip(".,);]") for u in
-                            re.findall(r"https?://[^\s]+", result)]
+                # The stored artifact or retrieved evidence must fulfil this
+                # task. URLs and an executor's own `ok` no longer prove that.
+                evidence = out.get("evidence") or []
                 try:
                     if ok and evidence:
                         workflow = succeed_plan(
                             workflow, lease_token=lease_token,
                             summary=result, evidence=evidence, verified=True)
+                    elif needs_user:
+                        workflow = needs_user_plan(workflow, lease_token=lease_token,
+                            reason=result or "This task needs access before it can continue.")
                     else:
                         workflow = fail_plan(
                             workflow, lease_token=lease_token,
@@ -1951,6 +1767,8 @@ def run_research_jobs(anticipy, runner=None) -> None:
                     finish_headers = {"X-Anticipy-Lease": lease_token}
                 except Exception:
                     continue
+            else:
+                finish_body["params"] = json.dumps(params)
             finished = backend.patch(
                 f"{base}/api/collections/jobs/records/{job['id']}",
                 json=finish_body, headers=finish_headers, timeout=10)
@@ -2285,8 +2103,8 @@ FINISHED_PER_PAGE = 200
 FINISHED_MAX_PAGES = 10
 
 
-def _finished_jobs(filt: str) -> list[dict]:
-    """Every finished job in the window, oldest first.
+def _finished_jobs(filt: str, *, base: str | None = None) -> list[dict]:
+    """Paged owner-scoped work, also used for questions and stalled tasks.
 
     This was one page of the ten NEWEST rows. A finished job's `updated`
     never moves again, so after a burst of more than ten done/failed jobs —
@@ -2300,7 +2118,7 @@ def _finished_jobs(filt: str) -> list[dict]:
     rows: list[dict] = []
     page = 1
     while page <= FINISHED_MAX_PAGES:
-        r = backend.get(f"{PB}/api/collections/jobs/records",
+        r = backend.get(f"{base or PB}/api/collections/jobs/records",
                    params={"filter": filt, "perPage": FINISHED_PER_PAGE,
                            "page": page, "sort": "updated"},
                    timeout=10)
@@ -2581,7 +2399,7 @@ def record_notification_status(job: dict, state: str) -> bool:
     this helper records the resulting sent/failed/skipped observation.
     """
     job_id = str(job.get("id") or "").strip()
-    allowed = {"sms_sent", "sms_failed", "sms_skipped"}
+    allowed = {"sms_sent", "sms_failed", "sms_skipped", "sms_accepted", "sms_unconfirmed"}
     if not job_id or state not in allowed:
         return False
     owner_ref = str(job.get("owner_ref") or "")
@@ -2701,7 +2519,7 @@ def record_stall_notification_status(job: dict, state: str) -> bool:
     job_id = str(job.get("id") or "").strip()
     job_status = str(job.get("status") or "").strip().lower()
     if not job_id or not job_status or state not in {
-            "sms_sent", "sms_failed", "sms_skipped"}:
+            "sms_sent", "sms_failed", "sms_skipped", "sms_deferred"}:
         return False
     owner_ref = str(job.get("owner_ref") or "")
     owner_id = str(job.get("owner") or "")
@@ -3375,26 +3193,21 @@ def asks_for_goal(goal: str, owner_ref: str = "", within_hours: float = 24.0) ->
         return 0
 
 
+_QUESTION_COVERAGE_CACHE: dict = {}
+
+
 def need_already_asked(goal: str, blocker: str, within_hours: float = 24.0,
-                       covered: float = 0.5, owner_ref: str = "") -> bool:
-    """Has she already told him what THIS task is waiting for?
+                       owner_ref: str = "", llm=None) -> bool:
+    """Ask a model whether earlier outbound messages covered this question.
 
-    Keying on the task alone was wrong in a way that only shows up on the
-    second round. If he answers part of what a form wants, the task resumes,
-    the browser gets further and stops on something else — and a task-keyed
-    guard would keep her quiet about the new thing for the rest of the day.
-    The task would die silently, which is the exact failure the stuck-job ask
-    exists to prevent.
-
-    So compare against the BLOCKER — the browser's own words about what it
-    needs, which are stable — and ask whether a message she already sent
-    about this task covered it. Her own wording is generated fresh every time
-    and is useless for this; the requirement is not."""
-    goal, blocker = (goal or "").strip(), (blocker or "").strip()
-    if not goal or not blocker:
-        return False
-    want = _content_words(blocker)
-    if not want:
+    Task/state IDs handle transport identity. This question is about meaning:
+    a name and a restaurant name can share every word and still be different
+    requirements. Old word-overlap and number-subset guesses are removed.
+    Only a positive coverage verdict suppresses an ask; unavailable/unclear
+    must not pretend the owner has already been asked. Other transport guards
+    still bound duplicate effects and outreach volume.
+    """
+    if not goal.strip() or not blocker.strip():
         return False
     try:
         since = (datetime.now(timezone.utc)
@@ -3405,26 +3218,28 @@ def need_already_asked(goal: str, blocker: str, within_hours: float = 24.0,
                            "perPage": 100, "sort": "-created"}, timeout=10)
         if not r.ok:
             return False
-        for ev in r.json().get("items", []):
-            if (ev.get("goal") or "").strip() != goal:
-                continue
-            text = ev.get("text", "")
-            said = _content_words(text)
-            if said and len(want & said) / len(want) >= covered:
-                return True
-            # Word overlap misses a paraphrase (live, 2026-08-10: the same
-            # parked booking was re-asked every 45 minutes, freshly worded
-            # each time). Every ask now carries the blocker's hard facts
-            # exactly, so a prior needs_user ask whose facts match IS this
-            # question, whatever the words around them. A new requirement has
-            # new facts and still gets raised.
-            if (ev.get("decision") == "needs_user"
-                    and _fact_tokens(blocker)
-                    and carries_facts(text, blocker)):
-                return True
-    except Exception as e:
-        print(f"need_already_asked check failed: {e}")
-    return False
+        history = [{key: ev.get(key, "") for key in
+                    ("id", "text", "goal", "created", "decision")}
+                   for ev in r.json().get("items", [])
+                   if _event_matches_owner(ev, owner_ref)
+                   and str(ev.get("goal") or "").strip() == goal.strip()]
+        if not history:
+            return False
+        key = (owner_ref, goal, blocker, json.dumps(history, sort_keys=True))
+        if key not in _QUESTION_COVERAGE_CACHE:
+            from .question_delivery import coverage_verdict
+            verdict = coverage_verdict(llm, goal, blocker, history)
+            # Cache only actual verdicts. A model outage is retried after it
+            # recovers, not remembered as either permission or suppression.
+            if verdict != "unavailable":
+                if len(_QUESTION_COVERAGE_CACHE) >= 500:
+                    _QUESTION_COVERAGE_CACHE.pop(next(iter(_QUESTION_COVERAGE_CACHE)))
+                _QUESTION_COVERAGE_CACHE[key] = verdict
+            return verdict == "already_asked"
+        return _QUESTION_COVERAGE_CACHE[key] == "already_asked"
+    except Exception as exc:
+        print(f"question coverage unavailable: {type(exc).__name__}")
+        return False
 
 
 def already_raised(goal: str, text: str = "", within_hours: float = 24.0,
@@ -4429,6 +4244,39 @@ def claim(event_id: str) -> bool:
     return mark_processed(event_id, "processing")
 
 
+def connection_command(ev: dict, owner_ref: str) -> str:
+    """Sequence the shared connection handler before ordinary conversation.
+
+    The API reads the persisted event itself. It cannot be redirected with a
+    caller's transcription or recipient. Pending work is retried by event id,
+    against the API's durable lease, never reinterpreted as a second task.
+    """
+    if not os.environ.get("ANTICIPY_SERVICE_TOKEN"):
+        return "not_for_us"
+    try:
+        response = backend.post(f"{PB}/worker/connection-command", json={
+            "event_id": ev["id"], "owner_ref": owner_ref,
+        }, timeout=120)
+        # Compatibility while the new API is rolling out. No connection
+        # executor exists on this endpoint in an older release.
+        if response.status_code == 404:
+            return "not_for_us"
+        if response.status_code != 200:
+            return "pending"
+        result = response.json()
+        if result.get("status") != "completed":
+            return "pending"
+        outcome = result.get("outcome") or {}
+        if outcome.get("kind") == "not_for_us":
+            return "not_for_us"
+        if not outcome.get("replied"):
+            return "pending"
+        return "ask" if outcome.get("question") else "ignore"
+    except Exception as error:
+        print(f"connection command awaiting reconciliation: {type(error).__name__}")
+        return "pending"
+
+
 def handle_inbound(ev: dict, convo, anticipy) -> str:
     """Handle ONE answer from the owner, whichever channel it arrived on.
 
@@ -4440,7 +4288,8 @@ def handle_inbound(ev: dict, convo, anticipy) -> str:
 
     Returns the decision it recorded, for the log and for tests.
     """
-    in_app = ev.get("kind") == "app_reply"
+    in_app = (ev.get("kind") == "app_reply" or
+              (ev.get("kind") == "transcript" and ev.get("source") == "typed"))
     lane = "app in" if in_app else "sms in"
     text = ev.get("text", "").strip()
     # One conversation key for both channels (docs leg 2 "IT WAS ONE
@@ -4477,13 +4326,31 @@ def handle_inbound(ev: dict, convo, anticipy) -> str:
         print(f"{lane}: could not claim, retrying later")
         return "unclaimed"
 
+    connection = connection_command(ev, anticipy.owner_ref)
+    if connection != "not_for_us":
+        # Reset only our processing claim, retaining the original event id.
+        # The connection service owns the external-effect retry fence.
+        mark_processed(ev["id"], "" if connection == "pending" else connection)
+        return "unclaimed" if connection == "pending" else connection
+
     # An answer typed in the app is answered in the app. This is NOT a ruling on
     # whether SMS is primary or a backstop -- that question stays open -- only
     # that a reply belongs on the channel the answer arrived on.
     deliver = convo.reply_in_app() if in_app else contextlib.nullcontext()
-    with deliver:
+    provenance = (convo.from_event(ev) if hasattr(convo, "from_event")
+                  else contextlib.nullcontext())
+    with deliver, provenance:
         try:
-            out = convo.on_reply(phone, text)
+            reply_context = None
+            if ev.get("kind") == "app_reply":
+                try:
+                    candidate = json.loads(ev.get("goal") or "null")
+                    if isinstance(candidate, dict) and isinstance(candidate.get("reply_to_job_id"), str):
+                        reply_context = candidate
+                except (ValueError, TypeError):
+                    pass
+            out = (convo.on_reply(phone, text, reply_context=reply_context)
+                   if reply_context else convo.on_reply(phone, text))
         except Exception as e:
             mark_processed(ev["id"], "error")
             print(f"{lane}: {text!r} -> error: {e}")
@@ -4827,22 +4694,26 @@ def publish_worker_status(banner: str, owner_ref: str = "",
 
 
 def ask_about_stuck_jobs(anticipy, convo) -> None:
-    """Text the owner about anything the browser handed back, once each.
+    """Deliver unanswered task questions, including drafts not yet executable.
 
     The agent reports exactly what it needs ("I need your birthday to finish
     the reservation"); she puts that in her own words and asks. His reply
     comes back through the normal SMS path, where the answer is remembered
     and the job resumes — so nothing has to be pre-programmed per field."""
     try:
-        filt = 'status="needs_user"'
+        filt = '(status="needs_user" || status="awaiting_confirm") && result!=""'
         scope = owner_filter(anticipy)
         if scope:
             filt += f" && {scope}"
-        r = backend.get(f"{PB}/api/collections/jobs/records",
-                   params={"filter": filt, "perPage": 5, "sort": "-updated"}, timeout=10)
-        if not r.ok:
-            return
-        for job in r.json().get("items", []):
+        # Reuse the owner-scoped, oldest-first paginator. Five already asked
+        # questions must not occupy the entire first page forever and starve
+        # a sixth one. A card without a question does not belong in this pass.
+        for job in _finished_jobs(filt):
+            if not _event_matches_owner(job, anticipy.owner_ref,
+                                        getattr(anticipy, "owner_id", "")):
+                continue
+            if job.get("status") not in ("needs_user", "awaiting_confirm"):
+                continue
             # There used to be an in-RAM ASKED_ABOUT set here, marked before
             # any other check. It defeated the very guard written to replace
             # it: need_already_asked() exists so that a task blocking on a
@@ -4852,9 +4723,35 @@ def ask_about_stuck_jobs(anticipy, convo) -> None:
             blocker = (job.get("result") or "").strip()
             if not blocker:
                 continue
-            # An ambient job that hit a wall does not earn a text — he never
-            # asked for it. It stays visible in the app, nothing more.
+            # Read-only background research stays on the desk. A proposed
+            # consequential task uses the separate desk lane and has an
+            # approval/question the owner can answer; it must not disappear
+            # from this sweep merely because no executor has started yet.
             if ambient_job(job):
+                continue
+            # A draft is an invitation to start, not a reply to an already
+            # authorized errand. After a midnight proposal is deferred, the
+            # persisted card is the morning outbox. Do not expire its question
+            # or pay to rewrite it on every nighttime sweep.
+            proposed = job.get("status") == "awaiting_confirm"
+            try:
+                question_params = json.loads(job.get("params") or "{}")
+            except (ValueError, TypeError):
+                question_params = {}
+            if not isinstance(question_params, dict):
+                question_params = {}
+            invited = question_params.get("_question_invited") is True
+            proactive = proposed and not invited
+            if proactive and (_in_quiet_hours(time.time()) or MEETING_ARMED):
+                continue
+            # Fence the exact persisted question before touching a provider.
+            # Hashing raw record values is transport identity, not a judgment
+            # of meaning. New questions/versions remain independently sendable.
+            question_key = hashlib.sha256(json.dumps([
+                job.get("status"), job.get("workflow_version", 0), blocker,
+            ], ensure_ascii=False).encode()).hexdigest()[:24]
+            notice = dict(job, id=f"question:{job['id']}:{question_key}")
+            if notification_was_attempted(notice) is not False:
                 continue
             # Cheapest guard FIRST. This whole block used to compose the
             # message before deciding whether to send it, so every poll of a
@@ -4942,7 +4839,9 @@ def ask_about_stuck_jobs(anticipy, convo) -> None:
             window = 24.0 if asks_already >= 2 else 3.0
             if need_already_asked(job.get("goal", ""), blocker,
                                   within_hours=window,
-                                  owner_ref=anticipy.owner_ref):
+                                  owner_ref=anticipy.owner_ref,
+                                  llm=getattr(getattr(anticipy, "brain", None), "strong", None)
+                                      or getattr(anticipy, "llm", None)):
                 print(f"stuck job {job['id']}: already asked for this, staying quiet")
                 continue
             # Same distinction as the finished-job reporter, for the same
@@ -4989,46 +4888,32 @@ def ask_about_stuck_jobs(anticipy, convo) -> None:
                     print(f"stuck job {job['id']}: nowhere to send this — no "
                           f"phone on this account, not composing")
                 continue
+            # Follow-up invitations share the same durable daily outreach
+            # allowance as the original proposal and the clock. Directly
+            # requested work blocked during execution remains a prompt reply.
+            if proactive and not reserve_uninvited_text(anticipy.owner_ref, "task_question"):
+                continue
             said = anticipy._voice({
-                "situation": "you got most of the way through a task in their browser "
-                             "and need one thing from them to finish. Carry the facts "
+                "situation": "a task is waiting for the owner's answer. Its recorded "
+                             "status and question are below. Awaiting confirmation "
+                             "means execution has not been authorized; needs_user "
+                             "means an executor stopped for input. Do not claim any "
+                             "progress beyond that evidence. Carry the facts "
                              "below EXACTLY — every number, time, date and name in "
                              "what_you_need must survive into your text unchanged",
                 "task": job.get("goal", ""),
+                "status": job.get("status", ""),
                 "what_you_need": blocker,
             })
-            # Her paraphrase is voice, not authority: if it dropped or invented
-            # a number/time/date, the facts go out verbatim instead. Live,
-            # 2026-08-10: "showing 6:30 PM, task is tomorrow at noon" was
-            # rewritten as "I'm gonna drive at 6:30. I can change it for
-            # tomorrow" — word salad about a booking he was waiting on.
-            # The facts she may use are the blocker's AND the task's: the
-            # model is shown both, so a sentence mentioning the 6 PM from the
-            # goal is not an invention. Judging it against the blocker alone
-            # rejected nearly every natural sentence — which is why he kept
-            # getting the identical canned line and said, correctly, "feel
-            # like it's hard-coded" (2026-08-16).
-            allowed = f"{blocker} {job.get('goal', '')}"
-            if said and not (carries_facts(said, blocker)
-                             or (_fact_tokens(blocker) <= _fact_tokens(said)
-                                 and _fact_tokens(said) <= _fact_tokens(allowed))):
-                print(f"stuck job {job['id']}: paraphrase mangled the facts, "
-                      f"asking again with them pinned")
-                said = anticipy._voice({
-                    "situation": "you got most of the way through a task in "
-                                 "their browser and need one thing to finish. "
-                                 "Your reply MUST contain, character for "
-                                 "character, every number, time, date and name "
-                                 "in what_you_need. Write it the way a person "
-                                 "texts, not a status line.",
-                    "task": job.get("goal", ""),
-                    "what_you_need": blocker,
-                })
-                if said and not (carries_facts(said, blocker)
-                                 or (_fact_tokens(blocker) <= _fact_tokens(said)
-                                     and _fact_tokens(said) <= _fact_tokens(allowed))):
-                    said = None
-            said = said or f"I'm nearly through {job.get('goal', 'that')} — {blocker}"
+            # The task and its complete question are the composition context.
+            # A bag of words/numbers cannot validate a paraphrase's meaning.
+            # If composition is unavailable, show the literal recorded question.
+            said = said or f"About {job.get('goal', 'that task')}: {blocker}"
+            # A failed database write is not permission to create an
+            # unrecordable external effect. A lost provider response also
+            # cannot license resending; the attempt stays visibly unconfirmed.
+            if claim_notification_attempt(notice) is not True:
+                continue
             # What she actually sent is the durable record — a set in memory
             # would forget across a redeploy and re-ask for his name and email.
             # Only record it if it actually left the building. notify_owner
@@ -5036,8 +4921,10 @@ def ask_about_stuck_jobs(anticipy, convo) -> None:
             # turned a refused send into 24 hours of silence about that task,
             # because the dedup guard reads these records as proof she spoke.
             if not anticipy.notify_owner(said):
+                record_notification_status(notice, "sms_unconfirmed")
                 print(f"stuck job {job['id']}: send failed, not recording it as said")
                 continue
+            record_notification_status(notice, "sms_accepted")
             _last_blocker[job["id"]] = blocker
             mark_sent(local_key)
             post_event("anticipy_says", said, decision="needs_user",
@@ -5045,6 +4932,16 @@ def ask_about_stuck_jobs(anticipy, convo) -> None:
             print(f"asked about stuck job {job['id']}: {said[:80]}")
     except Exception as e:
         print(f"stuck-job ask failed: {e}")
+
+
+def configure_message_transport(anticipy, provider):
+    """Bind both sending surfaces to one provider, clearing any old direct arm."""
+    arm = sendblue_arm.SendblueArm() if provider == "sendblue" else None
+    anticipy.voice = arm
+    transport = (MessageTransport(
+        arm, before_send=lambda destination: canonical_phone_allows_effect(anticipy, destination),
+    ) if arm else MockTransport())
+    return arm, transport
 
 
 def main() -> None:
@@ -5064,7 +4961,8 @@ def main() -> None:
     # server-default behaviour.
     owner_zone = fetch_owner_timezone(owner_ref)
     llm = LLM(owner_zone=owner_zone,
-              owner_name=fetch_owner_first_name(owner_ref))
+              owner_name=fetch_owner_first_name(owner_ref),
+              owner_email=(_latest_profile(owner_ref) or {}).get("email"))
     if owner_zone:
         try:
             CLOCK_TZ = ZoneInfo(owner_zone)
@@ -5080,48 +4978,18 @@ def main() -> None:
                         owner_phone=("" if os.environ.get("ANTICIPY_SUPERVISED") == "1"
                                      else os.environ.get("ANTICIPY_OWNER_PHONE", "owner")),
                         owner_id=legacy_owner, owner_ref=owner_ref)
-    # WHAT WAS HERE UNTIL 2026-09-05, Sendblue arm: `live_sms =
-    # has_credentials(); voice = VoiceArm() if live_sms else None; transport =
-    # TwilioTransport(voice, ...) if voice else MockTransport()`, and the
-    # banner said `sms=live`. One vendor, so "configured" and "which" were
-    # the same question. They are not any more.
-    #
-    # WHICH ARM TEXTS is decided once, by brain/sendblue_arm.py
-    # `choose_provider` — the same rule the reach gate reads — so the banner,
-    # the transport and the measurement can never name different vendors.
-    # Sendblue when its three variables are set, else Twilio when its
-    # credentials are (an API key OR the auth token: brain/voice_arm.py
-    # `has_credentials` is the one place that knows), else mock. A provider
-    # NAMED in ANTICIPY_SMS_PROVIDER but not configured is mock, never the
-    # other vendor, and says so here where the operator is looking.
+    # SendBlue is the only active texting provider. Missing or retired
+    # configuration disables sending, including the direct notification path.
     sms_provider = sendblue_arm.choose_provider()
     asked = (os.environ.get("ANTICIPY_SMS_PROVIDER") or "").strip().lower()
     if asked and sms_provider == "mock":
         print(f"ANTICIPY_SMS_PROVIDER={asked!r} but that provider is not "
               f"configured on this process — texting is MOCK, not the other "
               f"vendor. Set its credentials or unset the variable.")
-    # The Twilio arm is ALSO the calling arm, so it is built whenever Twilio
-    # is configured, whatever texts ride on. Calls stay on Twilio; Sendblue
-    # does not dial.
-    voice = VoiceArm() if has_credentials() else None
-    if sms_provider == "sendblue":
-        arm = sendblue_arm.SendblueArm()
-    elif sms_provider == "twilio":
-        arm = voice
-    else:
-        arm = None
-    # notify_owner's direct `.text` fallback (brain/anticipy_core.py) must
-    # reach the SAME channel the conversation does, or a text that missed the
-    # conversational lane would go out through the vendor that was retired.
-    if arm is not None:
-        anticipy.voice = arm
-    elif voice:
-        anticipy.voice = voice
-    transport = (MessageTransport(
-        arm,
-        before_send=lambda destination: canonical_phone_allows_effect(
-            anticipy, destination),
-    ) if arm else MockTransport())
+    # Only the selected SendBlue arm may reach a phone. In particular, a
+    # missing SendBlue configuration cannot attach a legacy Twilio arm to
+    # notify_owner while the conversational transport says it is mock.
+    arm, transport = configure_message_transport(anticipy, sms_provider)
     convo = Conversation(anticipy, transport=transport)
     anticipy.conversation = convo
     # This is deliberately installed after every transport is attached and
@@ -5161,7 +5029,7 @@ def main() -> None:
           # "sms=mock" is load-bearing text, not a nicety: proof/local_rig.sh
           # refuses to continue unless the boot banner says it, and kills a
           # laptop worker that could text a real person. Anything else names
-          # the vendor (`sms=twilio`, `sms=sendblue:…1234`). The credential
+          # the vendor (`sms=sendblue:…1234`). The credential
           # goes in its own field — after a key is minted, the only way to
           # know whether outbound really moved off the full-access auth token
           # is to read it off the process.
@@ -5226,7 +5094,6 @@ def main() -> None:
     # repeat the network read on the first loop turn; the minute beat below
     # remains the authority for changes after startup.
     last_profile = time.time()
-    last_webhook = 0.0
     while True:
         try:
             # Pick up the owner's number from the app (and any change to it)
@@ -5260,6 +5127,9 @@ def main() -> None:
                 # worker that started before onboarding finished otherwise
                 # composes for the whole day without knowing who it is
                 # writing to.
+                identity_profile = _latest_profile(anticipy.owner_ref)
+                if identity_profile is not None:
+                    llm.owner_email = str(identity_profile.get("email") or "").strip()
                 first = fetch_owner_first_name(anticipy.owner_ref)
                 if first and first != llm.owner_name:
                     llm.owner_name = first
@@ -5279,13 +5149,6 @@ def main() -> None:
                 # anything, so a tap during the read cannot be undone by the
                 # facts arriving a moment behind it.
                 ingest_read_facts(memory, owner_ref=anticipy.owner_ref)
-            # Is the number still wired to us? Cheap, and the failure it
-            # catches is invisible from in here — she simply never hears him.
-            manages_webhook = (os.environ.get("ANTICIPY_SUPERVISED") != "1" or
-                               os.environ.get("ANTICIPY_WEBHOOK_MANAGER") == "1")
-            if manages_webhook and time.time() - last_webhook > WEBHOOK_CHECK_EVERY_SECONDS:
-                last_webhook = time.time()
-                ensure_inbound_webhook()
             # The clock: she reviews her open loops on her own schedule and
             # may initiate — rarely, in daytime, rate-limited, gated.
             now = time.time()
@@ -5335,6 +5198,13 @@ def main() -> None:
                           "hearing — the rest of the batch waits for the next "
                           "turn so his replies and reports are read first")
                     break
+                # The main composer predates app_reply and writes a typed
+                # transcript. It is still a direct conversation with us, not
+                # ambient speech to triage. Preserve the original event while
+                # sharing the reply path, claim and delivery behavior.
+                if ev.get("source") == "typed":
+                    handle_inbound(ev, convo, anticipy)
+                    continue
                 line = ev.get("text", "").strip()
                 # Mark that this person is mid-conversation, so a question
                 # born from one fragment waits for the sentence to finish.
@@ -5469,7 +5339,13 @@ def main() -> None:
                               f"({placed.get('why')}) seg={placed.get('segment','-')}")
                     except Exception as e:
                         print(f"segment: skipped ({e})")
-                if out.get("anticipy_says"):
+                if out.get("question_job_id"):
+                    # The job is the saved in-app question. Recording it here
+                    # as earlier outreach would make the SMS outbox believe
+                    # that the owner had already been texted and suppress the
+                    # first actual send. The outbox records its own attempt.
+                    print(f"question saved on task {out['question_job_id']}; SMS outbox owns delivery")
+                elif out.get("anticipy_says"):
                     post_event("anticipy_says", out["anticipy_says"],
                                decision=decision,
                                goal=out["decision"].goal or "",

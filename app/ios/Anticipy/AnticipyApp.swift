@@ -600,11 +600,12 @@ enum AppReplyWritePolicy {
         return "app-reply:\(account):\(event)"
     }
 
-    static func pending(accountID: String, eventID: String) -> Pending? {
+    static func pending(accountID: String, eventID: String,
+                        questionRevision: String? = nil) -> Pending? {
         guard let external = externalEventID(accountID: accountID,
                                              eventID: eventID) else { return nil }
         return Pending(accountID: accountID, eventID: eventID,
-                       externalEventID: external)
+                       externalEventID: questionRevision.map { external + ":" + $0 } ?? external)
     }
 
     static func upserting(_ pending: Pending,
@@ -642,6 +643,9 @@ final class AnticipySession: ObservableObject {
     @Published var transcript: [TranscriptLine] = []
     @Published var sessionLines: [SessionLine] = []
     @Published var anticipySays: [BrainEvent] = []
+    /// The first successful read is history, including when listening resumes
+    /// before that read returns. Later polls must not move this boundary.
+    @Published var initialHistoryReplyIDs: Set<String>?
     @Published var jobs: [AgentJob] = []
     /// The only way this product can reach someone whose phone is in their
     /// pocket. See Notifier — until it existed, a booking waiting on an OK
@@ -668,7 +672,7 @@ final class AnticipySession: ObservableObject {
     /// tests/test_extension_version_pin.py now reads extension/manifest.json,
     /// this literal, and the mirror in Tests/StaleExtensionTests.swift, and
     /// goes red when any of the three disagree. Bump all three together.
-    static let expectedExtensionVersion = "0.15.0"
+    static let expectedExtensionVersion = "0.16.0"
 
     /// The extension reports itself as "Chrome/128.0.0.0 ext/0.8.2" in the
     /// agent record's browser field. Returns what Chrome is running when it
@@ -882,6 +886,7 @@ final class AnticipySession: ObservableObject {
     /// account. This is deliberately not persisted: after a process launch the
     /// account must be read before any screen promises that texts can arrive.
     @Published private(set) var canonicalOwnerPhoneState: OwnerMirror.PhoneState = .unknown
+    @Published private(set) var notificationPolicy: DashboardPolicy.NotificationPolicy?
     private var canonicalOwnerRefreshGeneration = 0
 
     private var currentOwnerMirror: OwnerMirror.Values {
@@ -922,6 +927,7 @@ final class AnticipySession: ObservableObject {
     func refreshCanonicalOwner() async -> Bool {
         guard isSignedIn else {
             canonicalOwnerPhoneState = .unknown
+            notificationPolicy = nil
             return false
         }
         let requestedAccount = accountID
@@ -1284,7 +1290,7 @@ final class AnticipySession: ObservableObject {
         do {
             let fetched = try await b.fetchJobs(owner: requestedOwnerID)
             guard refreshLeaseIsCurrent(lease) else { return }
-            jobs = fetched.map { job in
+            let reconciledJobs = fetched.map { job in
                 guard let held = confirmedStatus[job.id] else { return job }
                 switch ActionWritePolicy.reconcile(
                     originalStatus: held.original,
@@ -1307,6 +1313,7 @@ final class AnticipySession: ObservableObject {
                     return job
                 }
             }
+            if jobs != reconciledJobs { jobs = reconciledJobs }
             connection = .ready
             // Raised from the poll on purpose: the app keeps running while it
             // listens (background audio), so a local notification from here
@@ -1337,6 +1344,11 @@ final class AnticipySession: ObservableObject {
         }
         let fetchedEvents = try? await b.fetchEvents()
         guard refreshLeaseIsCurrent(lease) else { return }
+        let fetchedNotificationPolicy = try? await b.fetchNotificationPolicy()
+        guard refreshLeaseIsCurrent(lease) else { return }
+        notificationPolicy = fetchedNotificationPolicy.flatMap {
+            try? JSONDecoder().decode(DashboardPolicy.NotificationPolicy.self, from: $0)
+        }
         if let events = fetchedEvents {
             // Server view of the stream: heard lines with the brain's verdict,
             // plus everything Anticipy said/texted back.
@@ -1383,14 +1395,17 @@ final class AnticipySession: ObservableObject {
             serverLines.append(contentsOf: transcript.filter {
                 $0.id.hasPrefix("local-") && !serverTexts.contains($0.text)
             })
-            transcript = serverLines
-            anticipySays = events.filter { $0.kind == "anticipy_says" || $0.kind == "anticipy_text" }
+            if transcript != serverLines { transcript = serverLines }
+            let said = events.filter { $0.kind == "anticipy_says" || $0.kind == "anticipy_text" }
+            if initialHistoryReplyIDs == nil { initialHistoryReplyIDs = Set(said.map(\.id)) }
+            if anticipySays != said { anticipySays = said }
             // His replies, so a question that is already settled stops
             // offering a box to settle it again. Both lanes: he may answer the
             // same question by text or in here, and either one closes it.
-            ownerReplies = events.filter {
+            let replies = events.filter {
                 $0.kind == "sms_reply" || $0.kind == "app_reply"
             }
+            if ownerReplies != replies { ownerReplies = replies }
         }
         // A quiet buzz the moment finished work lands.
         let doneIDs = Set(jobs.filter { $0.status == "done" }.map(\.id))
@@ -2286,6 +2301,7 @@ final class AnticipySession: ObservableObject {
     /// keep listening, display the previous account's words, or leave its
     /// errands on the lock screen.
     private func clearSignedInSurface() {
+        speakerTagger.invalidatePendingDeliveries()
         // A network response already on its way back must not repopulate this
         // screen (or its lock-screen notifications) after the account leaves.
         invalidateRefreshes()
@@ -2315,6 +2331,7 @@ final class AnticipySession: ObservableObject {
         // in OwnerMirror so this line cannot fall behind the one in Settings.
         OwnerMirror.clear()
         canonicalOwnerPhoneState = .unknown
+        notificationPolicy = nil
         canonicalOwnerRefreshGeneration += 1
         // Raw and derived account state is just as identifying as the profile
         // mirrors. In particular, Developer Speech Stream makes these arrays
@@ -2324,6 +2341,7 @@ final class AnticipySession: ObservableObject {
         transcript = []
         sessionLines = []
         anticipySays = []
+        initialHistoryReplyIDs = nil
         jobs = []
         ownerReplies = []
         failedWrites = []
@@ -2938,9 +2956,16 @@ final class AnticipySession: ObservableObject {
             // brain never picks it up, the card stays as it is and says so —
             // which is the truth. Flipping it to queued here would show him a
             // task moving that nothing is working on.
-            return await write(job) {
-                try await self.backend.pushEvent(kind: "app_reply", text: answer)
-            }
+            guard isSignedIn else { return false }
+            let context: [String: Any] = ["reply_to_job_id": job.id,
+                "workflow_version": job.workflow_version ?? 0,
+                "question": job.result ?? "", "goal": job.goal]
+            guard let revision = try? workflowDigest(context.merging(["answer": answer]) { _, new in new }),
+                  let contextJSON = try? jsonString(context),
+                  let pending = pendingAppReply(eventID: job.id)
+                    ?? AppReplyWritePolicy.pending(accountID: accountID, eventID: job.id,
+                                                   questionRevision: revision) else { return false }
+            return await writeAppReply(pending, text: answer, replyContext: contextJSON)
 
         case .approval:
             // Record the yes ON the job: the browser agent reads it and finishes
@@ -3114,6 +3139,16 @@ final class AnticipySession: ObservableObject {
     /// action exposed while an uncertain card is on screen; it never sends the
     /// mutation again.
     func reconcileWrite(_ job: AgentJob) async {
+        if let pending = pendingAppReply(eventID: job.id) {
+            guard isSignedIn, !inFlight.contains(job.id) else { return }
+            let account = accountID, token = authToken, b = backend
+            inFlight.insert(job.id)
+            defer { inFlight.remove(job.id) }
+            let read = await canonicalAppReplyRead(pending, backend: b)
+            guard isSignedIn, accountID == account, authToken == token else { return }
+            _ = applyAppReplyReconciliation(AppReplyWritePolicy.reconcile(read), pending: pending)
+            return
+        }
         guard let pending = pendingJobWrites[job.id],
               !inFlight.contains(job.id) else { return }
         inFlight.insert(job.id)
@@ -3195,8 +3230,10 @@ final class AnticipySession: ObservableObject {
     /// durable identity before the request leaves, then resolve any uncertain
     /// completion by reading that exact owner-scoped event back.
     private func writeAppReply(_ pending: AppReplyWritePolicy.Pending,
-                               text: String) async -> Bool {
-        guard isSignedIn, accountID == pending.accountID else { return false }
+                               text: String, replyContext: String? = nil) async -> Bool {
+        guard isSignedIn, accountID == pending.accountID,
+              !inFlight.contains(pending.eventID),
+              !unverifiedWrites.contains(pending.eventID) else { return false }
         let id = pending.eventID
         let requestedAccount = accountID
         let requestedToken = authToken
@@ -3209,7 +3246,7 @@ final class AnticipySession: ObservableObject {
         defer { inFlight.remove(id) }
 
         do {
-            try await b.pushEvent(kind: "app_reply", text: text,
+            try await b.pushEvent(kind: "app_reply", text: text, goal: replyContext,
                                   externalEventID: pending.externalEventID)
             guard isSignedIn, accountID == requestedAccount,
                   authToken == requestedToken else { return false }

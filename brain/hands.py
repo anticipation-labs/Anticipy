@@ -32,7 +32,9 @@ never on the browser and never on the api hand. That is the trade Law 1 asks
 for and its cost is written down here: a write the model never got to judge
 becomes a read-only lookup rather than a browser errand, visible in the row's
 `_hand` note and in the log line this module prints, instead of a job that
-acts without a verdict.
+acts without a verdict. The server executor now refuses hold/unasked/unanswered
+notes: using the research lane to keep a row away from the browser does not license
+a public lookup or a fabricated completion.
 
 THE FACTS ARE HANDED TO THE MODEL, NOT GUESSED FROM WORDS. `gather_context`
 reads which apps this owner has connected and whether writes are switched on
@@ -402,7 +404,8 @@ only reads, and the choice to touch nothing. Pick the one that takes this step.
              it exists only for an app in the CONNECTED list below, and it may
              change things in that app only when that row says writes are ON.
   research — read-only, on the server: look something up, read pages, or
-             recall what the assistant itself heard him say, and tell him.
+             produce a private draft/summary/comparison from the supplied
+             context, or recall what the assistant itself heard him say.
              Needs no account and no app. Changes nothing anywhere.
   hold     — no hand should touch this: it is not a step anyone can run, or it
              must wait for the owner's own word (money, deleting things,
@@ -437,10 +440,21 @@ And two from the house:
   payments, pages he asked to see. Finding, comparing or checking something
   on the open web needs no account and is research, not the browser, even
   though a browser could do it.
-- A question about his own life — what he promised, said, was told, owes, or
-  where something is — is answered from what the assistant heard, never by
-  opening an app or a website for it. That is research too, whether or not
-  anything is connected. Answering him is not a hand.
+- Distinguish remembered conversation from a requested source read. "What did
+  I say about pickup?" can use memory; "check the pickup calendar" requires
+  reading that calendar. Memory may identify the source but must not pretend
+  to be its current contents. Private sources require the connected app or
+  the owner's browser, not public web search.
+- Drafting text to return privately in this conversation does not itself
+  require an email app and does not write one. Choose the hand needed to read
+  its sources. Saving a draft in an external account or sending it does change
+  that account. Never invent such a save/send step merely because it is a draft.
+  When the needed facts are already supplied, research can compose the actual
+  draft on the server without a web lookup. It must not substitute instructions
+  about drafting for the requested draft itself.
+- An offline browser is an unavailable access path, not permission to substitute
+  memory or public search for a private source. Keep private-source work on
+  browser when no suitable app is connected, so the owner can supply access.
 
 Worked examples, nothing connected unless it says so:
   "find a plumber who works weekends"                  -> research, read
@@ -640,6 +654,9 @@ How to answer it:
 - Arguments are a JSON object using the tool's own parameter names, filled
   from the STEP and from what was HEARD. Every parameter marked required must
   be present. Leave optional ones out unless the step needs them.
+- A search query is composed from the described target; it is not an opaque
+  record id the owner must supply. For a named report, its title can be the
+  query. Never substitute a title for a parameter that actually requires an id.
 - Never invent a fact the call needs. An event or message id, a person's
   address, a place, a time that neither the step nor what was heard supplies
   is not yours to make up, and a person's name is not an address or an id:
@@ -650,6 +667,10 @@ How to answer it:
   not one call, and a tool that would also touch what the step did not name
   is not that step's tool: the verdict is "unclear", and the reason says
   what the lookup would have to find or what the tool would touch besides.
+  For an information request, returning the needed source content is enough:
+  the assistant can reason over or summarize those returned facts afterward.
+  The tool need not itself write the final conversational answer. Search
+  snippets alone are not the full content when the requested answer needs it.
 - Relative times ("tomorrow", "Thursday afternoon") are resolved from the
   current date, time and time zone you were given, and written the way the
   parameter asks (an RFC3339 timestamp with an offset when it asks for one).

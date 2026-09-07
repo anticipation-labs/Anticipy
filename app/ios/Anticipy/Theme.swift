@@ -3,6 +3,28 @@ import UIKit
 import CoreImage
 import Foundation
 
+/// Web addresses stay visible verbatim and become tappable. This recognizes
+/// URL syntax only; it does not interpret a message or execute its contents.
+@MainActor
+enum AssistantMessageText {
+    private static let detector = try? NSDataDetector(
+        types: NSTextCheckingResult.CheckingType.link.rawValue)
+
+    static func attributed(_ text: String) -> AttributedString {
+        var result = AttributedString(text)
+        guard let detector else { return result }
+        for match in detector.matches(in: text, range: NSRange(text.startIndex..., in: text)) {
+            guard let url = match.url,
+                  ["https", "http"].contains(url.scheme?.lowercased() ?? ""),
+                  let source = Range(match.range, in: text),
+                  let start = AttributedString.Index(source.lowerBound, within: result),
+                  let end = AttributedString.Index(source.upperBound, within: result) else { continue }
+            result[start..<end].link = url
+        }
+        return result
+    }
+}
+
 /// Anticipy brand system, pulled from anticipy.ai, in TWO themes.
 ///
 /// Every colour in this app comes through this enum — there is not one raw

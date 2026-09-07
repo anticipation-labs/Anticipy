@@ -1,5 +1,14 @@
 # brain/ off Railway, onto Cloudflare Containers — the runbook
 
+> **Historical planning record; updated status on 2026-09-07.** The API and
+> brain now run on Cloudflare. Images are built remotely through
+> `.github/workflows/brain-deploy.yml`; installing Docker on a development Mac
+> is not a deployment prerequisite. The API has passed 22 live release checks.
+> Container rollout completion alone does not prove the running image: current
+> work verifies each process's source and recent R2 memory snapshot. Read
+> [the active audit](../research/audit-2026-09-06/PLAN.md) for unresolved issues.
+> The undeployed/blocked statements below describe the September 4 investigation.
+
 Measured **2026-09-04** against Cloudflare account `114587b715e702461766369b01d42fc7`
 (`omar@anticipy.ai`), wrangler **4.129.0**, `@cloudflare/containers` **0.3.7**.
 

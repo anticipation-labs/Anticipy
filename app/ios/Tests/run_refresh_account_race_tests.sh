@@ -80,7 +80,7 @@ checks = {
         "try await b.fetchJobs(owner: requestedOwnerID)"),
     "job response is guarded before jobs mutation": ordered(
         refresh, "try await b.fetchJobs(owner: requestedOwnerID)", guard,
-        "jobs = fetched.map"),
+        "let reconciledJobs = fetched.map", "jobs = reconciledJobs"),
     "notification yield is guarded and receives live lease callback":
         "stillCurrent:" in refresh and ordered(
             refresh, "await notifier.announce", guard,

@@ -58,7 +58,7 @@ def run_person(person, label, timeout):
     run_dir.mkdir(parents=True, mode=0o700)
     service = requests.Session()
     service.trust_env = False
-    service.headers["X-Anticipy-Token"] = "local-development-service-token"
+    service.headers["X-Anticipy-Token"] = os.environ.get("ANTICIPY_AUDIT_SERVICE_TOKEN", "local-development-service-token")
 
     def request(method, path, **kwargs):
         response = service.request(method, BASE + path, timeout=20, **kwargs)
@@ -109,7 +109,7 @@ def run_person(person, label, timeout):
         "PYTHONPATH": str(ROOT), "PYTHONUNBUFFERED": "1", "ANTICIPY_AUDIT_RUN": audit_run,
         "OPENROUTER_API_KEY": (STATE / "gateway-token").read_text().strip(),
         "ANTICIPY_PB": BASE, "ANTICIPY_OWNER_REF": ref, "ANTICIPY_OWNER_ID": ref,
-        "ANTICIPY_SERVICE_TOKEN": "local-development-service-token",
+        "ANTICIPY_SERVICE_TOKEN": os.environ.get("ANTICIPY_AUDIT_SERVICE_TOKEN", "local-development-service-token"),
         "ANTICIPY_SUPERVISED": "1", "ANTICIPY_SMS_PROVIDER": "mock",
         "ANTICIPY_MEMORY_DB": str(run_dir / "memory.db"),
         "ANTICIPY_CLOCK_STATE": str(run_dir / "clock_state.json"),
@@ -137,14 +137,18 @@ def run_person(person, label, timeout):
                 if process.poll() is not None or time.monotonic() - started > 150:
                     raise RuntimeError("profile imports did not complete; inspect worker.log")
                 time.sleep(2)
-            transcript = event(person["transcript"]["text"], "transcript", "typed", explicit=True, speaker="owner")
+            source = person["transcript"].get("source", "typed")
+            transcript = event(person["transcript"]["text"], "transcript", source,
+                               explicit=person["transcript"].get("explicit", source == "typed"),
+                               speaker=person["transcript"].get("speaker", "owner"))
             result["transcript_id"] = transcript["id"]
             heard_started = time.monotonic()
             while time.monotonic() - heard_started < timeout:
                 row = request("GET", "/api/collections/events/records/" + transcript["id"])
                 if row.get("decision") not in ("", "hearing", "processing", "claimed"):
                     result["transcript"] = row
-                    result["state"] = "observed_needs_semantic_review"
+                    result["state"] = ("model_unavailable" if row.get("decision") == "unavailable"
+                                       else "observed_needs_semantic_review")
                     break
                 if process.poll() is not None:
                     raise RuntimeError("brain worker exited before a decision")
@@ -162,11 +166,14 @@ def run_person(person, label, timeout):
             except subprocess.TimeoutExpired:
                 process.kill()
                 process.wait()
-        for collection in ("events", "jobs", "segments"):
-            data = request("GET", f"/api/collections/{collection}/records", params={
-                "filter": f'owner_ref="{ref}"', "perPage": 500, "sort": "created",
-            })
-            atomic_json(run_dir / (collection + ".json"), data)
+        try:
+            for collection in ("events", "jobs", "segments"):
+                data = request("GET", f"/api/collections/{collection}/records", params={
+                    "filter": f'owner_ref="{ref}"', "perPage": 500, "sort": "created",
+                })
+                atomic_json(run_dir / (collection + ".json"), data)
+        except Exception as error:
+            result.update(state="infrastructure_or_runtime_failure", error="Evidence read failed: " + str(error))
         ledger = json.loads((STATE / "spend.json").read_text())
         calls = [c for c in ledger["calls"] if c.get("audit_run") == audit_run]
         result.update(elapsed_seconds=round(time.monotonic() - started, 2),
@@ -184,19 +191,23 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--child", action="store_true")
     parser.add_argument("--ids", default="10")
+    parser.add_argument("--corpus", default="proof/audit/corpus/people.json")
     parser.add_argument("--label", default="pilot-1")
     parser.add_argument("--timeout", type=int, default=150)
     parser.add_argument("--parallel", type=int, choices=range(1, 9), default=1)
+    parser.add_argument("--evaluate-held-out", action="store_true", help="Final evaluation of the frozen held-out people")
     args = parser.parse_args()
     if args.child:
         child()
     else:
-        people = json.loads((ROOT / "proof/audit/corpus/people.json").read_text())["people"]
+        people = json.loads((ROOT / args.corpus).read_text())["people"]
         selected = [int(i) for i in args.ids.split(",")]
         for index in selected:
             person = people[index - 1]
-            if person["split"] == "held_out":
+            if person["split"] == "held_out" and not args.evaluate_held_out:
                 raise SystemExit("held-out scenarios stay closed until development checks are complete")
+            if args.evaluate_held_out and person["split"] != "held_out":
+                raise SystemExit("final held-out evaluation accepts only the frozen held-out people")
         failed = False
         with ThreadPoolExecutor(max_workers=args.parallel) as pool:
             futures = [pool.submit(run_person, people[index - 1], args.label, args.timeout) for index in selected]

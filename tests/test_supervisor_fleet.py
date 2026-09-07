@@ -131,25 +131,10 @@ def test_no_child_is_ever_the_webhook_manager(monkeypatch, fleet):
     assert seen and all(env["ANTICIPY_WEBHOOK_MANAGER"] == "0" for env in seen)
 
 
-def test_the_supervisor_itself_checks_the_number():
-    """Singular by construction: there is exactly one supervisor, so the role
-    cannot be lost by an owner going away."""
+def test_neither_supervisor_nor_standalone_worker_rewrites_retired_webhooks():
     import inspect
-    src = inspect.getsource(S.main)
-    assert "worker.ensure_inbound_webhook()" in src
-    assert "worker.WEBHOOK_CHECK_EVERY_SECONDS" in src, "on a timer, not per pass"
-    # ...and it must not be inside the discovery try/except, or a backend
-    # outage would take the watchdog down with it.
-    assert src.index("worker.ensure_inbound_webhook()") < src.index("try:")
-
-
-def test_a_standalone_worker_still_checks_its_own_number():
-    """Nothing above may turn the watchdog off for a single-process
-    deployment, which is what every non-supervised install is."""
-    import inspect
-    src = inspect.getsource(W.main)
-    assert 'os.environ.get("ANTICIPY_SUPERVISED") != "1"' in src
-    assert "ensure_inbound_webhook()" in src
+    assert "ensure_inbound_webhook()" not in inspect.getsource(S.main)
+    assert "ensure_inbound_webhook()" not in inspect.getsource(W.main)
 
 
 def test_clock_state_write_failure_preserves_the_last_valid_state(tmp_path, monkeypatch):

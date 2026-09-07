@@ -4,7 +4,7 @@ Anticipy is the orchestrator AND its personality. One mind that:
 - hears every transcript line and files it into the temporal memory graph,
 - decides what matters (ignore / ask / act) with memory as context,
 - delegates: browser work to the action arm (extension / browser-use via the
-  job queue), texts and calls to the voice arm (Twilio),
+  job queue), owner texts to the messaging arm (SendBlue),
 - tracks every open loop (commitment) until it's done,
 - speaks in the first person: "I caught X — I'm handling it. I'll ask
   before anything goes out." ("caught"/"heard", never "overheard" — she's
@@ -21,13 +21,19 @@ import os
 import re
 import secrets
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Optional
 
 import requests
 
 from . import backend
 from . import research
+from .spoken_consent import judge as judge_spoken_consent
+from .speech_request import information_request
+from .content_context import judge as judge_content_context, ContentContext
+from .grounding import grounding_verdict
+from .readiness import task_readiness
+from .effects import task_effect
 
 from .asking import ask_line, question_line
 from .compute import compute_answer
@@ -45,9 +51,6 @@ from .orchestrator import (Brain, Decision, IRREVERSIBLE, ADDRESSEES,
                            PARTY_UNANSWERED, ends_in_the_world,
                            calendar_plan_verdict, CALENDAR_YES,
                            work_is_licensed, LICENCE_YES, plan_is_settled,
-                           unsupported_names,
-                           unsupported_counts, read_into_a_machine,
-                           not_speech_evidence,
                            _extract_json)
 
 NAME = "Anticipy"
@@ -87,69 +90,6 @@ def _required_from_missing(missing) -> tuple:
         if ("date" in low or "day" in low) and "time" not in low:
             out.append("date")
     return tuple(dict.fromkeys(out))
-
-# Policy layer OUTSIDE the model: any goal whose text implies something that
-# leaves the owner's world (sending, booking, buying, signing up, calling,
-# posting, deleting) is held for confirmation regardless of what triage said.
-# LLM goal strings are free-form, so exact-match sets are not enough.
-# VERB forms only, never the -ation/-ment noun: "find Earls hours and
-# reservation options" is research whose sentence happens to contain the
-# noun "reservation" in action position, and the broad reserv\w* read it as
-# the verb "reserve" — a pure lookup became a held card with a text asking
-# permission to look. Same trap for invitation/confirmation/cancellation.
-_VERBS = (
-    r"send\w*|email\w*|book\w*|reserv(?:e|es|ed|ing)|buy\w*|purchas\w*|order\w*|pay\w*|"
-    r"sign(?:\s+\w+)?\s*up|sign\w*|register\w*|subscrib\w*|submit\w*|post\w*|publish\w*|"
-    r"repl(?:y|ies|ying)|messag\w*|text\w*|call\w*|cancel(?:s|led|ling|ed|ing)?|delet\w*|"
-    r"unsubscrib\w*|transfer\w*|schedul\w*|reschedul\w*|rebook\w*|"
-    r"postpon\w*|delay\w*|invit(?:e|es|ed|ing)|rsvp|"
-    r"shar\w*|forward\w*|respond\w*|confirm(?:s|ed|ing)?|appl(?:y|ies|ying)|"
-    r"wire|venmo|e-?transfer|donat(?:e|es|ed|ing)|checkout|check\s*out|upload\w*|deposit\w*|"
-    # Generic portal actions that alter an account or submit a case. These
-    # were missing from the world-change policy, so the exact same invoice
-    # plan could be classified as two unrelated read-only jobs merely because
-    # the model said "dispute" and then "request" instead of "submit".
-    r"request\w*|disput\w*|renew\w*|file\w*|enrol\w*|consent\w*|"
-    r"grant\s+(?:my\s+)?permission|give\s+permission|"
-    r"reduc\w*|chang\w*|updat\w*|mov\w*|"
-    r"open\s+(?:an?\s+|the\s+)?(?:[a-z][\w-]*\s+){0,3}"
-    r"(?:claim|case|ticket|warranty|repair)\b"
-)
-# Only in ACTION position — the start of the goal, or after and/then/to/&/comma.
-# A verb buried in a noun phrase is not an action: "noise CANCELLING
-# headphones" and "MEETING notes" are not things that leave the owner's world,
-# and holding them taught the owner to tap through prompts without reading.
-_IRREVERSIBLE_RE = re.compile(
-    r"(?:^|\b(?:and|then|to|also|please|&)\s+|,\s*)(?:" + _VERBS + r")\b",
-    re.IGNORECASE,
-)
-
-# Goals that only READ the world. Anything not clearly read-only is held —
-# the safe default, because a missed verb means something leaves the owner's
-# world without their word, while an over-hold costs one tap.
-#
-# A verb list deciding whether a goal leaves the owner's world is a
-# pattern-match on meaning, which Law 1 gives to a model. THE REAL FIX is the
-# effect channel: the model declares `touches` (compute|read|world) at triage
-# and is_consequential reads THAT. This regex is only the fallback for goals
-# arriving without a declaration, and when no live path can produce one it is
-# DELETED — not softened, not shortened.
-#
-# TAPE: (HARNESS-LAWS.md Law 2) audit item #22. Retired by the leg in
-# `overnight/tape_gate.py`, which stays red while the text below exists.
-_READ_ONLY_RE = re.compile(
-    r"^\s*(research|compar\w*|look\s*up|find|check(?!\s*out)\w*|search\w*|read\w*|"
-    r"summar\w*|gather\w*|browse|price|monitor|watch|list|"
-    r"open(?!\s+(?:an?\s+)?account)|go\s+to|visit|navigat\w*|show|load|"
-    # "Plan the weekend at Earls" is PREPARATION — options, hours, logistics
-    # — nothing leaves his world until a book/send verb appears. Held "plan"
-    # cards were the seed of every two-card night: the model words early
-    # vague turns as "plan X", the real "book X" arrives minutes later, and
-    # whenever the judge blinked he got two cards and two texts for one
-    # dinner.
-    r"pull\s+up|view|display|tell|plan(?:s|ned|ning)?\b)",
-    re.IGNORECASE,
-)
 
 # A correction is an amendment to the plan already on the owner's desk, not
 # a lossy paraphrase of it.  The normal merge guard deliberately refuses to
@@ -219,47 +159,6 @@ def explicitly_new_task(line: str) -> bool:
     """Did the speaker explicitly declare a fresh, independent errand?"""
     return _EXPLICIT_NEW_TASK_RE.search(line or "") is not None
 
-
-# Addressee pre-filter OUTSIDE the model (roadmap §7.1). The obvious case is
-# decided deterministically: a very long, fluent run of instruction-like
-# prose with no interlocutor is the owner dictating to a machine (Wispr Flow
-# into another AI, voice-typing a message) — nobody speaks paragraphs of
-# clean spec at a person. On 2026-08-04 exactly those lines were triaged as
-# work for HER, and the owner got "On it" texts about messages he was
-# dictating to a different assistant. The model also classifies (folded into
-# triage), but for lines this unmistakable her lane must not depend on it.
-DICTATION_MIN_WORDS = 40
-
-# Real speech is disfluent; dictation engines emit clean prose. Any of these
-# marks a line as spoken to the room, not typed by voice.
-_DICTATION_FILLERS_RE = re.compile(
-    r"\b(um+|uh+|erm+|hm+|y'?know|you know|i mean)\b[, ]", re.IGNORECASE)
-
-# Instruction-prose markers: the spec-speak of someone telling a machine (or
-# an absent reader) what to do. Two or more of these in one long fluent run
-# is dictation, not conversation.
-_DICTATION_INSTRUCT_RE = re.compile(
-    r"\b(make sure|please|you should|you need to|i want you to|i need you to|"
-    r"can you|could you|go ahead and|instead of|rather than|"
-    r"it should|that should|this should|so that|"
-    r"(?:add|change|update|fix|remove|create|write|use|rename|delete|keep)\s+"
-    r"(?:a|an|the|that|this|it)\b)", re.IGNORECASE)
-
-# A speaker can put a perfectly actionable sentence inside a document,
-# example, test case, or quotation while explicitly denying that it is an
-# instruction. The embedded imperative is adversarial input to triage: if the
-# model sees "open a claim" more strongly than "quoted material only", speech
-# written for somewhere else becomes a real Anticipy job. This narrow boundary
-# uses only the speaker's explicit non-action words; it never guesses from
-# topic or tone, and direct messages to Anticipy remain authoritative.
-_NON_ACTION_CONTENT_RE = re.compile(
-    r"\b(?:quoted\s+material|(?:a\s+)?quote|(?:an?\s+)?example|"
-    r"(?:a\s+)?hypothetical|sample\s+(?:text|instruction))\s+only\b|"
-    r"\bfor\s+(?:reference|illustration)\s+only\b|"
-    r"\bdo\s+not\s+(?:act\s+on|execute|carry\s+out|start|treat\s+as\s+"
-    r"(?:a\s+)?(?:request|task|instruction))\b",
-    re.IGNORECASE,
-)
 
 # Declarative facts deliberately offered for later recall are memory input,
 # not browser work. Keep this narrow: a leading "for later/reference" plus a
@@ -356,46 +255,9 @@ def addressed_by_name(line: str) -> bool:
     return re.search(rf"\b{re.escape(NAME)}\b", text, re.IGNORECASE) is not None
 
 
-def looks_like_dictation(line: str) -> bool:
-    """Deterministic pre-filter for the unmistakable case only. Anything it
-    is unsure about returns False and is left to the model's classification —
-    a False here never forces anything, it just declines to override."""
-    text = (line or "").strip()
-    if len(text.split()) < DICTATION_MIN_WORDS:
-        return False
-    if addressed_by_name(text):
-        return False          # she was addressed by name: not dictation
-    if _DICTATION_FILLERS_RE.search(text):
-        return False          # disfluent = spoken to the room
-    return len(_DICTATION_INSTRUCT_RE.findall(text)) >= 2
-
-
-def explicitly_non_action_content(line: str) -> bool:
-    """Did the speaker explicitly label embedded commands as non-actions?"""
-    return _NON_ACTION_CONTENT_RE.search(line or "") is not None
-
-
 def explicitly_for_memory(line: str) -> bool:
     """Did the speaker frame this declarative value as a fact for later?"""
     return _MEMORY_ONLY_RE.search(line or "") is not None
-
-
-# Memory holds what people SAID, and a model will happily store a stray
-# instruction as a fact. Anything re-entering a prompt from memory therefore
-# passes through here FIRST — once, in one place, so the triage prompt and the
-# browser agent's prompt cannot drift into two different notions of what is
-# safe to replay. Prose only: a "fact" shaped like an instruction or a schema
-# is dropped, never repaired, because a half-scrubbed instruction is still an
-# instruction. (One such note once became the referent of a bare "let's do it"
-# and grew a goal of its own.)
-_MEMORY_INJECTION_RE = re.compile(r"reply only|compact json|[{}]", re.IGNORECASE)
-
-
-def _fact_words(text: str) -> set:
-    """Lowercased word set, punctuation dropped. Used only to notice that two
-    strings say the same thing — recall decorates an episode as
-    `heard: "<line>"`, so character equality never fires."""
-    return {w for w in re.split(r"[^a-z0-9]+", (text or "").lower()) if w}
 
 
 # Imported facts are written by OTHER PEOPLE. A calendar title arrives from
@@ -504,7 +366,7 @@ _UNTRUSTED_BUDGET_DIVISOR = 3
 
 
 def memory_notes(facts: list[dict], budget: int = 600, exclude: str = "") -> str:
-    """Recalled facts as one prose line, injection-filtered and length-capped.
+    """Recalled facts as bounded background, with imported material fenced.
 
     `budget` exists because this string rides into EVERY step of a browser run,
     not once: an unbounded recall is a per-step token bill. Facts arrive
@@ -512,15 +374,18 @@ def memory_notes(facts: list[dict], budget: int = 600, exclude: str = "") -> str
     least relevant first. Whole facts only — a fact cut mid-sentence reads as a
     different, wrong fact.
 
-    `exclude` drops the line that CAUSED this recall. Memory ingests every
+    `exclude` drops only an exact record of the line that CAUSED this recall.
+    It never erases a longer fact or contradiction through shared words.
+    Memory ingests every
     utterance as an episode and then recalls it milliseconds later as its own
     best match, so the browser agent's memory block led with
     `heard: "look up the dinner menu at the Cactus Club location I usually go
     to"` — the very sentence already sitting in its GOAL and in WHAT THEY
     AGREED TO. Worse than redundant: that block is labelled "NOT approved
     values", so his authority appeared inside the one region the prompt tells
-    the model not to trust as authority. Compared on words, not characters,
-    because recall wraps the text in `heard: "..."`.
+    the model not to trust as authority. Match the original quote or its exact
+    storage wrapper. JSON and quoted instructions remain data; their source
+    determines the fence, not a vocabulary filter.
 
     IMPORTED facts are segregated into a fence at the end rather than dropped.
     Dropping them would lose the very context day zero exists to acquire; mixing
@@ -537,15 +402,16 @@ def memory_notes(facts: list[dict], budget: int = 600, exclude: str = "") -> str
     whatever it leaves goes back to the untrusted side, so an untrusted-only
     recall still fills the block. Relevance order is preserved WITHIN each
     class — this changes what is dropped, never what leads."""
-    skip = _fact_words(exclude)
+    skip = exclude.strip()
     told: list[str] = []
     quoted: list[str] = []
     for f in facts or []:
         fact = (f.get("fact") or "").strip()
-        if not fact or _MEMORY_INJECTION_RE.search(fact):
+        if not fact:
             continue
         # An episode that is just the originating line said back to us.
-        if skip and _fact_words(fact) >= skip:
+        if skip and (str(f.get("quote") or "").strip() == skip
+                     or fact == skip or fact == f'heard: "{skip}"'):
             continue
         if str(f.get("source") or "") in _UNTRUSTED_SOURCES:
             quoted.append(fact)
@@ -589,50 +455,17 @@ def memory_notes(facts: list[dict], budget: int = 600, exclude: str = "") -> str
 def is_consequential(goal: str, params: dict | None = None,
                      explicit: bool = False,
                      touches: str | None = None) -> bool:
-    """Does this goal change the world? Judged on the GOAL only — params carry
-    the raw transcript, whose stray words ("cancel my flight" mentioned in
-    passing) must not decide whether a research task is held.
+    """Enforce an effect declaration, never infer meaning from goal words.
 
-    explicit=True means the owner ASKED for this in so many words (a direct
-    text/command, not something overheard). Their ask is the go-ahead, so only
-    goals that actually leave their world (send/book/buy…) are still held —
-    making them confirm "open wikipedia" teaches them to tap through prompts
-    without reading."""
-    g = (goal or "").strip()
-    # The deny-list outranks EVERYTHING below, including the model's own
-    # declaration — enforcement lives beneath the model, and a "compute"
-    # claim on a send must not make it run.
-    if _IRREVERSIBLE_RE.search(g):
-        return True
-    # THE MODEL'S DECLARATION, when triage gave one. What a goal touches is
-    # a question of MEANING, and meaning belongs to the model — the first
-    # two fixes here were a verb list and then a calculator-sniff run on
-    # every goal, both pattern-matching wearing different coats. Now triage
-    # itself names the channel ("touches": compute | read | world) and this
-    # gate merely enforces it. "world" holds even when the wording reads
-    # read-only; compute/read runs unattended even when no word list would
-    # have recognised it.
-    if touches == "world":
-        return True
-    if explicit:
-        return False
-    if touches in ("compute", "read"):
-        return False
-    # TAPE: (HARNESS-LAWS.md Law 2) audit item #19.
-    # WHAT IT IS: with no declared `touches`, the calculator is asked whether
-    # it can answer the goal, and a yes is read as "this only computes". That
-    # is a capability check standing in for a declaration.
-    # THE REAL FIX: the effect-channel rewrite — every goal arrives with
-    # `touches` decided by the model at triage, and this branch becomes
-    # unreachable and is DELETED.
-    # THE LEG THAT RETIRES IT: `overnight/tape_gate.py`. It named
-    # HARNESS-LAWS.md before, which reads as compliant and enforces nothing:
-    # the laws file is where the rule lives, not the check that fails while
-    # the tape does.
-    if compute_answer(g):
-        return False
-    # Overheard: default to holding — only explicitly read-only runs unattended.
-    return not _READ_ONLY_RE.search(g)
+    Unknown effect is held, including on a direct request. Callers with a live
+    model resolve missing declarations before queuing. Actual tool effects,
+    device acts and workflow approvals are checked again by the executor.
+    """
+    if touches is None and isinstance(params, dict):
+        declaration = params.get("_effect")
+        if isinstance(declaration, dict):
+            touches = declaration.get("touches")
+    return touches not in ("compute", "read")
 
 
 _HONORIFIC_RE = re.compile(r"\b(?:Dr|Mr|Mrs|Ms|Prof)\.?\s+([A-Z][a-z]\w*)")
@@ -962,6 +795,8 @@ def _missing_fact_question(missing, fallback="") -> str:
             return f"I still need {wanted[0]}."
         return "I still need " + ", ".join(wanted[:-1]) + " and " + wanted[-1] + "."
     if fallback:
+        if isinstance(fallback, (list, tuple)):
+            fallback = "; ".join(str(value).strip().rstrip(".?") for value in fallback if value)
         return "I still need: " + str(fallback).strip().rstrip(".?") + "."
     if names:
         return "I still need " + ", ".join(sorted(names)) + "."
@@ -1222,13 +1057,6 @@ def job_lane(goal: str, params: dict | None = None, *, owner_ref: str = "",
     # import this module — cannot be pulled into a cycle by it.
     from . import hands
     g = (goal or "").strip()
-    # A computable goal that somehow reaches the queue anyway (the hear()
-    # path answers most of them before a job exists) belongs on the server
-    # arm, never in his browser — a CAPABILITY test, the same one
-    # is_consequential runs, and no model is spent on it.
-    if compute_answer(g):
-        verdict = hands.HandVerdict(hands.HAND_RESEARCH,
-                                    "computable on the server; no hand needed")
     # A DECLARED lane is not a meaning question. The brain's own research arm
     # prefixes its goals "research:", and a source of "browser" is the owner
     # saying "in my browser" through a typed field -- both are stored
@@ -1236,7 +1064,7 @@ def job_lane(goal: str, params: dict | None = None, *, owner_ref: str = "",
     # about wording, not fields. Honouring them here is what keeps the six
     # pre-existing lane tests true without a word list: no model is asked
     # about a goal that already carries its lane.
-    elif g.lower().startswith("research:"):
+    if g.lower().startswith("research:"):
         verdict = hands.HandVerdict(hands.HAND_RESEARCH, "declared by the research arm")
     elif str((params or {}).get("source") or "").lower() == "browser":
         verdict = hands.HandVerdict(hands.HAND_BROWSER, "declared: the owner asked for the browser")
@@ -1255,11 +1083,9 @@ def job_lane(goal: str, params: dict | None = None, *, owner_ref: str = "",
     # -> "" (held, visible). is_consequential is what a plan TOUCHES, which
     # Law 1 permits; the model was still asked first and its silence recorded.
     if verdict.hand in hands.NO_VERDICT or verdict.hand == hands.HAND_HOLD:
-        if is_consequential(g, params):
+        declaration = (params or {}).get("_effect", {})
+        if isinstance(declaration, dict) and declaration.get("touches") == "world":
             lane = ""
-    # THE SEATBELT, AFTER THE VERDICT.
-    if _IRREVERSIBLE_RE.search(g):
-        lane = ""
     if isinstance(params, dict):
         params["_hand"] = dict(verdict.as_note(), lane=lane)
     return lane
@@ -1326,7 +1152,11 @@ if a job's overall status is done. Ask for missing details without pretending
 you already gathered material. Do not narrate planned reads as current activity.
 When approval is still required, a future promise is also misleading: saying
 "I'll remind you tomorrow" can make someone rely on a reminder that is not set.
-Offer to start and ask for the missing approval. Use only established identities
+For awaiting_confirm, offer to start and ask for the missing approval. Queued
+and running jobs already passed that approval: acknowledge their status without
+asking whether to start again. Missing task details can still need a question.
+Your name is Anticipy. The account owner's name and names in recalled memories
+belong to other people; they never rename you. Use only established identities
 when offering a choice; if the available context gives no candidates, ask an open
 question without inventing departments, relationships or people.
 
@@ -1421,6 +1251,8 @@ class Anticipy:
         self.llm = llm
         self.memory = memory or Memory(llm=llm)
         self.brain = Brain(llm=llm) if llm else None
+        if isinstance(self.memory, Memory) and self.brain:
+            self.memory.relation_llm = self.brain.strong or self.llm
         self.backend_url = backend_url.rstrip("/")
         self.voice = voice
         self.owner_phone = owner_phone
@@ -1531,82 +1363,76 @@ class Anticipy:
 
     # ------------------------------------------------------------ hearing
 
-    # Deliberately narrow. These used to fire on ambient speech — "where are
-    # we going for dinner with the Hendersons?" was answered with a status
-    # report, and the line never reached memory at all.
-    _BRIEFING_RE = re.compile(
-        r"(give me (a|my|the) (briefing|debrief|rundown)|catch me up|"
-        r"what('?s| is) (still )?(open|left|outstanding|pending)\b|"
-        r"where do (we|things) stand|status update|what do you have for me)",
-        re.IGNORECASE)
-    # A real question ENDS in a question mark; imperatives never do. "Remind
-    # me to call the dentist" is a task, not a memory lookup.
-    _RECALL_RE = re.compile(
-        r"^\s*(what|when|who|where|which|did|do|have|has)\b.*\?\s*$",
-        re.IGNORECASE)
-    _IMPERATIVE_RE = re.compile(r"^\s*(remind me to|remember to|make sure)\b", re.IGNORECASE)
-
-    # Contentless approval — nothing in it but the yes. Anything carrying a
-    # detail ("let's do Earls at 7") falls through to triage as before.
-    _GO_AHEAD_RE = re.compile(
-        r"^(ok(ay)?|yes|yeah|yep|sure|perfect|alright|cool|great)?[,!.\s]*"
-        r"(let'?s do it|do it|go ahead|go for it|make it happen|i'?m in|"
-        r"sounds good|let'?s go|book it|send it)[,!.\s]*$", re.IGNORECASE)
-
     @staticmethod
     def _recently_asked(job: dict, window: float = 900.0) -> bool:
-        """Was this card put to him recently enough to be what "do it" means?"""
-        import datetime as _dt
+        """A valid timestamp bounds automatic approval eligibility, not meaning."""
+        import datetime as dt
         try:
-            created = _dt.datetime.strptime(
-                (job.get("created") or "")[:19], "%Y-%m-%d %H:%M:%S"
-            ).replace(tzinfo=_dt.timezone.utc).timestamp()
-        except Exception:
-            return True          # unreadable timestamp: assume it counts
-        return time.time() - created <= window
+            stamp = str(job.get("created") or "").replace("Z", "+00:00")
+            created = dt.datetime.fromisoformat(stamp)
+            if created.tzinfo is None:
+                created = created.replace(tzinfo=dt.timezone.utc)
+            age = time.time() - created.timestamp()
+            return 0 <= age <= window
+        except (ValueError, TypeError, OverflowError):
+            return False
 
-    def _release_freshest_held(self, line: str) -> Optional[str]:
-        """Release the plan he was JUST asked about — and only that: the
-        newest held card, and only while the asking is minutes old. A yes an
-        hour later is about something else and stays with triage."""
+    def _release_freshest_held(self, line: str, *, context=None, speaker=None,
+                              explicit=False) -> Optional[str]:
+        """Approve only the task a contextual verdict selects, unchanged in D1.
+
+        The historical method name is retained for callers. List order no longer
+        selects a task. Incomplete candidate lists, absent judgments, malformed
+        state and concurrent changes all leave held work held.
+        """
         try:
-            filt = 'status="awaiting_confirm"'
+            model = getattr(getattr(self, "brain", None), "strong", None) or self.llm
+            if not model or not getattr(model, "live", False):
+                return None
             owner_filter = self._owner_filter()
-            if owner_filter:
-                filt += f" && {owner_filter}"
-            # Fetch MORE THAN ONE on purpose. Asking for a single row made
-            # "yeah do it" spoken aloud release whichever card happened to be
-            # newest, with no test that it was the one he meant — and that
-            # release does a real thing in the world. The same three words
-            # sent over SMS correctly come back "which one, 1) or 2)?",
-            # because that path refuses to guess between candidates. Two lanes
-            # to the same decision must not have different rules about acting
-            # on a guess; the stricter one is right.
+            if not owner_filter:
+                return None
             r = backend.get(f"{self.backend_url}/api/collections/jobs/records",
-                       params={"filter": filt, "perPage": 4, "sort": "-created"},
-                       timeout=10)
-            items = r.json().get("items", []) if r.ok else []
-            if not items:
+                       params={"filter": f'status="awaiting_confirm" && {owner_filter}',
+                               "perPage": 100, "sort": "-created"}, timeout=10)
+            if not r.ok:
                 return None
-            if len([j for j in items if self._recently_asked(j)]) > 1:
-                # Several live cards, one unqualified "do it". Fall through to
-                # triage, which can ask him which — rather than book one and
-                # find out afterwards.
+            listing = r.json()
+            items = listing.get("items", [])
+            if not items or listing.get("totalPages", 1) > 1:
                 return None
-            job = items[0]
-            import datetime as _dt
-            try:
-                created = _dt.datetime.strptime(
-                    (job.get("created") or "")[:19], "%Y-%m-%d %H:%M:%S"
-                ).replace(tzinfo=_dt.timezone.utc).timestamp()
-            except Exception:
-                created = time.time()
-            if time.time() - created > 900:
+            def owned(row):
+                if self.owner_ref:
+                    return row.get("owner_ref") == self.owner_ref
+                return row.get("owner") == self.owner_id
+            if any(not owned(j) or j.get("status") != "awaiting_confirm" for j in items):
                 return None
-            try:
-                params = json.loads(job.get("params") or "{}")
-            except Exception:
-                params = {}
+            if not any(self._recently_asked(j) for j in items):
+                return None
+            if model is not self.llm:
+                for key in ("owner_name", "owner_email", "owner_zone"):
+                    setattr(model, key, getattr(self.llm, key, None))
+            verdict = judge_spoken_consent(
+                model, line=line, conversation=context or [], tasks=items,
+                speaker=speaker, explicit=explicit)
+            if verdict["verdict"] != "approved":
+                return None
+            job = next(j for j in items if j["id"] == verdict["job_id"])
+            if not self._recently_asked(job):
+                return None
+            # The view's ETag advertises that the API supports atomic If-Match.
+            # Re-read after the model: even a correct judgment cannot approve a
+            # scope another writer changed while it was thinking.
+            latest = backend.get(
+                f"{self.backend_url}/api/collections/jobs/records/{job['id']}", timeout=10)
+            if not latest.ok or latest.json() != job:
+                return None
+            etag = getattr(latest, "headers", {}).get("ETag")
+            if not etag:
+                return None
+            params = json.loads(job.get("params") or "{}")
+            if not isinstance(params, dict):
+                return None
             params["authorized"] = True
             params["approved_scope"] = (
                 f"Task: {job.get('goal', '')}. "
@@ -1632,10 +1458,15 @@ class Anticipy:
                 params = put_in_params(params, workflow)
                 fields.update(workflow.job_fields())
                 fields["params"] = json.dumps(params)
+            params["spoken_consent"] = {
+                "verdict": "approved", "job_id": job["id"], "owner_words": line,
+                "reason": str(verdict.get("reason") or ""),
+                "source_event_id": getattr(self, "_source_event_id", ""),
+            }
+            fields["params"] = json.dumps(params)
             pr = backend.patch(
                 f"{self.backend_url}/api/collections/jobs/records/{job['id']}",
-                json=fields,
-                timeout=10)
+                json=fields, headers={"If-Match": etag}, timeout=10)
             return (job.get("goal") or None) if getattr(pr, "ok", False) else None
         except Exception:
             return None
@@ -1777,6 +1608,8 @@ class Anticipy:
         # two goals read WITH the lunch being planned around them are plainly
         # one plan. Refreshed every line, so it is always this conversation.
         self._last_convo = [c for c in (context or []) if c][-6:]
+        # Answers to one task's gaps must never seed a later, unrelated task.
+        self._memory_filled = {}
         self._source_event_id = (source_event_id or "").strip()
         self._lineage_key = (lineage_key or source_event_id or "").strip()
         # Per-line, and only for this line: see the note on _capture_source in
@@ -1817,32 +1650,41 @@ class Anticipy:
             if last_heard and len(last_heard) > 2 else ""
         )
         self._last_heard = (line, heard_at, self._source_event_id)
-        # Unmistakable dictation is known before anything can answer or act:
-        # a line the owner voice-typed at another machine must not be
-        # answered from memory as if he had asked HER. Explicit lines (he
-        # texted/typed them at her) are never dictation by definition.
-        # Two filters, because they catch opposite shapes. looks_like_dictation
-        # wants a LONG fluent run of instruction-prose (Wispr Flow into another
-        # assistant). The three lines that became real jobs on 2026-08-04 were
-        # the other shape entirely — short, garbled, number-dense fragments —
-        # and it missed all three. read_into_a_machine only spends a model call
-        # when the line carries mechanical evidence, so ordinary speech costs
-        # nothing and never reaches it.
-        non_action_content = not explicit and explicitly_non_action_content(line)
-        dictated = not explicit and (looks_like_dictation(line)
-                                     or non_action_content
-                                     or read_into_a_machine(self.llm, line))
-        # This is stronger than ordinary dictation. The owner explicitly said
-        # the embedded imperative is quotation/example material only, so even
-        # quiet research would violate their words. Remember the line, expose
-        # the boundary in the audit verdict, and do not send it to triage.
-        if non_action_content:
+        # Content destination is meaning, never a word-count or phrase rule.
+        # Explicit app/text input already establishes where it was sent.
+        content = ContentContext("live_speech", "Direct input to Anticipy")
+        if not explicit:
+            content = judge_content_context(self.llm, line, context=context,
+                                            speaker=speaker)
+            strong = getattr(getattr(self, "brain", None), "strong", None)
+            if content.verdict in ("authored_content", "unclear") and strong and strong is not self.llm:
+                content = judge_content_context(strong, line, context=context,
+                                                speaker=speaker)
+        # Only a positive contextual judgement can suppress the entire record.
+        # Mixed quoted content and independent live work must continue to triage.
+        if content.verdict == "authored_content":
+            self._last_addressee = ("dictation", time.time())
+            self._prev = None
             mem = self.memory.ingest(line, speaker=speaker)
             return {"memory": mem, "decision": Decision(
-                decision="ignore", goal="",
-                reason="explicitly labelled quotation/example, not an action",
-                addressee="dictation", owes="machine"),
-                "anticipy_says": None}
+                decision="ignore", goal="", reason=content.reason,
+                addressee="dictation", owes="machine"), "anticipy_says": None}
+        # The consent judge sees all words and the whole supplied conversation.
+        # Only transport/speaker/meeting evidence routes around it; a word list
+        # cannot decide whether speech is eligible to approve a task.
+        if speaker != "other" and channel != "sms" and not in_meeting:
+            released = self._release_freshest_held(
+                line, context=context, speaker=speaker, explicit=explicit)
+            if released:
+                mem = self.memory.ingest(line, speaker=speaker)
+                self._prev = None
+                for loop in self.loops:
+                    if loop.what == released and loop.status == "awaiting_ok":
+                        loop.status = "handling"
+                return {"memory": mem, "decision": Decision(
+                    decision="act", goal=released,
+                    reason="contextual owner approval of the unchanged held task",
+                    addressee="assistant", owes="owner"), "anticipy_says": None}
         # SHE ASKED. HE ANSWERED OUT LOUD. THAT MUST COUNT.
         #
         # A texted answer reaches a parked job; a SPOKEN one never could —
@@ -1858,124 +1700,40 @@ class Anticipy:
         # own harm: exactly one job may be waiting, it must have asked
         # recently, and the line must either supply what it named or dispute
         # the premise. Anything else goes to triage untouched.
-        if not explicit and not dictated:
+        if not explicit:
             answered = self._spoken_answer_to_parked_work(line, speaker=speaker)
             if answered:
                 return answered
-        # Owner questions are answered, not triaged: a briefing request goes
-        # to the briefing engine, and a memory question is answered straight
-        # from the graph. Neither should ever spawn a browser job.
-        if self._BRIEFING_RE.search(line):
-            # Remember it either way — the early return used to skip ingest,
-            # so anything phrased like a briefing request left no trace.
-            mem = self.memory.ingest(line, speaker=speaker)
-            said = self.status_report() if re.search(
-                r"open|left|outstanding|pending|status|stand", line, re.I) \
-                else self.briefing()
-            return {"memory": mem, "decision": Decision(
-                decision="answer", goal=None, reason="briefing request"),
-                "anticipy_says": said}
-        # A wake word is addressing, not grammar. "Anticipy, what was the
-        # code?" is the same memory question as "what was the code?". The
-        # anchored question gate used to see only the leading product name,
-        # miss the question entirely, and send "retrieve the code" to the
-        # browser. In a fresh hidden-oracle run it then hallucinated a
-        # different six-digit code in its spoken reply. Strip only our name
-        # at the beginning; nothing else is rewritten or guessed.
-        recall_line = re.sub(
-            rf"^\s*(?:hey\s+)?{re.escape(NAME)}\s*[,;:\-]?\s*",
-            "", line, count=1, flags=re.IGNORECASE)
-        if not dictated and self._RECALL_RE.match(recall_line) \
-                and not self._IMPERATIVE_RE.match(recall_line):
-            answer = self._answer_from_memory(recall_line)
-            if answer:
+        # A question mark is not an addressee. Ask with the actual conversation
+        # before looking up private memory or interrupting with a status report.
+        request = information_request(self.llm, line, context=context,
+                                      speaker=speaker, explicit=explicit)
+        strong = getattr(getattr(self, "brain", None), "strong", None)
+        if request.verdict != "not_requested" and strong and strong is not self.llm:
+            request = information_request(strong, line, context=context,
+                                          speaker=speaker, explicit=explicit)
+        if request.verdict == "requested":
+            said = (self.status_report() if request.kind == "status" else
+                    self.briefing() if request.kind == "briefing" else
+                    self._answer_from_memory(line))
+            if said:
                 mem = self.memory.ingest(line, speaker=speaker)
                 return {"memory": mem, "decision": Decision(
-                    decision="answer", goal=None, reason="memory recall"),
-                    "anticipy_says": answer}
-        mem = self.memory.ingest(line, speaker=speaker)
-        if not explicit and explicitly_for_memory(line):
-            self._prev = (line, time.time())
-            return {"memory": mem, "decision": Decision(
-                decision="ignore", goal="",
-                reason="declarative fact supplied for later recall",
-                addressee="self", owes="nobody"),
-                "anticipy_says": None}
-        # A stray fragment ("Tomorrow", "Okay") carries no intent of its own,
-        # but related memories injected as context can make triage hallucinate
-        # one — live incident: the single word "Tomorrow" plus a stale memory
-        # spawned a full draft-email job. Fragments are remembered, never acted on.
-        if len(line.split()) < 2:
-            self._prev = (line, time.time())
-            return {"memory": mem, "decision": Decision(
-                decision="ignore", goal=None, reason="fragment, no intent"),
-                "anticipy_says": None}
-        # A bare spoken go-ahead ("Okay let's do it") names nothing on its
-        # own — the "it" is the plan she just held and asked about. Triaging
-        # it as a fresh line is how a contentless yes once minted a brand-new
-        # goal out of injected context ("extract memory into compact JSON", a
-        # leaked internal instruction, live 2026-08-11). His yes lands on the
-        # freshly held plan; only when nothing is freshly held does the line
-        # fall through to triage.
-        #
-        # A YES SAID TO SOMEBODY ELSE IS NOT A YES TO HER.
-        #
-        # This shortcut releases a consequential card with no confirmation, so
-        # it must only fire on speech that could plausibly be aimed at her.
-        # Two ways it could not be:
-        #
-        #  - He is mid-conversation with a person she cannot hear. "Okay let's
-        #    do it" to the man on the phone is the purest back-channel there
-        #    is, and it is the exact class in_conversation() was built for —
-        #    yet the release ran two lines before that evidence was ever
-        #    consulted, so an investor call within fifteen minutes of a held
-        #    dinner would have booked the dinner. speaker is no protection:
-        #    measured on 200 tagged lines, 97% of them carry no verdict at all.
-        #  - It arrived over SMS. conversation.py owns confirm semantics for
-        #    texts — it decides go/amend against the item it actually asked
-        #    about — and only hands a line to _think() once it has judged it a
-        #    new request or chat. A "sounds good" the SMS lane already
-        #    declined to treat as a confirmation must not come back through
-        #    the ambient door and release the newest card instead.
-        #  - The meeting posture is armed. in_conversation() is a BACK-CHANNEL
-        #    density test and needs a fifth of the recent lines to be almost
-        #    pure agreement; the 2026-08-23 Meet ran at 13% against its 20%
-        #    threshold and never tripped it. That is the whole reason
-        #    meeting_heard exists, and it means a substantive two-way meeting
-        #    is invisible here while being the likeliest room for "okay let's
-        #    do it" to belong to somebody else. The posture already holds
-        #    fresh consequential CARDS for the after-call digest; this was the
-        #    one path that needs no card, because it releases work already
-        #    sitting at the gate — so a yes across the table could have sent
-        #    an email.
-        #
-        # None of the three loses the yes: the line falls through to triage
-        # with mid_conversation and the meeting pre-check riding along, which
-        # is the honest place to judge it — and anything minted mid-meeting is
-        # held for the digest anyway. Being wrong here costs one tap; being
-        # wrong the other way costs an action nobody authorised.
-        ambient = (not dictated and speaker != "other" and channel != "sms"
-                   and not in_meeting and not in_conversation(context))
-        if ambient and self._GO_AHEAD_RE.match(line.strip()):
-            released = self._release_freshest_held(line)
-            if released:
-                self._prev = None
-                for l in self.loops:
-                    if l.what == released and l.status == "awaiting_ok":
-                        l.status = "handling"
-                return {"memory": mem, "decision": Decision(
-                    decision="act", goal=released,
-                    reason="his go-ahead — released the plan he was asked about",
+                    decision="answer", goal=None,
+                    reason=f"addressed {request.kind} request",
                     addressee="assistant", owes="owner"),
-                    "anticipy_says": None}
+                    "anticipy_says": said}
+        mem = self.memory.ingest(line, speaker=speaker)
+        # Even a one-word answer is judged with its conversation. A word count
+        # cannot tell a complete contextual answer from an unrelated fragment.
         # Split-thought context is only the last line, only if it's recent
         # (people pause seconds, not hours), and only if it wasn't already
         # acted on — an acted line re-fed as context mints duplicate jobs.
         prev = self._prev
         prev_line = prev[0] if prev and time.time() - prev[1] < 120 else None
         # WHO is he talking to? The previous classification rides along
-        # (people don't switch addressee mid-breath) and the deterministic
-        # pre-filter above already marked unmistakable dictation.
+        # (people do not switch addressee mid-breath); current context can
+        # establish a change, including a return from voice-typing.
         last_a = self._last_addressee
         prev_addressee = last_a[0] if last_a and time.time() - last_a[1] < 120 else None
         # A meeting arming kills the parked question: its moment is gone,
@@ -1986,7 +1744,7 @@ class Anticipy:
                   f"{self._pending_ask[0][:60]!r}")
             self._pending_ask = None
         decision = self._decide(line, mem, prev_line=prev_line, convo=context,
-                                prev_addressee=prev_addressee, dictated=dictated,
+                                prev_addressee=prev_addressee, content_context=content,
                                 speaker=speaker, speaker_name=speaker_name,
                                 link_candidates=link_candidates,
                                 mid_conversation=in_conversation(context),
@@ -2006,7 +1764,6 @@ class Anticipy:
             # detector's prose-shape guess. Without this, both halves of
             # “Send X this exact message:” / “yeah, agreed — body” were filed
             # as voice typing and the explicit task vanished completely.
-            dictated = False
             decision = Decision(
                 decision="act", goal=stitched_goal,
                 reason="consequential command continued after recognizer split",
@@ -2023,6 +1780,15 @@ class Anticipy:
             authority_event_ids = [event for event in
                                    (stitch_prev_event_id, self._source_event_id)
                                    if event]
+        if decision.decision in ("act", "ask") and decision.goal:
+            effect = self._task_effect(decision.goal, {
+                "heard": authority_source, "conversation": context or [],
+                "previous_line": prev_line, "channel": channel,
+            })
+            if effect.touches in ("compute", "read", "world"):
+                decision = replace(decision, touches=effect.touches)
+            elif effect.touches == "unclear":
+                decision = replace(decision, touches=None)
         # WHOSE PROMISE IS THIS? TRIAGE JUST SAID — AND ONLY A "NOT HIS" THAT
         # SURVIVES THE REVERSAL QUESTION IS EVER WRITTEN DOWN.
         #
@@ -2187,14 +1953,13 @@ class Anticipy:
         # not a floor.
         if explicit:
             addressee = "assistant"
-        elif dictated:
-            addressee = "dictation"
         else:
             addressee = decision.addressee if decision.addressee in ADDRESSEES else None
         decision.addressee = addressee
         if addressee:
             self._last_addressee = (addressee, time.time())
         handled = None
+        question_job_id = None
 
         # THE SECOND KEY (2026-08-05). Triage saying "act" is one key; this
         # is the other, and both must turn. Whose job did these words create?
@@ -2248,7 +2013,7 @@ class Anticipy:
             may_look = (decision.owes in ("nobody", None)
                         and decision.decision == "act"
                         and goal and not decision.missing
-                        and not is_consequential(goal))
+                        and not is_consequential(goal, touches=decision.touches))
             # "nobody" is right about musing and wrong about a plan the
             # speakers actually SETTLED: "we should really go out… Earl's
             # tomorrow at 2:30… yeah for sure I'd be down" reads as mutual
@@ -2262,7 +2027,7 @@ class Anticipy:
             # both fields blank dies unasked (Omi port 10a).
             settled = (decision.owes in ("nobody", None) and goal
                        and addressee not in DIRECT_ADDRESSEES
-                       and (is_consequential(goal)
+                       and (is_consequential(goal, touches=decision.touches)
                             or ends_in_the_world(self.llm, line, goal))
                        and plan_is_settled(self.llm, line, goal))
             if not may_look and not settled:
@@ -2293,7 +2058,7 @@ class Anticipy:
                 params = {"source": line, "now": self._now_line(),
                           "lane": "ambient"}
                 params = self._keeping(params, mem.get("commitment_id"))
-                job_id = self._queue_job(goal, params)
+                job_id = self._queue_job(goal, params, touches=decision.touches)
                 if not self._backed_by_a_card(goal, job_id, "quiet-lookup"):
                     # No card, so no LoopRecord either: a "handling" loop with
                     # no job id can never close (review_loops has nothing to
@@ -2467,7 +2232,7 @@ class Anticipy:
                 params = self._keeping(params, mem.get("commitment_id"))
                 if decision.assumption:
                     params["assumption"] = decision.assumption
-                job_id = self._queue_job(goal, params)
+                job_id = self._queue_job(goal, params, touches=decision.touches)
                 if self._backed_by_a_card(goal, job_id, "quiet-research"):
                     self.loops.append(LoopRecord(
                         commitment_id=mem.get("commitment_id") or -1,
@@ -2509,12 +2274,7 @@ class Anticipy:
                 # missing=[] — and the one text about it filled the gap from
                 # habit and said 7 PM. Same gate, same reason, this lane too.
                 if not explicit:
-                    try:
-                        for gap in check_sufficiency(self.llm, goal):
-                            if gap not in decision.missing:
-                                decision.missing.append(gap)
-                    except Exception:
-                        pass
+                    decision = self._review_readiness(decision, line, context, prev_line)
                 # Memory answers before he is asked: a gap his own history
                 # settles (the location he always books, his home city)
                 # becomes an assumption on the card he approves, not another
@@ -2812,55 +2572,43 @@ class Anticipy:
             except Exception:
                 already = None
         if decision.decision == "act" and decision.goal and not explicit and not already:
-            try:
-                gap = check_sufficiency(self.llm, decision.goal)
-            except Exception:
-                gap = []
-            # A name she never heard is not a detail, it is an invention, and
-            # acting on it books the wrong restaurant in the wrong city. Folded
-            # into the same gate: it becomes a question instead of a booking.
-            try:
-                heard_bits = (decision.goal and [line, " ".join(context or []),
-                                                 prev_line or ""]) or []
-                made_up = (unsupported_names(decision.goal, *heard_bits)
-                           + unsupported_counts(decision.goal, *heard_bits))
-            except Exception:
-                made_up = []
-            if made_up:
-                gap = list(gap) + [
-                    n if n.startswith("how many")
-                    else f"which {n} you meant — I do not think you actually said that"
-                    for n in made_up]
-            # Memory before questions, this lane too — but never for a
-            # made-up detail: an invented name must be ASKED about, not
-            # quietly ratified by a memory lookup.
-            if gap and not made_up:
+            # Factual support is a model question over the full record, not a
+            # capitalization or number-word test. Relative dates are evaluated
+            # against the same clock used to interpret the request.
+            model = getattr(getattr(self, "brain", None), "strong", None) or self.llm
+            if model and getattr(model, "live", False):
+                support = grounding_verdict(model, decision.goal, {
+                    "heard": line, "conversation": context or [],
+                    "previous_line": prev_line, "current_local_time": self._now_line(),
+                    "measured_speaker": speaker or "unknown",
+                })
+                if support != "supported":
+                    self._prev = (line, time.time())
+                    return {"memory": mem, "decision": replace(decision,
+                        decision="ignore", goal=None,
+                        reason=f"task grounding {support}; no invented clarification"),
+                        "anticipy_says": None}
+        # Both triage outcomes must consult the same record. A triage "ask"
+        # used to skip memory entirely; the later check then saw only a title.
+        if decision.decision in ("act", "ask") and decision.goal and not already:
+            decision = self._review_readiness(decision, line, context, prev_line)
+            if decision.missing:
                 try:
-                    filled, gap = fill_gaps_from_memory(
-                        self.llm, self.memory, decision.goal, gap)
+                    filled, remaining = fill_gaps_from_memory(
+                        getattr(getattr(self, "brain", None), "strong", None) or self.llm,
+                        self.memory, decision.goal, decision.missing)
                 except Exception:
-                    filled = {}
+                    filled, remaining = {}, decision.missing
                 if filled:
-                    picked = "; ".join(filled.values())
-                    decision = Decision(
-                        decision=decision.decision, goal=decision.goal,
-                        reason=decision.reason, missing=decision.missing,
-                        assumption=((decision.assumption + " — "
-                                     if decision.assumption else "")
-                                    + f"from what I know about you: {picked}"),
-                        addressee=decision.addressee, owes=decision.owes,
-                        continues=decision.continues)
+                    decision = replace(decision, missing=remaining,
+                        assumption=((decision.assumption + " — " if decision.assumption else "")
+                                    + "from what I know about you: " + "; ".join(filled.values())))
                     self._memory_filled = dict(filled)
-            if gap:
-                decision = Decision(
-                    decision=decision.decision, goal=decision.goal,
-                    reason=decision.reason,
-                    missing=list(decision.missing or []) + gap,
-                    assumption=decision.assumption, addressee=decision.addressee,
-                    owes=decision.owes, continues=decision.continues)
+                    if not remaining:
+                        decision = replace(decision, decision="act")
 
         if decision.decision == "act" and decision.missing:
-            decision = Decision(
+            decision = replace(decision,
                 decision="ask", goal=decision.goal, reason=decision.reason,
                 missing=decision.missing, assumption=decision.assumption,
                 addressee=decision.addressee, owes=decision.owes,
@@ -2869,7 +2617,8 @@ class Anticipy:
         if decision.decision == "act" and decision.goal:
             # The executor needs temporal ground truth: a job run today with
             # no "now" produced an OpenTable result dated a YEAR in the past.
-            params = {"source": authority_source, "now": self._now_line()}
+            params = {"source": authority_source, "now": self._now_line(),
+                      "_question_invited": explicit or decision.addressee == "assistant"}
             params = self._keeping(params, mem.get("commitment_id"))
             if stitched_goal:
                 params["recognizer_continuation"] = True
@@ -2940,6 +2689,15 @@ class Anticipy:
                     job_id=job_id,
                 )
                 self.loops.append(loop)
+            execution = self._execution_evidence(job_id)
+            if (execution.get("status") == "awaiting_confirm"
+                    and execution.get("workflow_state") == "draft"
+                    and execution.get("question")):
+                # The selected hand may discover a required field after triage
+                # chose act (for example an event's end time). It is the same
+                # persisted-question path as an initial ask, with one outbox.
+                return {"memory": mem, "decision": replace(decision, decision="ask"),
+                        "anticipy_says": execution["question"], "question_job_id": job_id}
             # Her words are GENERATED for this exact moment — a template can
             # never sound like a person.
             if running_dup:
@@ -2953,7 +2711,7 @@ class Anticipy:
                                  "motion — one short reassurance; never "
                                  "re-ask approval, never claim it finished",
                     "heard": line, "goal": decision.goal,
-                    "execution": self._execution_evidence(job_id),
+                    "execution": execution,
                 }) or f"Already on it — {decision.goal} is moving.") \
                     if explicit else None
             else:
@@ -2961,7 +2719,7 @@ class Anticipy:
                     "situation": "acknowledge the task's recorded execution state",
                     "heard": line, "goal": decision.goal,
                     "assumption": decision.assumption,
-                    "execution": self._execution_evidence(job_id),
+                    "execution": execution,
                 }) or self.say_handling(decision.goal, held)
             # Details first, browser second: before anything irreversible she
             # texts the owner — their go-ahead releases the held job.
@@ -3046,96 +2804,104 @@ class Anticipy:
                 "assumption": decision.assumption,
                 "execution": self._execution_evidence(None),
             }) or f"Quick question — {(decision.missing or [decision.reason or 'want me to take this on'])[0]}?"
-            # A question is unprompted speech too, and this branch used to text
-            # him every single time with no guard whatever — the held-job path
-            # at least had the queue's own dedup behind it. On 2026-07-31 that
-            # produced "I need the location for Sharky's Diner before I can
-            # check their hours" twice, seventeen seconds apart, and again
-            # twenty minutes later. Asking is fine; asking the same thing over
-            # and over is what made her exhausting.
-            # A question is an interruption, and interrupting is earned by
-            # being ADDRESSED — he asked her, or typed at her. Thinking
-            # aloud is not an invitation: one mumbled dinner plan once drew
-            # THREE different "what night were you thinking?" texts in two
-            # minutes, because each goalless self-talk ask dodged the
-            # goal-keyed dedupe. Self-talk still gets her help — acts queue,
-            # plans firm up through the open-plan carry — she just doesn't
-            # tug his sleeve about it. No classification at all no longer
-            # reaches this branch: the lane gate above sends an
-            # unattributed ask to the parked-ask valve (Omi port 10a).
-            # TRIED AND REVERTED, 2026-08-07 — do not narrow this to goalless
-            # asks. The reasoning looked airtight: the incident above was about
-            # GOALLESS asks dodging the goal-keyed dedupe, so with a goal
-            # present _may_say should stop the repeats. It does not. Each turn
-            # of one dinner produces a slightly DIFFERENT goal — "Book dinner
-            # reservation for tomorrow at 7 PM", then "...for 2 tomorrow at
-            # 7 PM" — and the dedupe reads those as separate errands.
-            #
-            # Measured on the live model the moment it was tried:
-            #   dinner_demo_proof      FAIL 3/3 — FOUR texts for one dinner
-            #   second_scenario_proof  FAIL 2/3 — SIX texts, and no held booking
-            #
-            # This guard is load-bearing. The real complaint it looks
-            # responsible for — a card headed "Quick question for you" with no
-            # question under it — is the CARD lying about a silence that was
-            # correct, and belongs in ConversationCard.swift, not here.
             if decision.addressee == "self" and not explicit:
-                print(f"self-talk question stays unasked: {handled!r}")
+                # Ambient self-talk does not earn an interrupting question.
                 handled = None
-            elif self._may_say(may_say, handled, decision.goal, "ask"):
-                # A failed send must leave NOTHING to post as said. Both
-                # sibling branches already do this; this one discarded the
-                # result, so a dead Twilio call was recorded as a question
-                # asked — and the dedupe guard then kept her quiet about it
-                # forever, waiting for an answer he was never asked for.
-                if not self.notify_owner(handled):
-                    handled = None
-            else:
-                print(f"already asked him about {decision.goal!r} — staying quiet")
-            # A question with no card behind it is a plan that evaporates:
-            # "which saturday?" got its answer, the answer got a warm reply,
-            # and nothing existed for the answer to land on (live 2026-08-11).
-            # The asked-about plan is held — the answer amends it, his
-            # go-ahead releases it, and "forget it" kills it.
-            if handled and decision.goal:
-                params = {"source": line, "now": self._now_line()}
+            elif decision.goal:
+                params = {"source": authority_source, "now": self._now_line(),
+                          "_question_text": handled,
+                          "_question_invited": explicit or decision.addressee == "assistant"}
                 params = self._keeping(params, mem.get("commitment_id"))
                 if channel:
                     params["channel"] = channel
+                for k, v in (getattr(self, "_memory_filled", None) or {}).items():
+                    key = re.sub(r"\W+", " ", k).strip().lower()[:48]
+                    if key:
+                        params[key] = v
+                self._memory_filled = {}
                 if decision.missing:
-                    params["missing"] = ", ".join(
-                        str(m) for m in decision.missing)
+                    params["missing"] = decision.missing
                 if decision.assumption:
                     params["assumption"] = decision.assumption
                 job_id = self._queue_job(decision.goal, params, hold=True,
-                                         explicit=explicit)
-                if job_id and not getattr(self, "_running_dup", None):
-                    self.loops.append(LoopRecord(
-                        commitment_id=mem.get("commitment_id") or -1,
-                        what=decision.goal, status="awaiting_ok",
-                        job_id=job_id))
-                elif job_id == QUEUE_WRITE_FAILED:
-                    # The question is already out of the door (notify_owner
-                    # ran above), and the card it was supposed to land on does
-                    # not exist: this is the 2026-08-11 evaporating-plan shape
-                    # arriving through a failed write instead of a missing
-                    # queue call. Nothing to repair from here, but it must not
-                    # pass in silence, because his answer will find nothing to
-                    # amend and only this log says why.
-                    print(f"asked him about {decision.goal!r} but the card "
-                          "behind it never landed — his answer will have "
-                          "nothing to amend")
+                                         explicit=explicit,
+                                         touches=decision.touches)
+                if job_id and job_id != QUEUE_WRITE_FAILED:
+                    question_job_id = job_id
+                    if not getattr(self, "_running_dup", None):
+                        self.loops.append(LoopRecord(
+                            commitment_id=mem.get("commitment_id") or -1,
+                            what=decision.goal, status="awaiting_ok", job_id=job_id))
+                    # The persisted card is the question's delivery surface.
+                    # The worker's durable question outbox owns SMS attempts,
+                    # quiet hours and restart dedupe. A failed/absent transport
+                    # must not erase the card or publish it as an SMS receipt.
+                else:
+                    handled = "I couldn't save that task. Please try again."
+            elif self._may_say(may_say, handled, None, "ask"):
+                self.notify_owner(handled)
+            elif not explicit:
+                handled = None
 
         return {
             "memory": mem,
             "decision": decision,
             "anticipy_says": handled,
+            "question_job_id": question_job_id,
         }
+
+    def _task_effect(self, goal, evidence):
+        model = getattr(getattr(self, "brain", None), "strong", None) or self.llm
+        try:
+            facts = self.memory.recall(goal, limit=8, retired=RETIRED_QUOTED)
+            notes = memory_notes(facts, budget=2400)
+        except Exception:
+            notes = "Memory unavailable; do not infer facts."
+        return task_effect(model, dict(evidence, task=goal,
+            related_memory=notes, current_local_time=self._now_line()))
+
+    def _review_readiness(self, decision, line, conversation, previous_line):
+        """Owner questions are the last resort; reading/setup can be progress.
+
+        Memory remains quoted context. Only fill_gaps_from_memory may promote
+        trusted, active memory into approved action values, and execution keeps
+        its own schema and consent checks after this planning verdict.
+        """
+        model = getattr(getattr(self, "brain", None), "strong", None) or self.llm
+        if not model or not getattr(model, "live", False):
+            return decision
+        try:
+            facts = self.memory.recall(decision.goal, limit=8, retired=RETIRED_QUOTED)
+            notes = memory_notes(facts, budget=2400, exclude=line)
+        except Exception:
+            notes = "Memory unavailable; do not infer facts."
+        try:
+            from .hands import gather_context
+            hand = gather_context(owner_ref=self.owner_ref, backend_url=self.backend_url)
+            access = {"browser_online": hand.browser_online,
+                      "connections": None if hand.connections is None else [
+                          {"toolkit": row.toolkit, "status": row.status,
+                           "writes_enabled": row.writes_enabled}
+                          for row in hand.connections]}
+        except Exception:
+            access = {"connections": None, "browser_online": None}
+        readiness = task_readiness(model, {
+            "task": decision.goal, "heard": line,
+            "conversation": conversation or [], "previous_line": previous_line,
+            "proposed_missing": decision.missing or [], "related_memory": notes,
+            "current_local_time": self._now_line(), "access": access,
+        })
+        if readiness.verdict == "ready":
+            return replace(decision, decision="act", missing=[])
+        if readiness.verdict == "needs_owner":
+            return replace(decision, decision="ask", missing=list(readiness.missing))
+        # A missing verdict cannot invent or silently answer a question.
+        return decision
 
     def _decide(self, line: str, mem: dict, prev_line: Optional[str] = None,
                 convo: Optional[list[str]] = None,
                 prev_addressee: Optional[str] = None,
-                dictated: bool = False,
+                content_context: Optional[ContentContext] = None,
                 speaker: Optional[str] = None,
                 speaker_name: Optional[str] = None,
                 link_candidates: Optional[list[str]] = None,
@@ -3169,9 +2935,10 @@ class Anticipy:
             # is talking to now, absent positive evidence of a switch.
             if prev_addressee:
                 prompt = f"{prompt}\n(Addressee of the previous line: {prev_addressee})"
-            if dictated:
-                prompt = (f"{prompt}\n(Pre-check: this line reads as machine "
-                          f"dictation — a long fluent run of instruction-prose.)")
+            if content_context and content_context.verdict == "live_speech":
+                prompt += "\n(Contextual destination review: " + json.dumps({
+                    "verdict": content_context.verdict,
+                    "reason": content_context.reason}) + ")"
             # MEASURED, not guessed: a fifth or more of his recent lines were
             # pure acknowledgement, which is what listening sounds like. He is
             # talking WITH someone whose side never reached the microphone.
@@ -3228,7 +2995,7 @@ class Anticipy:
                 # `line` itself is already the thing being triaged, and memory
                 # ingested it a moment ago, so it comes back as its own top
                 # match. Excluded here for the same reason as at the mint path.
-                notes = memory_notes(context, exclude=line)
+                notes = memory_notes(context, budget=1800, exclude=line)
                 if notes:
                     prompt = f"{prompt}\n(Related memory: {notes})"
             # The link question. Recent lines numbered so the model can point
@@ -3281,6 +3048,10 @@ class Anticipy:
             row = response.json()
             if row.get("id") == job_id and isinstance(row.get("status"), str):
                 evidence["status"] = row["status"]
+                if isinstance(row.get("workflow_state"), str):
+                    evidence["workflow_state"] = row["workflow_state"]
+                if isinstance(row.get("result"), str):
+                    evidence["question"] = row["result"]
         except Exception:
             pass
         return evidence
@@ -3292,6 +3063,7 @@ class Anticipy:
         if not self.llm:
             return None
         context = dict(context)
+        context["assistant_identity"] = {"name": NAME, "role": "assistant"}
         # The reply needs the same human context as the decision. A goal with
         # "Alex" alone otherwise asks the composer to invent distinguishing
         # details, despite the owner's contacts already being in memory.
@@ -3305,7 +3077,11 @@ class Anticipy:
                 context["related_memory"] = "unavailable; do not infer missing facts"
         context.setdefault("conversation", getattr(self, "_last_convo", []))
         try:
-            res = self.llm.chat(VOICE_SYSTEM, json.dumps(context), temperature=0.7)
+            model = getattr(getattr(self, "brain", None), "strong", None) or self.llm
+            if model is not self.llm:
+                for field in ("owner_name", "owner_email", "owner_zone"):
+                    setattr(model, field, getattr(self.llm, field, None))
+            res = model.chat(VOICE_SYSTEM, json.dumps(context), temperature=0.7)
             # A SENTENCE THAT RAN OUT OF ROOM IS NOT A SENTENCE. The provider
             # says so and this code used to discard the answer: a composition
             # cut at the token ceiling went to his phone stopping mid-word.
@@ -3895,6 +3671,12 @@ class Anticipy:
                    touches: str | None = None,
                    act: Optional[ActDeclaration] = None) -> Optional[str]:
         self._running_dup = None
+        if touches not in ("compute", "read", "world"):
+            effect = self._task_effect(goal, {"request": params})
+            touches = effect.touches
+            params["_effect"] = {"touches": effect.touches, "reason": effect.reason}
+        else:
+            params["_effect"] = {"touches": touches, "reason": "declared during task interpretation"}
         # A held card supersedes the parked question: the plan the fragment
         # was asking about has since completed itself, and the card's own
         # one-text asks whatever is still missing. Two question texts for
@@ -3996,7 +3778,7 @@ class Anticipy:
             if not explicit and self._retracting_mere_talk(goal):
                 return None
         if (not declared_new_task
-                and is_consequential(goal, params, explicit=explicit)):
+                and is_consequential(goal, params, explicit=explicit, touches=touches)):
             # A plan ALREADY MOVING is not a new card. "Sounds good" after
             # her own "got it, booking it" went back through triage, missed
             # the running job (the dedupe below only saw pending ones) and
@@ -4162,11 +3944,16 @@ class Anticipy:
             if calendar.state == CALENDAR_YES:
                 act = calendar_act_declaration()
                 params = dict(params, **calendar.facts)
-        # Route read-only work to the worker's research arm (roadmap §6).
-        # Without a Brave key the worker has no way to run it, so the job
-        # keeps the browser lane rather than queueing for an executor that
-        # does not exist — graceful fallback, never a dead queue.
-        lane = job_lane(goal, params) if os.environ.get("BRAVE_API_KEY") else ""
+        # API/browser routing exists independently of the public-search key.
+        # Previously an absent search credential skipped the entire router,
+        # including connected APIs, without ever asking which hand was useful.
+        device = device_lane(act)
+        lane = device or job_lane(goal, params, owner_ref=self.owner_ref or self.owner_id,
+                                 backend_url=self.backend_url,
+                                 llm=getattr(getattr(self, "brain", None), "strong", None) or self.llm)
+        # Server work can compose from supplied facts without a search key.
+        # Its executor judges the required evidence and available capability;
+        # a missing search credential must not force a private draft into Chrome.
         # AND THEN THE DEVICE LANE, WHICH OUTRANKS BOTH OF THE ABOVE.
         #
         # Deliberately OUTSIDE the Brave-key conditional. Brave is what the
@@ -4188,7 +3975,6 @@ class Anticipy:
         # question the confirmation floor asks is "did the model DECLARE an
         # act this phone executes", which does not stop being true because
         # the browser was held off it.
-        device = device_lane(act)
         lane = device or lane
         # THE RESEARCH GATE (HANDS 1 spec §5.4), asked here and only here.
         #
@@ -4446,6 +4232,8 @@ class Anticipy:
                 body["commitment_key"] = commitment_key
             question = _missing_fact_question(
                 workflow.missing, fallback=params.get("missing") or "")
+            if not device and isinstance(params.get("_question_text"), str) and params["_question_text"].strip():
+                question = params["_question_text"].strip()
             if question:
                 body["result"] = question
             if self.owner_ref:
@@ -4832,12 +4620,14 @@ class Anticipy:
         if goal:
             # Anything she prepares unprompted goes through the same gate as
             # everything else — held if consequential, never auto-sent.
-            held = is_consequential(goal)
+            effect = self._task_effect(goal, {"origin": "proactive review",
+                "proposed_message": say, "commitments": selected})
+            held = is_consequential(goal, touches=effect.touches)
             job_id = self._queue_job(
                 goal, self._keeping(
                     {"source": "clock initiative", "say": say,
                      "now": self._now_line()},
-                    loop_ids[0] if loop_ids else -1), hold=held)
+                    loop_ids[0] if loop_ids else -1), hold=held, touches=effect.touches)
             if not self._backed_by_a_card(goal, job_id, "clock-initiative"):
                 # The say and the goal come out of ONE model reply: the words
                 # are a message about that prepared work, and worker.py posts

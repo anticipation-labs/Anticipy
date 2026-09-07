@@ -25,7 +25,7 @@ on:
         description: 'Backend component to deploy'
         required: true
         type: choice
-        options: [brain, api, inspect]
+        options: [brain, api, inspect, inspect-api, messaging-secret, messaging-sender]
         default: brain
       confirm:
         description: 'Type DEPLOY to deploy the selected component'
@@ -37,12 +37,12 @@ on:
         default: '1'
 
 concurrency:
-  group: brain-deploy
+  group: ${{ github.event.inputs.component == 'inspect' && 'backend-inspect' || 'brain-deploy' }}
   cancel-in-progress: false
 
 jobs:
   deploy:
-    if: ${{ github.ref == 'refs/heads/cloudflare-backend' && github.event.inputs.confirm == 'DEPLOY' && github.event.inputs.component != 'api' && github.event.inputs.component != 'inspect' }}
+    if: ${{ github.ref == 'refs/heads/cloudflare-backend' && github.event.inputs.confirm == 'DEPLOY' && github.event.inputs.component == 'brain' }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
@@ -98,23 +98,22 @@ jobs:
           cap="$DEPLOY_CAP"
           [[ "$cap" =~ ^[0-9]+$ ]] && [ "$cap" -le 100 ] || { echo "Invalid capacity"; exit 1; }
           echo "Deploying anticipy-brain with discovery cap = $cap"
+          runtime_source=$(python3 -c 'from brain.runtime_status import source_hash; print(source_hash())')
           # wrangler builds the image from brain/Dockerfile remotely and deploys
           # OwnerBrain + BrainSupervisor. --containers-rollout gradual is the safe
           # default; the first run should be cap=1.
           wrangler deploy \
             --config migration/config/wrangler.brain.jsonc \
             --keep-vars \
+            --tag "$GITHUB_SHA" \
             --var ANTICIPY_MAX_OWNER_WORKERS:"$cap" \
-            --containers-rollout gradual
+            --var ANTICIPY_EXPECTED_RUNTIME_SOURCE:"$runtime_source" \
+            --containers-rollout immediate
 
-      - name: Post-deploy checks
-        run: |
-          echo "Watch for, per §10.6:"
-          echo "  * the container reaches healthy on :8731"
-          echo "  * 'state pulled' then 'state snapshot ok' within ~90s"
-          echo "  * the brain answers a real text for the ONE test owner"
-          echo "Do NOT raise the cap to 100 until the single owner is proven."
-          echo "Leave the Railway volume in place, unmounted, for two weeks (§10.9)."
+      - name: Verify the active fleet, running source and current memory snapshots
+        env:
+          ANTICIPY_INTERNAL_KEY: ${{ secrets.ANTICIPY_INTERNAL_KEY }}
+        run: python3 -m proof.audit.live_brain_release
 
   api:
     if: ${{ github.ref == 'refs/heads/cloudflare-backend' && github.event.inputs.confirm == 'DEPLOY' && github.event.inputs.component == 'api' }}
@@ -140,11 +139,42 @@ jobs:
       - name: Apply the non-destructive account erasure write fence
         working-directory: migration/workers
         run: npx --no-install wrangler d1 execute anticipy-backend --remote --config wrangler.jsonc --file ../d1/2026-09-07-account-erasure-fence.sql
+      - name: Apply the connection command retry fence
+        working-directory: migration/workers
+        run: npx --no-install wrangler d1 execute anticipy-backend --remote --config wrangler.jsonc --file ../d1/2026-09-07-connection-command-runs.sql
       - name: Deploy the API while preserving separately configured provider variables
         working-directory: migration/workers
         run: npx --no-install wrangler deploy --config wrangler.jsonc --keep-vars --tag "$GITHUB_SHA"
       - name: Verify the active version and exercise signup, ownership and deletion over the live URL
+        env:
+          ANTICIPY_INTERNAL_KEY: ${{ secrets.ANTICIPY_INTERNAL_KEY }}
         run: python proof/audit/live_api_release.py --base https://api.anticipy.ai --verify-deployment
+
+  messaging-secret:
+    if: ${{ github.ref == 'refs/heads/cloudflare-backend' && github.event.inputs.confirm == 'DEPLOY' && github.event.inputs.component == 'messaging-secret' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      SENDBLUE_WEBHOOK_SECRET: ${{ secrets.SENDBLUE_WEBHOOK_SECRET }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install only the webhook secret and verify live authentication without a message
+        run: python3 proof/audit/configure_sendblue_webhook.py
+
+  messaging-sender:
+    if: ${{ github.ref == 'refs/heads/cloudflare-backend' && github.event.inputs.confirm == 'DEPLOY' && github.event.inputs.component == 'messaging-sender' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      SENDBLUE_FROM_NUMBER: ${{ vars.SENDBLUE_FROM_NUMBER }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Align API and brain with the verified existing provider line
+        run: python3 -m proof.audit.configure_sendblue_sender
 
   inspect:
     if: ${{ github.ref == 'refs/heads/cloudflare-backend' && github.event.inputs.component == 'inspect' }}
@@ -157,3 +187,46 @@ jobs:
       - uses: actions/checkout@v4
       - name: Read deployed database structure without customer rows
         run: python3 -m proof.audit.live_schema
+      - name: Read container rollout and instance metadata without environment values
+        run: python3 -m proof.audit.live_container_inspect
+      - uses: actions/setup-node@v4
+        with: { node-version: '24' }
+      - name: Observe one minute of lifecycle errors without customer content
+        run: |
+          npm ci --prefix migration/workers --ignore-scripts
+          set +e
+          timeout 75s migration/workers/node_modules/.bin/wrangler tail anticipy-brain --format json > "$RUNNER_TEMP/brain-tail.json" 2> "$RUNNER_TEMP/brain-tail-stderr.txt"
+          result=$?
+          set -e
+          if [ "$result" != 0 ] && [ "$result" != 124 ]; then
+            echo "Read-only log observation failed with exit $result"
+            exit "$result"
+          fi
+          python3 proof/audit/container_log_summary.py "$RUNNER_TEMP/brain-tail.json"
+
+  inspect-api:
+    if: ${{ github.ref == 'refs/heads/cloudflare-backend' && github.event.inputs.component == 'inspect-api' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '24' }
+      - name: Install the existing deployment CLI
+        run: npm ci --prefix migration/workers --ignore-scripts
+      - name: Read the authored draft probe error without customer content
+        run: python3 -m proof.audit.live_messaging_error
+      - name: Observe webhook response codes without message content
+        run: |
+          set +e
+          timeout 125s migration/workers/node_modules/.bin/wrangler tail anticipy-api --format json > "$RUNNER_TEMP/api-tail.json" 2> "$RUNNER_TEMP/api-tail-stderr.txt"
+          result=$?
+          set -e
+          if [ "$result" != 0 ] && [ "$result" != 124 ]; then
+            echo "Read-only API observation failed with exit $result"
+            exit "$result"
+          fi
+          python3 proof/audit/messaging_log_summary.py "$RUNNER_TEMP/api-tail.json"

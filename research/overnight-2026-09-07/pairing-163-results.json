@@ -1,0 +1,254 @@
+{
+  "scope": "actual extension registration and heartbeat; local Worker/D1; actual iOS simulator pairing",
+  "paired": true,
+  "singleRegistration": true,
+  "ownerMatched": true,
+  "network": [
+    {
+      "path": "/agent/register",
+      "method": "POST",
+      "status": 200
+    },
+    {
+      "path": "/api/collections/agents/records/ew8sgosnllb667t",
+      "method": "PATCH",
+      "status": 200
+    },
+    {
+      "path": "/api/collections/agents/records/ew8sgosnllb667t",
+      "method": "PATCH",
+      "status": 200
+    },
+    {
+      "path": "/api/collections/agents/records/ew8sgosnllb667t",
+      "method": "PATCH",
+      "status": 200
+    },
+    {
+      "path": "/api/collections/agents/records/ew8sgosnllb667t",
+      "method": "PATCH",
+      "status": 200
+    },
+    {
+      "path": "/api/collections/agents/records/ew8sgosnllb667t",
+      "method": "PATCH",
+      "status": 200
+    },
+    {
+      "path": "/api/collections/agents/records/ew8sgosnllb667t",
+      "method": "PATCH",
+      "status": 200
+    },
+    {
+      "path": "/api/collections/agents/records/ew8sgosnllb667t",
+      "method": "PATCH",
+      "status": 200
+    },
+    {
+      "path": "/api/collections/agents/records/ew8sgosnllb667t",
+      "method": "PATCH",
+      "status": 200
+    },
+    {
+      "path": "/api/collections/agents/records/ew8sgosnllb667t",
+      "method": "PATCH",
+      "status": 200
+    },
+    {
+      "path": "/api/collections/agents/records/ew8sgosnllb667t",
+      "method": "PATCH",
+      "status": 200
+    },
+    {
+      "path": "/api/collections/agents/records/ew8sgosnllb667t",
+      "method": "PATCH",
+      "status": 200
+    },
+    {
+      "path": "/api/collections/agents/records/ew8sgosnllb667t",
+      "method": "PATCH",
+      "status": 200
+    },
+    {
+      "path": "/api/collections/agents/records/ew8sgosnllb667t",
+      "method": "PATCH",
+      "status": 200
+    },
+    {
+      "path": "/api/collections/agents/records/ew8sgosnllb667t",
+      "method": "PATCH",
+      "status": 200
+    },
+    {
+      "path": "/api/collections/agents/records/ew8sgosnllb667t",
+      "method": "PATCH",
+      "status": 200
+    },
+    {
+      "path": "/api/collections/agents/records/ew8sgosnllb667t",
+      "method": "PATCH",
+      "status": 200
+    },
+    {
+      "path": "/api/collections/agents/records/ew8sgosnllb667t",
+      "method": "PATCH",
+      "status": 200
+    },
+    {
+      "path": "/api/collections/agents/records/ew8sgosnllb667t",
+      "method": "PATCH",
+      "status": 200
+    },
+    {
+      "path": "/api/collections/agents/records/ew8sgosnllb667t",
+      "method": "PATCH",
+      "status": 200
+    },
+    {
+      "path": "/api/collections/agents/records/ew8sgosnllb667t",
+      "method": "PATCH",
+      "status": 200
+    },
+    {
+      "path": "/api/collections/agents/records/ew8sgosnllb667t",
+      "method": "PATCH",
+      "status": 200
+    },
+    {
+      "path": "/api/collections/agents/records/ew8sgosnllb667t",
+      "method": "PATCH",
+      "status": 200
+    },
+    {
+      "path": "/api/collections/agents/records/ew8sgosnllb667t",
+      "method": "PATCH",
+      "status": 200
+    },
+    {
+      "path": "/api/collections/agents/records/ew8sgosnllb667t",
+      "method": "PATCH",
+      "status": 200
+    },
+    {
+      "path": "/api/collections/agents/records/ew8sgosnllb667t",
+      "method": "PATCH",
+      "status": 200
+    },
+    {
+      "path": "/api/collections/agents/records/ew8sgosnllb667t",
+      "method": "PATCH",
+      "status": 200
+    },
+    {
+      "path": "/api/collections/agents/records/ew8sgosnllb667t",
+      "method": "PATCH",
+      "status": 200
+    },
+    {
+      "path": "/api/collections/agents/records/ew8sgosnllb667t",
+      "method": "PATCH",
+      "status": 200
+    },
+    {
+      "path": "/api/collections/agents/records/ew8sgosnllb667t",
+      "method": "PATCH",
+      "status": 200
+    },
+    {
+      "path": "/api/collections/agents/records/ew8sgosnllb667t",
+      "method": "PATCH",
+      "status": 200
+    },
+    {
+      "path": "/api/collections/agents/records/ew8sgosnllb667t",
+      "method": "PATCH",
+      "status": 200
+    },
+    {
+      "path": "/api/collections/agents/records/ew8sgosnllb667t",
+      "method": "PATCH",
+      "status": 200
+    },
+    {
+      "path": "/api/collections/agents/records/ew8sgosnllb667t",
+      "method": "PATCH",
+      "status": 200
+    },
+    {
+      "path": "/api/collections/agents/records/ew8sgosnllb667t",
+      "method": "PATCH",
+      "status": 200
+    },
+    {
+      "path": "/api/collections/agents/records/ew8sgosnllb667t",
+      "method": "PATCH",
+      "status": 200
+    },
+    {
+      "path": "/api/collections/agents/records/ew8sgosnllb667t",
+      "method": "PATCH",
+      "status": 200
+    },
+    {
+      "path": "/api/collections/agents/records/ew8sgosnllb667t",
+      "method": "PATCH",
+      "status": 200
+    },
+    {
+      "path": "/api/collections/agents/records/ew8sgosnllb667t",
+      "method": "PATCH",
+      "status": 200
+    },
+    {
+      "path": "/api/collections/agents/records/ew8sgosnllb667t",
+      "method": "PATCH",
+      "status": 200
+    },
+    {
+      "path": "/api/collections/agents/records/ew8sgosnllb667t",
+      "method": "PATCH",
+      "status": 200
+    },
+    {
+      "path": "/api/collections/agents/records/ew8sgosnllb667t",
+      "method": "PATCH",
+      "status": 200
+    },
+    {
+      "path": "/api/collections/agents/records/ew8sgosnllb667t",
+      "method": "PATCH",
+      "status": 200
+    },
+    {
+      "path": "/api/collections/agents/records/ew8sgosnllb667t",
+      "method": "PATCH",
+      "status": 200
+    },
+    {
+      "path": "/api/collections/agents/records/ew8sgosnllb667t",
+      "method": "PATCH",
+      "status": 200
+    },
+    {
+      "path": "/api/collections/agents/records/ew8sgosnllb667t",
+      "method": "PATCH",
+      "status": 200
+    },
+    {
+      "path": "/api/collections/agents/records/ew8sgosnllb667t",
+      "method": "PATCH",
+      "status": 200
+    },
+    {
+      "path": "/agent/key",
+      "method": "GET",
+      "status": 503
+    }
+  ],
+  "disconnected_in_app": true,
+  "revoked_status": 403,
+  "stale_success_absent": true,
+  "pair_code_cleared": true,
+  "build": 163,
+  "server_outage_recovery": "initial request reported unavailable; same code succeeded after local workerd restart"
+}

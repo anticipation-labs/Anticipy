@@ -634,35 +634,6 @@ SEGMENTER = "brain/segmenter.py"
 
 KNOWN_TAPE = [
     Tape(
-        tid="_READ_ONLY_RE",
-        rel=CORE,
-        find="_READ_ONLY_RE = re.compile(",
-        what="a verb regex is the default hold/run split for every goal that "
-             "arrives with no effect-channel declaration",
-        real_fix="effect-channel classification owns the split outright, so "
-                 "an undeclared goal is re-asked of the model rather than "
-                 "guessed at by wording. Then _READ_ONLY_RE is DELETED.",
-        audit_item=22,
-        ledger_needle="[tape:read_only_re]",
-    ),
-    Tape(
-        tid="is_consequential compute fallback",
-        rel=CORE,
-        # `if compute_answer(g):` also appears in job_lane(), which is an
-        # unrelated browser-arm router. home= is what tells the two apart, and
-        # is why deleting THIS one does not leave the entry looking alive.
-        find="if compute_answer(g):",
-        home="is_consequential",
-        what="the calculator is consulted on an undeclared goal and, if it "
-             "can answer, flips a held goal to unattended",
-        real_fix="the effect-channel rewrite: triage always declares "
-                 "`touches`, so nothing reaches a capability sniff. The "
-                 "comment already promises this — it just named no leg.",
-        marker_home="is_consequential",
-        audit_item=19,
-        ledger_needle="[tape:compute_fallback]",
-    ),
-    Tape(
         tid="shard_too_thin",
         rel=CORE,
         find="def shard_too_thin(",
@@ -781,6 +752,47 @@ KNOWN_TAPE = [
 #       note="one line: what does the job now",
 #   ),
 CLOSED_TAPE: list[ClosedTape] = [
+    ClosedTape(
+        Tape(
+            tid="_READ_ONLY_RE",
+            rel=CORE,
+            find="_READ_ONLY_RE = re.compile(",
+            what="a verb regex is the default hold/run split for every goal that "
+                 "arrives with no effect-channel declaration",
+            real_fix="effect-channel classification owns the split outright, so "
+                     "an undeclared goal is re-asked of the model rather than "
+                     "guessed at by wording. Then _READ_ONLY_RE is DELETED.",
+            audit_item=22,
+            ledger_needle="[tape:read_only_re]",
+        ),
+        closed_by="f6753cb",
+        replaced_by="tests/test_effect_declaration.py",
+        proves="test_missing_effect_fails_closed_without_reading_the_goal",
+        note="The model classifies effects from context; unknown effects hold without reading goal words.",
+    ),
+    ClosedTape(
+        Tape(
+            tid="is_consequential compute fallback",
+            rel=CORE,
+            # `if compute_answer(g):` also appears in job_lane(), which is an
+            # unrelated browser-arm router. home= is what tells the two apart, and
+            # is why deleting THIS one does not leave the entry looking alive.
+            find="if compute_answer(g):",
+            home="is_consequential",
+            what="the calculator is consulted on an undeclared goal and, if it "
+                 "can answer, flips a held goal to unattended",
+            real_fix="the effect-channel rewrite: triage always declares "
+                     "`touches`, so nothing reaches a capability sniff. The "
+                     "comment already promises this — it just named no leg.",
+            marker_home="is_consequential",
+            audit_item=19,
+            ledger_needle="[tape:compute_fallback]",
+        ),
+        closed_by="2837c0f",
+        replaced_by="tests/test_effect_declaration.py",
+        proves="test_missing_effect_fails_closed_without_reading_the_goal",
+        note="The model classifies effects from context; unknown effects hold without reading goal words.",
+    ),
     ClosedTape(
         Tape(
             tid="_pending_class prose fallback",

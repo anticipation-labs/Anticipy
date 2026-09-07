@@ -229,10 +229,9 @@ def leg_2_one_conversation() -> str:
 # --------------------------------------------------------------------------
 def leg_3_judges() -> str:
     try:
-        from brain.anticipy_core import looks_like_dictation
+        from brain.content_context import judge as content_context
         from brain.llm import LLM
-        from brain.orchestrator import (TRIAGE_SYSTEM, _extract_json,
-                                        read_into_a_machine)
+        from brain.orchestrator import TRIAGE_SYSTEM, _extract_json
     except Exception as e:
         raise LegFailed(f"brain triage will not import: {e}")
 
@@ -266,7 +265,7 @@ def leg_3_judges() -> str:
     RUNS = 3
 
     def decide(text: str) -> bool:
-        if looks_like_dictation(text) or read_into_a_machine(llm, text):
+        if content_context(llm, text).verdict == "authored_content":
             return False
         try:
             got = json.loads(_extract_json(

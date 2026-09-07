@@ -33,6 +33,52 @@ import Foundation
 /// product's promise; a design that buries it is a design that broke it.
 enum DashboardPolicy {
 
+    /// Server-observed outreach timing. This is not a delivery receipt.
+    struct NotificationPolicy: Decodable, Equatable {
+        let quietHoursActive: Bool
+        let startHour: Int
+        let endHour: Int
+        let timeZone: String
+        let observedAt: Double
+        let expiresAt: Double
+
+        func isCurrent(at now: Date) -> Bool {
+            let time = now.timeIntervalSince1970
+            return observedAt <= time + 5 && time < expiresAt
+                && expiresAt > observedAt && expiresAt - observedAt <= 60
+                && (0...23).contains(startHour) && (0...23).contains(endHour)
+                && TimeZone(identifier: timeZone) != nil
+        }
+
+        var endTime: String {
+            let formatter = DateFormatter()
+            formatter.timeZone = TimeZone(secondsFromGMT: 0)
+            formatter.timeStyle = .short
+            return formatter.string(from: Date(timeIntervalSince1970: Double(endHour * 3600)))
+        }
+    }
+
+    struct NotificationCaption: Equatable {
+        let title: String
+        let detail: String
+        let icon: String
+    }
+
+    static func notificationCaption(policy: NotificationPolicy?, now: Date) -> NotificationCaption {
+        guard let policy, policy.isCurrent(at: now) else {
+            return NotificationCaption(title: "Text status unavailable",
+                detail: "I couldn't check the texting schedule. You can answer here now.",
+                icon: "questionmark.circle")
+        }
+        if policy.quietHoursActive {
+            return NotificationCaption(title: "Quiet hours · proactive texts paused",
+                detail: "Until \(policy.endTime) in your account’s time zone. You can answer here now.",
+                icon: "moon.fill")
+        }
+        return NotificationCaption(title: "Text delivery unconfirmed",
+            detail: "Check Messages for a text, or answer here now.", icon: "message")
+    }
+
     // MARK: - Which face is up
 
     enum Mode: String, Equatable, CaseIterable {
@@ -121,7 +167,7 @@ enum DashboardPolicy {
 
     /// One turn in the conversation. Every case carries a verdict somebody
     /// else made; none of them is inferred from the text.
-    enum Turn: Equatable {
+    enum Turn: Equatable, Identifiable {
         /// Something SOMEBODY said or typed — not necessarily the owner.
         ///
         /// `speaker` is the tagger's verdict: "owner", "other", or nil when the
@@ -192,6 +238,19 @@ enum DashboardPolicy {
         }
     }
 
+    /// A new capture keeps unfinished work visible, but does not replay old
+    /// answers. Record identity supplies the session boundary, so server clock
+    /// differences cannot hide a newly arrived answer. Pausing retains it.
+    static func captureTurns(_ turns: [Turn], existingIDs: Set<String>) -> [Turn] {
+        Array(turns.filter { turn in
+            switch turn {
+            case .owner, .pending, .quiet: return false
+            case .said: return !existingIDs.contains(turn.id)
+            case .working, .approval, .question: return true
+            }
+        }.suffix(4))
+    }
+
     /// The rows as they arrive, already decided, with the fields this screen
     /// reads named explicitly. A struct rather than the app's own types so the
     /// suite can build a thread without a backend.
@@ -202,6 +261,7 @@ enum DashboardPolicy {
         let at: String
         /// `HomeFeedPolicy.placement` has already run. This is its answer.
         let placement: Placement
+        var sourceEventIDs: Set<String> = []
 
         /// NO `done` CASE, and that is a decision rather than an omission.
         /// Finished work goes to the deck at the foot of the thread, which
@@ -244,6 +304,7 @@ enum DashboardPolicy {
         /// Who said it, as the tagger judged. nil means the phone could not say
         /// — which is a real answer and must never be rendered as "the owner".
         var speaker: String? = nil
+        var source: String? = nil
     }
 
     /// Assemble the thread. Oldest first, because a conversation is read
@@ -252,7 +313,8 @@ enum DashboardPolicy {
     ///
     /// Ties are broken by id, so two rows written in the same second do not
     /// swap places between two redraws of the same screen.
-    static func thread(heard: [HeardRow], said: [SaidRow], jobs: [JobRow]) -> [Turn] {
+    static func thread(heard: [HeardRow], said: [SaidRow], jobs: [JobRow],
+                       representedEventIDs: Set<String> = []) -> [Turn] {
         var turns: [Turn] = []
         turns.reserveCapacity(heard.count + said.count + jobs.count)
 
@@ -281,10 +343,15 @@ enum DashboardPolicy {
         // count could never fall, and "3 waiting" would be a standing lie.
         var pendingCount = 0, pendingAt = "", pendingID = ""
         var quietCount = 0, quietAt = "", quietID = ""
+        let representedSources = jobs.reduce(into: representedEventIDs) { $0.formUnion($1.sourceEventIDs) }
         for row in heard where !row.text.isEmpty {
+            if row.source == "typed" {
+                turns.append(.owner(id: row.id, text: row.text, at: row.at, speaker: "owner"))
+            }
+            if representedSources.contains(row.id) { continue }
             if let goal = row.goal?.trimmingCharacters(in: .whitespacesAndNewlines),
                !goal.isEmpty {
-                turns.append(.working(id: row.id, text: goal, at: row.at))
+                turns.append(.working(id: "work." + row.id, text: goal, at: row.at))
                 continue
             }
             // `decision` is a column a MODEL wrote, read back. Nothing here
@@ -293,7 +360,7 @@ enum DashboardPolicy {
             if verdict.isEmpty || verdict == "processing" {
                 pendingCount += 1
                 if row.at >= pendingAt { pendingAt = row.at; pendingID = row.id }
-            } else {
+            } else if row.source != "typed" {
                 quietCount += 1
                 if row.at >= quietAt { quietAt = row.at; quietID = row.id }
             }

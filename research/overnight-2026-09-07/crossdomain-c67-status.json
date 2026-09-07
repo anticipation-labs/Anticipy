@@ -1,0 +1,46 @@
+{
+  "cases": [
+    {
+      "person_id": "auditperson0001",
+      "state": "observed_needs_semantic_review"
+    },
+    {
+      "person_id": "auditperson0002",
+      "state": "observed_needs_semantic_review"
+    },
+    {
+      "person_id": "auditperson0003",
+      "state": "observed_needs_semantic_review"
+    },
+    {
+      "person_id": "auditperson0004",
+      "state": "observed_needs_semantic_review"
+    },
+    {
+      "person_id": "auditperson0005",
+      "state": "observed_needs_semantic_review"
+    },
+    {
+      "person_id": "auditperson0006",
+      "state": "observed_needs_semantic_review"
+    },
+    {
+      "person_id": "auditperson0008",
+      "state": "observed_needs_semantic_review"
+    },
+    {
+      "person_id": "auditperson0009",
+      "state": "observed_needs_semantic_review"
+    },
+    {
+      "person_id": "auditperson0010",
+      "state": "audit_stopped_after_shared_failure"
+    },
+    {
+      "person_id": "auditperson0011",
+      "state": "audit_stopped_after_shared_failure"
+    }
+  ],
+  "complete": false,
+  "finding": "Six first completed cases held requested source reads/draft preparation before doing useful work. Remaining queued cases were not executed."
+}

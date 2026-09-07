@@ -197,39 +197,45 @@ def leg_2_shard_floor() -> str:
 # --------------------------------------------------------------------------
 # LEG 3 — AN UNRESOLVED NAME GOES TO ASK, NEVER ACT  (plan #2b)
 #
-# "Dr. Evans" appears in no transcript line, no contact, no memory. A goal
-# naming a person resolvable nowhere must ask, never act. This leg runs the
-# REAL unsupported_names() (extracted from orchestrator.py, executed here)
-# against the recorded case, and confirms the ambient act path actually
-# calls it (anticipy_core.py ~:1532).
-#
-# CORRECTED 2026-08-23 (late): the deployed brain HAS this guard — it was
-# fingerprint-verified as this very lineage. The guard held: the recorded
-# GOAL for event nbeb6oze5bmyrge contains no "Dr. Evans" at all. The name
-# was invented downstream, in the outgoing-text voice pass — which is LEG 5's
-# territory. This leg stays green because the goal-level guard works; the
-# earlier "deploy drift" note here was wrong and is retracted.
+# "Dr. Evans" appears in none of the recorded source material. The original
+# regex checked capitalization, and later mistook September for a person.
+# The replacement judges full evidence with a model. This offline leg requires
+# current real-model evidence for inventions AND legitimate transformations,
+# and verifies that a missing/negative verdict actually withholds the task.
+# The independent voice-composition failure remains leg 5 below.
 # --------------------------------------------------------------------------
 def leg_3_entity_guard() -> str:
+    # A word-level person guess rejected the month September. Require the
+    # replacement's real-model contrasts AND its current source identity; a
+    # stale recorded success or a guard with no caller cannot pass this leg.
+    import hashlib
     core = read(CORE)
-    orch = read(ORCH)
-    mg = re.search(r"_GOAL_VERBS\s*=\s*\{.*?\n\}", orch, re.S)
-    if not mg:
-        raise LegFailed("_GOAL_VERBS not found — the leg cannot be tested")
-    fn = extract_function(orch, "unsupported_names", prelude=mg.group(0) + "\n")
-    # the recorded case: event nbeb6oze5bmyrge — goal named a person the
-    # audio never contained
-    flagged = fn("meeting with Dr. Evans, Monday 5:15 PM",
-                 "at 5:15", "so I have a hard stop", "")
-    if not any("Evans" in f for f in flagged):
-        raise LegFailed('unsupported_names() no longer flags "Dr. Evans" against '
-                        "audio that never contained it — the Earl's regression "
-                        "is back (plan #2b)")
-    if not re.search(r"made_up\s*=\s*\(?\s*unsupported_names", core):
-        raise LegFailed("unsupported_names() catches the case but the ambient act "
-                        "path no longer calls it (was anticipy_core.py ~:1808)")
-    return ('goal-level name guard works and is wired — "Dr. Evans" was '
-            "invented at the VOICE layer, which leg 5 tracks")
+    grounding = os.path.join(ROOT, "brain", "grounding.py")
+    proof = os.path.join(ROOT, "research", "overnight-2026-09-07",
+                         "grounding-model-results.json")
+    try:
+        evidence = json.loads(read(proof))
+    except Exception as exc:
+        raise LegFailed(f"model grounding evidence unavailable: {exc}")
+    expected_hash = hashlib.sha256(read(grounding).encode()).hexdigest()
+    if evidence.get("grounding_source_sha256") != expected_hash:
+        raise LegFailed("grounding source changed; replay the real-model contrasts")
+    rows = {row.get("case"): row for row in evidence.get("results", [])}
+    required = {"invented_person": "unsupported", "invented_party_size": "unsupported",
+                "relative_date": "supported", "completed_is_not_obligation": "unsupported",
+                "unknown_voice_is_not_contradiction": "supported"}
+    if any(rows.get(name, {}).get("observed") != verdict for name, verdict in required.items()):
+        raise LegFailed("grounding fails an invention/completion/date contrast")
+    if not rows or not all(row.get("passed") is True for row in rows.values()):
+        raise LegFailed("grounding evidence contains a failed or unavailable judgment")
+    call = core.find("support = grounding_verdict(model, decision.goal")
+    if call < 0:
+        raise LegFailed("the goal grounding judgment is not wired into hearing")
+    boundary = core[call:core.find('if decision.decision == "act" and decision.missing:', call)]
+    if ('if support != "supported":' not in boundary or
+            'return {"memory": mem' not in boundary or 'goal=None' not in boundary):
+        raise LegFailed("unsupported/missing grounding no longer withholds invented work")
+    return "current model grounding rejects invented people/counts and completed work; valid dates survive"
 
 
 # --------------------------------------------------------------------------
@@ -255,12 +261,12 @@ def leg_4_compute_lane() -> str:
         _sys.path.insert(0, ROOT)
     from brain.anticipy_core import is_consequential
     goal = "Convert 5 PM CST to PST"
-    if is_consequential(goal):
+    if is_consequential(goal, touches="compute"):
         raise LegFailed(f'is_consequential({goal!r}) still holds a timezone '
                         "conversion for approval, exactly as it did live "
-                        "(outbound auv9ieyhcvhy1nu) — classify by CAPABILITY "
-                        "(can the calculator satisfy it?), not by verb (plan #3)")
-    if not is_consequential("send the 5 PM CST to PST conversion to Tejas"):
+                        "(outbound auv9ieyhcvhy1nu) — enforce the model's "
+                        "effect declaration, not a reading of its verb")
+    if not is_consequential("send the 5 PM CST to PST conversion to Tejas", touches="world"):
         raise LegFailed("a goal that wears computation words but SENDS is no "
                         "longer held — the capability test must never outrank "
                         "the irreversible check")
@@ -275,9 +281,10 @@ def leg_4_compute_lane() -> str:
                             touches="world"):
         raise LegFailed('a declared "world" goal runs unattended because its '
                         "wording reads read-only — the declaration must hold it")
-    if not is_consequential("send the update to Tejas", touches="compute"):
-        raise LegFailed('declaring "compute" on a SEND makes it run — the '
-                        "deny-list no longer outranks the model")
+    if not is_consequential("work out the conversion", explicit=True):
+        raise LegFailed("missing effect declaration bypasses confirmation")
+    if is_consequential("privately explain 'send the update to Tejas'", touches="compute"):
+        raise LegFailed("goal words override the effect declaration")
     if '"touches"' not in read(ORCH):
         raise LegFailed("the triage contract no longer asks for the channel — "
                         "the gate is enforcing a declaration nobody makes")

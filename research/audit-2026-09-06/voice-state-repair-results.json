@@ -1,0 +1,142 @@
+{
+  "scope": "12 real-model compositions; synthetic contexts; no messages sent",
+  "model": "google/gemini-3.1-pro-preview",
+  "review": "All three welcomes correctly use Anticipy. All queued replies acknowledge the queue without requesting permission again. Awaiting-confirmation replies ask for missing reminder content without claiming it was set. Running replies describe work in progress without claiming a completed draft.",
+  "replies": [
+    {
+      "case": 0,
+      "context": {
+        "situation": "their very first minutes with you; introduce yourself warmly",
+        "their_name": "Amira",
+        "what_you_do": "listen, remember what matters, and handle errands with approval"
+      },
+      "reply": "hi Amira, I'm Anticipy. I'm here to listen, remember what matters, and handle the errands once you give the word."
+    },
+    {
+      "case": 0,
+      "context": {
+        "situation": "their very first minutes with you; introduce yourself warmly",
+        "their_name": "Amira",
+        "what_you_do": "listen, remember what matters, and handle errands with approval"
+      },
+      "reply": "hi Amira, i'm Anticipy. i'm here to listen, remember what matters to you, and handle your errands once you give the word."
+    },
+    {
+      "case": 0,
+      "context": {
+        "situation": "their very first minutes with you; introduce yourself warmly",
+        "their_name": "Amira",
+        "what_you_do": "listen, remember what matters, and handle errands with approval"
+      },
+      "reply": "hi Amira, i'm Anticipy. i'm here to listen, remember what matters to you, and handle your errands once you give the word."
+    },
+    {
+      "case": 1,
+      "context": {
+        "situation": "acknowledge the task",
+        "goal": "compare the two supplier proposals",
+        "execution": {
+          "status": "queued",
+          "verified_results": []
+        }
+      },
+      "reply": "The comparison of the two supplier proposals is queued up."
+    },
+    {
+      "case": 1,
+      "context": {
+        "situation": "acknowledge the task",
+        "goal": "compare the two supplier proposals",
+        "execution": {
+          "status": "queued",
+          "verified_results": []
+        }
+      },
+      "reply": "The comparison of the two supplier proposals is queued."
+    },
+    {
+      "case": 1,
+      "context": {
+        "situation": "acknowledge the task",
+        "goal": "compare the two supplier proposals",
+        "execution": {
+          "status": "queued",
+          "verified_results": []
+        }
+      },
+      "reply": "The comparison of the two supplier proposals is queued."
+    },
+    {
+      "case": 2,
+      "context": {
+        "situation": "acknowledge the task",
+        "goal": "create a reminder for tomorrow morning",
+        "execution": {
+          "status": "awaiting_confirm",
+          "verified_results": []
+        }
+      },
+      "reply": "i can set up a reminder for tomorrow morning. what do you need it to say?"
+    },
+    {
+      "case": 2,
+      "context": {
+        "situation": "acknowledge the task",
+        "goal": "create a reminder for tomorrow morning",
+        "execution": {
+          "status": "awaiting_confirm",
+          "verified_results": []
+        }
+      },
+      "reply": "i can set up a reminder for tomorrow morning. what do you need it to say?"
+    },
+    {
+      "case": 2,
+      "context": {
+        "situation": "acknowledge the task",
+        "goal": "create a reminder for tomorrow morning",
+        "execution": {
+          "status": "awaiting_confirm",
+          "verified_results": []
+        }
+      },
+      "reply": "i can set up a reminder for tomorrow morning. what do you need it to say?"
+    },
+    {
+      "case": 3,
+      "context": {
+        "situation": "acknowledge the task",
+        "goal": "draft a reply to the client",
+        "execution": {
+          "status": "running",
+          "verified_results": []
+        }
+      },
+      "reply": "The draft reply to the client is in progress."
+    },
+    {
+      "case": 3,
+      "context": {
+        "situation": "acknowledge the task",
+        "goal": "draft a reply to the client",
+        "execution": {
+          "status": "running",
+          "verified_results": []
+        }
+      },
+      "reply": "The draft reply to the client is in progress."
+    },
+    {
+      "case": 3,
+      "context": {
+        "situation": "acknowledge the task",
+        "goal": "draft a reply to the client",
+        "execution": {
+          "status": "running",
+          "verified_results": []
+        }
+      },
+      "reply": "i'm drafting the reply to the client now."
+    }
+  ]
+}

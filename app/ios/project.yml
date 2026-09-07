@@ -841,13 +841,12 @@ settings:
     #      who types a sentence and watches it vanish has had no
     #      acknowledgement at all, which is a send with no receipt and a
     #      different bug from this one.
-    # 159: NO BEHAVIOUR CHANGE. PocketBase is gone (2026-09-07): ten files'
-    #      comments that cited backend/pb_hooks/*.pb.js or described PocketBase
-    #      as the backend now name the Cloudflare Worker file that enforces the
-    #      same rule. The number moves because the bytes did — the build-number
-    #      leg is strict on purpose — and nothing on the phone behaves
-    #      differently.
-    CURRENT_PROJECT_VERSION: "159"
+    # 161: Keep Send above the keyboard, make long answers scrollable, preserve
+    #      typed replies and task provenance, move speaker inference off the UI
+    #      thread, and ask the model before offering optional device context.
+    # 162: Follow an explicitly sent reply, keep typed answers out of the
+    #      ambient count, and offer context on a fresh account's first line.
+    CURRENT_PROJECT_VERSION: "165"
     DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: NO
@@ -900,7 +899,7 @@ targets:
         # literal from a Mac one, and two products answering "which build
         # are you holding" with different numbers is the exact disease this
         # gate exists to prevent.
-        CURRENT_PROJECT_VERSION: "159"
+        CURRENT_PROJECT_VERSION: "165"
         DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_ENTITLEMENTS: ../macos/AnticipyMac/AnticipyMac.entitlements

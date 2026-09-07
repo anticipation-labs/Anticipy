@@ -36,11 +36,13 @@ class FakeLLM:
     """
 
     def __init__(self, consolidations=None, same_verdicts=None,
-                 relations=None, answer_n=None):
+                 relations=None, answer_n=None, vetoes=None, resolutions=None):
         self.consolidations = list(consolidations or [])
         self.same_verdicts = list(same_verdicts or [])
         self.relations = list(relations or [])
         self.answer_n = answer_n
+        self.vetoes = list(vetoes or [])
+        self.resolutions = list(resolutions or [])
         self.calls: list[tuple[str, str]] = []
 
     # **kw, not a pinned signature: brain.llm.LLM.chat grew an `aux` flag
@@ -49,6 +51,10 @@ class FakeLLM:
     # the dedup silently stopped happening and the test said `0 == 1`.
     def chat(self, system: str, user: str, temperature: float = 0.1, **kw) -> _Reply:
         self.calls.append((system, user))
+        if "stored veto_note" in system:
+            return _Reply(json.dumps({"coverage": self.vetoes.pop(0) if self.vetoes else "unknown"}))
+        if "Which ONE open commitment" in system:
+            return _Reply(json.dumps(self.resolutions.pop(0) if self.resolutions else {"n": None, "resolution": "unknown"}))
         if "distill" in system:
             payload = (self.consolidations.pop(0)
                        if self.consolidations else {"facts": []})
@@ -171,12 +177,13 @@ class FakeExtractor:
 
     def __init__(self, people=(), places=(), topics=(), commitment=None,
                  commitment_to=None, completed=None, per_line=None,
-                 mode="openrouter"):
+                 mode="openrouter", resolution=None):
         self.default = {"people": list(people), "places": list(places),
                         "topics": list(topics), "commitment": commitment,
                         "commitment_to": commitment_to, "completed": completed}
         self.per_line = dict(per_line or {})
         self.mode = mode
+        self.resolution = resolution
         self.lines: list[str] = []
 
     def payload_for(self, line: str) -> dict:
@@ -187,6 +194,8 @@ class FakeExtractor:
         return dict(self.default)
 
     def chat(self, system: str, user: str, temperature: float = 0.1, **kw):
+        if "Which ONE open commitment" in system:
+            return _ExtractReply(json.dumps(self.resolution or {"n": None, "resolution": "unknown"}), mode=self.mode)
         if EXTRACT_KEY not in (system or ""):
             return _ExtractReply("{}", mode=self.mode)
         self.lines.append(user)

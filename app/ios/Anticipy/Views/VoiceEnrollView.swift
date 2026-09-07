@@ -21,7 +21,7 @@ struct VoiceEnrollView: View {
     @State private var remaining: Double = 0
     @State private var ticker: Timer?
 
-    private enum Phase { case intro, recording, done, failed, unavailable }
+    private enum Phase { case intro, recording, processing, done, failed, unavailable }
 
     var body: some View {
         ZStack {
@@ -79,6 +79,9 @@ struct VoiceEnrollView: View {
                     .font(.system(size: 15))
                     .foregroundStyle(Theme.muted)
             }
+        case .processing:
+            Label("Learning your voice…", systemImage: "waveform")
+                .font(.headline).foregroundStyle(Theme.text)
         case .done:
             VStack(alignment: .leading, spacing: Theme.Space.base) {
                 Text("I've got you.")
@@ -128,6 +131,8 @@ struct VoiceEnrollView: View {
                     .font(.system(size: 13))
                     .foregroundStyle(Theme.muted)
             }
+        case .processing:
+            ProgressView().accessibilityLabel("Learning your voice")
         case .done:
             primary("Done") { dismiss() }
         case .failed:
@@ -172,9 +177,11 @@ struct VoiceEnrollView: View {
     private func finish() {
         let samples = session.speakerTagger.drainWindow()
         session.listener.stopAfterEnrollment()
-        let ok = session.speakerTagger.enrollOwner(from: samples)
-        Haptics.taskDone()
-        phase = ok ? .done : .failed
+        phase = .processing
+        session.speakerTagger.enrollOwner(from: samples) { ok in
+            Haptics.taskDone()
+            phase = ok ? .done : .failed
+        }
     }
 
     private func stop() {

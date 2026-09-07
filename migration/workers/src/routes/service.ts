@@ -286,7 +286,7 @@ export async function phoneRemove(req: Request, env: ServiceEnv): Promise<Respon
   const auth = await verifyToken(env, req.headers.get("Authorization") || "");
   if (!auth) return signIn();
   // Structurally unreachable while `owners` is the only auth collection
-  // (pb/auth.ts refuses any other collectionName outright), and kept because
+  // (api/auth.ts refuses any other collectionName outright), and kept because
   // it is the documented refusal and the day a second auth collection exists
   // is the day its absence would be a hole rather than dead code.
   if (auth.claims.collectionName !== "owners") {
