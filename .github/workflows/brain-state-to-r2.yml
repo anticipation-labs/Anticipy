@@ -1,10 +1,24 @@
 name: Brain state → R2 (Railway volume migration)
 
-# Copies every owner's brain state (memory.db + clock_state.json) off the
+# Copies an owner's brain state (memory.db + clock_state.json) off the
 # Railway `worker` volume into the R2 bucket anticipy-owner-state, with SHA-256
 # round-trip verification. This is the "one-way door" from
 # migration/BRAIN-ON-CONTAINERS.md §5.4 — done in CI so the customer memory
 # NEVER touches a laptop, only the ephemeral GitHub runner.
+#
+# WHICH OWNERS, AND WHEN — research/2026-09-05-brain-of-record.md, not
+# restated here beyond the rule this job enforces: an owner is heard by
+# exactly one brain, the one attached to the backend their phone posts to.
+# While an owner is on Railway, Railway's memory.db is the truth and this job
+# may refresh R2's copy as often as it likes. The moment an owner is named in
+# ANTICIPY_SERVE_OWNERS (migration/config/wrangler.brain.jsonc) the Cloudflare
+# container is the writer — it snapshots memory.db to the same R2 key every
+# 60 s (brain/container_entry.py) — and a copy from Railway would overwrite
+# everything that brain has learned since. So this job REFUSES to put an
+# object for any owner on that allowlist (audit F20, 2026-09-05). The order
+# at cutover is therefore: run this job for the owner → add them to the
+# allowlist → dispatch brain-deploy.yml, whose pre-flight requires the R2
+# object to exist.
 #
 # SAFETY PROPERTIES (do not weaken):
 #   * READ-ONLY on Railway. It never deletes the volume. The runbook keeps the
@@ -13,13 +27,20 @@ name: Brain state → R2 (Railway volume migration)
 #     FAILS the job loudly rather than continuing.
 #   * PRAGMA integrity_check on every memory.db before upload; a corrupt source
 #     is reported and skipped, never silently uploaded.
-#   * Idempotent: re-running overwrites the same keys with the same bytes.
+#   * Idempotent while Railway is the sole writer for that owner: re-running
+#     overwrites the same keys with the same bytes. Once the container writes
+#     the key, this job does not (the allowlist refusal above).
+#   * Every line of every `run:` block stays indented under its block scalar.
+#     Audit F18: two heredoc bodies written at column 1 ended the block
+#     scalar early, GitHub could not parse the file, and a workflow declared
+#     dispatch-only fired on EVERY push — fifty red runs in a day, zero of
+#     them dispatched. Prove it parses before pushing:
+#     ruby -ryaml -e 'YAML.load_file(".github/workflows/brain-state-to-r2.yml")'
 #
 # It does NOT stop the Railway supervisor and does NOT deploy the container.
 # Per the runbook, stopping the supervisor + the founder's manual copy + the
 # container deploy are LATER, supervised steps. This job is only the safe
-# copy+verify half, and it can be run repeatedly to keep R2 fresh until the
-# real cutover window.
+# copy+verify half.
 #
 # REQUIRED REPO SECRETS (add in GitHub → Settings → Secrets → Actions):
 #   RAILWAY_TOKEN                 - Railway project/account token (read the volume)
@@ -33,6 +54,10 @@ on:
       confirm:
         description: 'Type MIGRATE to run the copy'
         required: true
+        default: ''
+      owners:
+        description: 'Comma-separated owner ids to carry. Empty = every owner on the volume that is NOT on the Cloudflare allowlist.'
+        required: false
         default: ''
 
 concurrency:
@@ -50,7 +75,12 @@ jobs:
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       R2_BUCKET: anticipy-owner-state
       R2_PREFIX: owners
+      OWNERS_INPUT: ${{ github.event.inputs.owners }}
     steps:
+      # The allowlist is read from the tree this run was dispatched on, the
+      # same file brain-deploy.yml reads for its pre-flight.
+      - uses: actions/checkout@v4
+
       - name: Tooling
         run: |
           npm i -g @railway/cli@latest wrangler@4 >/dev/null 2>&1
@@ -71,32 +101,40 @@ jobs:
       - name: Integrity-check every memory.db, then upload + verify each file
         run: |
           set -euo pipefail
-          fail=0; uploaded=0
-          sha() { python3 - "$1" <<'PY'
-import hashlib,sys
-print(hashlib.sha256(open(sys.argv[1],'rb').read()).hexdigest())
-PY
-          }
+          fail=0; uploaded=0; refused=0; skipped=0
+          sha() { python3 -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())' "$1"; }
+          # Owners the Cloudflare brain serves: their R2 state is the
+          # container's to write, never this job's (see the header).
+          allow=$(grep -oE '"ANTICIPY_SERVE_OWNERS": *"[^"]*"' migration/config/wrangler.brain.jsonc | sed -E 's/.*: *"([^"]*)"/\1/' | tr ',' ' ')
+          wanted=$(echo "$OWNERS_INPUT" | tr ',' ' ')
+          echo "Cloudflare allowlist (refused here): ${allow:-<none>}"
+          echo "Owners asked for: ${wanted:-<every owner on the volume not on the allowlist>}"
           for dir in stage/owners/*/; do
             ref=$(basename "$dir")
             # guard: owner refs are the D1 id shape; skip anything odd
             if ! echo "$ref" | grep -qE '^[A-Za-z0-9_-]{8,64}$'; then
               echo "::error::skipping suspicious owner ref '$ref'"; fail=1; continue
             fi
+            if [ -n "$wanted" ] && ! printf ' %s ' $wanted | grep -q " $ref "; then
+              skipped=$((skipped+1)); continue
+            fi
+            if printf ' %s ' $allow | grep -q " $ref "; then
+              if [ -n "$wanted" ]; then
+                echo "::error::REFUSING $ref: it is on ANTICIPY_SERVE_OWNERS, so the Cloudflare brain is writing its R2 state; a copy from Railway would overwrite what that brain has learned (research/2026-09-05-brain-of-record.md)"
+                refused=$((refused+1))
+              else
+                echo "skip $ref: served by the Cloudflare brain, R2 is its own"
+                skipped=$((skipped+1))
+              fi
+              continue
+            fi
             for f in memory.db clock_state.json; do
               src="$dir$f"
               [ -f "$src" ] || continue
-              # SQLite integrity check for the DB
+              # SQLite integrity check for the DB. A source that cannot be
+              # opened prints its exception's last line, which is not "ok".
               if [ "$f" = "memory.db" ]; then
-                res=$(python3 - "$src" <<'PY'
-import sqlite3,sys
-try:
-    c=sqlite3.connect(f"file:{sys.argv[1]}?mode=ro",uri=True)
-    print(c.execute("PRAGMA integrity_check").fetchone()[0]); c.close()
-except Exception as e:
-    print(f"ERROR:{e}")
-PY
-)
+                res=$(python3 -c 'import sqlite3,sys; c=sqlite3.connect("file:"+sys.argv[1]+"?mode=ro",uri=True); print(c.execute("PRAGMA integrity_check").fetchone()[0]); c.close()' "$src" 2>&1 | tail -1 || true)
                 if [ "$res" != "ok" ]; then
                   echo "::error::integrity_check FAILED for $ref/$f: $res"; fail=1; continue
                 fi
@@ -116,16 +154,25 @@ PY
             done
           done
           echo "----"
-          echo "uploaded+verified files: $uploaded"
+          echo "uploaded+verified files: $uploaded; owners skipped: $skipped; owners refused: $refused"
+          if [ "$refused" -ne 0 ]; then
+            echo "::error::an owner named in the input is served by the Cloudflare brain — nothing was written for them; remove them from ANTICIPY_SERVE_OWNERS first if Railway really is their brain of record"
+            exit 1
+          fi
           if [ "$fail" -ne 0 ]; then
             echo "::error::one or more files failed integrity or SHA verification — DO NOT treat this migration as complete"
             exit 1
           fi
-          echo "All owner state copied to R2 and verified. Railway volume left untouched."
+          if [ -n "$wanted" ] && [ "$uploaded" -eq 0 ]; then
+            echo "::error::none of the owners asked for exist on the Railway volume — nothing was copied"
+            exit 1
+          fi
+          echo "Owner state copied to R2 and verified. Railway volume left untouched."
 
       - name: Report
         if: always()
         run: |
           echo "Per the runbook (§10.9): keep the Railway volume in place, unmounted,"
           echo "for two weeks. This job copies+verifies only; it does not stop the"
-          echo "supervisor or delete anything."
+          echo "supervisor or delete anything. An owner moves to the Cloudflare brain"
+          echo "only by the step in research/2026-09-05-brain-of-record.md."
