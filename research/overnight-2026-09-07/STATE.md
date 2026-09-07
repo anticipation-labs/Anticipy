@@ -1,6 +1,37 @@
 # Anticipy overnight repair — 7 September 2026
 
-## Latest checkpoint — 2026-09-07 12:43 UTC
+## Latest checkpoint — 2026-09-07 13:19 UTC
+
+- iOS164 committed10c8eb20ec240f47109c2f57b057dc869e3baba4, pushed.
+  CI34125816490 running; ASC164 not yet queried. Full local suites passed,
+  simulator build succeeded. New capture/pause/resume/long result/relaunch
+  checked. Simulator back on Today with microphone stopped. See ui-164.md.
+- c67 brain is LIVE,8/8 workers/source6746edd8519d8d78a17fd98cb204680c14c97b617c1f934e0b5d93167f603327.
+- Queue browser comparison PASS through shipping background poll, pairing,
+  lease/claim, four live model calls, DOM clicks and independent receipt.
+ 53.258seconds. Fixture CLEANED UP, old credential403. Personal extension
+  remains0.15; browser-settings restriction still applies. Sanitized evidence
+  browser-queue-results.json; raw screenshots/base64 remain local only.
+- Local command migration applied. UI brain restarted at c67, session54948.
+  Local Wrangler89202 on8787, model gateway60349 on8790.
+- Crossdomain c67 batch STOPPED after shared premature-approval defect:
+  eight completed profiles1,2,3,4,5,6,8,9;10/11 interrupted. Do not call this
+  full50 coverage. First six stopped before research/drafting. Status evidence
+  crossdomain-c67-status.json. Its processes are terminated.
+- UNCOMMITTED effect repair in brain/effects.py,anticipy_core.py,orchestrator.py,
+  hands.py. Deletes consequence verb regex and calculator fallback; classifies
+  actual effect using full context, not hypothetical eventual action.
+  Real model20contrasts allPASS. Whole-worker replay1/2 running session3468,
+  labelovernight-effects-flow-1; freeze brain source until both finish.
+- First full Python run42failures: several obsolete prose-based test fixtures,
+  dropped effect in quiet paths, and accidentally removed mouth regex constants.
+  Constants restored and quiet paths now carry declaration. Tests/retirement
+  registry still need repair; do not deploy this uncommitted change yet.
+- Gateway observed10.116832268 before this round; native ceiling~4.15.
+  Never reset ledgers. Still within original50USD authorization.
+
+## Previous checkpoint — 2026-09-07 12:44 UTC
+
 
 - iOS163 commit970f31d shipped through CI34120389837. Independent ASC34121890032
   confirms VALID, internal IN_BETA_TESTING, account ok***@icloud.com in Internal.
@@ -18,6 +49,21 @@
   Full Python3090passed2skipped; API full6+typecheck6 and real model5(11cases).
   New table is included in erasure triggers/cleanup and CI migration step.
   Must deploy API first, verify live, then brain cap100 and verify8/8 source.
+- c67a229 API deployed34122927532 with34 live checks. Actual live command
+  proof overnight-connection-live-1 passes5/5: list, real Gmail link, contextual
+  GoogleCalendar link, quoted-command refusal, targeted-card answer preserved.
+  Replays identical, exactlyone app reply each, test account DELETED. Native
+  ceiling now reserves3.757278 total, gateway observed9.299015 before newcorpus.
+- Brain34123095901 completed successfully; its live fleet log is
+  overnight-connection-brain-deploy.log. Read verified source before reporting.
+- Local migration applied via binding DB (dev database name is staging); local
+  command path is available.40development transcripts now running session4897,
+  label overnight-crossdomain-c67, parallel2, timeout240. Do not alter brain
+  source while it is sampling if comparing one release. No execution arms.
+- Fresh live browser fixture overnight-browser-queue-1 MUST BE CLEANED UP.
+  It has one read-only canonical queued comparison workflow. Full background
+  poll proof session52993, logovernight-browser-live-queue-1.log; proof adds
+  --queue to run_real_browser, actual claims/leases/rowwrites, isolatedChrome.
 - Earlier connection model1–4 found missing minter wiring/SMS dependency and
   an operation-vs-target ambiguity. Model5 actually persists links and passes.
 - Remaining: proactive spoken API offers, draft-before-approval, multistep API,
