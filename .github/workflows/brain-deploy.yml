@@ -160,3 +160,17 @@ jobs:
         run: python3 -m proof.audit.live_schema
       - name: Read container rollout and instance metadata without environment values
         run: python3 -m proof.audit.live_container_inspect
+      - uses: actions/setup-node@v4
+        with: { node-version: '24' }
+      - name: Observe one minute of lifecycle errors without customer content
+        run: |
+          npm ci --prefix migration/workers --ignore-scripts
+          set +e
+          timeout 75s migration/workers/node_modules/.bin/wrangler tail anticipy-brain --format json > "$RUNNER_TEMP/brain-tail.json" 2> "$RUNNER_TEMP/brain-tail-stderr.txt"
+          result=$?
+          set -e
+          if [ "$result" != 0 ] && [ "$result" != 124 ]; then
+            echo "Read-only log observation failed with exit $result"
+            exit "$result"
+          fi
+          python3 proof/audit/container_log_summary.py "$RUNNER_TEMP/brain-tail.json"
