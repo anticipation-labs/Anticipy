@@ -1,0 +1,12 @@
+{
+  "checked_at": "2026-09-07T16:58:27.935117+00:00",
+  "commit": "7a9b61de0d269929d0302fef6f216637fedd170b",
+  "deployment_run": 34144839415,
+  "ok": true,
+  "worker_count": 8,
+  "source_matches": 8,
+  "running": 8,
+  "durable_snapshots_current": 8,
+  "source_sha256": "d82419a4ff10f57c1154badfc3658cb220bb65b8c241175b40e2bd775a9fdc03",
+  "scope": "Live fleet readback, no customer content included."
+}

@@ -8,6 +8,6 @@ The tools can read a connected app, use a paired browser, or ask your phone to u
 
 The overnight work found real failures: a broken SendBlue webhook configuration, a reproduced interface freeze, keyboard overlap, oversized cards, and replies that were generated and then discarded. Build one sixty five is available through internal TestFlight. The audit explains each repair and its evidence.
 
-A live drafting test also returned web instructions and marked the task done. That is false completion, and it still needs fixing. The work is incomplete. Fifty fictional people were tested through planning, not fifty completed real errands. Real phone delivery, broader connected-account execution, and several older reasoning shortcuts still need proof or repair. The report makes those limits visible.
+A live drafting test also returned web instructions and marked the task done. That false completion is now repaired on the tested server path. A live request produced the actual private note, checked it, and returned it to the app. It took eighty three seconds, which is still too slow. The work is incomplete. Fifty fictional people were tested through planning, not fifty completed real errands. Real phone delivery, broader connected-account execution, and several older reasoning shortcuts still need proof or repair. The report makes those limits visible.
 
 This narration uses a computer generated voice.

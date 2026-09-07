@@ -1,66 +1,64 @@
-# Morning status — 7 September 2026, 09:00 Vancouver
+# Morning status — 7 September 2026, updated after the live draft repeat
 
-The request is unfinished. The app has shipped improvements, but production
-acceptance has not passed. This record replaces any inference that a large unit
-suite or50 planning observations proves complete real-world tasks.
+Build165 is available through internal TestFlight. The backend is improved,
+but the full production acceptance is unfinished. Passing individual suites
+and planning traces did not prove enough complete user tasks; the live draft
+failure exposed that gap. Every remaining repair needs an actual end result.
 
-## Available now
-- iOS165, commit844c8a3: CI34138060603 succeeded. Independent Apple queries
-  34139816700 and34140480094 report VALID, Internal IN_BETA_TESTING and the
-  owner's iCloud tester in the group. Physical installation165 not observed.
-- UI fixes across162–165 include reproduced freeze, keyboard obstruction,
-  bounded answers, stable capture history, false contact prompts, quiet-hours
-  visibility and tappable links. Simulator checks, builds and source evidence
-  are recorded in ui-release.md and ui-163/164/165.md.
-- SendBlue live webhook authentication repaired; unsigned403 and signed-body
-  parsing400 observed. No real carrier reply roundtrip was performed.
-- API/brain f988 live missing-Gmail offer:9.37seconds; backlog seven notices
-  verified. Own phone-disabled probe, all created work cancelled.
-- Reply repair05e5ed2 committed and deployed through CI34140365066. At15:58UTC, all8 workers passed actual source/process/durable-snapshot
-  verification. The earlier seven-worker rollout gap resolved; the live input
-  was processed. Evidence: work/audit/overnight-reply-deploy.log.
+## Completed and available
+| Area | What changed | What was actually verified |
+| --- | --- | --- |
+| iPhone interface | Freeze, keyboard obstruction, oversized answers, unstable history, false contact prompts, quiet-hours visibility and tappable links | Simulator interaction/build evidence, source checks, CI; build165 independently read back from Apple |
+| Text transport | Removed active Twilio fallback from API/brain; repaired missing SendBlue webhook authentication | Live unsigned request refused; signed request reached payload parsing. Carrier roundtrip still unproven |
+| Missing connections | A queued task can offer the specific missing app and explain the blocker | Live missing-Gmail offer in9.37s; seven queued browser/phone notices delivered once |
+| Contextual replies | Retain actual clarification/memory answers instead of dropping them in favour of an earlier acknowledgement | Real-model contact and memory contrasts; live missing-name question |
+| Private drafts | Server now produces the artifact and separately checks whether it fulfils the original task | Live app request→queued task→actual note→verified exact-text receipt→app delivery in82.84s; all8 workers on7a9b61d |
+| Browser harness | Pairing, model/DOM interaction and queue/claim/result evidence | Isolated Chrome and synthetic browser task; personal extension installation remains below published version |
+| Audit | Visual architecture, API explanation,50 fictional people and reproducible evidence | PDF and synthetic narration;50 are planning observations, not50 completed errands |
 
-## New live failure: instructions substituted for completed work
-The designated phone-disabled probe asked for a private message draft, with two
-possible Averys and no preferred identity. The actual app reply asked which
-Avery. The worker then produced a web answer about creating a SharePoint draft,
-although SharePoint was never requested, and marked the job done. This is a
-false completion. It is not repaired by the reply-handoff fix.
+The live draft test sent no message and wrote nothing to another app. Its
+fictional phone was disabled and restored; its own task was cancelled after
+measurement. The original false completion remains in the evidence history.
+A short draft taking83seconds remains a performance problem.
 
-Evidence: work/audit/overnight-reply-live-1-followup.json. The first probe report
-has an empty reply list because it filtered parent_line, which ordinary worker
-replies do not populate. Preserve that failed report: the later read used the
-same isolated owner and creation time and recovered both actual outputs.
-The probe cancelled its created job and restored the fictional phone. It sent
-no real-person text. A second context-answer case was not run.
+## Still unfinished, in repair order
+1. Speech interpretation: one ambient conversation with useful private work
+   was wrongly ignored as machine dictation. Active word-count/phrase rules
+   override context, contrary to HARNESS-LAWS. Replace that path with contextual
+   judgement; challenge it with conversation, actual dictation, quotations and
+   mixed quoted content beside valid owner work. No new keyword exceptions.
+2. Texting from end to end: prove an inbound carrier reply resumes the same
+   pending task once, returns the actual result, and exposes deferred/failed/
+   delivered state. Authentication alone did not prove that.
+3. Account and browser execution: verify a connected source read, a completed
+   API task and personal browser pairing. Isolated synthetic browser success
+   does not prove the extension on the owner's Chrome profile works.
+4. Responsiveness and recovery: reduce observed83-second draft latency; exercise
+   network failure, browser closure, duplicate replies, cancellation and restart.
+5. Release only verified repairs through CI and update the evidence. General
+   multi-step API execution, per-task delivery receipts and older semantic
+   shortcuts are still open. No zero-defect or20-day coverage claim is made.
 
-## What the test corpus proved
--50 separate fictional-person ingestion/planning observations, real models,
-  stored contacts and memory, external execution arms disabled.
--3109 Python checks passed,2 skipped. This does not supersede live failures.
--12 ambient conversations:11 planning outcomes observed; one private volunteer
-  draft was wrongly ignored as dictation. Seven quiet cases stayed quiet.
--Actual browser model/DOM and full queued synthetic browser task proofs exist;
-  personal installed extension0.15 remains below published0.16 and automated
-  extension management was blocked by the browser security policy.
+## Validation and access
+- Final server-work revision:3,127 Python checks passed,2 skipped; iOS baseline
+  passed.15 real-model server-work contrasts passed, then the live artifact
+  repeat passed. These are different scopes, not interchangeable checkmarks.
+-12 ambient scenarios:11 expected planning outcomes; the private volunteer
+  draft was missed. Seven deliberately quiet scenarios stayed quiet.
+- iOS165: CI34138060603; independent Apple queries34139816700/34140480094
+  reported VALID and Internal IN_BETA_TESTING. Physical installation165 was
+  not observed; the user previously confirmed159 and fresh signup.
+- Sanket:165 attached to private Sanket pilot group, last readback NOT_INVITED
+  and READY_FOR_BETA_SUBMISSION. Apple refused a second submission while
+  another build in the train was in review. External installation is not ready.
+- Browser extension0.16 is published; personal Chrome0.15 was observed. Browser
+  security policy blocked automated extension management; it was not bypassed.
+- Paid-test ledgers remain preserved within theUS$50 authorization. Current
+  operating ceilings are35 gateway +14 native =49; reservations are not spend.
 
-## Finish in this order
-1. DONE: independently checked CI source/process/snapshot evidence;8/8 healthy
-   at15:58UTC. Preserve the earlier rollout gap as history, not an open failure.
-2. Fix task routing and outcome verification so a requested artifact/action
-   cannot be completed by a web how-to answer. Reproduce this exact live trace,
-   then challenge with unrelated drafting/research/API/browser tasks.
-3. Correct the dictation-versus-observed-conversation context distinction using
-   context/examples/model judgement. Rerun the failed ambient case plus contrasts.
-4. Exercise one complete phone reply → same task → actual result, then real
-   connected-source access and personal browser pairing. Carrier receipts,
-   compound preparation and legacy semantic shortcuts remain explicit work.
-5. Ship only verified changes through CI and update this audit from actual
-   observations. Do not ask the owner to rediscover known defects.
+See server-work.md and server-work-live-results.json for the latest completed
+repair; STATE.md preserves the detailed sequence. The repair heartbeat remains
+active. This is a progress report, not production certification.
 
-Sanket:165 attached to private Sanket pilot group; readback NOT_INVITED and
-READY_FOR_BETA_SUBMISSION. Apple refused submission because another build in
-that train is in review. External installation is not available yet.
-
-The PDF and89-second computer-generated narration explain the harness and
-limitations. The repair heartbeat remains active; the work is not marked done.
+Latest independent Apple read: CI34145587025,16:58UTC, still165 VALID / Internal
+IN_BETA_TESTING; Sanket NOT_INVITED / external READY_FOR_BETA_SUBMISSION.

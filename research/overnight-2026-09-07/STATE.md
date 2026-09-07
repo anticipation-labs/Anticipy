@@ -577,3 +577,36 @@ and held-out/API-connection tests, clean synthetic accounts, update visual PDF.
   app-input→queuedjob→artifactreceipt repeat on designatedphone-disabledprobe.
 - Gateway observed17.61, cap35; native reserved11.631602cap12. Nextliveproof may
   raise nativeceiling14 and reserve2;35+14=49 remainswithinuser50. Neverreset.
+
+## 2026-09-07 16:50 UTC — server artifact release in progress
+- Candidate7a9b61d committed/pushed; CI34144839415 deploying. Final3127pass,
+ 2skipped; pre-edit iOS logic allpassed;15/15realmodelcontrasts. No iOSchange.
+- Do not claimliveuntil allsource/snapshots and --artifact probeactualresult.
+  Currentliveversiontag7a9b61d; fleetwarming. Testownerphone presentlyrestored.
+- NEXT ambientrootconfirmed: anticipy_core.looks_like_dictation useswordcount,
+ filler/instructionphrasecounts; hear() assignsdictated and _decide adds a
+ 'pre-check' asserting machine dictation. TRIAGE_SYSTEM also says nobody speaks
+ clean paragraphs to a person. Needsmodelcontextclassification replacingactive
+ heuristic+quoted-onlyoverride, with ordinaryspeaker-labelledconversation vs
+ actualauthoredcontentcontrasts. Do not merely add an exception for volunteer
+ text or speaker names. Read1740/3010core andorchestrator129/197.
+
+## 2026-09-07 17:00 UTC — live server artifact proof passed
+- CI34144839415 SUCCESS; live7a9b61d all8 source/process/snapshots current.
+- false-completion-live-artifact-1 actual app_reply→queuedjob→real private
+  note→independent satisfied→exact text digest receipt→app delivered:82.84s.
+  No sends; probe phone restored; own created task cancelled. Preserved raw
+  evidence and committed sanitized server-work-live-results/release records.
+- Actual output reviewed: asks team to review greenfolder byFriday, no howto
+  substitution, no invented app. ValiddateSep11, fixture nameE2E.
+- Latency82.84s remains poor. Broad task correctness not claimed.
+- Nativecap14/reserved13.631602 + gatewaycap35 =49 combined ceiling; preserve.
+- Nextrepair: ambient semantic dictation override identified in core/orchestrator.
+  No ambient source edits yet. Read code/tests before replacing. Full carrier
+  reply/same task/result and personalbrowser connection remain unproven.
+
+- Morning update refreshed with liveproof and fresh ASC34145587025 read.
+  PDF20pages, allpages visually inspected; evidenceindex orphan corrected.
+  Updated synthetic narration97.45s, mean-15.9dB/max-1.9dB.
+  Main task unfinished; existing15min repairheartbeat staysACTIVE.
+  No new ambient source changes in this status continuation.

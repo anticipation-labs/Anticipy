@@ -46,9 +46,27 @@ retrieved source URLs; the text bound is applied before verification and hashing
   proof/audit/run_server_work.py.
 - Final full Python:3,127 passed,2 skipped in56.73seconds, preserved in
   work/audit/false-completion-release-python.log. The pre-edit iOS suite passed.
-  A live whole-worker repeat follows deployment.
+  The live whole-worker repeat passed after deployment (details below).
   Existing simulator/app source remains build165; this change is backend-only.
 
 The ambient dictation miss, broad multi-step API execution, carrier roundtrip,
 per-task delivery receipts and the registered legacy meaning shortcuts are
 separate unfinished work. No phrase list or semantic regex was added here.
+
+## Live repeat, 7 September, 09:56 Vancouver
+CI34144839415 deployed commit7a9b61d. All8 served workers loaded the exact
+source digest, were running, and had current durable snapshots. On the
+designated fictional owner with its phone disabled, an actual app_reply asked
+for a private note about reviewing the green folder by Friday. The live worker
+queued it, composed the actual note, independently judged fulfilment, saved a
+verified receipt whose SHA256 matches the stored text, and delivered the result
+to the app. Source-to-result took82.84seconds. No third-party message or app
+write was performed. The created task was cancelled after measurement and the
+fictional phone restored. Evidence: server-work-live-results.json and
+server-work-live-release.json.
+
+This closes the observed how-to-substituted-for-draft failure for the exercised
+server path. It does not prove all possible task fulfilment or external actions.
+82.84seconds for a short draft is too slow for the desired experience; latency
+remains a separate issue. The result was semantically reviewed, not merely
+accepted because the receipt said verified.
