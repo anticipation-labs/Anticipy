@@ -1,4 +1,4 @@
-# Ask App Store Connect a question. READ ONLY, and manual only.
+# Ask App Store Connect a question, or explicitly invite a tester. Manual only.
 #
 # WHY THIS EXISTS. On 2026-09-06 build 153 was VALID and the owner's phone was
 # on build 88. "VALID" is Apple's verdict on the BYTES — processing finished,
@@ -9,13 +9,11 @@
 # on the development Mac, which is the same reason iOS ships from here rather
 # than from a laptop.
 #
-# WHAT IT WILL NEVER DO ON ITS OWN. It does not attach a build to a group and
-# does not submit anything for review. It CAN add one named person to one named
-# tester group, and that is the only write it has: it is dispatched by hand,
-# with the address typed in, and it refuses unless `confirm` is the literal
-# word INVITE. Apple emails a real human being the moment it succeeds, which is
-# why the confirmation is a typed word rather than a checkbox somebody can
-# leave ticked from last time.
+# A blank confirmation is read-only. INVITE adds one person to an existing
+# group. INVITE_EXTERNAL creates or reuses a private external group, attaches
+# the exact build, adds the named tester and submits beta review if required.
+# Neither invitation path grants an App Store Connect role or enables a public
+# link. See proof/audit/testflight_external.py for the external readback checks.
 name: Ask App Store Connect
 
 on:
@@ -51,7 +49,7 @@ on:
         default: "Internal"
         type: string
       confirm:
-        description: "Type INVITE to actually send the invitation email"
+        description: "INVITE for an existing group; INVITE_EXTERNAL for private external testing; blank only reads"
         required: false
         default: ""
         type: string
@@ -93,6 +91,19 @@ jobs:
             --email "${{ inputs.email }}" \
             --first "${{ inputs.first }}" --last "${{ inputs.last }}" \
             --confirm INVITE
+
+      - name: Prepare private external testing
+        id: external
+        if: inputs.confirm == 'INVITE_EXTERNAL' && inputs.email != ''
+        env:
+          ASC_KEY_PATH: ${{ runner.temp }}/asc/AuthKey.p8
+          TESTFLIGHT_BUNDLE: ${{ inputs.bundle }}
+          TESTFLIGHT_BUILD: ${{ inputs.build }}
+          TESTFLIGHT_GROUP: ${{ inputs.group }}
+          TESTFLIGHT_EMAIL: ${{ inputs.email }}
+          TESTFLIGHT_FIRST: ${{ inputs.first }}
+          TESTFLIGHT_LAST: ${{ inputs.last }}
+        run: python3 proof/audit/testflight_external.py --confirm INVITE_EXTERNAL
 
       - name: Who can install this build
         env:
