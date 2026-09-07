@@ -199,3 +199,17 @@ read/write refusal, account cleanup, invalid tokens and revoked login. This is
 local evidence until the deployment runs. Source: Cloudflare
 [version metadata binding](https://developers.cloudflare.com/workers/runtime-apis/bindings/version-metadata/)
 and [deployments API](https://developers.cloudflare.com/api/resources/workers/subresources/scripts/subresources/deployments/).
+
+
+### Live deletion failure: deployed ledger differs from the fixture schema
+
+CI run 34082618776 deployed API commit 16b0c9d as version
+ada03370-d09c-4f61-9f97-4f0ddd7bdc00. Live signup, login, profile persistence,
+cross-account refusal, generic-delete refusal and malformed-token rejection
+passed. Account erasure returned 503 before any cleanup. Read-only schema run
+34082746364 found all 32 fence triggers present, but the actual purge ledger has
+no created/updated columns; the local generated schema supplied both. The fix
+writes only requested_at/purged_at, the ledger's actual timestamp contract, in
+both the API and memory consumer. A regression now runs against this exact
+column shape. Three phone-less diagnostic accounts remain until cleanup passes.
+The owner account was not changed.

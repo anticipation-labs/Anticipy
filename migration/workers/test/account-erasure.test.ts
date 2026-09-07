@@ -38,6 +38,14 @@ async function erase(r: ReturnType<typeof rig>, provider?: Pick<ComposioConnecti
   }), r.env, provider);
 }
 
+await check("the deployed purge ledger without synthetic autodates supports cleanup", async () => {
+  const r = rig();
+  r.db.db.exec("ALTER TABLE purges DROP COLUMN created; ALTER TABLE purges DROP COLUMN updated;");
+  assert.equal((await erase(r)).status, 200);
+  assert.equal(r.db.rows("SELECT * FROM owners WHERE id = ?", A).length, 0);
+  assert.equal(r.db.rows("SELECT * FROM purges WHERE owner_ref = ?", A).length, 1);
+});
+
 await check("deletion removes all local connection state and preserves another owner", async () => {
   const r = rig();
   for (const ref of [A, B]) {

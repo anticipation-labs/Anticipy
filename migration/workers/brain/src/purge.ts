@@ -69,9 +69,9 @@ export async function drainMemoryPurges(
       await requireLegacyArchiveReview(env.STATE_ARCHIVE, `${archive}/`);
       const now = new Date().toISOString();
       const result = await env.DB.prepare(
-        `UPDATE purges SET memory_purged = 1, purged_at = ?, updated = ?
+        `UPDATE purges SET memory_purged = 1, purged_at = ?
          WHERE id = ? AND NOT EXISTS (SELECT 1 FROM owners WHERE id = ?)`,
-      ).bind(now, now.replace("T", " "), row.id, ref).run();
+      ).bind(now, row.id, ref).run();
       if (result.meta.changes !== 1) throw new Error("purge completion was not recorded");
       purged++;
     } catch (error) {

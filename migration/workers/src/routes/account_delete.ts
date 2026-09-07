@@ -19,7 +19,6 @@ type ErasureProvider = Pick<ComposioConnections, "connections" | "disconnect">;
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), {
   status, headers: { "content-type": "application/json" },
 });
-const pbNow = () => new Date().toISOString().replace("T", " ");
 function pbId(): string {
   const alphabet = "abcdefghijklmnopqrstuvwxyz0123456789";
   return [...crypto.getRandomValues(new Uint8Array(15))]
@@ -78,11 +77,12 @@ export async function accountDelete(
       `SELECT count(*) AS n FROM sqlite_master WHERE type = 'trigger' AND name IN (${triggerNames.map(() => "?").join(",")})`,
     ).bind(...triggerNames).first<{n: number}>();
     if (fence?.n !== triggerNames.length) throw new Error("erasure fence migration missing");
-    const now = pbNow();
+    // The migrated production purge ledger has no PocketBase autodates.
+    // requested_at and purged_at are its authoritative timestamps.
     await env.DB.prepare(
-      `INSERT INTO purges (id, owner_ref, legacy_uuid, requested_at, memory_purged, created, updated)
-       SELECT ?,?,?,?,?,?,? WHERE NOT EXISTS (SELECT 1 FROM purges WHERE owner_ref = ?)`,
-    ).bind(pbId(), ref, row.legacy_uuid || "", new Date().toISOString(), 0, now, now, ref).run();
+      `INSERT INTO purges (id, owner_ref, legacy_uuid, requested_at, memory_purged)
+       SELECT ?,?,?,?,? WHERE NOT EXISTS (SELECT 1 FROM purges WHERE owner_ref = ?)`,
+    ).bind(pbId(), ref, row.legacy_uuid || "", new Date().toISOString(), 0, ref).run();
   } catch {
     return json(503, { ok: false, account_deleted: false,
       message: "Account cleanup could not start. Please try again shortly." });
