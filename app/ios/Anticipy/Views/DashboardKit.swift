@@ -154,7 +154,7 @@ struct CaptureCard: View {
                     HStack(spacing: 12) {
                         ForEach(meta) { chip in
                             Label {
-                                Text(chip.text).font(.system(size: 13))
+                                Text(AssistantMessageText.attributed(chip.text)).font(.system(size: 13))
                             } icon: {
                                 Image(systemName: chip.icon).font(.system(size: 11))
                             }
@@ -424,7 +424,7 @@ struct SaidTurn: View {
                     .foregroundStyle(OnboardTheme.champagneInk)
                     .accessibilityHidden(true)
             }
-            Text(text)
+            Text(AssistantMessageText.attributed(text))
                 .font(.system(size: 16))
                 .foregroundStyle(OnboardTheme.ink)
                 .lineSpacing(3)
@@ -460,7 +460,7 @@ struct QuestionTurn: View {
                 .font(.system(size: 15, weight: .medium))
                 .foregroundStyle(OnboardTheme.champagneInk)
                 .padding(.top, 1)
-            Text(text)
+            Text(AssistantMessageText.attributed(text))
                 .font(.system(size: 16))
                 .foregroundStyle(OnboardTheme.ink)
                 .fixedSize(horizontal: false, vertical: true)
