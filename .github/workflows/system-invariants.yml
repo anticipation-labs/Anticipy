@@ -21,6 +21,7 @@ on:
       - 'research/2026-09-05-composio-connections.md'
       - 'app/ios/Tests/ResetMessageTests.swift'
       - 'app/ios/Anticipy/Backend/ConnectedAppsClient.swift'
+      - 'app/macos/**'
       - '.github/workflows/system-invariants.yml'
   pull_request:
     paths:
@@ -35,6 +36,7 @@ on:
       - 'research/2026-09-05-composio-connections.md'
       - 'app/ios/Tests/ResetMessageTests.swift'
       - 'app/ios/Anticipy/Backend/ConnectedAppsClient.swift'
+      - 'app/macos/**'
       - '.github/workflows/system-invariants.yml'
 
 jobs:
@@ -84,3 +86,55 @@ jobs:
           npm ci --prefix migration/workers/brain
           npm test --prefix migration/workers/brain
           npm run typecheck --prefix migration/workers/brain
+
+  # The Mac recorder's suites (app/macos/Tests/run_all.sh: capture core,
+  # meeting archive, transcript wire). Every one compiles the real production
+  # sources with swiftc and needs no Xcode project, signing or device — but
+  # MeetingArchive targets macOS 26, so the runner selects Xcode 26 exactly as
+  # ios-testflight.yml does. Until this job existed the Mac suites ran only
+  # when a person ran them; the brief on #37 counted five suites written in
+  # one week with no runner, and a suite nobody runs is a comment.
+  mac:
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Xcode 26 (the meeting archive targets the macOS 26 SDK)
+        run: |
+          X26=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
+          test -n "$X26" || { echo "::error::no Xcode 26 on this runner"; exit 1; }
+          sudo xcode-select -s "$X26"
+          xcrun --show-sdk-version
+      - name: Prove Mac recorder invariants
+        run: sh app/macos/Tests/run_all.sh
+      # The suites compile the pure halves with swiftc. Whether the APP still
+      # builds — the xcodegen target's source list, the SwiftUI shell, the
+      # macOS 26 speech APIs — is only answered by xcodebuild, and until this
+      # step nothing answered it before a release. Unsigned on purpose: this
+      # proves the source, mac-release.yml proves the signature.
+      - name: Install xcodegen
+        run: brew install xcodegen
+      - name: The Mac app builds (universal, unsigned)
+        working-directory: app/ios
+        run: |
+          set -o pipefail
+          xcodegen generate
+          xcodebuild -project Anticipy.xcodeproj -scheme AnticipyMac \
+            -configuration Release -destination 'generic/platform=macOS' \
+            -derivedDataPath "$RUNNER_TEMP/mac-derived" \
+            ARCHS='arm64 x86_64' ONLY_ACTIVE_ARCH=NO \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGN_IDENTITY= \
+            build | tail -40
+          app="$RUNNER_TEMP/mac-derived/Build/Products/Release/AnticipyMac.app"
+          test -d "$app" || { echo "::error::no AnticipyMac.app was produced"; exit 1; }
+          test "$(lipo -archs "$app/Contents/MacOS/AnticipyMac")" = "x86_64 arm64"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$app/Contents/Info.plist"
+          # The binary must carry the brain's address and not the retired one.
+          # Into a file, not a pipe: `grep -q` quits on the first match and a
+          # pipefail'd `strings` then dies of SIGPIPE — a pass reported as red.
+          strings "$app/Contents/MacOS/AnticipyMac" > "$RUNNER_TEMP/binary-strings.txt"
+          grep -q 'https://api.anticipy.ai' "$RUNNER_TEMP/binary-strings.txt"
+          if grep -q 'railway.app' "$RUNNER_TEMP/binary-strings.txt"; then
+            echo "::error::the binary still names the retired Railway backend"
+            exit 1
+          fi
