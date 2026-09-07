@@ -64,6 +64,7 @@ import { handsApiTools, HANDS_API_TOOLS_PATH, type HandsApiToolsEnv } from "./ro
 import { adminConnectLink, ADMIN_CONNECT_LINK_PATH, type AdminConnectLinkEnv } from "./routes/admin_connect_link.ts";
 import { adminSmsLines, ADMIN_SMS_LINES_PATH, type AdminSmsLinesEnv } from "./routes/admin_sms_lines.ts";
 import { adminBrainStatus } from "./routes/admin_brain_status.ts";
+import { adminAccountReset } from "./routes/admin_account_reset.ts";
 import { agentRegister, agentKey, agentLlm, agentCaptcha, agentUpgradeCredential, type AgentEnv } from "./routes/agent.ts";
 import {
   serveFile, shareEvidence, depositEvidenceImage, discardEvidenceImage, type AssetEnv,
@@ -202,6 +203,7 @@ export default {
     // The small service routes. /worker/owners returns two fields and nothing
     // else -- it is authorised by a shared token every worker carries.
     if (path === "/admin/brain/status") return adminBrainStatus(request, env);
+    if (path === "/admin/account-reset") return adminAccountReset(request, env as never);
     if (path === "/worker/owners" && method === "GET") {
       return workerOwners(request, env as unknown as ServiceEnv);
     }

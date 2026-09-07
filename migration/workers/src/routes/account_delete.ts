@@ -61,7 +61,12 @@ export async function accountDelete(
   });
   const ref = String(auth.claims.id || "").trim();
   if (!ref) return json(400, { ok: false, message: "No account on that token." });
+  return eraseVerifiedOwner(ref, env, provider);
+}
 
+/** Call only after the public account token or internal operator identity
+ * proof has established the exact canonical owner. Never accept a legacy UUID. */
+export async function eraseVerifiedOwner(ref: string, env: AccountErasureEnv, provider?: ErasureProvider): Promise<Response> {
   const row = await env.DB.prepare("SELECT legacy_uuid FROM owners WHERE id = ?")
     .bind(ref).first<{ legacy_uuid: string }>();
   if (!row) return json(401, { ok: false, message: "Sign in first." });

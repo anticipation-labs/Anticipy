@@ -12,10 +12,11 @@ import urllib.error
 import urllib.request
 
 
-def request(base, method, path, data=None, token=None):
+def request(base, method, path, data=None, token=None, extra_headers=None):
     headers = {"Content-Type": "application/json", "User-Agent": "Anticipy-release-proof/1"}
     if token:
         headers["Authorization"] = "Bearer " + token
+    headers.update(extra_headers or {})
     req = urllib.request.Request(base + path, method=method, headers=headers,
                                  data=None if data is None else json.dumps(data).encode())
     try:
@@ -102,6 +103,28 @@ def prove(base, verify_deployment=False):
         status, _, _ = request(base, "GET", event_path, token=owner["token"])
         check(status in (401, 403, 404), "Old token cannot read deleted data")
         accounts.remove(owner)
+        if os.environ.get("ANTICIPY_INTERNAL_KEY"):
+            # This .invalid owner is excluded from the production brain fleet.
+            # A fictional profile number is identity data only; no text is sent.
+            status, _, _ = request(base, "POST", "/me/profile/upsert", {
+                "name": "Operator erasure fixture", "email": stranger["email"],
+                "phone": "+12025550199", "timezone": "America/Vancouver"}, stranger["token"])
+            check(status == 200, "Operator fixture profile saved")
+            payload = {"owner_ref": stranger["id"], "email": stranger["email"],
+                       "phone": "+12025550199", "confirm": "DELETE PRODUCT ACCOUNT"}
+            header = {"X-Internal-Key": os.environ["ANTICIPY_INTERNAL_KEY"]}
+            status, _, _ = request(base, "POST", "/admin/account-reset", payload)
+            check(status == 401, "Operator erasure refuses an unauthenticated request")
+            status, _, _ = request(base, "POST", "/admin/account-reset",
+                                   payload | {"phone": "+12025550198"}, extra_headers=header)
+            check(status == 409, "Operator erasure refuses mismatched identity")
+            status, body, _ = request(base, "POST", "/admin/account-reset", payload, extra_headers=header)
+            check(status == 200 and body.get("account_deleted") is True,
+                  "Verified operator erasure completed through the same cleanup path")
+            status, _, _ = request(base, "POST", "/api/collections/owners/auth-with-password", {
+                "identity": stranger["email"], "password": stranger["password"]})
+            check(status == 400, "Operator-erased fixture cannot log in")
+            accounts.remove(stranger)
     finally:
         failures = 0
         for owner in accounts:

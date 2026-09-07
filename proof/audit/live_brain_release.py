@@ -31,7 +31,8 @@ def main():
                 continue
         workers = body.get("workers", [])
         matching = [w for w in workers if w.get("source_sha256") == expected
-                    and w.get("child_running") is True and w.get("snapshot_current") is True]
+                    and w.get("child_running") is True and w.get("snapshot_current") is True
+                    and (w.get("models") or {}).get("ANTICIPY_STRONG_MODEL") == "google/gemini-3.1-pro-preview"]
         revision = (body.get("version") or {}).get("tag")
         print(json.dumps({"revision_matches": revision == os.environ["GITHUB_SHA"],
                           "fleet_current": body.get("current"), "fleet_ok": body.get("ok"),

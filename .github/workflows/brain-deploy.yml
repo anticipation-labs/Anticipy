@@ -141,6 +141,8 @@ jobs:
         working-directory: migration/workers
         run: npx --no-install wrangler deploy --config wrangler.jsonc --keep-vars --tag "$GITHUB_SHA"
       - name: Verify the active version and exercise signup, ownership and deletion over the live URL
+        env:
+          ANTICIPY_INTERNAL_KEY: ${{ secrets.ANTICIPY_INTERNAL_KEY }}
         run: python proof/audit/live_api_release.py --base https://api.anticipy.ai --verify-deployment
 
   inspect:
