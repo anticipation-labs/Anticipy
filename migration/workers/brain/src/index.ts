@@ -29,6 +29,8 @@ import { DurableObject } from "cloudflare:workers";
 
 export interface BrainEnv {
   DB: D1Database;
+  OWNER_STATE: R2Bucket;
+  STATE_ARCHIVE: R2Bucket;
   OWNER_BRAIN: DurableObjectNamespace<OwnerBrain>;
   BRAIN_SUPERVISOR: DurableObjectNamespace<BrainSupervisor>;
 
