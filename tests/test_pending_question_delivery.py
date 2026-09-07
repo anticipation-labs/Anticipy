@@ -81,6 +81,22 @@ def test_authorized_executor_question_is_a_reply_even_at_night(delivery):
     assert delivery.slots == []
 
 
+def test_directly_requested_clarification_is_not_deferred_as_proactive(delivery):
+    delivery.jobs = [question(params='{"_question_invited":true}')]
+    delivery.night = True
+    W.ask_about_stuck_jobs(delivery.brain, None)
+    W.ask_about_stuck_jobs(delivery.brain, None)
+    assert len(delivery.sent) == 1
+    assert delivery.slots == []
+
+
+def test_only_a_structural_invitation_verdict_changes_delivery_posture(delivery):
+    delivery.jobs = [question(params='{"_question_invited":"yes"}')]
+    delivery.night = True
+    W.ask_about_stuck_jobs(delivery.brain, None)
+    assert delivery.sent == []
+
+
 def test_a_conversation_defers_a_proposed_question_without_dropping_it(delivery, monkeypatch):
     delivery.jobs = [question()]
     monkeypatch.setattr(W, "MEETING_ARMED", True)

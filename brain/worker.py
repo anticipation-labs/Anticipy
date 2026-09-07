@@ -4877,7 +4877,15 @@ def ask_about_stuck_jobs(anticipy, convo) -> None:
             # persisted card is the morning outbox. Do not expire its question
             # or pay to rewrite it on every nighttime sweep.
             proposed = job.get("status") == "awaiting_confirm"
-            if proposed and (_in_quiet_hours(time.time()) or MEETING_ARMED):
+            try:
+                question_params = json.loads(job.get("params") or "{}")
+            except (ValueError, TypeError):
+                question_params = {}
+            if not isinstance(question_params, dict):
+                question_params = {}
+            invited = question_params.get("_question_invited") is True
+            proactive = proposed and not invited
+            if proactive and (_in_quiet_hours(time.time()) or MEETING_ARMED):
                 continue
             # Fence the exact persisted question before touching a provider.
             # Hashing raw record values is transport identity, not a judgment
@@ -5026,7 +5034,7 @@ def ask_about_stuck_jobs(anticipy, convo) -> None:
             # Follow-up invitations share the same durable daily outreach
             # allowance as the original proposal and the clock. Directly
             # requested work blocked during execution remains a prompt reply.
-            if proposed and not reserve_uninvited_text(anticipy.owner_ref, "task_question"):
+            if proactive and not reserve_uninvited_text(anticipy.owner_ref, "task_question"):
                 continue
             said = anticipy._voice({
                 "situation": "a task is waiting for the owner's answer. Its recorded "
@@ -5502,7 +5510,13 @@ def main() -> None:
                               f"({placed.get('why')}) seg={placed.get('segment','-')}")
                     except Exception as e:
                         print(f"segment: skipped ({e})")
-                if out.get("anticipy_says"):
+                if out.get("question_job_id"):
+                    # The job is the saved in-app question. Recording it here
+                    # as earlier outreach would make the SMS outbox believe
+                    # that the owner had already been texted and suppress the
+                    # first actual send. The outbox records its own attempt.
+                    print(f"question saved on task {out['question_job_id']}; SMS outbox owns delivery")
+                elif out.get("anticipy_says"):
                     post_event("anticipy_says", out["anticipy_says"],
                                decision=decision,
                                goal=out["decision"].goal or "",

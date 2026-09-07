@@ -239,3 +239,67 @@ and held-out/API-connection tests, clean synthetic accounts, update visual PDF.
 -Next: commit these reply/delivery changes; deploy brain via CI with cap100; check
  live process/source/snapshot identities. Then finish natural speech/50-person/API
  connection proof and remove remaining semantic shortcuts on active paths.
+
+## 2026-09-07 11:00 UTC — natural speech failures reproduced and under repair
+- Brain96e7ef4 deployed by CI34112544081. Live verification observed8/8 running
+  workers with source93b08f99bb48a15302f9b3eb7d4a2994e1d5078b2adf28dcc4bf3a1c5a98e100,
+  current snapshots, correct revision and zero archive cleanup failures.
+- Natural1 completed10 actual worker runs. It reproduced the exact unwanted
+  calendar/accounting task: memory extraction knew the work was complete, but
+  both triage tiers invented unfinished work (strong model explicitly guessed
+  an ASR repair from got into gotta). Another completed conversation triggered
+  an irrelevant memory answer through _RECALL_RE. The direct calendar request
+  was lost when notify_owner could not text, because queue creation depended
+  on successful delivery. These are observed failures, not hypothetical risks.
+- Prompt repair preserves recorded tense/completion; a separate contextual
+  information-request model now replaces the question-mark/briefing early route.
+  Natural2 reproduced the original completed utterance and ordinary completed
+  dialogue with no task and no unsolicited answer (2/2).
+- Natural2 direct calendar request now persisted, but exposed a second defect:
+  unsupported_names considered September an invented person, and reconstruction
+  of Decision dropped touches=world. This produced an absurd which-September
+  question and lost the phone-calendar route. Replacing that active token check
+  with model grounding; transitions preserve all Decision fields via replace.
+- A saved question is now independent of optional SMS. Worker avoids writing
+  an unsent app question into outbound-message history (which otherwise suppresses
+  the first SMS). Its persisted job owns the app card; the durable question
+  outbox owns texting. Tests cover absent phone and failed persistence.
+- Memory rendering no longer drops every JSON/contact fact merely for braces,
+  nor drops a contradictory fact because it contains the utterance's word set.
+  Exact record identity handles self-echo; imported facts remain nonce-fenced.
+- Current work UNCOMMITTED/NOT LIVE. Natural3 is replaying direct calendar and
+  draft requests. Full tests running; old assumptions about inline SMS and word
+  filtering are being replaced with observable delivery/grounding tests.
+- Speech-request audit1 has no unwanted answers, but strict verdict labels
+  exposed ambiguous cases and a Spanish request missed by the cheap tier.
+  Escalate unclear/unavailable to the existing strong tier, then rerun. A safe
+  unclear negative is not a false positive, but provider unavailable never passes.
+
+## 2026-09-07 11:25 UTC — speech release candidate verified
+- Full Python checks:3072 passed,2 skipped (overnight-core-full-6.log).
+  Targeted last changes also passed. No iOS source changed in this release.
+-12 real grounding cases and16 contextual information-request cases pass.
+-10 natural worker transcripts completed (natural-speech-results.json). Nine
+  behave as expected at ingestion/planning; case9 still asks for a known email
+  and for source contents before retrieval. This is an OPEN memory/API issue.
+-Calendar-delivery1 specifically proves the final shared path: one draft
+  device_calendar task, missing-end question, invited=true, source event marked
+  ask, no false outbound event. Invited questions may text at night; proactive
+  proposals defer. Durability/failure/duplicate tests cover this distinction.
+-Live browser fixture prepared on api.anticipy.ai. Signup, registration, exact
+  code lookup, pairing readback and model access passed. The live browser and
+  vision model is Gemini3.1Pro, not the Sonnet used by the earlier local proofs.
+  Through that ACTUAL live proxy, compare passed3 calls/21.8s and appointment
+  passed11 calls/45.1s, exactly one synthetic APPT-1 with correct start/end.
+  Chrome pages are isolated fixtures; extension plumbing is adapted, not an
+  installed-extension claim. Live account MUST be cleaned up after next probes:
+  PYTHONPATH=. python3 proof/audit/prepare_browser_fixture.py cleanup --label overnight-live-browser-1
+-Actual proxy testing reserves a conservative independent $10 ceiling in
+  work/audit/overnight-live-browser-budget.json. Gateway operating cap remains
+  $25, so combined controlled audit spending remains below authorized$50.
+-Sanket:162 attached to private group by34115188213, but Apple refused review:
+  another build in the same train (159) is already in beta review. Do not call
+  this installable externally. Keep checking existing review; no duplicate invites.
+-Next commit/deploy the speech fix; verify8/8 live source/snapshots again.
+  Then memory/source retrieval before questions, remaining active semantic
+  shortcuts, browser response formatting, full queue/API execution and UI QA.

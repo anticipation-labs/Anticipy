@@ -140,6 +140,9 @@ class _LLM:
         if system == WORLD_SYSTEM:
             return types.SimpleNamespace(
                 text=json.dumps({"ends_in_the_world": self.world}))
+        from brain.grounding import SYSTEM as GROUNDING_SYSTEM
+        if system == GROUNDING_SYSTEM:
+            return types.SimpleNamespace(text='{"verdict":"supported"}')
         if system == SUFFICIENCY_SYSTEM:
             return types.SimpleNamespace(
                 text=json.dumps({"can_start": True, "needed": []}))
@@ -339,8 +342,9 @@ def test_voice_survives_an_absent_hands_verdict_when_aimed_at_her(monkeypatch):
     a, fake, sent = _anticipy(monkeypatch, d)
     kinds, may_say = _recorder()
     out = a.hear(LINE, may_say=may_say)
-    assert kinds == ["ask"], kinds
-    assert len(sent) == 1
+    assert kinds == [], "the persisted question uses the durable outbox"
+    assert sent == []
+    assert out["anticipy_says"]
     assert a._pending_ask is None
     jobs = fake.jobs()
     assert len(jobs) == 1 and jobs[0]["status"] == "awaiting_confirm"

@@ -95,15 +95,18 @@ def test_names_are_bounded_and_safe_on_junk():
     assert len(unsupported_names(many, "")) <= 4
 
 
-def test_it_feeds_the_gate_that_turns_act_into_ask():
-    src = open(os.path.join(os.path.dirname(os.path.dirname(
-        os.path.abspath(__file__))), "brain", "anticipy_core.py")).read()
-    call = src.index("unsupported_names(")
+def test_goal_grounding_replaces_the_active_name_word_guard():
+    from pathlib import Path
+    src = (Path(__file__).resolve().parents[1] / "brain/anticipy_core.py").read_text()
+    assert "unsupported_names(decision.goal" not in src
+    assert "unsupported_counts(decision.goal" not in src
+    call = src.index("support = grounding_verdict(model, decision.goal")
     gate = src.index('if decision.decision == "act" and decision.missing:')
-    assert call < gate, "an invented name must become a question, not a booking"
-    block = src[call - 200:call + 500]
-    assert "line" in block and "context" in block, \
-        "it must check against everything she was given, not just the bare line"
+    assert call < gate
+    block = src[call:call + 900]
+    assert '"heard": line' in block and '"conversation": context' in block
+    assert '"current_local_time": self._now_line()' in block
+    assert 'support != "supported"' in block
 
 
 # ------------------------------------------------ invented head counts
@@ -164,12 +167,7 @@ def test_counts_are_bounded_and_safe_on_junk():
     assert len(unsupported_counts("for two and for three and for four and for five", "")) <= 2
 
 
-def test_both_checks_feed_the_same_gate():
-    src = open(os.path.join(os.path.dirname(os.path.dirname(
-        os.path.abspath(__file__))), "brain", "anticipy_core.py")).read()
-    i = src.index("made_up = (unsupported_names")
-    block = src[i:i + 300]
-    assert "unsupported_counts(decision.goal" in block, \
-        "an invented head count must become a question too"
-    gate = src.index('if decision.decision == "act" and decision.missing:')
-    assert i < gate
+def test_fact_guard_covers_every_fact_without_parsing_name_or_count_words():
+    from brain.grounding import SYSTEM
+    assert "actors and quantities" in SYSTEM
+    assert "Capitalized months are not invented people" in SYSTEM
