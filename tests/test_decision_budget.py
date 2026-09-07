@@ -133,7 +133,7 @@ class Transport:
             "settled": json.dumps({"settled": True}),
             "sufficiency": json.dumps({"can_start": True}),
             "calendar": json.dumps({"calendar_write": False}),
-            "read_aloud": json.dumps({"speech": True}),
+            "read_aloud": json.dumps({"verdict": "live_speech", "reason": "Conversation"}),
             "second_look": json.dumps({"owner_committed": True}),
             "same_plan": json.dumps({"same": True}),
             "voice": "want me to go ahead?",
@@ -191,13 +191,14 @@ def test_a_slow_provider_is_cut_at_the_deadline_not_at_the_chain(monkeypatch):
     """50 s a call, under the 60 s inactivity timeout that used to be the
     only bound: today's code walks the whole chain — ten minutes for one
     line. Bounded, the line completes after ceil(150/50) requests, degraded
-    on the side each check already chose, and the held card still lands."""
+    before an unjudged task can be created. A deadline before triage is a
+    retryable worker failure, not permission to invent a held task."""
     slow = Transport({"t": 1000.0}, advance=50.0)
     a, _, queued = _rig(monkeypatch, slow)
-    out = a.hear(LINE)
-    assert out["decision"].decision == "act", out["decision"]
+    with pytest.raises(llm.DeadlineExceeded):
+        a.hear(LINE)
     assert len(slow.asked) <= 3, slow.asked
-    assert queued and queued[0]["hold"] is True, queued
+    assert queued == [], "no triage verdict means no task"
     # The same line, answered instantly, walks well past three: the bound is
     # what cut it, not the chain running out.
     instant = Transport({"t": 0.0})

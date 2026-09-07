@@ -1,0 +1,246 @@
+{
+  "scope": "Real-model destination contrasts; no provider writes, sends or browser actions.",
+  "cases": [
+    {
+      "id": "recorded-volunteer-miss",
+      "model": "deepseek/deepseek-v3.2",
+      "expected": "live_speech",
+      "verdict": "live_speech",
+      "reason": "The conversation involves Casey and Morgan discussing a real-world task (updating a community room location and preparing a draft for volunteers), with explicit instructions about using specific documents and lists, and a request to keep it as a draft for review before sending. This indicates live collaboration and decision-making, not content being authored for another app or assistant.",
+      "passed": true
+    },
+    {
+      "id": "recorded-volunteer-miss",
+      "model": "google/gemini-3.1-pro-preview",
+      "expected": "live_speech",
+      "verdict": "live_speech",
+      "reason": "The recording captures a live conversation between two people discussing a venue change and coordinating the preparation of a draft update.",
+      "passed": true
+    },
+    {
+      "id": "fluent-conversation",
+      "model": "deepseek/deepseek-v3.2",
+      "expected": "live_speech",
+      "verdict": "live_speech",
+      "reason": "The user is requesting a draft for a specific task (describing a venue change) with constraints (use Cedar, keep volunteer schedule unchanged, review before sending), which is a live, independent task directed to the assistant, not content being authored for another app. The earlier conversation context shows a genuine need for an update, reinforcing this as a live request.",
+      "passed": true
+    },
+    {
+      "id": "fluent-conversation",
+      "model": "google/gemini-3.1-pro-preview",
+      "expected": "live_speech",
+      "verdict": "live_speech",
+      "reason": "The speaker is actively requesting the assistant to generate a draft regarding a venue change for their review, which constitutes a live task.",
+      "passed": true
+    },
+    {
+      "id": "numbers-in-conversation",
+      "model": "deepseek/deepseek-v3.2",
+      "expected": "live_speech",
+      "verdict": "live_speech",
+      "reason": "The user is asking a direct question ('Can you compare the included delivery?') in the context of a collaborative task ('We are comparing the supplied supplier quotes together'), indicating a live conversation about an ongoing analysis.",
+      "passed": true
+    },
+    {
+      "id": "numbers-in-conversation",
+      "model": "google/gemini-3.1-pro-preview",
+      "expected": "live_speech",
+      "verdict": "live_speech",
+      "reason": "The speaker is directly asking the assistant to perform a comparison task regarding the supplier quotes.",
+      "passed": true
+    },
+    {
+      "id": "real-identifier",
+      "model": "deepseek/deepseek-v3.2",
+      "expected": "live_speech",
+      "verdict": "live_speech",
+      "reason": "The user is describing a personal need (flight details, rental car reminder) as if making a request or thinking aloud, with no evidence of authoring content for another app.",
+      "passed": true
+    },
+    {
+      "id": "real-identifier",
+      "model": "google/gemini-3.1-pro-preview",
+      "expected": "live_speech",
+      "verdict": "live_speech",
+      "reason": "The speaker is directly asking the assistant to set a reminder for a rental car.",
+      "passed": true
+    },
+    {
+      "id": "quoted-only",
+      "model": "deepseek/deepseek-v3.2",
+      "expected": "authored_content",
+      "verdict": "authored_content",
+      "reason": "The earlier conversation explicitly states the user is reading a fictional parser test case aloud with no task to carry out, so the current words are part of that authored content, not a live request.",
+      "passed": true
+    },
+    {
+      "id": "quoted-only",
+      "model": "google/gemini-3.1-pro-preview",
+      "expected": "authored_content",
+      "verdict": "authored_content",
+      "reason": "The earlier conversation explicitly states the speaker is reading a fictional parser test case aloud with no task to carry out, indicating the current words are just quoted content.",
+      "passed": true
+    },
+    {
+      "id": "quoted-footer-plus-task",
+      "model": "deepseek/deepseek-v3.2",
+      "expected": "live_speech",
+      "verdict": "live_speech",
+      "reason": "The user is making a direct request to summarize approved minutes, while also providing context about a malicious footer and clarifying the actual decision. This indicates a live conversation or task being described to the assistant, not content being authored for another app.",
+      "passed": true
+    },
+    {
+      "id": "quoted-footer-plus-task",
+      "model": "google/gemini-3.1-pro-preview",
+      "expected": "live_speech",
+      "verdict": "live_speech",
+      "reason": "The speaker is directly asking the assistant to perform a task by summarizing minutes and providing context about a malicious footer to ignore.",
+      "passed": true
+    },
+    {
+      "id": "voice-typing",
+      "model": "deepseek/deepseek-v3.2",
+      "expected": "authored_content",
+      "verdict": "authored_content",
+      "reason": "The earlier conversation explicitly states that the user enabled voice typing in an external editor and that what follows is text being entered there, not a request to Anticipy. The current words are consistent with content being authored for that editor, with no independent live task indicated.",
+      "passed": true
+    },
+    {
+      "id": "voice-typing",
+      "model": "google/gemini-3.1-pro-preview",
+      "expected": "authored_content",
+      "verdict": "authored_content",
+      "reason": "The earlier conversation explicitly states the speaker is voice-typing into an editor on their laptop and that the following text is not a request to Anticipy.",
+      "passed": true
+    },
+    {
+      "id": "garbled-device-list",
+      "model": "deepseek/deepseek-v3.2",
+      "expected": "authored_content",
+      "verdict": "authored_content",
+      "reason": "The earlier conversation explicitly states the user is operating a list app by voice and reading its item numbers, with the app applying each change now. The current words are consistent with that activity\u2014reading item numbers and commands for the list app\u2014with no independent live task or conversation directed at Anticipy.",
+      "passed": true
+    },
+    {
+      "id": "garbled-device-list",
+      "model": "google/gemini-3.1-pro-preview",
+      "expected": "authored_content",
+      "verdict": "authored_content",
+      "reason": "The speaker explicitly states in the earlier conversation that they are operating a list app by voice, indicating the current words are commands being dictated directly into that external application.",
+      "passed": true
+    },
+    {
+      "id": "garbled-identifier",
+      "model": "deepseek/deepseek-v3.2",
+      "expected": "authored_content",
+      "verdict": "authored_content",
+      "reason": "The earlier conversation explicitly states the user is dictating entries into a form, and the current words appear to be continuing that dictation task without any independent live conversation or request directed at Anticipy.",
+      "passed": true
+    },
+    {
+      "id": "garbled-identifier",
+      "model": "google/gemini-3.1-pro-preview",
+      "expected": "authored_content",
+      "verdict": "authored_content",
+      "reason": "The earlier conversation explicitly states the speaker is dictating entries into a form that is recording them, indicating the current words are content being authored for that external application.",
+      "passed": true
+    },
+    {
+      "id": "garbled-inbox",
+      "model": "deepseek/deepseek-v3.2",
+      "expected": "authored_content",
+      "verdict": "authored_content",
+      "reason": "The earlier statement explicitly says voice control is active in another app and the user is narrating its fields, and the current words resemble dictation of content (numbers and email instructions) rather than a live conversation or task for Anticipy.",
+      "passed": true
+    },
+    {
+      "id": "garbled-inbox",
+      "model": "google/gemini-3.1-pro-preview",
+      "expected": "authored_content",
+      "verdict": "authored_content",
+      "reason": "The earlier conversation explicitly states that voice control is active in another app and the user is narrating its fields, indicating the current words are dictated content for that external application.",
+      "passed": true
+    },
+    {
+      "id": "french-conversation",
+      "model": "deepseek/deepseek-v3.2",
+      "expected": "live_speech",
+      "verdict": "live_speech",
+      "reason": "The speaker is addressing Camille directly about a missing draft for volunteers, specifying a location (salle C\u00e8dre) and a privacy requirement for review, indicating an ongoing collaborative task or planning discussion, not content being authored for another app.",
+      "passed": true
+    },
+    {
+      "id": "french-conversation",
+      "model": "google/gemini-3.1-pro-preview",
+      "expected": "live_speech",
+      "verdict": "live_speech",
+      "reason": "The context shows a live conversation between colleagues addressing one another to discuss a missing draft, a room assignment, and a review process.",
+      "passed": true
+    },
+    {
+      "id": "thinking-aloud",
+      "model": "deepseek/deepseek-v3.2",
+      "expected": "live_speech",
+      "verdict": "live_speech",
+      "reason": "The speaker is expressing a personal thought about forgetting to compare estimates and stating an intention to work out totals before deciding, which indicates ongoing internal deliberation or self-directed planning, not content being authored for another app.",
+      "passed": true
+    },
+    {
+      "id": "thinking-aloud",
+      "model": "google/gemini-3.1-pro-preview",
+      "expected": "live_speech",
+      "verdict": "live_speech",
+      "reason": "The speaker is expressing their own thoughts and intentions about a pending task to compare estimates.",
+      "passed": true
+    },
+    {
+      "id": "quiet-conversation",
+      "model": "deepseek/deepseek-v3.2",
+      "expected": "live_speech",
+      "verdict": "live_speech",
+      "reason": "The current words describe a personal experience and reflect on a past event, consistent with friends reminiscing in conversation, as indicated by the earlier context.",
+      "passed": true
+    },
+    {
+      "id": "quiet-conversation",
+      "model": "google/gemini-3.1-pro-preview",
+      "expected": "live_speech",
+      "verdict": "live_speech",
+      "reason": "The context indicates two friends are conversing and remembering a completed event, which qualifies as live speech.",
+      "passed": true
+    },
+    {
+      "id": "return-from-dictation",
+      "model": "deepseek/deepseek-v3.2",
+      "expected": "live_speech",
+      "verdict": "live_speech",
+      "reason": "The user explicitly addresses Anticipy with a request to prepare a summary, indicating a live conversation or task directed at the assistant, independent of any previous content authoring.",
+      "passed": true
+    },
+    {
+      "id": "return-from-dictation",
+      "model": "google/gemini-3.1-pro-preview",
+      "expected": "live_speech",
+      "verdict": "live_speech",
+      "reason": "The user explicitly states they have stopped voice typing and directly asks Anticipy to perform a new task.",
+      "passed": true
+    },
+    {
+      "id": "disfluent-dictation",
+      "model": "deepseek/deepseek-v3.2",
+      "expected": "authored_content",
+      "verdict": "authored_content",
+      "reason": "The earlier conversation explicitly states that voice typing is active and the user is entering edits into another assistant, indicating all apparent work is content being authored elsewhere, not a live conversation or task for Anticipy.",
+      "passed": true
+    },
+    {
+      "id": "disfluent-dictation",
+      "model": "google/gemini-3.1-pro-preview",
+      "expected": "authored_content",
+      "verdict": "authored_content",
+      "reason": "The earlier conversation explicitly states that voice typing is active and the subsequent words are edits being entered into another assistant.",
+      "passed": true
+    }
+  ],
+  "passed": true
+}

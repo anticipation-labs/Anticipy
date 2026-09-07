@@ -183,11 +183,12 @@ def test_exact_message_split_survives_two_model_ignores(monkeypatch):
     assert len(notified) == 1
 
 
-def test_exact_message_dialogue_outranks_a_false_dictation_guess(monkeypatch):
+def test_exact_message_dialogue_retains_the_contextual_speech_verdict(monkeypatch):
     import brain.anticipy_core as core
 
     a = Anticipy(memory=Memory(":memory:"), llm=None, owner_id="t")
-    monkeypatch.setattr(core, "looks_like_dictation", lambda _line: True)
+    monkeypatch.setattr(core, "judge_content_context", lambda *_a, **_k:
+                        core.ContentContext("live_speech", "Two people discussing their task"))
     monkeypatch.setattr(a, "_decide", lambda *_args, **_kwargs: Decision(
         decision="ignore", goal="", reason="mistaken for voice typing",
         addressee="dictation", owes="machine"))

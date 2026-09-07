@@ -166,11 +166,14 @@ def run_person(person, label, timeout):
             except subprocess.TimeoutExpired:
                 process.kill()
                 process.wait()
-        for collection in ("events", "jobs", "segments"):
-            data = request("GET", f"/api/collections/{collection}/records", params={
-                "filter": f'owner_ref="{ref}"', "perPage": 500, "sort": "created",
-            })
-            atomic_json(run_dir / (collection + ".json"), data)
+        try:
+            for collection in ("events", "jobs", "segments"):
+                data = request("GET", f"/api/collections/{collection}/records", params={
+                    "filter": f'owner_ref="{ref}"', "perPage": 500, "sort": "created",
+                })
+                atomic_json(run_dir / (collection + ".json"), data)
+        except Exception as error:
+            result.update(state="infrastructure_or_runtime_failure", error="Evidence read failed: " + str(error))
         ledger = json.loads((STATE / "spend.json").read_text())
         calls = [c for c in ledger["calls"] if c.get("audit_run") == audit_run]
         result.update(elapsed_seconds=round(time.monotonic() - started, 2),

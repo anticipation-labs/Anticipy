@@ -30,6 +30,7 @@ from . import pb
 from . import research
 from .spoken_consent import judge as judge_spoken_consent
 from .speech_request import information_request
+from .content_context import judge as judge_content_context, ContentContext
 from .grounding import grounding_verdict
 from .readiness import task_readiness
 from .effects import task_effect
@@ -50,8 +51,6 @@ from .orchestrator import (Brain, Decision, IRREVERSIBLE, ADDRESSEES,
                            PARTY_UNANSWERED, ends_in_the_world,
                            calendar_plan_verdict, CALENDAR_YES,
                            work_is_licensed, LICENCE_YES, plan_is_settled,
-                           read_into_a_machine,
-                           not_speech_evidence,
                            _extract_json)
 
 NAME = "Anticipy"
@@ -161,47 +160,6 @@ def explicitly_new_task(line: str) -> bool:
     return _EXPLICIT_NEW_TASK_RE.search(line or "") is not None
 
 
-# Addressee pre-filter OUTSIDE the model (roadmap §7.1). The obvious case is
-# decided deterministically: a very long, fluent run of instruction-like
-# prose with no interlocutor is the owner dictating to a machine (Wispr Flow
-# into another AI, voice-typing a message) — nobody speaks paragraphs of
-# clean spec at a person. On 2026-08-04 exactly those lines were triaged as
-# work for HER, and the owner got "On it" texts about messages he was
-# dictating to a different assistant. The model also classifies (folded into
-# triage), but for lines this unmistakable her lane must not depend on it.
-DICTATION_MIN_WORDS = 40
-
-# Real speech is disfluent; dictation engines emit clean prose. Any of these
-# marks a line as spoken to the room, not typed by voice.
-_DICTATION_FILLERS_RE = re.compile(
-    r"\b(um+|uh+|erm+|hm+|y'?know|you know|i mean)\b[, ]", re.IGNORECASE)
-
-# Instruction-prose markers: the spec-speak of someone telling a machine (or
-# an absent reader) what to do. Two or more of these in one long fluent run
-# is dictation, not conversation.
-_DICTATION_INSTRUCT_RE = re.compile(
-    r"\b(make sure|please|you should|you need to|i want you to|i need you to|"
-    r"can you|could you|go ahead and|instead of|rather than|"
-    r"it should|that should|this should|so that|"
-    r"(?:add|change|update|fix|remove|create|write|use|rename|delete|keep)\s+"
-    r"(?:a|an|the|that|this|it)\b)", re.IGNORECASE)
-
-# A speaker can put a perfectly actionable sentence inside a document,
-# example, test case, or quotation while explicitly denying that it is an
-# instruction. The embedded imperative is adversarial input to triage: if the
-# model sees "open a claim" more strongly than "quoted material only", speech
-# written for somewhere else becomes a real Anticipy job. This narrow boundary
-# uses only the speaker's explicit non-action words; it never guesses from
-# topic or tone, and direct messages to Anticipy remain authoritative.
-_NON_ACTION_CONTENT_RE = re.compile(
-    r"\b(?:quoted\s+material|(?:a\s+)?quote|(?:an?\s+)?example|"
-    r"(?:a\s+)?hypothetical|sample\s+(?:text|instruction))\s+only\b|"
-    r"\bfor\s+(?:reference|illustration)\s+only\b|"
-    r"\bdo\s+not\s+(?:act\s+on|execute|carry\s+out|start|treat\s+as\s+"
-    r"(?:a\s+)?(?:request|task|instruction))\b",
-    re.IGNORECASE,
-)
-
 # Declarative facts deliberately offered for later recall are memory input,
 # not browser work. Keep this narrow: a leading "for later/reference" plus a
 # copular fact. "Remember to call the dentist" is intentionally excluded; it
@@ -295,25 +253,6 @@ def addressed_by_name(line: str) -> bool:
     """
     text = _ADDRESSES_RE.sub(" ", line or "")
     return re.search(rf"\b{re.escape(NAME)}\b", text, re.IGNORECASE) is not None
-
-
-def looks_like_dictation(line: str) -> bool:
-    """Deterministic pre-filter for the unmistakable case only. Anything it
-    is unsure about returns False and is left to the model's classification —
-    a False here never forces anything, it just declines to override."""
-    text = (line or "").strip()
-    if len(text.split()) < DICTATION_MIN_WORDS:
-        return False
-    if addressed_by_name(text):
-        return False          # she was addressed by name: not dictation
-    if _DICTATION_FILLERS_RE.search(text):
-        return False          # disfluent = spoken to the room
-    return len(_DICTATION_INSTRUCT_RE.findall(text)) >= 2
-
-
-def explicitly_non_action_content(line: str) -> bool:
-    """Did the speaker explicitly label embedded commands as non-actions?"""
-    return _NON_ACTION_CONTENT_RE.search(line or "") is not None
 
 
 def explicitly_for_memory(line: str) -> bool:
@@ -1711,6 +1650,25 @@ class Anticipy:
             if last_heard and len(last_heard) > 2 else ""
         )
         self._last_heard = (line, heard_at, self._source_event_id)
+        # Content destination is meaning, never a word-count or phrase rule.
+        # Explicit app/text input already establishes where it was sent.
+        content = ContentContext("live_speech", "Direct input to Anticipy")
+        if not explicit:
+            content = judge_content_context(self.llm, line, context=context,
+                                            speaker=speaker)
+            strong = getattr(getattr(self, "brain", None), "strong", None)
+            if content.verdict in ("authored_content", "unclear") and strong and strong is not self.llm:
+                content = judge_content_context(strong, line, context=context,
+                                                speaker=speaker)
+        # Only a positive contextual judgement can suppress the entire record.
+        # Mixed quoted content and independent live work must continue to triage.
+        if content.verdict == "authored_content":
+            self._last_addressee = ("dictation", time.time())
+            self._prev = None
+            mem = self.memory.ingest(line, speaker=speaker)
+            return {"memory": mem, "decision": Decision(
+                decision="ignore", goal="", reason=content.reason,
+                addressee="dictation", owes="machine"), "anticipy_says": None}
         # The consent judge sees all words and the whole supplied conversation.
         # Only transport/speaker/meeting evidence routes around it; a word list
         # cannot decide whether speech is eligible to approve a task.
@@ -1727,32 +1685,6 @@ class Anticipy:
                     decision="act", goal=released,
                     reason="contextual owner approval of the unchanged held task",
                     addressee="assistant", owes="owner"), "anticipy_says": None}
-        # Unmistakable dictation is known before anything can answer or act:
-        # a line the owner voice-typed at another machine must not be
-        # answered from memory as if he had asked HER. Explicit lines (he
-        # texted/typed them at her) are never dictation by definition.
-        # Two filters, because they catch opposite shapes. looks_like_dictation
-        # wants a LONG fluent run of instruction-prose (Wispr Flow into another
-        # assistant). The three lines that became real jobs on 2026-08-04 were
-        # the other shape entirely — short, garbled, number-dense fragments —
-        # and it missed all three. read_into_a_machine only spends a model call
-        # when the line carries mechanical evidence, so ordinary speech costs
-        # nothing and never reaches it.
-        non_action_content = not explicit and explicitly_non_action_content(line)
-        dictated = not explicit and (looks_like_dictation(line)
-                                     or non_action_content
-                                     or read_into_a_machine(self.llm, line))
-        # This is stronger than ordinary dictation. The owner explicitly said
-        # the embedded imperative is quotation/example material only, so even
-        # quiet research would violate their words. Remember the line, expose
-        # the boundary in the audit verdict, and do not send it to triage.
-        if non_action_content:
-            mem = self.memory.ingest(line, speaker=speaker)
-            return {"memory": mem, "decision": Decision(
-                decision="ignore", goal="",
-                reason="explicitly labelled quotation/example, not an action",
-                addressee="dictation", owes="machine"),
-                "anticipy_says": None}
         # SHE ASKED. HE ANSWERED OUT LOUD. THAT MUST COUNT.
         #
         # A texted answer reaches a parked job; a SPOKEN one never could —
@@ -1768,7 +1700,7 @@ class Anticipy:
         # own harm: exactly one job may be waiting, it must have asked
         # recently, and the line must either supply what it named or dispute
         # the premise. Anything else goes to triage untouched.
-        if not explicit and not dictated:
+        if not explicit:
             answered = self._spoken_answer_to_parked_work(line, speaker=speaker)
             if answered:
                 return answered
@@ -1800,8 +1732,8 @@ class Anticipy:
         prev = self._prev
         prev_line = prev[0] if prev and time.time() - prev[1] < 120 else None
         # WHO is he talking to? The previous classification rides along
-        # (people don't switch addressee mid-breath) and the deterministic
-        # pre-filter above already marked unmistakable dictation.
+        # (people do not switch addressee mid-breath); current context can
+        # establish a change, including a return from voice-typing.
         last_a = self._last_addressee
         prev_addressee = last_a[0] if last_a and time.time() - last_a[1] < 120 else None
         # A meeting arming kills the parked question: its moment is gone,
@@ -1812,7 +1744,7 @@ class Anticipy:
                   f"{self._pending_ask[0][:60]!r}")
             self._pending_ask = None
         decision = self._decide(line, mem, prev_line=prev_line, convo=context,
-                                prev_addressee=prev_addressee, dictated=dictated,
+                                prev_addressee=prev_addressee, content_context=content,
                                 speaker=speaker, speaker_name=speaker_name,
                                 link_candidates=link_candidates,
                                 mid_conversation=in_conversation(context),
@@ -1832,7 +1764,6 @@ class Anticipy:
             # detector's prose-shape guess. Without this, both halves of
             # “Send X this exact message:” / “yeah, agreed — body” were filed
             # as voice typing and the explicit task vanished completely.
-            dictated = False
             decision = Decision(
                 decision="act", goal=stitched_goal,
                 reason="consequential command continued after recognizer split",
@@ -2022,8 +1953,6 @@ class Anticipy:
         # not a floor.
         if explicit:
             addressee = "assistant"
-        elif dictated:
-            addressee = "dictation"
         else:
             addressee = decision.addressee if decision.addressee in ADDRESSEES else None
         decision.addressee = addressee
@@ -2972,7 +2901,7 @@ class Anticipy:
     def _decide(self, line: str, mem: dict, prev_line: Optional[str] = None,
                 convo: Optional[list[str]] = None,
                 prev_addressee: Optional[str] = None,
-                dictated: bool = False,
+                content_context: Optional[ContentContext] = None,
                 speaker: Optional[str] = None,
                 speaker_name: Optional[str] = None,
                 link_candidates: Optional[list[str]] = None,
@@ -3006,9 +2935,10 @@ class Anticipy:
             # is talking to now, absent positive evidence of a switch.
             if prev_addressee:
                 prompt = f"{prompt}\n(Addressee of the previous line: {prev_addressee})"
-            if dictated:
-                prompt = (f"{prompt}\n(Pre-check: this line reads as machine "
-                          f"dictation — a long fluent run of instruction-prose.)")
+            if content_context and content_context.verdict == "live_speech":
+                prompt += "\n(Contextual destination review: " + json.dumps({
+                    "verdict": content_context.verdict,
+                    "reason": content_context.reason}) + ")"
             # MEASURED, not guessed: a fifth or more of his recent lines were
             # pure acknowledgement, which is what listening sounds like. He is
             # talking WITH someone whose side never reached the microphone.

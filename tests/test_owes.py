@@ -17,7 +17,7 @@ import types
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from brain.anticipy_core import Anticipy, explicitly_non_action_content  # noqa: E402
+from brain.anticipy_core import Anticipy  # noqa: E402
 
 
 class ScriptedLLM:
@@ -200,13 +200,15 @@ def test_the_model_is_actually_asked_the_question():
     assert "WHOSE JOB" in TRIAGE_SYSTEM
 
 
-def test_quoted_material_cannot_become_a_real_job_even_if_triage_says_act():
+def test_quoted_material_cannot_become_a_real_job_even_if_triage_says_act(monkeypatch):
+    import brain.anticipy_core as core
+    monkeypatch.setattr(core, "judge_content_context", lambda *_a, **_k:
+                        core.ContentContext("authored_content", "Entire record is a dictated example"))
     line = (
         "In the note I am writing, include this example as quoted material "
         "only: Open a windshield claim on policy AUTO-25794. Then ask the "
         "team to review the logs before anyone changes production."
     )
-    assert explicitly_non_action_content(line)
     a = build({"decision": "act", "goal": "open windshield claim AUTO-25794",
                "addressee": "assistant", "owes": "owner",
                "reason": "contains an actionable claim request"})

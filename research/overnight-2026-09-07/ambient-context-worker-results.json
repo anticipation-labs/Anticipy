@@ -1,0 +1,151 @@
+{
+  "scope": "12 complete local ingestion/planning worker replays with real models; no external execution proof",
+  "cases": [
+    {
+      "case": "greeting",
+      "expected": "quiet",
+      "jobs": [],
+      "planning_outcome_met": true,
+      "execution_proven": false,
+      "elapsed_seconds": 96.38,
+      "original_observation_state": "observed_needs_semantic_review",
+      "evidence": "work/audit/transcripts/ambient-context-full-2/auditperson0001"
+    },
+    {
+      "case": "already_completed",
+      "expected": "quiet",
+      "jobs": [],
+      "planning_outcome_met": true,
+      "execution_proven": false,
+      "elapsed_seconds": 90.34,
+      "original_observation_state": "observed_needs_semantic_review",
+      "evidence": "work/audit/transcripts/ambient-context-full-2/auditperson0002"
+    },
+    {
+      "case": "historical_disappointment",
+      "expected": "quiet",
+      "jobs": [],
+      "planning_outcome_met": true,
+      "execution_proven": false,
+      "elapsed_seconds": 91.97,
+      "original_observation_state": "observed_needs_semantic_review",
+      "evidence": "work/audit/transcripts/ambient-context-full-2/auditperson0003"
+    },
+    {
+      "case": "fictional_dialogue",
+      "expected": "quiet",
+      "jobs": [],
+      "planning_outcome_met": true,
+      "execution_proven": false,
+      "elapsed_seconds": 104.28,
+      "original_observation_state": "observed_needs_semantic_review",
+      "evidence": "work/audit/transcripts/ambient-context-full-2/auditperson0004"
+    },
+    {
+      "case": "hypothetical",
+      "expected": "quiet",
+      "jobs": [],
+      "planning_outcome_met": true,
+      "execution_proven": false,
+      "elapsed_seconds": 90.2,
+      "original_observation_state": "observed_needs_semantic_review",
+      "evidence": "work/audit/transcripts/ambient-context-full-2/auditperson0005"
+    },
+    {
+      "case": "other_person_promise",
+      "expected": "quiet",
+      "jobs": [],
+      "planning_outcome_met": true,
+      "execution_proven": false,
+      "elapsed_seconds": 94.25,
+      "original_observation_state": "observed_needs_semantic_review",
+      "evidence": "work/audit/transcripts/ambient-context-full-2/auditperson0006"
+    },
+    {
+      "case": "owner_commitment",
+      "expected": "prepare",
+      "jobs": [
+        {
+          "status": "queued",
+          "goal": "prepare a private comparison of the two workshop furniture supplier quotes against the brief"
+        }
+      ],
+      "planning_outcome_met": true,
+      "execution_proven": false,
+      "elapsed_seconds": 116.38,
+      "original_observation_state": "observed_needs_semantic_review",
+      "evidence": "work/audit/transcripts/ambient-context-full-2/auditperson0007"
+    },
+    {
+      "case": "retracted_plan",
+      "expected": "quiet",
+      "jobs": [],
+      "planning_outcome_met": true,
+      "execution_proven": false,
+      "elapsed_seconds": 92.15,
+      "original_observation_state": "observed_needs_semantic_review",
+      "evidence": "work/audit/transcripts/ambient-context-full-2/auditperson0008"
+    },
+    {
+      "case": "draft_boundary",
+      "expected": "prepare",
+      "jobs": [
+        {
+          "status": "queued",
+          "goal": "prepare a draft volunteer update stating the room is Cedar, using the final notice and schedule"
+        }
+      ],
+      "planning_outcome_met": true,
+      "execution_proven": false,
+      "elapsed_seconds": 134.88,
+      "original_observation_state": "infrastructure_or_runtime_failure",
+      "evidence": "work/audit/transcripts/ambient-context-full-2/auditperson0009"
+    },
+    {
+      "case": "corrected_time",
+      "expected": "prepare",
+      "jobs": [
+        {
+          "status": "running",
+          "goal": "prepare a private draft calendar entry for your 'Supplier review' on Thursday, September 10 from 11:00 AM to 12:00 PM Vancouver time"
+        }
+      ],
+      "planning_outcome_met": true,
+      "execution_proven": false,
+      "elapsed_seconds": 130.84,
+      "original_observation_state": "infrastructure_or_runtime_failure",
+      "evidence": "work/audit/transcripts/ambient-context-full-2/auditperson0010"
+    },
+    {
+      "case": "forgotten_live_need",
+      "expected": "prepare",
+      "jobs": [
+        {
+          "status": "queued",
+          "goal": "compare Cedar Kitchen's accessibility info with the booking email to check if the side entrance is step-free"
+        }
+      ],
+      "planning_outcome_met": true,
+      "execution_proven": false,
+      "elapsed_seconds": 114.46,
+      "original_observation_state": "observed_needs_semantic_review",
+      "evidence": "work/audit/transcripts/ambient-context-full-2/auditperson0011"
+    },
+    {
+      "case": "instruction_in_source",
+      "expected": "prepare",
+      "jobs": [
+        {
+          "status": "running",
+          "goal": "summarize the approved club minutes, noting the next meeting on October 8 at 16:00 UTC"
+        }
+      ],
+      "planning_outcome_met": true,
+      "execution_proven": false,
+      "elapsed_seconds": 153.29,
+      "original_observation_state": "infrastructure_or_runtime_failure",
+      "evidence": "work/audit/transcripts/ambient-context-full-2/auditperson0012"
+    }
+  ],
+  "planning_outcomes_met": 12
+}
