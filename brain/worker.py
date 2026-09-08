@@ -4014,10 +4014,10 @@ def resolve_owner_ref(legacy_owner: str = "") -> str:
 
 
 # HOW LONG ONE POLL TURN MAY SPEND HEARING before it goes on to the rest of
-# the turn: handle_inbound — the ONLY path that reads his yes/no to a question
-# she already asked — then the digests, research, stuck-job asks, finished-job
-# and stall reports, and the deafness notice. Every one of those sits behind
-# the transcript loop on this one thread, and until 2026-09-05 (Omi port 06)
+# the turn: digests, research, stuck-job asks, finished-job and stall reports,
+# and the deafness notice. Direct answers now get a turn between speech records;
+# they still cannot interrupt a model decision already in flight. The remaining
+# duties sit behind the transcript loop, and until 2026-09-05 (Omi port 06)
 # nothing bounded it: BATCH=20 lines, each free to spend its whole decision
 # budget, was fifty minutes of not looking at his replies. The honest bound
 # is this figure PLUS the line in flight, which is never abandoned: at most
@@ -4052,6 +4052,32 @@ def fetch_unprocessed(kind: str = "transcript", owner_ref: str = "") -> list[dic
     # lines rather than ordering them.
     items.sort(key=capture_key)
     return items[:BATCH]
+
+
+def fetch_direct_inputs(owner_ref: str) -> list[dict]:
+    """One account's direct conversation, across app and messaging transports.
+
+    Kind/source are transport metadata, never a guess about sentence meaning.
+    Include the main composer's typed transcripts even behind a speech backlog.
+    """
+    if not owner_ref:
+        return []
+    response = backend.get(f"{PB}/api/collections/events/records", params={
+        "filter": f'owner_ref={json.dumps(owner_ref)} && decision="" && '
+                  '(kind="sms_reply" || kind="app_reply" || '
+                  '(kind="transcript" && source="typed"))',
+        "perPage": PAGE, "sort": "created",
+    }, timeout=10)
+    response.raise_for_status()
+    rows = response.json().get("items", [])
+    rows.sort(key=capture_key)
+    return rows[:BATCH]
+
+
+def service_direct_inputs(convo, anticipy) -> None:
+    """Use the existing claim, connection, reasoning and delivery path once."""
+    for event in fetch_direct_inputs(anticipy.owner_ref):
+        handle_inbound(event, convo, anticipy)
 
 
 # How many earlier lines the model is shown to point at. 40 is the window
@@ -5192,6 +5218,9 @@ def main() -> None:
                 # anything, so a tap during the read cannot be undone by the
                 # facts arriving a moment behind it.
                 ingest_read_facts(memory, owner_ref=anticipy.owner_ref)
+            # The owner's direct conversation precedes both initiative and
+            # ambient backlog. No parallel memory access or second reply path.
+            service_direct_inputs(convo, anticipy)
             # The clock: she reviews her open loops on her own schedule and
             # may initiate — rarely, in daytime, rate-limited, gated.
             now = time.time()
@@ -5202,8 +5231,9 @@ def main() -> None:
                 # waiting must be interpreted before the clock can speak from
                 # memory; otherwise her brand-new output can precede and then
                 # falsely echo-match the older input on a replay.
-                has_pending_input = bool(fetch_unprocessed(
+                has_pending_input = (bool(fetch_unprocessed(
                     owner_ref=anticipy.owner_ref))
+                    or bool(fetch_direct_inputs(anticipy.owner_ref)))
                 if not has_pending_input and clock_should_run(now, state):
                     out = anticipy.clock_tick(
                         now, already_reached_out=set(state.get("reached_loop_ids", [])),
@@ -5232,6 +5262,9 @@ def main() -> None:
             release_stranded_claims(anticipy.owner_ref)
             turn_started = time.monotonic()
             for ev in fetch_unprocessed(owner_ref=anticipy.owner_ref):
+                # A reply arriving during the preceding hearing decision must
+                # not wait for the entire five-minute speech batch to finish.
+                service_direct_inputs(convo, anticipy)
                 # BEFORE claim(), so no claimed row is ever abandoned: what is
                 # left keeps decision="" and fetch_unprocessed returns it next
                 # turn in the same capture_key order. Nothing lost, nothing
@@ -5403,7 +5436,7 @@ def main() -> None:
                       f" ({out['decision'].goal or 'no goal'})"
                       f" [{getattr(out['decision'], 'reason', '') or '-'}]")
 
-            # THE one answer path. An owner answers a question by text (Twilio
+            # THE one answer path. An owner answers a question by text (SendBlue
             # webhook -> the Worker -> events) or by typing into the app (the app
             # writes the row itself), and both arrive at the single `on_reply`
             # inside handle_inbound().
@@ -5415,9 +5448,7 @@ def main() -> None:
             # the only resolution. A parallel in-app implementation would have
             # to reimplement release, cancel, refinement and the stuck-task
             # resume, and would drift from this one the first time either moved.
-            for ev in fetch_unprocessed("sms_reply", anticipy.owner_ref) + \
-                    fetch_unprocessed("app_reply", anticipy.owner_ref):
-                handle_inbound(ev, convo, anticipy)
+            service_direct_inputs(convo, anticipy)
 
             # Retry feed replies that have no provider attempt yet. Delivery
             # never re-runs the model, approval handling, or the underlying task.

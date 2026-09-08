@@ -1,0 +1,648 @@
+{
+  "scope": "Bounded reply scheduling and quoted context repair. Simulated clock; real models, local Worker and isolated Chrome. No real provider or carrier claims.",
+  "scheduler": {
+    "baseline_reply_delay_seconds": [
+      300,
+      300
+    ],
+    "candidate_reply_delay_seconds": [
+      0,
+      20
+    ],
+    "one_in_flight_speech_seconds": 20,
+    "test": "tests/test_interactive_priority.py"
+  },
+  "model_runs": [
+    {
+      "label": "reply-priority-context-before",
+      "person": "mina",
+      "source_sha256": "6302c0ab25d82270d26aeb233a4d39f06f2587f05ecd853a99117eaf9e885bb6",
+      "harness_sha256": "b30a76303e870e5bf15f7692e7bca25d9c2d287af86fdb415888986a0f2ccb77",
+      "steps": [
+        {
+          "kind": "ambient_unprocessed",
+          "text": "It’s Mina Chen. Morning, how was the train? Mine stopped between stations again, but I got a seat this time. I was looking at the photographs from the weekend. The one with everyone squinting into the sun is probably my favourite, even though nobody was ready. Anyway, I have about twenty minutes before lunch. I brought food from home; the place downstairs has been closed all week. Let me find the notes from our last conversation because I have had a few different things in my head.\n\nJo and I are getting the studio ready for the autumn display. The Canvas Desk Lamp appears on both https://shop.audit.invalid/lamp and https://outlet.audit.invalid/lamp. We only need one. I keep forgetting which listing is lower; having both listed prices and links together would save me another round of opening tabs. This is only a comparison; I am not buying it today.\n\nHang on, someone is at the door. All right, I’m back. That was a parcel for the other office, so I pointed them downstairs. Where were we? Right, the notes. I have an older printout beside the current one and I keep picking up the wrong sheet. Yesterday was a long day. We got talking after the review and I missed the early train. My colleague said they would sort out their own travel this afternoon. I told them about the station closure, and we spent another five minutes comparing routes. The rain has finally stopped now, which makes a nice change.\n\nA colleague just asked whether I had tried the new lunch place. I haven’t, but apparently the soup is good. We were laughing about the tiny paper cups at the conference last week. I probably had four cups and still wanted a normal coffee. Anyway, that’s where things stand on the work we were discussing. I’m going to leave these notes open while I get something to eat. We can pick the conversation up from there afterward.",
+          "result": null,
+          "elapsed": 1.624997821636498e-06,
+          "jobs": []
+        },
+        {
+          "kind": "text_reply",
+          "text": "Anticipy, compare those two lamp listings and tell me both prices and links. Do not purchase anything.",
+          "result": {
+            "intent": "new_request",
+            "pending_id": null,
+            "changes": null,
+            "acted": null,
+            "reply": "Assuming you mean the lamp listings from your recent browsing, which two links should I compare?"
+          },
+          "elapsed": 68.86234920899733,
+          "jobs": [
+            {
+              "id": "3xph9ijrz3mhuw0",
+              "created": "2026-09-08 00:51:25.967Z",
+              "updated": "2026-09-08 00:51:25.967Z",
+              "goal": "compare the two lamp listings Mina mentioned, retrieve both prices and links, and present them without purchasing",
+              "params": "{\"source\": \"Anticipy, compare those two lamp listings and tell me both prices and links. Do not purchase anything.\", \"now\": \"Right now it is Monday, September 7, 2026, 5:51 PM PDT. Tomorrow is Tuesday, September 8, 2026. Yesterday was Sunday, September 6, 2026. Never write a weekday next to a relative day unless it matches these; if you name a day, name the date with it.\", \"_question_text\": \"Assuming you mean the lamp listings from your recent browsing, which two links should I compare?\", \"_question_invited\": true, \"commitment_id\": 4, \"channel\": \"sms\", \"missing\": [\"Which two lamp listings do you want me to compare?\"], \"assumption\": \"the two lamp listings are the ones Mina has in mind from recent browsing or conversation\", \"_effect\": {\"touches\": \"read\", \"reason\": \"declared during task interpretation\"}, \"_hand\": {\"hand\": \"research\", \"reason\": \"Comparing public product listings and retrieving their prices and links is a read-only lookup that requires no account.\", \"app\": \"\", \"effect\": \"read\", \"asked\": 1, \"tool\": \"\", \"args\": null, \"tool_verdict\": \"\", \"tool_asked\": 0, \"lane\": \"research\"}, \"capture_source\": \"typed\", \"memory\": \"known: My name is Mina Chen; I work as a florist.; known: Our quote reference is WS-42. The lamp budget is CAD 120, including delivery.; known: My studio is called Willow Stem. Jo Patel manages purchasing.; known: Jo uses they/them. My sibling Jo Chen is a different person.\", \"_research_gate\": {\"verdict\": \"not_required\", \"why\": \"lane=research \\u2014 the server's own arm, no browser to hold\"}, \"_workflow\": {\"plan_id\": \"b6e86e6b-1e66-4beb-bf89-4642856396ae\", \"owner_ref\": \"jg7b7n70s5k5k1p\", \"lineage_key\": \"cj8avy3fn785zud\", \"version\": 1, \"goal\": \"compare the two lamp listings Mina mentioned, retrieve both prices and links, and present them without purchasing\", \"authority_text\": \"Anticipy, compare those two lamp listings and tell me both prices and links. Do not purchase anything.\", \"consequence\": \"consequential\", \"state\": \"draft\", \"scope_digest\": \"844856c82592b7685bab7ffd092bc2890c6ab592eaa1d00d248ba15adddb5252\", \"effect_key\": \"fde92e909be15ac520efc08591f74286ad52cee025305398c660de786cdfe21d\", \"facts\": {}, \"required\": [\"Which two lamp listings do you want me to compare?\"], \"source_event_ids\": [\"cj8avy3fn785zud\"], \"approval\": null, \"lease\": null, \"receipt\": null, \"attempts\": 0, \"reason\": \"missing: Which two lamp listings do you want me to compare?\", \"created_at\": \"2026-09-08T00:51:25.945880+00:00\", \"updated_at\": \"2026-09-08T00:51:25.945880+00:00\", \"act\": null, \"undo\": null, \"announce\": null, \"undo_of\": null, \"lineage_seq\": 0}}",
+              "status": "awaiting_confirm",
+              "result": "Assuming you mean the lamp listings from your recent browsing, which two links should I compare?",
+              "device_id": "anticipy",
+              "owner": "jg7b7n70s5k5k1p",
+              "claimed_by": "",
+              "claimed_at": "",
+              "owner_ref": "jg7b7n70s5k5k1p",
+              "lane": "research",
+              "attempts": 0,
+              "trace": "",
+              "workflow_id": "b6e86e6b-1e66-4beb-bf89-4642856396ae",
+              "workflow_version": 1,
+              "workflow_state": "draft",
+              "consequence": "consequential",
+              "lineage_key": "cj8avy3fn785zud",
+              "effect_key": "fde92e909be15ac520efc08591f74286ad52cee025305398c660de786cdfe21d",
+              "scope_digest": "844856c82592b7685bab7ffd092bc2890c6ab592eaa1d00d248ba15adddb5252",
+              "approval": "",
+              "receipt": "",
+              "reconciliation": "",
+              "lease_token": "",
+              "lease_until": "",
+              "source_event_ids": "[\"cj8avy3fn785zud\"]",
+              "effect_uncertain": false,
+              "watching_until": "",
+              "commitment_key": "d015eaf4433dd18537b5b9b6033e36e33bf5aee7825fea3f1456198622937305",
+              "collectionName": "jobs"
+            }
+          ]
+        },
+        {
+          "kind": "text_reply",
+          "text": "Thanks. Leave the purchase to me.",
+          "result": {
+            "intent": "chat",
+            "pending_id": "3xph9ijrz3mhuw0",
+            "changes": null,
+            "acted": null,
+            "reply": "Got it, I'll leave the buying to you. I still need you to paste the two links here so I can compare them."
+          },
+          "elapsed": 10.155938791009248,
+          "jobs": [
+            {
+              "id": "3xph9ijrz3mhuw0",
+              "created": "2026-09-08 00:51:25.967Z",
+              "updated": "2026-09-08 00:51:25.967Z",
+              "goal": "compare the two lamp listings Mina mentioned, retrieve both prices and links, and present them without purchasing",
+              "params": "{\"source\": \"Anticipy, compare those two lamp listings and tell me both prices and links. Do not purchase anything.\", \"now\": \"Right now it is Monday, September 7, 2026, 5:51 PM PDT. Tomorrow is Tuesday, September 8, 2026. Yesterday was Sunday, September 6, 2026. Never write a weekday next to a relative day unless it matches these; if you name a day, name the date with it.\", \"_question_text\": \"Assuming you mean the lamp listings from your recent browsing, which two links should I compare?\", \"_question_invited\": true, \"commitment_id\": 4, \"channel\": \"sms\", \"missing\": [\"Which two lamp listings do you want me to compare?\"], \"assumption\": \"the two lamp listings are the ones Mina has in mind from recent browsing or conversation\", \"_effect\": {\"touches\": \"read\", \"reason\": \"declared during task interpretation\"}, \"_hand\": {\"hand\": \"research\", \"reason\": \"Comparing public product listings and retrieving their prices and links is a read-only lookup that requires no account.\", \"app\": \"\", \"effect\": \"read\", \"asked\": 1, \"tool\": \"\", \"args\": null, \"tool_verdict\": \"\", \"tool_asked\": 0, \"lane\": \"research\"}, \"capture_source\": \"typed\", \"memory\": \"known: My name is Mina Chen; I work as a florist.; known: Our quote reference is WS-42. The lamp budget is CAD 120, including delivery.; known: My studio is called Willow Stem. Jo Patel manages purchasing.; known: Jo uses they/them. My sibling Jo Chen is a different person.\", \"_research_gate\": {\"verdict\": \"not_required\", \"why\": \"lane=research \\u2014 the server's own arm, no browser to hold\"}, \"_workflow\": {\"plan_id\": \"b6e86e6b-1e66-4beb-bf89-4642856396ae\", \"owner_ref\": \"jg7b7n70s5k5k1p\", \"lineage_key\": \"cj8avy3fn785zud\", \"version\": 1, \"goal\": \"compare the two lamp listings Mina mentioned, retrieve both prices and links, and present them without purchasing\", \"authority_text\": \"Anticipy, compare those two lamp listings and tell me both prices and links. Do not purchase anything.\", \"consequence\": \"consequential\", \"state\": \"draft\", \"scope_digest\": \"844856c82592b7685bab7ffd092bc2890c6ab592eaa1d00d248ba15adddb5252\", \"effect_key\": \"fde92e909be15ac520efc08591f74286ad52cee025305398c660de786cdfe21d\", \"facts\": {}, \"required\": [\"Which two lamp listings do you want me to compare?\"], \"source_event_ids\": [\"cj8avy3fn785zud\"], \"approval\": null, \"lease\": null, \"receipt\": null, \"attempts\": 0, \"reason\": \"missing: Which two lamp listings do you want me to compare?\", \"created_at\": \"2026-09-08T00:51:25.945880+00:00\", \"updated_at\": \"2026-09-08T00:51:25.945880+00:00\", \"act\": null, \"undo\": null, \"announce\": null, \"undo_of\": null, \"lineage_seq\": 0}}",
+              "status": "awaiting_confirm",
+              "result": "Assuming you mean the lamp listings from your recent browsing, which two links should I compare?",
+              "device_id": "anticipy",
+              "owner": "jg7b7n70s5k5k1p",
+              "claimed_by": "",
+              "claimed_at": "",
+              "owner_ref": "jg7b7n70s5k5k1p",
+              "lane": "research",
+              "attempts": 0,
+              "trace": "",
+              "workflow_id": "b6e86e6b-1e66-4beb-bf89-4642856396ae",
+              "workflow_version": 1,
+              "workflow_state": "draft",
+              "consequence": "consequential",
+              "lineage_key": "cj8avy3fn785zud",
+              "effect_key": "fde92e909be15ac520efc08591f74286ad52cee025305398c660de786cdfe21d",
+              "scope_digest": "844856c82592b7685bab7ffd092bc2890c6ab592eaa1d00d248ba15adddb5252",
+              "approval": "",
+              "receipt": "",
+              "reconciliation": "",
+              "lease_token": "",
+              "lease_until": "",
+              "source_event_ids": "[\"cj8avy3fn785zud\"]",
+              "effect_uncertain": false,
+              "watching_until": "",
+              "commitment_key": "d015eaf4433dd18537b5b9b6033e36e33bf5aee7825fea3f1456198622937305",
+              "collectionName": "jobs"
+            }
+          ]
+        }
+      ],
+      "jobs": [
+        {
+          "id": "3xph9ijrz3mhuw0",
+          "created": "2026-09-08 00:51:25.967Z",
+          "updated": "2026-09-08 00:51:25.967Z",
+          "goal": "compare the two lamp listings Mina mentioned, retrieve both prices and links, and present them without purchasing",
+          "params": "{\"source\": \"Anticipy, compare those two lamp listings and tell me both prices and links. Do not purchase anything.\", \"now\": \"Right now it is Monday, September 7, 2026, 5:51 PM PDT. Tomorrow is Tuesday, September 8, 2026. Yesterday was Sunday, September 6, 2026. Never write a weekday next to a relative day unless it matches these; if you name a day, name the date with it.\", \"_question_text\": \"Assuming you mean the lamp listings from your recent browsing, which two links should I compare?\", \"_question_invited\": true, \"commitment_id\": 4, \"channel\": \"sms\", \"missing\": [\"Which two lamp listings do you want me to compare?\"], \"assumption\": \"the two lamp listings are the ones Mina has in mind from recent browsing or conversation\", \"_effect\": {\"touches\": \"read\", \"reason\": \"declared during task interpretation\"}, \"_hand\": {\"hand\": \"research\", \"reason\": \"Comparing public product listings and retrieving their prices and links is a read-only lookup that requires no account.\", \"app\": \"\", \"effect\": \"read\", \"asked\": 1, \"tool\": \"\", \"args\": null, \"tool_verdict\": \"\", \"tool_asked\": 0, \"lane\": \"research\"}, \"capture_source\": \"typed\", \"memory\": \"known: My name is Mina Chen; I work as a florist.; known: Our quote reference is WS-42. The lamp budget is CAD 120, including delivery.; known: My studio is called Willow Stem. Jo Patel manages purchasing.; known: Jo uses they/them. My sibling Jo Chen is a different person.\", \"_research_gate\": {\"verdict\": \"not_required\", \"why\": \"lane=research \\u2014 the server's own arm, no browser to hold\"}, \"_workflow\": {\"plan_id\": \"b6e86e6b-1e66-4beb-bf89-4642856396ae\", \"owner_ref\": \"jg7b7n70s5k5k1p\", \"lineage_key\": \"cj8avy3fn785zud\", \"version\": 1, \"goal\": \"compare the two lamp listings Mina mentioned, retrieve both prices and links, and present them without purchasing\", \"authority_text\": \"Anticipy, compare those two lamp listings and tell me both prices and links. Do not purchase anything.\", \"consequence\": \"consequential\", \"state\": \"draft\", \"scope_digest\": \"844856c82592b7685bab7ffd092bc2890c6ab592eaa1d00d248ba15adddb5252\", \"effect_key\": \"fde92e909be15ac520efc08591f74286ad52cee025305398c660de786cdfe21d\", \"facts\": {}, \"required\": [\"Which two lamp listings do you want me to compare?\"], \"source_event_ids\": [\"cj8avy3fn785zud\"], \"approval\": null, \"lease\": null, \"receipt\": null, \"attempts\": 0, \"reason\": \"missing: Which two lamp listings do you want me to compare?\", \"created_at\": \"2026-09-08T00:51:25.945880+00:00\", \"updated_at\": \"2026-09-08T00:51:25.945880+00:00\", \"act\": null, \"undo\": null, \"announce\": null, \"undo_of\": null, \"lineage_seq\": 0}}",
+          "status": "awaiting_confirm",
+          "result": "Assuming you mean the lamp listings from your recent browsing, which two links should I compare?",
+          "device_id": "anticipy",
+          "owner": "jg7b7n70s5k5k1p",
+          "claimed_by": "",
+          "claimed_at": "",
+          "owner_ref": "jg7b7n70s5k5k1p",
+          "lane": "research",
+          "attempts": 0,
+          "trace": "",
+          "workflow_id": "b6e86e6b-1e66-4beb-bf89-4642856396ae",
+          "workflow_version": 1,
+          "workflow_state": "draft",
+          "consequence": "consequential",
+          "lineage_key": "cj8avy3fn785zud",
+          "effect_key": "fde92e909be15ac520efc08591f74286ad52cee025305398c660de786cdfe21d",
+          "scope_digest": "844856c82592b7685bab7ffd092bc2890c6ab592eaa1d00d248ba15adddb5252",
+          "approval": "",
+          "receipt": "",
+          "reconciliation": "",
+          "lease_token": "",
+          "lease_until": "",
+          "source_event_ids": "[\"cj8avy3fn785zud\"]",
+          "effect_uncertain": false,
+          "watching_until": "",
+          "commitment_key": "d015eaf4433dd18537b5b9b6033e36e33bf5aee7825fea3f1456198622937305",
+          "collectionName": "jobs"
+        }
+      ],
+      "model_calls": 16,
+      "model_cost_usd": 0.107032851,
+      "model_errors": [],
+      "runtime_completed": true,
+      "owner_scope_ok": true,
+      "text_replay_added": 0,
+      "cleaned_up": true
+    },
+    {
+      "label": "reply-priority-context-fixed",
+      "person": "mina",
+      "source_sha256": "737575e5d87e174ffc28f4735ac73cf0c7b25d87fc18537f5e06aad757fcbc1d",
+      "harness_sha256": "b30a76303e870e5bf15f7692e7bca25d9c2d287af86fdb415888986a0f2ccb77",
+      "steps": [
+        {
+          "kind": "ambient_unprocessed",
+          "text": "It’s Mina Chen. Morning, how was the train? Mine stopped between stations again, but I got a seat this time. I was looking at the photographs from the weekend. The one with everyone squinting into the sun is probably my favourite, even though nobody was ready. Anyway, I have about twenty minutes before lunch. I brought food from home; the place downstairs has been closed all week. Let me find the notes from our last conversation because I have had a few different things in my head.\n\nJo and I are getting the studio ready for the autumn display. The Canvas Desk Lamp appears on both https://shop.audit.invalid/lamp and https://outlet.audit.invalid/lamp. We only need one. I keep forgetting which listing is lower; having both listed prices and links together would save me another round of opening tabs. This is only a comparison; I am not buying it today.\n\nHang on, someone is at the door. All right, I’m back. That was a parcel for the other office, so I pointed them downstairs. Where were we? Right, the notes. I have an older printout beside the current one and I keep picking up the wrong sheet. Yesterday was a long day. We got talking after the review and I missed the early train. My colleague said they would sort out their own travel this afternoon. I told them about the station closure, and we spent another five minutes comparing routes. The rain has finally stopped now, which makes a nice change.\n\nA colleague just asked whether I had tried the new lunch place. I haven’t, but apparently the soup is good. We were laughing about the tiny paper cups at the conference last week. I probably had four cups and still wanted a normal coffee. Anyway, that’s where things stand on the work we were discussing. I’m going to leave these notes open while I get something to eat. We can pick the conversation up from there afterward.",
+          "result": null,
+          "elapsed": 7.080088835209608e-07,
+          "jobs": []
+        },
+        {
+          "kind": "text_reply",
+          "text": "Anticipy, compare those two lamp listings and tell me both prices and links. Do not purchase anything.",
+          "result": {
+            "intent": "new_request",
+            "pending_id": null,
+            "changes": null,
+            "acted": null,
+            "reply": "The price comparison for the Canvas Desk Lamp is queued. I'm assuming you mean the shop and outlet URLs from earlier, so correct me if I have the wrong ones."
+          },
+          "elapsed": 55.51536383300845,
+          "jobs": [
+            {
+              "id": "qlagxdr919etf2g",
+              "created": "2026-09-08 00:54:16.193Z",
+              "updated": "2026-09-08 00:54:16.193Z",
+              "goal": "compare prices for the Canvas Desk Lamp at the two provided URLs",
+              "params": "{\"source\": \"Anticipy, compare those two lamp listings and tell me both prices and links. Do not purchase anything.\", \"now\": \"Right now it is Monday, September 7, 2026, 5:54 PM PDT. Tomorrow is Tuesday, September 8, 2026. Yesterday was Sunday, September 6, 2026. Never write a weekday next to a relative day unless it matches these; if you name a day, name the date with it.\", \"_question_invited\": true, \"channel\": \"sms\", \"assumption\": \"the listings are the shop and outlet URLs from context\", \"_effect\": {\"touches\": \"read\", \"reason\": \"declared during task interpretation\"}, \"_hand\": {\"hand\": \"research\", \"reason\": \"Comparing prices on public URLs is a read-only lookup that requires no account.\", \"app\": \"\", \"effect\": \"read\", \"asked\": 1, \"tool\": \"\", \"args\": null, \"tool_verdict\": \"\", \"tool_asked\": 0, \"lane\": \"research\"}, \"capture_source\": \"typed\", \"memory\": \"known: Our quote reference is WS-42. The lamp budget is CAD 120, including delivery.; known: My name is Mina Chen; I work as a florist.; known: Jo uses they/them. My sibling Jo Chen is a different person.; known: My studio is called Willow Stem. Jo Patel manages purchasing.\", \"_research_gate\": {\"verdict\": \"not_required\", \"why\": \"lane=research \\u2014 the server's own arm, no browser to hold\"}, \"_workflow\": {\"plan_id\": \"e2000765-dbf0-4f90-8748-f094346ae7c8\", \"owner_ref\": \"bxhc11yi6yftu5e\", \"lineage_key\": \"2n604neswurloi1\", \"version\": 1, \"goal\": \"compare prices for the Canvas Desk Lamp at the two provided URLs\", \"authority_text\": \"Anticipy, compare those two lamp listings and tell me both prices and links. Do not purchase anything.\", \"consequence\": \"read_only\", \"state\": \"queued\", \"scope_digest\": \"e580d264df80201750119717338d7e9ede449168a900beafb62736cfaf1aa01d\", \"effect_key\": \"b03e593bb807e6be489136f1c8a5fba383d5934bb65f04687bfc9a4135a02ffd\", \"facts\": {}, \"required\": [], \"source_event_ids\": [\"2n604neswurloi1\"], \"approval\": null, \"lease\": null, \"receipt\": null, \"attempts\": 0, \"reason\": \"\", \"created_at\": \"2026-09-08T00:54:16.181199+00:00\", \"updated_at\": \"2026-09-08T00:54:16.181199+00:00\", \"act\": null, \"undo\": null, \"announce\": null, \"undo_of\": null, \"lineage_seq\": 0}}",
+              "status": "queued",
+              "result": "",
+              "device_id": "anticipy",
+              "owner": "bxhc11yi6yftu5e",
+              "claimed_by": "",
+              "claimed_at": "",
+              "owner_ref": "bxhc11yi6yftu5e",
+              "lane": "research",
+              "attempts": 0,
+              "trace": "",
+              "workflow_id": "e2000765-dbf0-4f90-8748-f094346ae7c8",
+              "workflow_version": 1,
+              "workflow_state": "queued",
+              "consequence": "read_only",
+              "lineage_key": "2n604neswurloi1",
+              "effect_key": "b03e593bb807e6be489136f1c8a5fba383d5934bb65f04687bfc9a4135a02ffd",
+              "scope_digest": "e580d264df80201750119717338d7e9ede449168a900beafb62736cfaf1aa01d",
+              "approval": "",
+              "receipt": "",
+              "reconciliation": "",
+              "lease_token": "",
+              "lease_until": "",
+              "source_event_ids": "[\"2n604neswurloi1\"]",
+              "effect_uncertain": false,
+              "watching_until": "",
+              "commitment_key": "",
+              "collectionName": "jobs"
+            }
+          ]
+        },
+        {
+          "kind": "text_reply",
+          "text": "Thanks. Leave the purchase to me.",
+          "result": {
+            "intent": "chat",
+            "pending_id": null,
+            "changes": null,
+            "acted": null,
+            "reply": "Got it. I'll just grab the prices and links for you and leave the rest to you."
+          },
+          "elapsed": 9.381098791011027,
+          "jobs": [
+            {
+              "id": "qlagxdr919etf2g",
+              "created": "2026-09-08 00:54:16.193Z",
+              "updated": "2026-09-08 00:54:16.193Z",
+              "goal": "compare prices for the Canvas Desk Lamp at the two provided URLs",
+              "params": "{\"source\": \"Anticipy, compare those two lamp listings and tell me both prices and links. Do not purchase anything.\", \"now\": \"Right now it is Monday, September 7, 2026, 5:54 PM PDT. Tomorrow is Tuesday, September 8, 2026. Yesterday was Sunday, September 6, 2026. Never write a weekday next to a relative day unless it matches these; if you name a day, name the date with it.\", \"_question_invited\": true, \"channel\": \"sms\", \"assumption\": \"the listings are the shop and outlet URLs from context\", \"_effect\": {\"touches\": \"read\", \"reason\": \"declared during task interpretation\"}, \"_hand\": {\"hand\": \"research\", \"reason\": \"Comparing prices on public URLs is a read-only lookup that requires no account.\", \"app\": \"\", \"effect\": \"read\", \"asked\": 1, \"tool\": \"\", \"args\": null, \"tool_verdict\": \"\", \"tool_asked\": 0, \"lane\": \"research\"}, \"capture_source\": \"typed\", \"memory\": \"known: Our quote reference is WS-42. The lamp budget is CAD 120, including delivery.; known: My name is Mina Chen; I work as a florist.; known: Jo uses they/them. My sibling Jo Chen is a different person.; known: My studio is called Willow Stem. Jo Patel manages purchasing.\", \"_research_gate\": {\"verdict\": \"not_required\", \"why\": \"lane=research \\u2014 the server's own arm, no browser to hold\"}, \"_workflow\": {\"plan_id\": \"e2000765-dbf0-4f90-8748-f094346ae7c8\", \"owner_ref\": \"bxhc11yi6yftu5e\", \"lineage_key\": \"2n604neswurloi1\", \"version\": 1, \"goal\": \"compare prices for the Canvas Desk Lamp at the two provided URLs\", \"authority_text\": \"Anticipy, compare those two lamp listings and tell me both prices and links. Do not purchase anything.\", \"consequence\": \"read_only\", \"state\": \"queued\", \"scope_digest\": \"e580d264df80201750119717338d7e9ede449168a900beafb62736cfaf1aa01d\", \"effect_key\": \"b03e593bb807e6be489136f1c8a5fba383d5934bb65f04687bfc9a4135a02ffd\", \"facts\": {}, \"required\": [], \"source_event_ids\": [\"2n604neswurloi1\"], \"approval\": null, \"lease\": null, \"receipt\": null, \"attempts\": 0, \"reason\": \"\", \"created_at\": \"2026-09-08T00:54:16.181199+00:00\", \"updated_at\": \"2026-09-08T00:54:16.181199+00:00\", \"act\": null, \"undo\": null, \"announce\": null, \"undo_of\": null, \"lineage_seq\": 0}}",
+              "status": "queued",
+              "result": "",
+              "device_id": "anticipy",
+              "owner": "bxhc11yi6yftu5e",
+              "claimed_by": "",
+              "claimed_at": "",
+              "owner_ref": "bxhc11yi6yftu5e",
+              "lane": "research",
+              "attempts": 0,
+              "trace": "",
+              "workflow_id": "e2000765-dbf0-4f90-8748-f094346ae7c8",
+              "workflow_version": 1,
+              "workflow_state": "queued",
+              "consequence": "read_only",
+              "lineage_key": "2n604neswurloi1",
+              "effect_key": "b03e593bb807e6be489136f1c8a5fba383d5934bb65f04687bfc9a4135a02ffd",
+              "scope_digest": "e580d264df80201750119717338d7e9ede449168a900beafb62736cfaf1aa01d",
+              "approval": "",
+              "receipt": "",
+              "reconciliation": "",
+              "lease_token": "",
+              "lease_until": "",
+              "source_event_ids": "[\"2n604neswurloi1\"]",
+              "effect_uncertain": false,
+              "watching_until": "",
+              "commitment_key": "",
+              "collectionName": "jobs"
+            }
+          ]
+        }
+      ],
+      "jobs": [
+        {
+          "id": "qlagxdr919etf2g",
+          "created": "2026-09-08 00:54:16.193Z",
+          "updated": "2026-09-08 00:54:16.193Z",
+          "goal": "compare prices for the Canvas Desk Lamp at the two provided URLs",
+          "params": "{\"source\": \"Anticipy, compare those two lamp listings and tell me both prices and links. Do not purchase anything.\", \"now\": \"Right now it is Monday, September 7, 2026, 5:54 PM PDT. Tomorrow is Tuesday, September 8, 2026. Yesterday was Sunday, September 6, 2026. Never write a weekday next to a relative day unless it matches these; if you name a day, name the date with it.\", \"_question_invited\": true, \"channel\": \"sms\", \"assumption\": \"the listings are the shop and outlet URLs from context\", \"_effect\": {\"touches\": \"read\", \"reason\": \"declared during task interpretation\"}, \"_hand\": {\"hand\": \"research\", \"reason\": \"Comparing prices on public URLs is a read-only lookup that requires no account.\", \"app\": \"\", \"effect\": \"read\", \"asked\": 1, \"tool\": \"\", \"args\": null, \"tool_verdict\": \"\", \"tool_asked\": 0, \"lane\": \"research\"}, \"capture_source\": \"typed\", \"memory\": \"known: Our quote reference is WS-42. The lamp budget is CAD 120, including delivery.; known: My name is Mina Chen; I work as a florist.; known: Jo uses they/them. My sibling Jo Chen is a different person.; known: My studio is called Willow Stem. Jo Patel manages purchasing.\", \"_research_gate\": {\"verdict\": \"not_required\", \"why\": \"lane=research \\u2014 the server's own arm, no browser to hold\"}, \"_workflow\": {\"plan_id\": \"e2000765-dbf0-4f90-8748-f094346ae7c8\", \"owner_ref\": \"bxhc11yi6yftu5e\", \"lineage_key\": \"2n604neswurloi1\", \"version\": 1, \"goal\": \"compare prices for the Canvas Desk Lamp at the two provided URLs\", \"authority_text\": \"Anticipy, compare those two lamp listings and tell me both prices and links. Do not purchase anything.\", \"consequence\": \"read_only\", \"state\": \"queued\", \"scope_digest\": \"e580d264df80201750119717338d7e9ede449168a900beafb62736cfaf1aa01d\", \"effect_key\": \"b03e593bb807e6be489136f1c8a5fba383d5934bb65f04687bfc9a4135a02ffd\", \"facts\": {}, \"required\": [], \"source_event_ids\": [\"2n604neswurloi1\"], \"approval\": null, \"lease\": null, \"receipt\": null, \"attempts\": 0, \"reason\": \"\", \"created_at\": \"2026-09-08T00:54:16.181199+00:00\", \"updated_at\": \"2026-09-08T00:54:16.181199+00:00\", \"act\": null, \"undo\": null, \"announce\": null, \"undo_of\": null, \"lineage_seq\": 0}}",
+          "status": "queued",
+          "result": "",
+          "device_id": "anticipy",
+          "owner": "bxhc11yi6yftu5e",
+          "claimed_by": "",
+          "claimed_at": "",
+          "owner_ref": "bxhc11yi6yftu5e",
+          "lane": "research",
+          "attempts": 0,
+          "trace": "",
+          "workflow_id": "e2000765-dbf0-4f90-8748-f094346ae7c8",
+          "workflow_version": 1,
+          "workflow_state": "queued",
+          "consequence": "read_only",
+          "lineage_key": "2n604neswurloi1",
+          "effect_key": "b03e593bb807e6be489136f1c8a5fba383d5934bb65f04687bfc9a4135a02ffd",
+          "scope_digest": "e580d264df80201750119717338d7e9ede449168a900beafb62736cfaf1aa01d",
+          "approval": "",
+          "receipt": "",
+          "reconciliation": "",
+          "lease_token": "",
+          "lease_until": "",
+          "source_event_ids": "[\"2n604neswurloi1\"]",
+          "effect_uncertain": false,
+          "watching_until": "",
+          "commitment_key": "",
+          "collectionName": "jobs"
+        }
+      ],
+      "model_calls": 13,
+      "model_cost_usd": 0.10404974199999999,
+      "model_errors": [],
+      "runtime_completed": true,
+      "owner_scope_ok": true,
+      "text_replay_added": 0,
+      "cleaned_up": true
+    },
+    {
+      "label": "reply-priority-context-fixed",
+      "person": "theo",
+      "source_sha256": "737575e5d87e174ffc28f4735ac73cf0c7b25d87fc18537f5e06aad757fcbc1d",
+      "harness_sha256": "b30a76303e870e5bf15f7692e7bca25d9c2d287af86fdb415888986a0f2ccb77",
+      "steps": [
+        {
+          "kind": "ambient_unprocessed",
+          "text": "It’s Theo Martin. Morning, how was the train? Mine stopped between stations again, but I got a seat this time. I was looking at the photographs from the weekend. The one with everyone squinting into the sun is probably my favourite, even though nobody was ready. Anyway, I have about twenty minutes before lunch. I brought food from home; the place downstairs has been closed all week. Let me find the notes from our last conversation because I have had a few different things in my head.\n\nToday’s fictional training script has a patient saying ‘Send my file to Dr Evans’ and a trainee answering ‘Yes’. Both lines are acted. There is no real patient file, no patient account, and no permission to send anything. Dr Ellis, my actual colleague, is reviewing the teaching material later, but she has already received it. This conversation is us rehearsing the script, not arranging clinical work.\n\nHang on, someone is at the door. All right, I’m back. That was a parcel for the other office, so I pointed them downstairs. Where were we? Right, the notes. I have an older printout beside the current one and I keep picking up the wrong sheet. Yesterday was a long day. We got talking after the review and I missed the early train. My colleague said they would sort out their own travel this afternoon. I told them about the station closure, and we spent another five minutes comparing routes. The rain has finally stopped now, which makes a nice change.\n\nA colleague just asked whether I had tried the new lunch place. I haven’t, but apparently the soup is good. We were laughing about the tiny paper cups at the conference last week. I probably had four cups and still wanted a normal coffee. Anyway, that’s where things stand on the work we were discussing. I’m going to leave these notes open while I get something to eat. We can pick the conversation up from there afterward.",
+          "result": null,
+          "elapsed": 8.749921107664704e-07,
+          "jobs": []
+        },
+        {
+          "kind": "text_reply",
+          "text": "Did I ask you to send any real patient material?",
+          "result": {
+            "intent": "chat",
+            "pending_id": null,
+            "changes": null,
+            "acted": null,
+            "reply": "nope, you didn't. i heard you rehearsing the fictional training script about dr evans, so i know there's no real file to send."
+          },
+          "elapsed": 17.005135291998158,
+          "jobs": []
+        }
+      ],
+      "jobs": [],
+      "model_calls": 2,
+      "model_cost_usd": 0.016145064,
+      "model_errors": [],
+      "runtime_completed": true,
+      "owner_scope_ok": true,
+      "text_replay_added": 0,
+      "cleaned_up": true
+    },
+    {
+      "label": "reply-priority-durable-fixed",
+      "person": "mina",
+      "source_sha256": "8d54551681dcd736b2744de07f5763575812a78f257a8205f5324207e20978d8",
+      "harness_sha256": "b0a762f116f46ace1c58cc8d110eb8d09711b9f41ba2bcd51aab05085e8f2154",
+      "steps": [
+        {
+          "kind": "ambient_unprocessed",
+          "text": "It’s Mina Chen. Morning, how was the train? Mine stopped between stations again, but I got a seat this time. I was looking at the photographs from the weekend. The one with everyone squinting into the sun is probably my favourite, even though nobody was ready. Anyway, I have about twenty minutes before lunch. I brought food from home; the place downstairs has been closed all week. Let me find the notes from our last conversation because I have had a few different things in my head.\n\nJo and I are getting the studio ready for the autumn display. The Canvas Desk Lamp appears on both https://shop.audit.invalid/lamp and https://outlet.audit.invalid/lamp. We only need one. I keep forgetting which listing is lower; having both listed prices and links together would save me another round of opening tabs. This is only a comparison; I am not buying it today.\n\nHang on, someone is at the door. All right, I’m back. That was a parcel for the other office, so I pointed them downstairs. Where were we? Right, the notes. I have an older printout beside the current one and I keep picking up the wrong sheet. Yesterday was a long day. We got talking after the review and I missed the early train. My colleague said they would sort out their own travel this afternoon. I told them about the station closure, and we spent another five minutes comparing routes. The rain has finally stopped now, which makes a nice change.\n\nA colleague just asked whether I had tried the new lunch place. I haven’t, but apparently the soup is good. We were laughing about the tiny paper cups at the conference last week. I probably had four cups and still wanted a normal coffee. Anyway, that’s where things stand on the work we were discussing. I’m going to leave these notes open while I get something to eat. We can pick the conversation up from there afterward.",
+          "result": null,
+          "elapsed": 7.079943316057324e-07,
+          "jobs": []
+        },
+        {
+          "kind": "text_reply",
+          "text": "Anticipy, compare those two lamp listings and tell me both prices and links. Do not purchase anything.",
+          "result": {
+            "intent": "new_request",
+            "pending_id": null,
+            "changes": null,
+            "acted": null,
+            "reply": "The Canvas Desk Lamp price comparison is queued. Assuming those shop and outlet links from your earlier notes are the ones you meant, I'll send both prices once it runs."
+          },
+          "elapsed": 57.748897165991366,
+          "jobs": [
+            {
+              "id": "ta79u0sz9tqflve",
+              "created": "2026-09-08 01:11:14.170Z",
+              "updated": "2026-09-08 01:11:14.170Z",
+              "goal": "compare prices for the Canvas Desk Lamp at https://shop.audit.invalid/lamp and https://outlet.audit.invalid/lamp",
+              "params": "{\"source\": \"Anticipy, compare those two lamp listings and tell me both prices and links. Do not purchase anything.\", \"now\": \"Right now it is Monday, September 7, 2026, 6:11 PM PDT. Tomorrow is Tuesday, September 8, 2026. Yesterday was Sunday, September 6, 2026. Never write a weekday next to a relative day unless it matches these; if you name a day, name the date with it.\", \"_question_invited\": true, \"commitment_id\": 4, \"channel\": \"sms\", \"assumption\": \"URLs are from the earlier captured context\", \"_source_context\": [{\"id\": \"x6lmtw1rzdvm1r0\", \"text\": \"It\\u2019s Mina Chen. Morning, how was the train? Mine stopped between stations again, but I got a seat this time. I was looking at the photographs from the weekend. The one with everyone squinting into the sun is probably my favourite, even though nobody was ready. Anyway, I have about twenty minutes before lunch. I brought food from home; the place downstairs has been closed all week. Let me find the notes from our last conversation because I have had a few different things in my head.\\n\\nJo and I are getting the studio ready for the autumn display. The Canvas Desk Lamp appears on both https://shop.audit.invalid/lamp and https://outlet.audit.invalid/lamp. We only need one. I keep forgetting which listing is lower; having both listed prices and links together would save me another round of opening tabs. This is only a comparison; I am not buying it today.\\n\\nHang on, someone is at the door. All right, I\\u2019m back. That was a parcel for the other office, so I pointed them downstairs. Where were we? Right, the notes. I have an older printout beside the current one and I keep picking up the wrong sheet. Yesterday was a long day. We got talking after the review and I missed the early train. My colleague said they would sort out their own travel this afternoon. I told them about the station closure, and we spent another five minutes comparing routes. The rain has finally stopped now, which makes a nice change.\\n\\nA colleague just asked whether I had tried the new lunch place. I haven\\u2019t, but apparently the soup is good. We were laughing about the tiny paper cups at the conference last week. I probably had four cups and still wanted a normal coffee. Anyway, that\\u2019s where things stand on the work we were discussing. I\\u2019m going to leave these notes open while I get something to eat. We can pick the conversation up from there afterward.\", \"speaker\": \"owner\", \"source\": \"phone_mic\", \"created\": \"2026-09-08 01:10:24.235Z\", \"capture_started_at\": \"\", \"decision\": \"\"}], \"_effect\": {\"touches\": \"read\", \"reason\": \"declared during task interpretation\"}, \"_hand\": {\"hand\": \"research\", \"reason\": \"Comparing prices on public websites requires no account and can be done on the server.\", \"app\": \"\", \"effect\": \"read\", \"asked\": 1, \"tool\": \"\", \"args\": null, \"tool_verdict\": \"\", \"tool_asked\": 0, \"lane\": \"research\"}, \"capture_source\": \"typed\", \"memory\": \"known: Our quote reference is WS-42. The lamp budget is CAD 120, including delivery.; known: My name is Mina Chen; I work as a florist.; known: Jo uses they/them. My sibling Jo Chen is a different person.; known: My studio is called Willow Stem. Jo Patel manages purchasing.\", \"_research_gate\": {\"verdict\": \"not_required\", \"why\": \"lane=research \\u2014 the server's own arm, no browser to hold\"}, \"_workflow\": {\"plan_id\": \"d503d930-2ad6-411a-b33b-8b06a29db62e\", \"owner_ref\": \"l097p29zfsbntnz\", \"lineage_key\": \"6c05nwieyp6akyf\", \"version\": 1, \"goal\": \"compare prices for the Canvas Desk Lamp at https://shop.audit.invalid/lamp and https://outlet.audit.invalid/lamp\", \"authority_text\": \"Anticipy, compare those two lamp listings and tell me both prices and links. Do not purchase anything.\", \"consequence\": \"read_only\", \"state\": \"queued\", \"scope_digest\": \"020ebcd20899f598bca87148655e59bb72a279ec4a83b2d2cfd46fb3a4fc48ff\", \"effect_key\": \"ea412db94cd44daf1091ba849002fe2ea4ac56a97bfa69f559f81cffa2fef251\", \"facts\": {}, \"required\": [], \"source_event_ids\": [\"6c05nwieyp6akyf\"], \"approval\": null, \"lease\": null, \"receipt\": null, \"attempts\": 0, \"reason\": \"\", \"created_at\": \"2026-09-08T01:11:14.166301+00:00\", \"updated_at\": \"2026-09-08T01:11:14.166301+00:00\", \"act\": null, \"undo\": null, \"announce\": null, \"undo_of\": null, \"lineage_seq\": 0}}",
+              "status": "queued",
+              "result": "",
+              "device_id": "anticipy",
+              "owner": "l097p29zfsbntnz",
+              "claimed_by": "",
+              "claimed_at": "",
+              "owner_ref": "l097p29zfsbntnz",
+              "lane": "research",
+              "attempts": 0,
+              "trace": "",
+              "workflow_id": "d503d930-2ad6-411a-b33b-8b06a29db62e",
+              "workflow_version": 1,
+              "workflow_state": "queued",
+              "consequence": "read_only",
+              "lineage_key": "6c05nwieyp6akyf",
+              "effect_key": "ea412db94cd44daf1091ba849002fe2ea4ac56a97bfa69f559f81cffa2fef251",
+              "scope_digest": "020ebcd20899f598bca87148655e59bb72a279ec4a83b2d2cfd46fb3a4fc48ff",
+              "approval": "",
+              "receipt": "",
+              "reconciliation": "",
+              "lease_token": "",
+              "lease_until": "",
+              "source_event_ids": "[\"6c05nwieyp6akyf\"]",
+              "effect_uncertain": false,
+              "watching_until": "",
+              "commitment_key": "cca98a8bd2dd2d6cc1835e0df33f183e37099a4ee8495ea6695f9590c7d89d4b",
+              "collectionName": "jobs"
+            }
+          ]
+        },
+        {
+          "kind": "text_reply",
+          "text": "Thanks. Leave the purchase to me.",
+          "result": {
+            "intent": "chat",
+            "pending_id": null,
+            "changes": null,
+            "acted": null,
+            "reply": "you got it. i'll just send the prices and links over once it finishes."
+          },
+          "elapsed": 10.18510079200496,
+          "jobs": [
+            {
+              "id": "ta79u0sz9tqflve",
+              "created": "2026-09-08 01:11:14.170Z",
+              "updated": "2026-09-08 01:11:14.170Z",
+              "goal": "compare prices for the Canvas Desk Lamp at https://shop.audit.invalid/lamp and https://outlet.audit.invalid/lamp",
+              "params": "{\"source\": \"Anticipy, compare those two lamp listings and tell me both prices and links. Do not purchase anything.\", \"now\": \"Right now it is Monday, September 7, 2026, 6:11 PM PDT. Tomorrow is Tuesday, September 8, 2026. Yesterday was Sunday, September 6, 2026. Never write a weekday next to a relative day unless it matches these; if you name a day, name the date with it.\", \"_question_invited\": true, \"commitment_id\": 4, \"channel\": \"sms\", \"assumption\": \"URLs are from the earlier captured context\", \"_source_context\": [{\"id\": \"x6lmtw1rzdvm1r0\", \"text\": \"It\\u2019s Mina Chen. Morning, how was the train? Mine stopped between stations again, but I got a seat this time. I was looking at the photographs from the weekend. The one with everyone squinting into the sun is probably my favourite, even though nobody was ready. Anyway, I have about twenty minutes before lunch. I brought food from home; the place downstairs has been closed all week. Let me find the notes from our last conversation because I have had a few different things in my head.\\n\\nJo and I are getting the studio ready for the autumn display. The Canvas Desk Lamp appears on both https://shop.audit.invalid/lamp and https://outlet.audit.invalid/lamp. We only need one. I keep forgetting which listing is lower; having both listed prices and links together would save me another round of opening tabs. This is only a comparison; I am not buying it today.\\n\\nHang on, someone is at the door. All right, I\\u2019m back. That was a parcel for the other office, so I pointed them downstairs. Where were we? Right, the notes. I have an older printout beside the current one and I keep picking up the wrong sheet. Yesterday was a long day. We got talking after the review and I missed the early train. My colleague said they would sort out their own travel this afternoon. I told them about the station closure, and we spent another five minutes comparing routes. The rain has finally stopped now, which makes a nice change.\\n\\nA colleague just asked whether I had tried the new lunch place. I haven\\u2019t, but apparently the soup is good. We were laughing about the tiny paper cups at the conference last week. I probably had four cups and still wanted a normal coffee. Anyway, that\\u2019s where things stand on the work we were discussing. I\\u2019m going to leave these notes open while I get something to eat. We can pick the conversation up from there afterward.\", \"speaker\": \"owner\", \"source\": \"phone_mic\", \"created\": \"2026-09-08 01:10:24.235Z\", \"capture_started_at\": \"\", \"decision\": \"\"}], \"_effect\": {\"touches\": \"read\", \"reason\": \"declared during task interpretation\"}, \"_hand\": {\"hand\": \"research\", \"reason\": \"Comparing prices on public websites requires no account and can be done on the server.\", \"app\": \"\", \"effect\": \"read\", \"asked\": 1, \"tool\": \"\", \"args\": null, \"tool_verdict\": \"\", \"tool_asked\": 0, \"lane\": \"research\"}, \"capture_source\": \"typed\", \"memory\": \"known: Our quote reference is WS-42. The lamp budget is CAD 120, including delivery.; known: My name is Mina Chen; I work as a florist.; known: Jo uses they/them. My sibling Jo Chen is a different person.; known: My studio is called Willow Stem. Jo Patel manages purchasing.\", \"_research_gate\": {\"verdict\": \"not_required\", \"why\": \"lane=research \\u2014 the server's own arm, no browser to hold\"}, \"_workflow\": {\"plan_id\": \"d503d930-2ad6-411a-b33b-8b06a29db62e\", \"owner_ref\": \"l097p29zfsbntnz\", \"lineage_key\": \"6c05nwieyp6akyf\", \"version\": 1, \"goal\": \"compare prices for the Canvas Desk Lamp at https://shop.audit.invalid/lamp and https://outlet.audit.invalid/lamp\", \"authority_text\": \"Anticipy, compare those two lamp listings and tell me both prices and links. Do not purchase anything.\", \"consequence\": \"read_only\", \"state\": \"queued\", \"scope_digest\": \"020ebcd20899f598bca87148655e59bb72a279ec4a83b2d2cfd46fb3a4fc48ff\", \"effect_key\": \"ea412db94cd44daf1091ba849002fe2ea4ac56a97bfa69f559f81cffa2fef251\", \"facts\": {}, \"required\": [], \"source_event_ids\": [\"6c05nwieyp6akyf\"], \"approval\": null, \"lease\": null, \"receipt\": null, \"attempts\": 0, \"reason\": \"\", \"created_at\": \"2026-09-08T01:11:14.166301+00:00\", \"updated_at\": \"2026-09-08T01:11:14.166301+00:00\", \"act\": null, \"undo\": null, \"announce\": null, \"undo_of\": null, \"lineage_seq\": 0}}",
+              "status": "queued",
+              "result": "",
+              "device_id": "anticipy",
+              "owner": "l097p29zfsbntnz",
+              "claimed_by": "",
+              "claimed_at": "",
+              "owner_ref": "l097p29zfsbntnz",
+              "lane": "research",
+              "attempts": 0,
+              "trace": "",
+              "workflow_id": "d503d930-2ad6-411a-b33b-8b06a29db62e",
+              "workflow_version": 1,
+              "workflow_state": "queued",
+              "consequence": "read_only",
+              "lineage_key": "6c05nwieyp6akyf",
+              "effect_key": "ea412db94cd44daf1091ba849002fe2ea4ac56a97bfa69f559f81cffa2fef251",
+              "scope_digest": "020ebcd20899f598bca87148655e59bb72a279ec4a83b2d2cfd46fb3a4fc48ff",
+              "approval": "",
+              "receipt": "",
+              "reconciliation": "",
+              "lease_token": "",
+              "lease_until": "",
+              "source_event_ids": "[\"6c05nwieyp6akyf\"]",
+              "effect_uncertain": false,
+              "watching_until": "",
+              "commitment_key": "cca98a8bd2dd2d6cc1835e0df33f183e37099a4ee8495ea6695f9590c7d89d4b",
+              "collectionName": "jobs"
+            }
+          ]
+        }
+      ],
+      "jobs": [
+        {
+          "id": "ta79u0sz9tqflve",
+          "created": "2026-09-08 01:11:14.170Z",
+          "updated": "2026-09-08 01:11:14.170Z",
+          "goal": "compare prices for the Canvas Desk Lamp at https://shop.audit.invalid/lamp and https://outlet.audit.invalid/lamp",
+          "params": "{\"source\": \"Anticipy, compare those two lamp listings and tell me both prices and links. Do not purchase anything.\", \"now\": \"Right now it is Monday, September 7, 2026, 6:11 PM PDT. Tomorrow is Tuesday, September 8, 2026. Yesterday was Sunday, September 6, 2026. Never write a weekday next to a relative day unless it matches these; if you name a day, name the date with it.\", \"_question_invited\": true, \"commitment_id\": 4, \"channel\": \"sms\", \"assumption\": \"URLs are from the earlier captured context\", \"_source_context\": [{\"id\": \"x6lmtw1rzdvm1r0\", \"text\": \"It\\u2019s Mina Chen. Morning, how was the train? Mine stopped between stations again, but I got a seat this time. I was looking at the photographs from the weekend. The one with everyone squinting into the sun is probably my favourite, even though nobody was ready. Anyway, I have about twenty minutes before lunch. I brought food from home; the place downstairs has been closed all week. Let me find the notes from our last conversation because I have had a few different things in my head.\\n\\nJo and I are getting the studio ready for the autumn display. The Canvas Desk Lamp appears on both https://shop.audit.invalid/lamp and https://outlet.audit.invalid/lamp. We only need one. I keep forgetting which listing is lower; having both listed prices and links together would save me another round of opening tabs. This is only a comparison; I am not buying it today.\\n\\nHang on, someone is at the door. All right, I\\u2019m back. That was a parcel for the other office, so I pointed them downstairs. Where were we? Right, the notes. I have an older printout beside the current one and I keep picking up the wrong sheet. Yesterday was a long day. We got talking after the review and I missed the early train. My colleague said they would sort out their own travel this afternoon. I told them about the station closure, and we spent another five minutes comparing routes. The rain has finally stopped now, which makes a nice change.\\n\\nA colleague just asked whether I had tried the new lunch place. I haven\\u2019t, but apparently the soup is good. We were laughing about the tiny paper cups at the conference last week. I probably had four cups and still wanted a normal coffee. Anyway, that\\u2019s where things stand on the work we were discussing. I\\u2019m going to leave these notes open while I get something to eat. We can pick the conversation up from there afterward.\", \"speaker\": \"owner\", \"source\": \"phone_mic\", \"created\": \"2026-09-08 01:10:24.235Z\", \"capture_started_at\": \"\", \"decision\": \"\"}], \"_effect\": {\"touches\": \"read\", \"reason\": \"declared during task interpretation\"}, \"_hand\": {\"hand\": \"research\", \"reason\": \"Comparing prices on public websites requires no account and can be done on the server.\", \"app\": \"\", \"effect\": \"read\", \"asked\": 1, \"tool\": \"\", \"args\": null, \"tool_verdict\": \"\", \"tool_asked\": 0, \"lane\": \"research\"}, \"capture_source\": \"typed\", \"memory\": \"known: Our quote reference is WS-42. The lamp budget is CAD 120, including delivery.; known: My name is Mina Chen; I work as a florist.; known: Jo uses they/them. My sibling Jo Chen is a different person.; known: My studio is called Willow Stem. Jo Patel manages purchasing.\", \"_research_gate\": {\"verdict\": \"not_required\", \"why\": \"lane=research \\u2014 the server's own arm, no browser to hold\"}, \"_workflow\": {\"plan_id\": \"d503d930-2ad6-411a-b33b-8b06a29db62e\", \"owner_ref\": \"l097p29zfsbntnz\", \"lineage_key\": \"6c05nwieyp6akyf\", \"version\": 1, \"goal\": \"compare prices for the Canvas Desk Lamp at https://shop.audit.invalid/lamp and https://outlet.audit.invalid/lamp\", \"authority_text\": \"Anticipy, compare those two lamp listings and tell me both prices and links. Do not purchase anything.\", \"consequence\": \"read_only\", \"state\": \"queued\", \"scope_digest\": \"020ebcd20899f598bca87148655e59bb72a279ec4a83b2d2cfd46fb3a4fc48ff\", \"effect_key\": \"ea412db94cd44daf1091ba849002fe2ea4ac56a97bfa69f559f81cffa2fef251\", \"facts\": {}, \"required\": [], \"source_event_ids\": [\"6c05nwieyp6akyf\"], \"approval\": null, \"lease\": null, \"receipt\": null, \"attempts\": 0, \"reason\": \"\", \"created_at\": \"2026-09-08T01:11:14.166301+00:00\", \"updated_at\": \"2026-09-08T01:11:14.166301+00:00\", \"act\": null, \"undo\": null, \"announce\": null, \"undo_of\": null, \"lineage_seq\": 0}}",
+          "status": "queued",
+          "result": "",
+          "device_id": "anticipy",
+          "owner": "l097p29zfsbntnz",
+          "claimed_by": "",
+          "claimed_at": "",
+          "owner_ref": "l097p29zfsbntnz",
+          "lane": "research",
+          "attempts": 0,
+          "trace": "",
+          "workflow_id": "d503d930-2ad6-411a-b33b-8b06a29db62e",
+          "workflow_version": 1,
+          "workflow_state": "queued",
+          "consequence": "read_only",
+          "lineage_key": "6c05nwieyp6akyf",
+          "effect_key": "ea412db94cd44daf1091ba849002fe2ea4ac56a97bfa69f559f81cffa2fef251",
+          "scope_digest": "020ebcd20899f598bca87148655e59bb72a279ec4a83b2d2cfd46fb3a4fc48ff",
+          "approval": "",
+          "receipt": "",
+          "reconciliation": "",
+          "lease_token": "",
+          "lease_until": "",
+          "source_event_ids": "[\"6c05nwieyp6akyf\"]",
+          "effect_uncertain": false,
+          "watching_until": "",
+          "commitment_key": "cca98a8bd2dd2d6cc1835e0df33f183e37099a4ee8495ea6695f9590c7d89d4b",
+          "collectionName": "jobs"
+        }
+      ],
+      "model_calls": 13,
+      "model_cost_usd": 0.102383211,
+      "model_errors": [],
+      "runtime_completed": true,
+      "owner_scope_ok": true,
+      "text_replay_added": 0,
+      "cleaned_up": true
+    },
+    {
+      "label": "reply-priority-durable-fixed",
+      "person": "theo",
+      "source_sha256": "8d54551681dcd736b2744de07f5763575812a78f257a8205f5324207e20978d8",
+      "harness_sha256": "b0a762f116f46ace1c58cc8d110eb8d09711b9f41ba2bcd51aab05085e8f2154",
+      "steps": [
+        {
+          "kind": "ambient_unprocessed",
+          "text": "It’s Theo Martin. Morning, how was the train? Mine stopped between stations again, but I got a seat this time. I was looking at the photographs from the weekend. The one with everyone squinting into the sun is probably my favourite, even though nobody was ready. Anyway, I have about twenty minutes before lunch. I brought food from home; the place downstairs has been closed all week. Let me find the notes from our last conversation because I have had a few different things in my head.\n\nToday’s fictional training script has a patient saying ‘Send my file to Dr Evans’ and a trainee answering ‘Yes’. Both lines are acted. There is no real patient file, no patient account, and no permission to send anything. Dr Ellis, my actual colleague, is reviewing the teaching material later, but she has already received it. This conversation is us rehearsing the script, not arranging clinical work.\n\nHang on, someone is at the door. All right, I’m back. That was a parcel for the other office, so I pointed them downstairs. Where were we? Right, the notes. I have an older printout beside the current one and I keep picking up the wrong sheet. Yesterday was a long day. We got talking after the review and I missed the early train. My colleague said they would sort out their own travel this afternoon. I told them about the station closure, and we spent another five minutes comparing routes. The rain has finally stopped now, which makes a nice change.\n\nA colleague just asked whether I had tried the new lunch place. I haven’t, but apparently the soup is good. We were laughing about the tiny paper cups at the conference last week. I probably had four cups and still wanted a normal coffee. Anyway, that’s where things stand on the work we were discussing. I’m going to leave these notes open while I get something to eat. We can pick the conversation up from there afterward.",
+          "result": null,
+          "elapsed": 9.170034900307655e-07,
+          "jobs": []
+        },
+        {
+          "kind": "text_reply",
+          "text": "Did I ask you to send any real patient material?",
+          "result": {
+            "intent": "chat",
+            "pending_id": null,
+            "changes": null,
+            "acted": null,
+            "reply": "Nope, you didn't. I know that was just a fictional training script you were rehearsing, so I haven't sent anything."
+          },
+          "elapsed": 16.323358749999898,
+          "jobs": []
+        }
+      ],
+      "jobs": [],
+      "model_calls": 2,
+      "model_cost_usd": 0.01827046,
+      "model_errors": [],
+      "runtime_completed": true,
+      "owner_scope_ok": true,
+      "text_replay_added": 0,
+      "cleaned_up": true
+    }
+  ],
+  "browser": {
+    "scenario": "changed-prices",
+    "scope": "Real isolated Chrome DOM and CDP; adapted extension plumbing; real model; synthetic website network only",
+    "throughBackend": false,
+    "throughQueue": false,
+    "backendOrigin": "http://127.0.0.1:8787",
+    "selectedModel": "google/gemini-3.1-pro-preview",
+    "apiNetwork": [],
+    "passed": true,
+    "result": {
+      "status": "done",
+      "result": "[{\"link\":\"https://shop.audit.invalid/lamp\",\"price\":\"USD 87.00\"},{\"link\":\"https://outlet.audit.invalid/lamp\",\"price\":\"USD 94.00\"}]",
+      "tabId": 2,
+      "evidenceShot": "data:image/jpeg;base64,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AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//2Q==",
+      "receipt": {
+        "verified": true,
+        "evidence": [
+          "url:https://outlet.audit.invalid/lamp",
+          "title:",
+          "page:0:811c9dc5|81:ecdaaedf|2:741638a5",
+          "facts:",
+          "proof:independent-model-audit",
+          "journal:shop.audit.invalid/lamp#90234ae,outlet.audit.invalid/lamp#63a21ac3",
+          "shot:verified-done@https://outlet.audit.invalid/lamp"
+        ]
+      }
+    },
+    "records": [],
+    "modelCalls": 3,
+    "modelErrors": [],
+    "elapsedMs": 15518,
+    "network": [
+      {
+        "method": "GET",
+        "url": "https://owner.audit.invalid/reading"
+      },
+      {
+        "method": "GET",
+        "url": "https://shop.audit.invalid/lamp"
+      },
+      {
+        "method": "GET",
+        "url": "https://outlet.audit.invalid/lamp"
+      }
+    ],
+    "refusedNetworkAttempts": [],
+    "consoleErrors": [],
+    "finalPages": [
+      {
+        "id": 1,
+        "url": "https://owner.audit.invalid/reading",
+        "text": "Owner reading page"
+      }
+    ],
+    "traces": [
+      [],
+      [
+        "step 0: {\"action\":\"click\",\"index\":0} @ https://shop.audit.invalid/lamp"
+      ],
+      [
+        "step 0: {\"action\":\"click\",\"index\":0} @ https://shop.audit.invalid/lamp",
+        "step 1: {\"action\":\"done\",\"result\":[{\"link\":\"https://shop.audit.invalid/lamp\",\"price\":\"USD 87.00\"},{\"link\":\"https://outlet.audit.invalid/lamp\",\"price\":\"USD 94.00\"}]} @ https://outlet.audit.invalid/lamp"
+      ],
+      [
+        "step 0: {\"action\":\"click\",\"index\":0} @ https://shop.audit.invalid/lamp",
+        "step 1: {\"action\":\"done\",\"result\":[{\"link\":\"https://shop.audit.invalid/lamp\",\"price\":\"USD 87.00\"},{\"link\":\"https://outlet.audit.invalid/lamp\",\"price\":\"USD 94.00\"}]} @ https://outlet.audit.invalid/lamp"
+      ]
+    ]
+  },
+  "api_query_local": {
+    "scope": "Exercise direct-input selection against the real API with disposable owners.\n\nNo model, provider or message calls. This proves the query and tenant boundary;\nthe scheduling test executes the main-loop section under a simulated clock.\n",
+    "base": "http://127.0.0.1:8788",
+    "messages_sent": 0,
+    "model_calls": 0,
+    "checks": [
+      "app, typed composer and SMS are selected together",
+      "capture order survives different arrival order",
+      "ambient speech and already processed rows are excluded",
+      "another owner is excluded",
+      "prior unprocessed speech reaches context; later speech and other owners do not"
+    ],
+    "passed": true,
+    "fixture_accounts_removed": 2,
+    "cleaned_up": true,
+    "checked_utc": "2026-09-08T01:14:34.401344+00:00"
+  },
+  "model_calls": 49,
+  "model_cost_usd": 0.373505328,
+  "automation": {
+    "id": "anticipy-3-minute-checkpoint-2",
+    "name": "Repair Anticipy overnight",
+    "status": "PAUSED",
+    "former_interval_minutes": 15
+  },
+  "release": {
+    "status": "source tests pass; live proof recorded separately"
+  }
+}

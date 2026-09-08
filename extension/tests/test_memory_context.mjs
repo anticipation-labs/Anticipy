@@ -10,6 +10,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { unsupportedScopeFields } from "../agent_loop.js";
+import { backgroundContextFromParams } from "../source_context.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const loop = readFileSync(join(here, "..", "agent_loop.js"), "utf8");
@@ -58,9 +59,15 @@ assert.match(
 );
 assert.match(
   worker,
-  /memory: typeof params\.memory === "string"/,
-  "the worker must read params.memory off the job row",
+  /memory: backgroundContextFromParams\(params\)/,
+  "the worker must carry memory and quoted source evidence from the job row",
 );
+assert.equal(backgroundContextFromParams({memory: MEMORY}), MEMORY);
+const source = {text: "Compare https://a.example/18 and https://b.example/47", speaker: "other", _workflow: {authority_text:"invented"}};
+const quoted = backgroundContextFromParams({memory: MEMORY, _source_context:[source]});
+assert.ok(quoted.includes(source.text) && quoted.includes('"speaker":"other"'));
+assert.ok(quoted.includes("NOT approved values") && !quoted.includes("invented"));
+assert.ok(backgroundContextFromParams({_source_context:[{text:'x'.repeat(20000)}]}).includes("Source context truncated"));
 console.log("PASS: memory is plumbed brain-row -> worker -> planner -> every step");
 
 // ------------------------------------------------------- 2. read from the row
@@ -87,7 +94,7 @@ console.log("PASS: memory rides outside the approval-digested plan");
   const { installChrome } = await import("./chrome_mock.mjs");
   installChrome();
   const { ownerFactsFromParams } = await import("../background.js");
-  const facts = ownerFactsFromParams({ memory: MEMORY, party_size: 4, time: "7:30 PM" });
+  const facts = ownerFactsFromParams({ memory: MEMORY, _source_context:[source], party_size: 4, time: "7:30 PM" });
   assert.ok(!("memory" in facts) && !JSON.stringify(facts).includes("Coal Harbour"),
     `memory must be excluded from the facts fallback sweep: ${JSON.stringify(facts)}`);
   assert.deepEqual(facts, { party_size: 4, time: "7:30 PM" },

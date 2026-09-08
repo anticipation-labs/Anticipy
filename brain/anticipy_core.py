@@ -1526,7 +1526,7 @@ class Anticipy:
              speaker: Optional[str] = None,
              link_candidates: Optional[list[str]] = None,
              source_event_id: str = "", lineage_key: str = "",
-             in_meeting: bool = False) -> dict:
+             in_meeting: bool = False, source_context: Optional[list[dict]] = None) -> dict:
         """One transcript line in; memory, decision, and delegation out.
 
         channel names where the line arrived from ("sms" when he texted it).
@@ -1566,13 +1566,19 @@ class Anticipy:
         caller owns the mapping back to ids, because only the caller knows
         them. Omitted — the default, and what every caller did before links
         existed — the question is never asked and no verdict is produced."""
-        with decision_budget():
-            return self._hear(line, context=context, may_say=may_say,
-                              explicit=explicit, channel=channel,
-                              capture_source=capture_source, speaker=speaker,
-                              link_candidates=link_candidates,
-                              source_event_id=source_event_id,
-                              lineage_key=lineage_key, in_meeting=in_meeting)
+        from .source_context import flat_records
+        previous_context = getattr(self, "_source_context", [])
+        self._source_context = flat_records(source_context)
+        try:
+            with decision_budget():
+                return self._hear(line, context=context, may_say=may_say,
+                                  explicit=explicit, channel=channel,
+                                  capture_source=capture_source, speaker=speaker,
+                                  link_candidates=link_candidates,
+                                  source_event_id=source_event_id,
+                                  lineage_key=lineage_key, in_meeting=in_meeting)
+        finally:
+            self._source_context = previous_context
 
     def _hear(self, line: str, context: Optional[list[str]] = None,
               may_say=None, explicit: bool = False, channel: str = "",
@@ -3652,6 +3658,10 @@ class Anticipy:
                    touches: str | None = None,
                    act: Optional[ActDeclaration] = None) -> Optional[str]:
         self._running_dup = None
+        # Persist quoted sources before routing so every hand sees the same
+        # evidence. Underscore metadata is excluded from approval facts.
+        if getattr(self, "_source_context", None):
+            params = dict(params, _source_context=self._source_context)
         if touches not in ("compute", "read", "world"):
             effect = self._task_effect(goal, {"request": params})
             touches = effect.touches

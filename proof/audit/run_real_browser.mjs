@@ -137,6 +137,7 @@ globalThis.fetch=async (url,options={})=>{
  return response;
 };
 const {runAgentGoal}=await import('../../extension/agent_loop.js');const traces=[];let result;const started=Date.now();
+const {backgroundContextFromParams}=await import('../../extension/source_context.js');
 try{
  if(throughQueue){
   if(!throughBackend||!backendFixture.jobId)throw new Error('Queue mode requires an owned fixture job');
@@ -153,6 +154,7 @@ try{
   if(!result)throw new Error('Queue did not reach a terminal or actionable state');
  }else {
   const options={apiKey:throughBackend?'backend-proxy':'metered-audit-transport',model:selectedModel,startUrl:chosen.start,maxSteps:12,budgetMs:150000,authorized:true,readOnly:chosen.readOnly,scope:chosen.scope||chosen.goal,planning:true,stillLive:async()=>true,ownerProfile:chosen.ownerProfile||{first_name:'Casey',email:'owner@audit.invalid'},onTrace:row=>traces.push(structuredClone(row))};
+  options.memory=backgroundContextFromParams(authored?.jobParams||{});
   result=await runAgentGoal(chosen.goal,options);
   if(authored?.consentReply && result.status==='needs_user' && result.offerRef){
    const question=structuredClone(result);

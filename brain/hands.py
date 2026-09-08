@@ -331,6 +331,7 @@ class HandContext:
     # itself (the tests, the live probe). None means read over backend_url.
     catalogs: Optional[dict] = None
     effect_channel: str = ""
+    source_context: str = ""
 
     def connected(self, toolkit: str) -> Optional[ConnectedApp]:
         want = (toolkit or "").strip().lower()
@@ -594,7 +595,7 @@ def choose_hand(goal: str, context: Optional[HandContext] = None,
         return HandVerdict(HAND_UNASKED, "no live model to ask")
     user = (f"STEP: {goal}\n"
             f"HEARD: {ctx.source.strip() if ctx.source else '(nothing recorded)'}\n"
-            + facts_block(ctx))
+            + facts_block(ctx) + ctx.source_context)
     if ctx.effect_channel == "world":
         user += ("\nThis entire task has a declared external effect. Research can only "
                  "read/compose; it cannot carry out this task's external action. "
@@ -892,7 +893,7 @@ def _missing_required(row: CatalogTool, args: dict) -> tuple:
 
 
 def choose_tool(goal: str, toolkit: str, catalog, llm=None, heard: str = "",
-                effect: str = "") -> ToolVerdict:
+                effect: str = "", source_context: str = "") -> ToolVerdict:
     """Which ONE tool from this toolkit's catalog does the step, with what
     arguments. One question, three answers plus the honest fourth; see the
     module docstring for the polarity. `catalog` is the vendor's rows
@@ -926,7 +927,7 @@ def choose_tool(goal: str, toolkit: str, catalog, llm=None, heard: str = "",
             f"APP: {toolkit} — connected; the router sent this step to its API"
             f"{' as a ' + planned if planned else ''}\n"
             f"CATALOG ({len(rows)} tools, the vendor's own list, in the vendor's order):\n"
-            + catalog_block(rows))
+            + catalog_block(rows) + source_context)
     suffix = ""
     why = "unreadable reply, twice"
     asked = 0
@@ -1024,7 +1025,8 @@ def plan_api_step(verdict: HandVerdict, goal: str, ctx: HandContext,
         return verdict
     app = verdict.app
     tv = choose_tool(goal, app, catalog_for(ctx, app), llm=llm,
-                     heard=ctx.source, effect=verdict.effect)
+                     heard=ctx.source, effect=verdict.effect,
+                     source_context=ctx.source_context)
     note = dict(tool=tv.tool, args=tv.args, tool_verdict=tv.verdict,
                 tool_asked=tv.asked)
     if not tv.chosen:
@@ -1173,12 +1175,14 @@ def gather_context(params: Optional[dict] = None, owner_ref: str = "",
     """The facts for one step. With no owner or no backend nothing is asked
     of the network and every fact is UNKNOWN."""
     p = params if isinstance(params, dict) else {}
+    from .source_context import quoted_context
     ref = active_owner_ref(owner_ref)
     base = str(backend_url or os.environ.get("ANTICIPY_PB") or "").strip()
     return HandContext(
         connections=read_connections(ref, base),
         browser_online=browser_is_online(ref, base),
         source=str(p.get("source") or ""),
+        source_context=quoted_context(p.get("_source_context")),
         rung=NO_LEDGER_RUNG,
         backend_url=base,
         effect_channel=str((p.get("_effect") or {}).get("touches") or "")

@@ -12,6 +12,7 @@ import {
   MAX_STEPS as READ_MAX_STEPS, leaseLapsed, runSupervisedRead,
 } from "./supervised_read.js";
 import { backendBase } from "./config.js";
+import { backgroundContextFromParams } from "./source_context.js";
 import { backendFetch as fetch } from "./backend_transport.js";
 import {
   effectIntentAfter,
@@ -28,7 +29,7 @@ import {
 // imported module alone can leave Chrome running a cached worker graph for an
 // unpacked extension; changing this entry file forces a fresh registration,
 // and the same marker is written into every job trace as runtime proof.
-const ENGINE_BUILD = "0.17.0";
+const ENGINE_BUILD = "0.18.0";
 
 const BACKEND_LLM = "backend-proxy";
 // Job traffic authenticates as THIS ONE AGENT and nothing more. An earlier
@@ -1708,7 +1709,7 @@ async function runJobInner(job, params) {
         // Read from params, NOT from params._workflow: memory is background,
         // not part of the approved scope, and anything inside _workflow is
         // covered by the digest his approval is bound to.
-        memory: typeof params.memory === "string" ? params.memory.slice(0, 1200) : "",
+        memory: backgroundContextFromParams(params),
         // WHAT THE SERVER LOOKED UP BEFORE LETTING GO OF THIS ROW.
         //
         // The research gate parks a world-touching errand on the research lane

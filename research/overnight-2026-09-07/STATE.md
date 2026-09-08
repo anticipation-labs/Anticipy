@@ -1,5 +1,22 @@
 # Anticipy overnight repair — 7 September 2026
 
+## Current checkpoint — September 8, 01:18 UTC (September 7 Vancouver)
+
+- The scheduled “Repair Anticipy overnight” follow-up is PAUSED. Do not resume it
+  or broaden the audit. Finish only the reply-priority release and record receipts.
+- The fifteen-person lab is complete and its five repairs are live at 61db0e7d;
+  report/evidence commit226d4b1c is pushed. See persona-lab-status.md.
+- The bounded follow-up now passes 3,033 Python tests (2 skipped), 83 browser
+  suites, iOS pre/post checks, local real-API isolation tests and actual-model
+  lost-context/fiction tests. Isolated Chrome correctly returns both link prices.
+  See reply-priority-repair.md and reply-priority-evidence.json.
+- New source is ready for CI, NOT YET VERIFIED LIVE. Publish brain, API assets
+  (extension0.18.0), and iOS170 (extension warning reference only). Verify exact
+  live brain source/process/memory, API ZIP bytes and independent Apple receipt.
+- Original budget continues: follow-up49calls/$0.373505328; no ledger reset.
+- Personal Chrome update remains blocked by tool policy; no bypass. Real OAuth,
+  carrier delivery and fresh listening latency are not proven by these fixtures.
+
 ## Latest harness source audit — approximately 19:00 UTC
 
 - Publication update: the team merged PR #61 as `5ef2a96a` during this audit.

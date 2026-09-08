@@ -31,7 +31,7 @@ def json_value(value):
     if hasattr(value,'isoformat'):return value.isoformat()
     raise TypeError(f'Unrecordable evidence type: {type(value).__name__}')
 
-def child(person,label):
+def child(person,label,unheard_ambient=False):
     import requests
     from unittest.mock import patch
     from proof.audit.run_transcripts import isolated_network
@@ -112,6 +112,7 @@ def child(person,label):
     def sensed_context(params=None,**kwargs):
         p=params or {}
         return dataclasses.replace(context,source=str(p.get('source') or ''),
+            source_context=__import__('brain.source_context',fromlist=['quoted_context']).quoted_context(p.get('_source_context')),
             effect_channel=str((p.get('_effect') or {}).get('touches') or ''))
     result={'person':person['id'],'name':person['name'],'scope':__doc__,'source_sha256':source_hash(),'corpus_sha256':hashlib.sha256(CORPUS.read_bytes()).hexdigest(),
         'harness_sha256':hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
@@ -121,8 +122,8 @@ def child(person,label):
         with patch.object(hands,'gather_context',side_effect=sensed_context):
             ev=event(person['transcript'],'transcript','phone_mic')
             start=time.monotonic()
-            decision=a.hear(person['transcript'],explicit=False,capture_source='phone_mic',speaker='owner',source_event_id=ev['id'],lineage_key=ev['id'])
-            result['steps'].append({'kind':'ambient','text':person['transcript'],'result':decision,'elapsed':time.monotonic()-start,'jobs':rows('jobs')})
+            decision=(None if unheard_ambient else a.hear(person['transcript'],explicit=False,capture_source='phone_mic',speaker='owner',source_event_id=ev['id'],lineage_key=ev['id']))
+            result['steps'].append({'kind':'ambient_unprocessed' if unheard_ambient else 'ambient','text':person['transcript'],'result':decision,'elapsed':time.monotonic()-start,'jobs':rows('jobs')})
             atomic_json(run_dir/'result.json',result)
             for job in rows('jobs'):
                 if job['status'] in ('awaiting_confirm','needs_user') and job.get('result'):
@@ -162,19 +163,20 @@ def child(person,label):
             and not result.get('model_errors'))
 
 def main():
-    parser=argparse.ArgumentParser();parser.add_argument('--label',required=True);parser.add_argument('--ids');parser.add_argument('--child',action='store_true');parser.add_argument('--held-out',action='store_true');args=parser.parse_args()
+    parser=argparse.ArgumentParser();parser.add_argument('--label',required=True);parser.add_argument('--ids');parser.add_argument('--child',action='store_true');parser.add_argument('--held-out',action='store_true');parser.add_argument('--unheard-ambient',action='store_true');args=parser.parse_args()
     data=CORPUS.read_bytes()
     if hashlib.sha256(data).hexdigest()!=CORPUS.with_suffix('.sha256.txt').read_text().strip():raise RuntimeError('Frozen corpus changed')
     people=json.loads(data)['personas'];selected=[p for p in people if not args.ids or p['id'] in args.ids.split(',')]
     if any(p['split']=='held_out' for p in selected) and not args.held_out:raise RuntimeError('Held-out cases require final evaluation flag')
     if args.child:
         if len(selected)!=1:raise RuntimeError('One owner per child process')
-        raise SystemExit(0 if child(selected[0],args.label) else 1)
+        raise SystemExit(0 if child(selected[0],args.label,args.unheard_ambient) else 1)
     def launch(p):
         log=STATE/(args.label+'-'+p['id']+'.log');log.parent.mkdir(parents=True,exist_ok=True)
         env={k:v for k,v in os.environ.items() if k in ('PATH','HOME','LANG','TMPDIR')}
         env.update(PYTHONPATH=str(ROOT),PYTHONUNBUFFERED='1',ANTICIPY_MODEL='deepseek/deepseek-v3.2',ANTICIPY_STRONG_MODEL='google/gemini-3.1-pro-preview')
         cmd=[sys.executable,str(Path(__file__).resolve()),'--child','--label',args.label,'--ids',p['id']]+(['--held-out'] if args.held_out else [])
+        if args.unheard_ambient:cmd.append('--unheard-ambient')
         with log.open('w') as out:
             try:r=subprocess.run(cmd,cwd=ROOT,env=env,stdout=out,stderr=subprocess.STDOUT,timeout=480)
             except subprocess.TimeoutExpired:print(p['id'],'HARNESS TIMEOUT',flush=True);return False
