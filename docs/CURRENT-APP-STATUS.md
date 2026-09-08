@@ -1,21 +1,31 @@
 # Anticipy app readiness
 
-Backend last checked September 7, 2026, 5:14 PM Vancouver time.
+Backend last checked September 7, 2026, 6:24 PM Vancouver time.
 Phone and installed-extension observations below retain their earlier timestamps.
 This is a dated readiness check, not a promise that every user journey works.
 
 ## What is live
 
-- iPhone build **169** is available to the owner's Internal TestFlight group.
-  Apple availability was independently verified; the installed phone version was
-  not read during this check.
-- API and brain source: `61db0e7dc7ca8c2cb7bad11bfa7f36d73aecc2ea`.
-  A direct production read at 00:14:24 UTC on September 8 returned HTTP 200,
-  eight running served workers with matching source and current memory snapshots,
-  and zero failed archive cleanups. The API URL serves the same commit and
-  version `f1e83a35-63a2-421a-ab9c-880239650d08`.
-- That repair commit was pushed to `cloudflare-backend`; the lab/report commit
-  adds reproducible evidence without changing the deployed runtime source.
+- iPhone build **170** is available to the owner's Internal TestFlight group.
+  Apple availability was independently verified at 01:29:13 UTC on September 8
+  by query 34176788640; the installed phone version was not read during this check.
+  Build 170 updates the extension-version warning; build169 carries the earlier
+  task-card and delivery-status repairs.
+- API and brain source: `cb2010957877eec0a8c67138b57060dc1bef3110`.
+  A direct production read at 01:24:55 UTC on September 8 returned HTTP 200,
+  all eight workers running the exact source with current memory snapshots,
+  and zero failed archive cleanups. API version:
+  `af5a0a33-ab22-4cab-8d38-ecc108e3e343`.
+- Extension **0.18.0** is published: all three downloads match committed bytes,
+  SHA-256 `4e409dcec8fa01669fe07fb60e83ef14870bf6cd0327a9db7a65e346b2a4690a`.
+- The overnight scheduled follow-up is **PAUSED**. The fixture API on 8788 and
+  audit model gateway on 8790 are stopped; spend/evidence files are retained.
+- [Reply-priority repair and evidence](../research/overnight-2026-09-07/reply-priority-repair.md):
+  direct answers precede the speech backlog and retain earlier quoted context
+  through task execution. 3,033 Python tests (2 skips), 83 browser suites and
+  the iOS checks passed. Real-model lost-links and fiction cases passed;
+  isolated Chrome read the retained URLs and returned both fixture prices.
+  [Live release receipt](../research/overnight-2026-09-07/reply-priority-release.json).
 
 ## Latest backend repairs and synthetic lab
 
@@ -48,11 +58,11 @@ notification preferences silently.
 
 | Area | Evidence | Required next proof |
 |---|---|---|
-| Installed browser | The owner's paired Chrome agent reported **0.15.0** at 22:49:54 UTC. The public ZIP was freshly checked and contains **0.17.0**, SHA-256 `2e36a5de26fd89dd02336b6e3faa4f6b2523625b4fd9ec9f50ed8a0d22caaae7`. | Load the repaired extension, verify its new heartbeat, and complete a harmless task through that installed extension's queue and result receipt. Updating TestFlight does not update Chrome. |
+| Installed browser | The owner's paired Chrome agent reported **0.15.0** at 22:49:54 UTC. The published ZIP now contains **0.18.0**, verified byte-for-byte above. | Load the repaired extension, verify its new heartbeat, and complete a harmless task through that installed extension's queue and result receipt. Updating TestFlight does not update Chrome. |
 | Browser execution | Earlier live-model synthetic-page tests passed comparison, appointment form, login handoff, capacity and hostile-content cases. One comparison traversed the live queue with adapted extension plumbing. Geometry fixes were separately tested in real Chrome. | Those proofs do not establish arbitrary bookings or task completion in the owner's installed browser. |
 | API connections | Earlier live stored-event tests passed app listing, link creation, contextual acceptance, quoted-command rejection and task-card routing. | Complete real provider authorization, read an agreed record, and resume the original task. A connection link or catalog match alone does not prove these steps. |
 | Proactive understanding | Conversation-led discovery is wired. The whole-conversation sorter remains non-acting; several other signal collectors have no production input callers. Registered legacy semantic heuristics remain. | Complete those integration paths using contextual model decisions and test against both actionable and non-actionable conversations. Global absence of word-based reasoning is not established. |
-| Listening speed | The earlier incident measured a substantial speech-processing backlog. | Repair the bottleneck and measure fresh transcript-to-question/result latency. Worker health does not prove fast listening. |
+| Listening speed | The earlier incident measured a substantial speech-processing backlog. Reply scheduling is now repaired and verified in a simulated-clock main-loop test. | Measure fresh phone transcript-to-question/result latency. An in-flight decision, import or other serial duty can still delay replies; worker health does not prove fast listening. |
 
 Direct inspection or modification of Chrome's extension settings was blocked by
 the browser tool's URL security policy. No alternate browser-control route was

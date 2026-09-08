@@ -1,0 +1,102 @@
+{
+  "checked_utc": "2026-09-08T01:24:55.806360+00:00",
+  "commit": "cb2010957877eec0a8c67138b57060dc1bef3110",
+  "passed": true,
+  "brain": {
+    "http": 200,
+    "revision": "cb2010957877eec0a8c67138b57060dc1bef3110",
+    "fleet_ok": true,
+    "workers": 8,
+    "matching_source": 8,
+    "running_current_memory": 8,
+    "cleanup_failed": 0,
+    "source_sha256": "8d54551681dcd736b2744de07f5763575812a78f257a8205f5324207e20978d8"
+  },
+  "api": {
+    "http": 200,
+    "revision": "cb2010957877eec0a8c67138b57060dc1bef3110",
+    "version": "af5a0a33-ab22-4cab-8d38-ecc108e3e343"
+  },
+  "downloads": [
+    {
+      "name": "anticipy-extension.zip",
+      "http": 200,
+      "matches_source": true,
+      "sha256": "4e409dcec8fa01669fe07fb60e83ef14870bf6cd0327a9db7a65e346b2a4690a",
+      "version": "0.18.0"
+    },
+    {
+      "name": "anticipy-claude-version-extension.zip",
+      "http": 200,
+      "matches_source": true,
+      "sha256": "4e409dcec8fa01669fe07fb60e83ef14870bf6cd0327a9db7a65e346b2a4690a",
+      "version": "0.18.0"
+    },
+    {
+      "name": "anticipy-codex-version-extension.zip",
+      "http": 200,
+      "matches_source": true,
+      "sha256": "4e409dcec8fa01669fe07fb60e83ef14870bf6cd0327a9db7a65e346b2a4690a",
+      "version": "0.18.0"
+    }
+  ],
+  "api_behavior": {
+    "scope": "Exercise direct-input selection against the real API with disposable owners.\n\nNo model, provider or message calls. This proves the query and tenant boundary;\nthe scheduling test executes the main-loop section under a simulated clock.\n",
+    "base": "https://api.anticipy.ai",
+    "messages_sent": 0,
+    "model_calls": 0,
+    "checks": [
+      "app, typed composer and SMS are selected together",
+      "capture order survives different arrival order",
+      "ambient speech and already processed rows are excluded",
+      "another owner is excluded",
+      "prior unprocessed speech reaches context; later speech and other owners do not"
+    ],
+    "passed": true,
+    "fixture_accounts_removed": 2,
+    "cleaned_up": true,
+    "checked_utc": "2026-09-08T01:19:40.922885+00:00"
+  },
+  "ci": {
+    "brain": 34176247513,
+    "api": 34176248424,
+    "invariants": 34176231535,
+    "ios": 34176231439,
+    "asc_query": 34176788640
+  },
+  "ios": {
+    "build": 170,
+    "processing_state": "VALID",
+    "expired": false,
+    "internal_state": "IN_BETA_TESTING",
+    "group": "Internal",
+    "group_tester_count": 2,
+    "external_state": "READY_FOR_BETA_SUBMISSION",
+    "available_to_owner_internal_group": true,
+    "installed_phone_build_not_observed": true,
+    "checked_utc": "2026-09-08T01:29:13Z",
+    "workflow_run": 34176788640
+  },
+  "api_behavior_after_release": {
+    "scope": "Exercise direct-input selection against the real API with disposable owners.\n\nNo model, provider or message calls. This proves the query and tenant boundary;\nthe scheduling test executes the main-loop section under a simulated clock.\n",
+    "base": "https://api.anticipy.ai",
+    "messages_sent": 0,
+    "model_calls": 0,
+    "checks": [
+      "app, typed composer and SMS are selected together",
+      "capture order survives different arrival order",
+      "ambient speech and already processed rows are excluded",
+      "another owner is excluded",
+      "prior unprocessed speech reaches context; later speech and other owners do not"
+    ],
+    "passed": true,
+    "fixture_accounts_removed": 2,
+    "cleaned_up": true,
+    "checked_utc": "2026-09-08T01:29:30.823640+00:00"
+  },
+  "automation_status": "PAUSED",
+  "temporary_services_stopped": [
+    8788,
+    8790
+  ]
+}

@@ -1,21 +1,26 @@
 # Anticipy overnight repair — 7 September 2026
 
-## Current checkpoint — September 8, 01:18 UTC (September 7 Vancouver)
+## Current checkpoint — September 8, 01:30 UTC (September 7 Vancouver)
 
-- The scheduled “Repair Anticipy overnight” follow-up is PAUSED. Do not resume it
-  or broaden the audit. Finish only the reply-priority release and record receipts.
-- The fifteen-person lab is complete and its five repairs are live at 61db0e7d;
-  report/evidence commit226d4b1c is pushed. See persona-lab-status.md.
-- The bounded follow-up now passes 3,033 Python tests (2 skipped), 83 browser
-  suites, iOS pre/post checks, local real-API isolation tests and actual-model
-  lost-context/fiction tests. Isolated Chrome correctly returns both link prices.
-  See reply-priority-repair.md and reply-priority-evidence.json.
-- New source is ready for CI, NOT YET VERIFIED LIVE. Publish brain, API assets
-  (extension0.18.0), and iOS170 (extension warning reference only). Verify exact
-  live brain source/process/memory, API ZIP bytes and independent Apple receipt.
-- Original budget continues: follow-up49calls/$0.373505328; no ledger reset.
-- Personal Chrome update remains blocked by tool policy; no bypass. Real OAuth,
-  carrier delivery and fresh listening latency are not proven by these fixtures.
+- COMPLETE: bounded reply-priority repair and release. STOP; do not restart
+  the lab, broaden this repair or resume the scheduled task without new work.
+- Both overnight thread follow-ups are PAUSED. Temporary fixture API 8788 and
+  model gateway 8790 are stopped; evidence and spend ledgers remain on disk.
+- Source cb201095 is pushed and verified LIVE: eight brain workers, matching
+  source/process/current memory, API revision and all three extension 0.18.0 ZIPs.
+- iOS 170 is VALID and available to the owner’s Internal group. Independent Apple
+  query 34176788640 at 01:29:13 UTC verifies this; no claim the phone installed it.
+- Full verification: 3,033 Python passes/2 skips, all 83 browser suites, iOS
+  pre/post checks and committed build identity. Live API after release passes
+  input order/context/tenant isolation; both disposable accounts erased.
+- Actual models retain the two missing URLs in one task; fictional dialogue
+  creates none. Isolated Chrome returns both prices/links from saved context.
+  Follow-up: 49 calls/$0.373505328, within the existing audit ledgers; no reset.
+- Read reply-priority-repair.md and reply-priority-release.json for this release.
+  The original 15-person lab/five fixes/PDF remain in persona-lab-status.md.
+- Remaining limits: personal Chrome install update blocked by tool policy; real
+  OAuth, carrier delivery and fresh phone listening latency are not established.
+  In-flight decisions/imports can still delay replies. No universal-ready claim.
 
 ## Latest harness source audit — approximately 19:00 UTC
 
@@ -89,7 +94,7 @@
   Added live probe found MISSING SENDBLUE_WEBHOOK_SECRET on API (503).
   Provider already had a masked secret; initial empty-field interpretation
   corrected.998fca6adds narrow CI secret operation and mandatory API auth probe.
-  CI34131481917 installed fresh secret; unsigned403/signed-invalid-JSON400.
+  CI 34131481917 installed fresh secret; unsigned403/signed-invalid-JSON400.
   Same secret saved in SendBlue anticipationlabs dashboard; refreshed readback
   matched. Provider URL remains api.anticipy.ai/sms/sendblue. No real SMS sent.
   Evidence sendblue-retirement.md,sendblue-live-auth.json. Provider Free API Mode
@@ -115,7 +120,7 @@
 ## Previous checkpoint — 2026-09-07 13:39 UTC
 
 
-- iOS16410c8eb2 uploaded06:20:18Vancouver; CI34125816490 success.
+- iOS16410c8eb2 uploaded06:20:18Vancouver; CI 34125816490 success.
   ASC34127186288 confirms VALID and Internal IN_BETA_TESTING. That read timed
   out listing individual testers;163previously verified Omar in that same group.
   Sanket164 is ATTACHED by34127548182 but Apple refuses new beta submission
@@ -146,7 +151,7 @@
 
 
 - iOS164 committed10c8eb20ec240f47109c2f57b057dc869e3baba4, pushed.
-  CI34125816490 running; ASC164 not yet queried. Full local suites passed,
+  CI 34125816490 running; ASC164 not yet queried. Full local suites passed,
   simulator build succeeded. New capture/pause/resume/long result/relaunch
   checked. Simulator back on Today with microphone stopped. See ui-164.md.
 - c67 brain is LIVE,8/8 workers/source6746edd8519d8d78a17fd98cb204680c14c97b617c1f934e0b5d93167f603327.
@@ -156,7 +161,7 @@
   remains0.15; browser-settings restriction still applies. Sanitized evidence
   browser-queue-results.json; raw screenshots/base64 remain local only.
 - Local command migration applied. UI brain restarted at c67, session54948.
-  Local Wrangler89202 on8787, model gateway60349 on8790.
+  Local Wrangler89202 on8787, model gateway60349 on 8790.
 - Crossdomain c67 batch STOPPED after shared premature-approval defect:
   eight completed profiles1,2,3,4,5,6,8,9;10/11 interrupted. Do not call this
   full50 coverage. First six stopped before research/drafting. Status evidence
@@ -176,7 +181,7 @@
 ## Previous checkpoint — 2026-09-07 12:44 UTC
 
 
-- iOS163 commit970f31d shipped through CI34120389837. Independent ASC34121890032
+- iOS163 commit970f31d shipped through CI 34120389837. Independent ASC34121890032
   confirms VALID, internal IN_BETA_TESTING, account ok***@icloud.com in Internal.
   Uploaded05:24Vancouver. External review remains separate; do not claim Sanket
   can install163. Simulator pairing/retry/disconnect verified, personal unpacked
@@ -473,7 +478,7 @@ and held-out/API-connection tests, clean synthetic accounts, update visual PDF.
 ## Release162 and reply deployment preparation (10:33 UTC)
 
 -iOS/browser source committed81dafd1393bb79d982f087fe2279aff84240a89c.
- CI34110939670 passed; ASC query34112233057 passed (see overnight-asc-162.log).
+ CI 34110939670 passed; ASC query 34112233057 passed (see overnight-asc-162.log).
  API deploy34110987507 passed. All three live zip aliases are0.16.0 and exactly
  match source SHA25693c3a2d8c29e97031c7c81707a2fb086c01564b3d201b546e2ec1b18aa0a9ba9.
 -Browser re-pair and UI disconnect verified. Correctly formed /agent/key was
@@ -505,7 +510,7 @@ and held-out/API-connection tests, clean synthetic accounts, update visual PDF.
  connection proof and remove remaining semantic shortcuts on active paths.
 
 ## 2026-09-07 11:00 UTC — natural speech failures reproduced and under repair
-- Brain96e7ef4 deployed by CI34112544081. Live verification observed8/8 running
+- Brain96e7ef4 deployed by CI 34112544081. Live verification observed8/8 running
   workers with source93b08f99bb48a15302f9b3eb7d4a2994e1d5078b2adf28dcc4bf3a1c5a98e100,
   current snapshots, correct revision and zero archive cleanup failures.
 - Natural1 completed10 actual worker runs. It reproduced the exact unwanted
@@ -571,10 +576,10 @@ and held-out/API-connection tests, clean synthetic accounts, update visual PDF.
 ## 2026-09-07 15:48 UTC — morning status, unfinished work explicit
 - User awake and asking for exact status. Reported concrete live repairs and
   limits, not a completion claim. Full audit and end-to-end acceptance unfinished.
-- API and brain f988aa8 deployed; brain CI34137279242 passed all8 current workers.
+- API and brain f988aa8 deployed; brain CI 34137279242 passed all8 current workers.
   Live missing-Gmail offer passed9.37s on designated phone-disabled probe,
   overnight-task-access-live-1.json. Seven-row backlog probe also passed.
-- iOS165 commit844c8a3, CI34138060603 succeeded. ASC query34139816700 succeeded;
+- iOS165 commit844c8a3, CI 34138060603 succeeded. ASC query 34139816700 succeeded;
   read actual output before calling it installable. Tappable URLs verified in
   simulator, plus full iOS tests and simulator build.
 - Fifty fictional-person planning observations complete after four infrastructure
@@ -597,7 +602,7 @@ and held-out/API-connection tests, clean synthetic accounts, update visual PDF.
   action prep/execution, three registered legacy meaning shortcuts and others.
 
 ## 2026-09-07 16:00 UTC — morning deliverable and next repair
-- Latest brain05e5ed2, CI34140365066 SUCCESS:8/8 source/process/fresh-snapshot
+- Latest brain05e5ed2, CI 34140365066 SUCCESS:8/8 source/process/fresh-snapshot
   verified at15:58UTC, source197e8cf1883680cc8fd11262fbb274644e55c4732f80743c04e61fe4f82725ae.
   Earlier designated-probe startup gap resolved. Inspect34140861796 had0
   lifecycle failures in23 observed events.
@@ -642,7 +647,7 @@ and held-out/API-connection tests, clean synthetic accounts, update visual PDF.
   raise nativeceiling14 and reserve2;35+14=49 remainswithinuser50. Neverreset.
 
 ## 2026-09-07 16:50 UTC — server artifact release in progress
-- Candidate7a9b61d committed/pushed; CI34144839415 deploying. Final3127pass,
+- Candidate7a9b61d committed/pushed; CI 34144839415 deploying. Final3127pass,
  2skipped; pre-edit iOS logic allpassed;15/15realmodelcontrasts. No iOSchange.
 - Do not claimliveuntil allsource/snapshots and --artifact probeactualresult.
   Currentliveversiontag7a9b61d; fleetwarming. Testownerphone presentlyrestored.
@@ -655,7 +660,7 @@ and held-out/API-connection tests, clean synthetic accounts, update visual PDF.
  text or speaker names. Read1740/3010core andorchestrator129/197.
 
 ## 2026-09-07 17:00 UTC — live server artifact proof passed
-- CI34144839415 SUCCESS; live7a9b61d all8 source/process/snapshots current.
+- CI 34144839415 SUCCESS; live7a9b61d all8 source/process/snapshots current.
 - false-completion-live-artifact-1 actual app_reply→queuedjob→real private
   note→independent satisfied→exact text digest receipt→app delivered:82.84s.
   No sends; probe phone restored; own created task cancelled. Preserved raw
@@ -677,7 +682,7 @@ and held-out/API-connection tests, clean synthetic accounts, update visual PDF.
 ## 2026-09-07 17:50 UTC — native texting failure isolated, repair active
 - Real harmless private-draft iMessage reached SendBlue but initial message
   never landed. Provider existing webhook signing secret differed from Worker.
-  Matched GitHub/Worker to provider's existing secret; CI34148364804 succeeded.
+  Matched GitHub/Worker to provider's existing secret; CI 34148364804 succeeded.
   Current signed malformed request reaches route (400), old secret rejects403.
 - Retried actual iMessage landed sms_reply but decision=error; no source-linked
   job or app reply. Do not call texting fixed. Historical probe-specific

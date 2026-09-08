@@ -643,6 +643,8 @@
     "former_interval_minutes": 15
   },
   "release": {
-    "status": "source tests pass; live proof recorded separately"
+    "status": "brain/API/downloads live and verified",
+    "receipt": "reply-priority-release.json",
+    "commit": "cb2010957877eec0a8c67138b57060dc1bef3110"
   }
 }

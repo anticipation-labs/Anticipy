@@ -1,6 +1,11 @@
 # Reply priority and preserved task context
 
-September 7, 2026, Vancouver. Release proof is recorded separately after CI.
+September 7, 2026, Vancouver. Backend and extension downloads are live at
+`cb201095`; [direct release proof](reply-priority-release.json) checks exact
+source on all eight brain workers, current memory, API revision and ZIP bytes.
+iPhone build **170** is VALID and available to the owner’s Internal TestFlight
+group. Independent App Store Connect query 34176788640 confirmed this at
+01:29:13 UTC on September 8; it does not prove the phone installed the update.
 
 ## Why this work resumed
 
@@ -78,5 +83,7 @@ installed extension remain separate proof gaps. The last observed personal
 extension was 0.15.0; publishing a ZIP does not update an unpacked Chrome install.
 
 The iPhone source change only updates the extension-version warning. Build 170
-must be shipped by CI and independently checked in App Store Connect. Do not
-report it available before that receipt exists.
+shipped through CI 34176231439 and the independent Apple receipt confirms
+Internal availability. External beta review remains separate. Both overnight
+follow-ups are PAUSED. The temporary API 8788 and model gateway 8790 are stopped.
+The bounded repair is complete; the broader limitations above remain explicit.
