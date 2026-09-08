@@ -7,7 +7,10 @@ that the harness be ensured working. The story is: actual iPhone microphone
 input → speech recognition → owner-bound durable capture → API event → brain
 with conversation context and memory → permitted executor → verified receipt
 and user-visible output. An uploaded app or green unit suite alone is not
-this proof. The user has confirmed physical iPhone version 1.1.1 (172).
+this proof. The user has confirmed physical iPhone app version 1.1.1 (172)
+and separately reports iOS **26.6.1**. This supports testing the newer analyzer
+path (subject to its runtime selection/fallback), not assuming a legacy-only
+device. No actual microphone trace from that device is established here.
 
 No whole-harness success is established. Full-story verification stopped at
 the first concrete source-level capture defect; no downstream live model,
@@ -135,6 +138,17 @@ frozen source, exit 0, with external outbound networking denied
 (`work/ios-audio-173-reviewed-full.log`). The nine scoped files contain no
 recognized credential-like patterns in the targeted scan. The test runner is
 registered in `run_all.sh`; no CI upload or production deployment is implied.
+
+The nine-file candidate was committed as
+`27c9562180ee79566aca6c8d79229fb37b0f7b7c` and pushed only to
+`cloudflare-backend`. The post-commit build-number gate passed: 173 names the
+committed iOS source. [Compile-only iOS CI](https://github.com/anticipation-labs/Anticipy/actions/runs/34286751213)
+was triggered by that exact push without a ship marker. Its final verdict was
+**success**: the complete iOS logic gate and actual Xcode simulator build both
+succeeded on `27c95621`. The signing-key, archive, export/upload and Apple
+processing steps were all explicitly skipped. This pass did not upload or
+distribute build 173; no 173 device installation has been confirmed. The last
+confirmed installed app build is 172.
 
 ## What the audio input actually means
 
