@@ -154,7 +154,7 @@ import {
 } from "../src/routes/connect.ts";
 import {
   connectAuthWiring, connectDeps, connectWiring, handleInboundText, makeSentenceWriter,
-  nudgeMomentFor, runTextCommandPlan, textReplySentences, SENTENCE_ATTEMPTS, TEXT_REPLY,
+  nudgeMomentFor, ownerPhone, runTextCommandPlan, textReplySentences, SENTENCE_ATTEMPTS, TEXT_REPLY,
   type ConnectWiringEnv, type NudgeWiringEnv,
 } from "../src/connections/wiring.ts";
 import {
@@ -2180,6 +2180,33 @@ await check("FINDING 5: the floor is due.ts's, imported, and there is only one o
   assert.equal(/"weight"\s*(?:<=|>=|<>|=|<|>)/.test(statement), false,
     `the weight predicate is back in the evidence query — it is true for every row that `
       + `has ever existed, because the stored column only ever rises: ${statement}`);
+});
+
+// The profile is authoritative once it exists, including an explicit removal.
+// These queries use real local SQLite and never contact a messaging provider.
+for (const current of ["+12025550123", "", "   "]) {
+  await check("current profile replaces or revokes the sign-up phone", async () => {
+    const { d1, env } = twinRig();
+    try {
+      d1.db.prepare("UPDATE owner_profile SET phone = ? WHERE owner_ref = ?").run(current, TWIN_OWNER);
+      assert.equal(await ownerPhone(env)(ownerId(TWIN_OWNER)), current.trim() || null);
+    } finally { d1.db.close(); }
+  });
+}
+await check("only an absent profile permits the same owner's sign-up phone", async () => {
+  const { d1, env } = twinRig();
+  try {
+    d1.db.prepare("DELETE FROM owner_profile WHERE owner_ref = ?").run(TWIN_OWNER);
+    assert.equal(await ownerPhone(env)(ownerId(TWIN_OWNER)), TWIN_PHONE);
+    assert.equal(await ownerPhone(env)(ownerId("absentowner0001")), null);
+  } finally { d1.db.close(); }
+});
+await check("a failed profile read cannot return a stale sign-up phone", async () => {
+  const { d1, env } = twinRig();
+  try {
+    d1.failOn = () => { throw new Error("local database unavailable"); };
+    await assert.rejects(() => ownerPhone(env)(ownerId(TWIN_OWNER)), /local database unavailable/);
+  } finally { d1.db.close(); }
 });
 
 console.log(`connections-wiring: ${passes} checks passed, ${failures} failed`);

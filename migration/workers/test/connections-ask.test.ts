@@ -348,8 +348,8 @@ function owner(r: Rig, id = OWNER, phone = TO, timezone: string | null = AWAKE_T
     r.d1.db.prepare(
       `INSERT INTO owner_profile (id, created, updated, owner_id, phone, name, first_name,
          last_name, email, birthday, facts, owner_ref, timezone)
-       VALUES (?,?,?,?,'','','','','','','',?,?)`,
-    ).run(`prof${id}`.slice(0, 15), PB_NOW, PB_NOW, id, id, timezone);
+       VALUES (?,?,?,?,?,'','','','','','',?,?)`,
+    ).run(`prof${id}`.slice(0, 15), PB_NOW, PB_NOW, id, phone, id, timezone);
   }
 }
 

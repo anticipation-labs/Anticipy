@@ -70,6 +70,7 @@ function listedLanes(filter, status = "queued") {
     ["jobres000000001", "research", "wf-res", OWNER],
     ["jobapi000000001", "api", "wf-api", OWNER],
     ["jobsup000000001", "supervised_read", "", OWNER],      // never carries a plan
+    ["jobsup000000002", "supervised_read", "wf-sup", OWNER], // metadata cannot change the hand
     ["jobdev000000001", "device_calendar", "wf-dev", OWNER],
     ["jobapi000000002", "api", "wf-api2", STRANGER],
   ];
@@ -163,12 +164,13 @@ check("the stale sweep takes its lanes from the same definition: a running api r
   assert.ok(rows.some((r) => r.id === "jobbrw000000001"), "CONTROL: the sweep lost the browser lane");
 });
 
-check("MEASURED, NOT ENDORSED: a device_calendar row with a plan is still listed here", () => {
-  // The server refuses that claim ("a calendar errand happens on your phone,
-  // never in a browser"), so it costs a warn line per poll, not a wrong hand.
-  // Recorded so the day it changes is a visible day; the day the filter names
-  // that lane too, delete this leg.
-  assert.ok(lanesOf(listedLanes(claimPoll)).includes("device_calendar"), claimPoll);
+check("neither poll nor sweep lists phone or supervised-read work, even with a plan", () => {
+  for (const [filter, status] of [[claimPoll, "queued"], [sweepPoll, "running"]]) {
+    const lanes = lanesOf(listedLanes(filter, status));
+    assert.ok(!lanes.includes("device_calendar"), filter);
+    assert.ok(!lanes.includes("supervised_read"), filter);
+    assert.ok(lanes.includes(""), "CONTROL: browser work remains visible");
+  }
 });
 
 check('`lane!="api"` occurs EXACTLY ONCE in background.js — one definition, the mutation literal', () => {

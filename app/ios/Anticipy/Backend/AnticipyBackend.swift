@@ -969,6 +969,40 @@ final class AnticipyBackend {
         return !rows.isEmpty
     }
 
+    /// Canonical row identity for the transcript outbox. Returning the row ID
+    /// preserves continuation edges after a lost POST response or app restart.
+    /// Unknown/malformed/foreign results throw; only a verified empty page is
+    /// absent. Never reconcile two utterances by matching their text.
+    func transcriptEventID(externalEventID: String) async throws -> String? {
+        guard !accountID.isEmpty, !externalEventID.isEmpty else { throw BackendError(status: 400) }
+        func escaped(_ value: String) -> String {
+            value.replacingOccurrences(of: "\\", with: "\\\\")
+                .replacingOccurrences(of: "\"", with: "\\\"")
+        }
+        let filter = "owner_ref=\"\(escaped(accountID))\""
+            + " && external_event_id=\"\(escaped(externalEventID))\""
+            + " && kind=\"transcript\""
+        var comps = URLComponents(url: baseURL.appendingPathComponent("api/collections/events/records"),
+                                  resolvingAgainstBaseURL: false)!
+        comps.queryItems = [URLQueryItem(name: "filter", value: filter),
+                           URLQueryItem(name: "perPage", value: "2"),
+                           URLQueryItem(name: "page", value: "1")]
+        let data = try await readData(from: comps.url!)
+        struct Identity: Decodable {
+            let id: String
+            let kind: String
+            let owner_ref: String?
+            let external_event_id: String?
+        }
+        struct Page: Decodable { let items: [Identity] }
+        let rows = try JSONDecoder().decode(Page.self, from: data).items
+        guard rows.count <= 1, rows.allSatisfy({
+            !$0.id.isEmpty && $0.kind == "transcript" && $0.owner_ref == accountID
+                && $0.external_event_id == externalEventID
+        }) else { throw BackendError(status: 502) }
+        return rows.first?.id
+    }
+
     /// A real page of the event archive with the server's page and total-page
     /// answers intact. `fetchEvents` remains the small live poll; screens that
     /// promise history use this and explicitly advance until `totalPages`.

@@ -29,7 +29,7 @@ import {
 // imported module alone can leave Chrome running a cached worker graph for an
 // unpacked extension; changing this entry file forces a fresh registration,
 // and the same marker is written into every job trace as runtime proof.
-const ENGINE_BUILD = "0.18.0";
+const ENGINE_BUILD = "0.18.1";
 
 const BACKEND_LLM = "backend-proxy";
 // Job traffic authenticates as THIS ONE AGENT and nothing more. An earlier
@@ -93,7 +93,11 @@ const MAX_ATTEMPTS = 3;
 // filter says); this clause is the courtesy that stops a browser from even
 // listing — and, through the sweep below, from trying to requeue — a row
 // that was never its own. Proof: tests/test_api_lane_is_not_browser_work.mjs.
-const BROWSER_LANE = 'workflow_id!="" && lane!="research" && lane!="api"';
+// Phone calendar work carries a workflow too. Listing ten such rows filled
+// the entire claim page: the server correctly refused every claim, while the
+// browser job behind them never got a turn. Supervised reads have a separate
+// executor and must stay excluded even if a row happens to carry a workflow.
+const BROWSER_LANE = 'workflow_id!="" && lane!="research" && lane!="api" && lane!="device_calendar" && lane!="supervised_read"';
 const ownerLaneFilter = (status, ownerRef) =>
   `status="${status}" && owner_ref="${ownerRef}" && ${BROWSER_LANE}`;
 
@@ -671,13 +675,6 @@ export async function claimJob() {
     // the popup's anticipy-ping, and this worker booting can all overlap)
     // would each spawn an agent loop for the same job.
     //
-    // The popup's mirror is set BEFORE the run starts, because between the
-    // claim and the agent loop's first step there is a model call and a tab to
-    // open, and a person watching a blank panel through that gap concludes it
-    // is broken.
-    await setCurrentJob({ id: job.id, status: "queued",
-                          doing: jobLine(job, parseJobParams(job)),
-                          result: QUEUED_SOON, blocked: false });
     const leaseToken = crypto.randomUUID();
     let fresh;
     try {
@@ -695,6 +692,13 @@ export async function claimJob() {
       continue;
     }
     if (fresh.claimed_by !== me || fresh.status !== "running" || fresh.lease_token !== leaseToken) continue;
+    // Publish only a claim this browser owns. A guard refusal or another
+    // browser winning the lease must not replace the last result with a
+    // "picking this up" card for work this browser will never start. This is
+    // still before the model call and tab creation in runJob.
+    await setCurrentJob({ id: fresh.id, status: "queued",
+                          doing: jobLine(fresh, parseJobParams(fresh)),
+                          result: QUEUED_SOON, blocked: false });
     return fresh;
   }
   // Nothing here was runnable. Before going quiet, answer the question the

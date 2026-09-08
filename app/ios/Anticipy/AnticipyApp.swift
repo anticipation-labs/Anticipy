@@ -409,6 +409,32 @@ enum PendingSpeechRetention {
     }
 }
 
+/// Pending words must reach recoverable storage before the composer clears or
+/// a network request starts. UserDefaults has no throwing persistence boundary;
+/// an atomic file does. A missing file is a legacy migration, not a corrupt file.
+enum CaptureOutboxPersistence {
+    static func location() throws -> URL {
+        let directory = try FileManager.default.url(for: .applicationSupportDirectory,
+            in: .userDomainMask, appropriateFor: nil, create: true)
+            .appendingPathComponent("Anticipy", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        return directory.appendingPathComponent("pending-transcripts.json")
+    }
+
+    static func read(at url: URL) throws -> Data? {
+        guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+        return try Data(contentsOf: url)
+    }
+
+    static func write(_ data: Data, to url: URL) throws {
+        #if os(iOS)
+        try data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+        #else
+        try data.write(to: url, options: .atomic)
+        #endif
+    }
+}
+
 /// Translate `/me/delete` evidence into copy without claiming an incremental
 /// operation was atomic. The endpoint can remove several tables before one
 /// fails, and a lost HTTP response leaves the client unable to know whether the
@@ -676,7 +702,7 @@ final class AnticipySession: ObservableObject {
     /// tests/test_extension_version_pin.py now reads extension/manifest.json,
     /// this literal, and the mirror in Tests/StaleExtensionTests.swift, and
     /// goes red when any of the three disagree. Bump all three together.
-    static let expectedExtensionVersion = "0.18.0"
+    static let expectedExtensionVersion = "0.18.1"
 
     /// The extension reports itself as "Chrome/128.0.0.0 ext/0.8.2" in the
     /// agent record's browser field. Returns what Chrome is running when it
@@ -741,6 +767,7 @@ final class AnticipySession: ObservableObject {
     @Published var connection: Connection = .loading
     /// How many spoken lines are still waiting for a network.
     @Published var pendingCount = 0
+    @Published var captureStorageFailed = false
 
     @AppStorage("backendURL") var backendURLString = "https://api.anticipy.ai"
     @AppStorage("ownerID") var ownerID = ""
@@ -830,36 +857,42 @@ final class AnticipySession: ObservableObject {
         /// it carries on from may still be sitting in this same queue with no
         /// server id of its own; the flush rebuilds the chain in order.
         var continuesPrevious: Bool? = nil
+        /// Optional for one-release migration. Assigned and persisted before
+        /// any POST, then unchanged through response loss and process restart.
+        var externalEventID: String? = nil
+        var parentExternalEventID: String? = nil
+        var parentLine: String? = nil
     }
     @AppStorage("unsentLines") private var unsentStore = ""
+    private var flushingUnsent = false
+
+    private func readPendingLines() throws -> [BufferedLine] {
+        if let data = try CaptureOutboxPersistence.read(at: CaptureOutboxPersistence.location()) {
+            return try JSONDecoder().decode([BufferedLine].self, from: data)
+        }
+        guard !unsentStore.isEmpty else { return [] }
+        let data = Data(unsentStore.utf8)
+        if let current = try? JSONDecoder().decode([BufferedLine].self, from: data) { return current }
+        // Legacy rows have no safe owner. Keep them sealed, never adopt them.
+        return try JSONDecoder().decode([String].self, from: data)
+            .map { BufferedLine(text: $0, explicit: false, speaker: nil, account: nil) }
+    }
+
+    private func persistPendingLines(_ rows: [BufferedLine]) throws {
+        let (kept, dropped) = PendingSpeechRetention.bounded(rows)
+        let data = try JSONEncoder().encode(kept)
+        try CaptureOutboxPersistence.write(data, to: CaptureOutboxPersistence.location())
+        // Only after atomic replacement succeeded may the legacy copy retire.
+        unsentStore = ""
+        captureStorageFailed = false
+        pendingCount = pendingLinesOwnedByCurrentAccount(in: kept).count
+        if dropped > 0 { ListenJournal.shared.record(.speechDropped(count: dropped)) }
+    }
+
     private var unsent: [BufferedLine] {
-        get {
-            guard !unsentStore.isEmpty else { return [] }
-            let data = Data(unsentStore.utf8)
-            if let current = try? JSONDecoder().decode([BufferedLine].self, from: data) {
-                return current
-            }
-            // One-release migration from the old string-only queue. Those
-            // rows were microphone speech because typed intent did not yet
-            // survive buffering.
-            return ((try? JSONDecoder().decode([String].self, from: data)) ?? [])
-                .map { BufferedLine(text: $0, explicit: false, speaker: nil,
-                                    account: nil) }
-        }
-        set {
-            // BOUNDED HERE, in the setter, rather than at the two call sites
-            // that grow the queue. `heard` appends on a failed push and
-            // `flushUnsent` prepends what it could not deliver; a bound applied
-            // at one of them and not the other is the same as no bound, and
-            // nothing would have failed to compile to say so.
-            let (kept, dropped) = PendingSpeechRetention.bounded(newValue)
-            if dropped > 0 {
-                ListenJournal.shared.record(.speechDropped(count: dropped))
-            }
-            unsentStore = (try? JSONEncoder().encode(kept))
-                .flatMap { String(data: $0, encoding: .utf8) } ?? ""
-            pendingCount = pendingLinesOwnedByCurrentAccount(in: kept).count
-        }
+        // Display only. Every mutation uses throwing read/persist functions;
+        // an unreadable file must never become a guessed empty replacement.
+        (try? readPendingLines()) ?? []
     }
 
     /// A persisted queue can contain rows from an earlier account. They stay
@@ -875,7 +908,8 @@ final class AnticipySession: ObservableObject {
     }
 
     private func refreshPendingCount() {
-        pendingCount = pendingLinesOwnedByCurrentAccount(in: unsent).count
+        do { pendingCount = pendingLinesOwnedByCurrentAccount(in: try readPendingLines()).count }
+        catch { pendingCount = 0; captureStorageFailed = true }
     }
 
     // The five device-local mirrors of the account holder. Keyed through
@@ -973,18 +1007,30 @@ final class AnticipySession: ObservableObject {
         // words survived read exactly this number.
         refreshPendingCount()
         listener.onLine = { [weak self] line, startedAt, endedAt, continues in
-            Task { await self?.heard(line, from: .phoneMic, at: startedAt,
+            guard let self, let lease = AccountWriteLeasePolicy.begin(accountID: self.accountID,
+                authToken: self.authToken, isSignedIn: self.isSignedIn) else { return }
+            Task {
+                guard AccountWriteLeasePolicy.isCurrent(lease, accountID: self.accountID,
+                    authToken: self.authToken, isSignedIn: self.isSignedIn) else { return }
+                await self.heard(line, from: .phoneMic, at: startedAt,
                                      endedAt: endedAt,
-                                     continuesPrevious: continues) }
+                                     continuesPrevious: continues)
+            }
         }
         // The on-device voice check rides with each line. It only engages
         // when a model is present AND he has enrolled; otherwise every line
         // travels bare, exactly as before.
         listener.speaker = speakerTagger
         listener.onSpeaker = { [weak self] line, tag, startedAt, endedAt, continues in
-            Task { await self?.heard(line, speaker: tag, from: .phoneMic,
+            guard let self, let lease = AccountWriteLeasePolicy.begin(accountID: self.accountID,
+                authToken: self.authToken, isSignedIn: self.isSignedIn) else { return }
+            Task {
+                guard AccountWriteLeasePolicy.isCurrent(lease, accountID: self.accountID,
+                    authToken: self.authToken, isSignedIn: self.isSignedIn) else { return }
+                await self.heard(line, speaker: tag, from: .phoneMic,
                                      at: startedAt, endedAt: endedAt,
-                                     continuesPrevious: continues) }
+                                     continuesPrevious: continues)
+            }
         }
         // Re-render views observing the session when the listener changes.
         listener.objectWillChange
@@ -1050,6 +1096,46 @@ final class AnticipySession: ObservableObject {
                at capturedAt: Date = Date(),
                endedAt: Date? = nil,
                continuesPrevious: Bool = false) async {
+        guard stageTranscript(line, speaker: speaker, explicit: explicit, from: source,
+                              at: capturedAt, endedAt: endedAt,
+                              continuesPrevious: continuesPrevious) else { return }
+        await flushUnsent()
+    }
+
+    /// Synchronous acceptance is the composer boundary: two taps cannot enqueue
+    /// the same draft before a Task starts, and a failed disk write keeps it in
+    /// the field. This acknowledges local storage, never server acceptance.
+    func acceptTyped(_ line: String) -> Bool {
+        let text = line.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty, stageTranscript(text, explicit: true, from: .typed) else { return false }
+        Task { await flushUnsent() }
+        return true
+    }
+
+    private func stageTranscript(_ line: String, speaker: String? = nil,
+                                 explicit: Bool = false, from source: LineSource,
+                                 at capturedAt: Date = Date(), endedAt: Date? = nil,
+                                 continuesPrevious: Bool = false) -> Bool {
+        guard let lease = AccountWriteLeasePolicy.begin(
+            accountID: accountID, authToken: authToken, isSignedIn: isSignedIn) else { return false }
+        let externalID = "transcript-\(lease.accountID)-\(UUID().uuidString)"
+        do {
+            let queue = try readPendingLines()
+            let preceding = queue.last { $0.account == lease.accountID }
+            let pending = BufferedLine(text: line, explicit: explicit, speaker: speaker,
+                source: source.wireName, account: lease.accountID,
+                capturedAt: capturedAt, endedAt: endedAt,
+                continuesPrevious: continuesPrevious, externalEventID: externalID,
+                parentExternalEventID: continuesPrevious ? preceding?.externalEventID : nil,
+                parentLine: continuesPrevious && preceding == nil ? lastTranscriptEventID : nil)
+            try persistPendingLines(queue + [pending])
+        } catch {
+            captureStorageFailed = true
+            // A recorder with nowhere to preserve its words must not look
+            // healthy. Already captured words cannot be claimed as saved.
+            if source != .typed { stopListening() }
+            return false
+        }
         // A typed line deserves an instant felt ack. Ambient capture does
         // NOT — buzzing on every finalized utterance all day is a phone that
         // won't stop twitching; the meaningful buzz is the act-verdict one.
@@ -1068,50 +1154,11 @@ final class AnticipySession: ObservableObject {
         // The local echo carries the tagger's verdict too. A typed line is the
         // owner by construction; a heard one is whatever the tagger said, which
         // is nil when it could not tell.
-        transcript.append(TranscriptLine(id: "local-\(UUID().uuidString)", text: line,
+        transcript.append(TranscriptLine(id: "local-\(externalID)", text: line,
                                          decision: nil,
                                          speaker: source == .typed ? "owner" : speaker,
                                          source: source.wireName))
-        // No owner, no capture. A forced sign-out (an expired token 401s and
-        // calls signOut) used to leave the microphone running and every line
-        // pushed, 403'd, and queued — the room transcribed behind a sign-in
-        // door, then posted into whoever signed in next.
-        guard !accountID.isEmpty else { return }
-        // Only a cut names a parent, and only a parent that exists: the first
-        // line of a session has nothing to carry on from.
-        let parent = continuesPrevious ? lastTranscriptEventID : ""
-        // ONE construction rule for the live push and the offline flush alike.
-        // Two paths building envelopes two ways is how a buffered line and a
-        // live line come to mean different things, and the buffered ones are
-        // exactly the rows the boundary work exists for.
-        let capture = CaptureEnvelope.of(startedAt: capturedAt, endedAt: endedAt)
-        do {
-            let id = try await backend.pushEvent(kind: "transcript", text: line,
-                                        speaker: speaker, explicit: explicit,
-                                        source: source.wireName,
-                                        capture: capture,
-                                        parentLine: parent)
-            if !id.isEmpty { lastTranscriptEventID = id }
-            ListenJournal.shared.record(
-                .posted(ok: true, detail: .sentLive(from: .init(wireName: source.wireName))))
-        } catch {
-            // A dropped push used to vanish into try? — the line then sat at
-            // the top of the feed saying "Thinking…" forever while the brain
-            // had never seen it. Queue it (on disk) and keep trying.
-            ListenJournal.shared.record(
-                .posted(ok: false,
-                        detail: .shelved(again: false, failure: Self.postFailureShape(error))))
-            // Both ends go to disk. Storing only the start would rebuild a
-            // one-instant envelope at flush time and put the buffered path
-            // back where the live path just left.
-            unsent = unsent + [BufferedLine(text: line, explicit: explicit,
-                                            speaker: speaker,
-                                            source: source.wireName,
-                                            account: accountID,
-                                            capturedAt: capturedAt,
-                                            endedAt: endedAt,
-                                            continuesPrevious: continuesPrevious)]
-        }
+        return true
     }
 
     /// What went wrong, in a form that is safe to write down.
@@ -1152,82 +1199,96 @@ final class AnticipySession: ObservableObject {
     /// has acknowledged. A crash mid-flush loses exactly the rows that were
     /// already delivered — which is to say, nothing.
     private func flushUnsent() async {
-        guard backendReachable, !unsent.isEmpty, !accountID.isEmpty else { return }
-        let queue = unsent
-        // The parent of a queued cut is the row posted immediately before it
-        // IN THIS FLUSH, and nothing else. `lastTranscriptEventID` cannot
-        // serve: it may hold a line posted live AFTER these words were spoken,
-        // which would link a sentence to its own future. A skipped row (a
-        // foreign account) and a failed row both break the chain outright, so
-        // both clear it rather than letting the next line inherit a parent it
-        // never followed. A cut whose parent went up live carries no parent at
-        // all: the queue never recorded that id, so there is nothing honest to
-        // point at.
+        guard !flushingUnsent, backendReachable,
+              let lease = AccountWriteLeasePolicy.begin(accountID: accountID,
+                authToken: authToken, isSignedIn: isSignedIn) else { return }
+        let requestedBackend = backend
+        let queue: [BufferedLine]
+        do { queue = try readPendingLines() }
+        catch { captureStorageFailed = true; return }
+        guard !queue.isEmpty else { return }
+        flushingUnsent = true
+        defer { flushingUnsent = false }
         var previousInThisFlush = ""
-        for line in queue {
-            // Never post one person's words into another person's account.
-            // A line with no recorded owner predates this field and cannot be
-            // attributed. Keep foreign/unattributed rows sealed under their
-            // existing stamp instead of sending them or deleting them merely
-            // because another account happened to reconnect first.
-            guard line.account == accountID else {
+        for original in queue {
+            guard AccountWriteLeasePolicy.isCurrent(lease, accountID: accountID,
+                authToken: authToken, isSignedIn: isSignedIn) else { return }
+            guard original.account == lease.accountID else {
                 previousInThisFlush = ""
-                // Skipped, NOT stalled, and left exactly where it is. A sealed
-                // row is never deliverable by this account and never will be,
-                // so treating it as a blocking head would mean one foreign line
-                // silently stops delivery for every line behind it, forever.
                 continue
             }
-            let parent = line.continuesPrevious == true ? previousInThisFlush : ""
+            var line = original
             do {
-                let id = try await backend.pushEvent(kind: "transcript", text: line.text,
-                                            speaker: line.speaker,
-                                            explicit: line.explicit,
-                                            source: line.source,
-                                            capture: CaptureEnvelope.of(
-                                                startedAt: line.capturedAt,
-                                                endedAt: line.endedAt),
-                                            parentLine: parent)
-                if !id.isEmpty { lastTranscriptEventID = id }
-                // An unreadable id is a broken link, not a guessable one.
+                var current = try readPendingLines()
+                // Clear/forget may have removed it while an earlier row was
+                // on the network. A snapshot never authorizes resurrecting it.
+                guard let index = current.firstIndex(of: original) else { continue }
+                if line.externalEventID?.isEmpty != false {
+                    line.externalEventID = "transcript-\(lease.accountID)-\(UUID().uuidString)"
+                    current[index] = line
+                    try persistPendingLines(current) // legacy ID before first POST
+                }
+                guard let externalID = line.externalEventID else { continue }
+                // Read before retry. Unknown is not absent; keep it pending.
+                var confirmedID = try await requestedBackend.transcriptEventID(externalEventID: externalID)
+                guard AccountWriteLeasePolicy.isCurrent(lease, accountID: accountID,
+                    authToken: authToken, isSignedIn: isSignedIn) else { return }
+                if confirmedID == nil {
+                    var parent = ""
+                    if line.continuesPrevious == true {
+                        parent = line.parentLine ?? previousInThisFlush
+                        if let parentExternal = line.parentExternalEventID {
+                            parent = try await requestedBackend.transcriptEventID(externalEventID: parentExternal) ?? ""
+                            guard AccountWriteLeasePolicy.isCurrent(lease, accountID: accountID,
+                                authToken: authToken, isSignedIn: isSignedIn) else { return }
+                        }
+                    }
+                    // A read also yields. Do not send a row the owner cleared
+                    // during that read, even though this pass still has a copy.
+                    guard try readPendingLines().contains(line) else { continue }
+                    do {
+                        let postedID = try await requestedBackend.pushEvent(kind: "transcript", text: line.text,
+                            speaker: line.speaker, explicit: line.explicit, source: line.source,
+                            capture: CaptureEnvelope.of(startedAt: line.capturedAt, endedAt: line.endedAt),
+                            parentLine: parent, externalEventID: externalID)
+                        guard AccountWriteLeasePolicy.isCurrent(lease, accountID: accountID,
+                            authToken: authToken, isSignedIn: isSignedIn) else { return }
+                        if !postedID.isEmpty { confirmedID = postedID }
+                    } catch {
+                        guard AccountWriteLeasePolicy.isCurrent(lease, accountID: accountID,
+                            authToken: authToken, isSignedIn: isSignedIn) else { return }
+                        // The server may have accepted a request whose response
+                        // was lost, including a unique-index refusal on retry.
+                        confirmedID = try await requestedBackend.transcriptEventID(externalEventID: externalID)
+                        guard AccountWriteLeasePolicy.isCurrent(lease, accountID: accountID,
+                            authToken: authToken, isSignedIn: isSignedIn) else { return }
+                        if confirmedID == nil { throw error }
+                    }
+                    if confirmedID == nil {
+                        confirmedID = try await requestedBackend.transcriptEventID(externalEventID: externalID)
+                        guard AccountWriteLeasePolicy.isCurrent(lease, accountID: accountID,
+                            authToken: authToken, isSignedIn: isSignedIn) else { return }
+                    }
+                }
+                guard let id = confirmedID else { return }
+                // Remove only after proof, by stable identity rather than text.
+                var remaining = try readPendingLines()
+                remaining.removeAll { $0.account == lease.accountID && $0.externalEventID == externalID }
+                try persistPendingLines(remaining)
+                lastTranscriptEventID = id
                 previousInThisFlush = id
-                // WHICH EAR, carried through the queue: the buffered line kept
-                // its source on disk for the wire, and the journal now keeps
-                // it too, so the day's per-ear count survives an outage. A
-                // queue entry written before the source was stored has none,
-                // and `Origin(wireName: "")` is `.unrecognised` — reported as
-                // an ear nobody recorded, never guessed at.
                 ListenJournal.shared.record(.posted(ok: true, detail: .sentFromQueue(from: .init(wireName: line.source ?? ""))))
-                // CONFIRMED, so now it may leave the disk — and not one
-                // instant earlier.
-                dropDeliveredLine(line)
-            }
-            catch {
+            } catch {
+                guard AccountWriteLeasePolicy.isCurrent(lease, accountID: accountID,
+                    authToken: authToken, isSignedIn: isSignedIn) else { return }
                 ListenJournal.shared.record(
                     .posted(ok: false,
                             detail: .shelved(again: true, failure: Self.postFailureShape(error))))
-                previousInThisFlush = ""
-                // Nothing to do. The row was never removed, so it is still on
-                // disk in its original position and the next flush will try it
-                // again. The old code had to carry it in `retained` and put it
-                // back at the end, which is the step a crash used to skip.
+                // Preserve ordering and avoid an outage causing one request
+                // per queued sentence on every three-second poll.
+                return
             }
         }
-    }
-
-    /// Remove ONE delivered row from the persisted queue, by value, against
-    /// whatever the queue holds right now.
-    ///
-    /// Re-read rather than closed over: the flush awaits between rows, and on
-    /// this actor that is where a new line can be appended, an account can be
-    /// signed out from under it, or the bound can trim the front. `firstIndex`
-    /// removes a single occurrence, so two identical lines legitimately queued
-    /// twice are retired one confirmed post at a time rather than both at once.
-    private func dropDeliveredLine(_ line: BufferedLine) {
-        var current = unsent
-        guard let index = current.firstIndex(of: line) else { return }
-        current.remove(at: index)
-        unsent = current
     }
 
     /// Anticipy's latest spoken line, only while it's actually fresh — a
@@ -2045,7 +2106,7 @@ final class AnticipySession: ObservableObject {
             if outcome.ok {
                 // This is safe even when another account arrived: remove only
                 // rows whose durable owner stamp is the deleted account.
-                clearPendingLinesOwned(by: lease.accountID)
+                let ownedQueueCleared = clearPendingLinesOwned(by: lease.accountID)
                 clearPendingAppRepliesOwned(by: lease.accountID)
 
                 let stillCurrent = AccountWriteLeasePolicy.isCurrent(
@@ -2058,9 +2119,14 @@ final class AnticipySession: ObservableObject {
                 let expiredSameAccount = !isSignedIn && accountID.isEmpty
                     && authToken.isEmpty && localPersonAccountID == lease.accountID
                 guard stillCurrent || expiredSameAccount else {
+                    if !ownedQueueCleared {
+                        return (false, "The original server account was deleted, but I couldn't erase its pending words on this iPhone. They remain sealed to that account; the current account was left untouched.")
+                    }
                     return (true, "The original account was deleted. This iPhone changed accounts before local cleanup finished, so the current account was left untouched.")
                 }
-                clearAllPendingLinesOnDevice()
+                guard clearAllPendingLinesOnDevice() else {
+                    return (false, "The server account was deleted, but I couldn't erase this iPhone's pending words. Check its storage before forgetting this iPhone again.")
+                }
                 clearAllPendingAppRepliesOnDevice()
                 signOut()
             }
@@ -2502,14 +2568,20 @@ final class AnticipySession: ObservableObject {
     /// queue's storage key is private: Settings was reaching into UserDefaults
     /// with a copy of the key string, so renaming it would have left a delete
     /// button that silently deleted nothing.
-    func clearPendingLines() {
-        guard !accountID.isEmpty else { return }
-        clearPendingLinesOwned(by: accountID)
+    @discardableResult
+    func clearPendingLines() -> Bool {
+        guard !accountID.isEmpty else { return false }
+        return clearPendingLinesOwned(by: accountID)
     }
 
-    private func clearPendingLinesOwned(by ownerAccount: String) {
-        guard !ownerAccount.isEmpty else { return }
-        unsent = unsent.filter { $0.account != ownerAccount }
+    @discardableResult
+    private func clearPendingLinesOwned(by ownerAccount: String) -> Bool {
+        guard !ownerAccount.isEmpty else { return false }
+        do {
+            let rows = try readPendingLines()
+            try persistPendingLines(rows.filter { $0.account != ownerAccount })
+            return true
+        } catch { captureStorageFailed = true; return false }
     }
 
     private func restorePendingAppReplyState() {
@@ -2552,8 +2624,13 @@ final class AnticipySession: ObservableObject {
     /// Device-wide erasure for the two operations whose copy promises this
     /// handset is forgotten. Unlike `clearPendingLines`, this must include
     /// nil-stamped legacy rows and sealed speech from every prior account.
-    private func clearAllPendingLinesOnDevice() {
-        unsent = PendingSpeechRetention.afterDeviceForget(unsent)
+    private func clearAllPendingLinesOnDevice() -> Bool {
+        // Explicit device-wide erasure may replace even an unreadable file.
+        // Scoped account removal above may not make that assumption.
+        do {
+            try persistPendingLines(PendingSpeechRetention.afterDeviceForget([BufferedLine]()))
+            return true
+        } catch { captureStorageFailed = true; return false }
     }
 
     /// The words waiting for a network, exposed read-only for Privacy & Data.
@@ -2573,7 +2650,7 @@ final class AnticipySession: ObservableObject {
         else { return false }
         let requestedBackend = backend
         stopListening()
-        clearAllPendingLinesOnDevice()
+        guard clearAllPendingLinesOnDevice() else { return false }
         clearAllPendingAppRepliesOnDevice()
         let oldIdentity = ownerID
         let browserDisconnected = await requestedBackend.unpairAgent(owner: oldIdentity)

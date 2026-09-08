@@ -70,6 +70,7 @@ class Recorder:
 def wired(monkeypatch):
     """Capture every side effect handle_inbound has on the world."""
     monkeypatch.setattr(W, "connection_command", lambda ev, owner: "not_for_us")
+    monkeypatch.setattr(W, "fetch_owner_phone", lambda ref: OWNER_PHONE)
     seen = {"marks": [], "events": [], "claims": []}
 
     monkeypatch.setattr(W, "mark_processed",
@@ -180,10 +181,11 @@ def test_the_app_lane_does_not_become_a_way_around_the_phone_check(wired):
     convo = Recorder()
     row = sms_row(frm="+15550009999")
     row["goal"] = ""          # looks phone-less, like an app row
-    assert W.handle_inbound(row, convo, anticipy()) == "confirm"
-    # goal="" falls back to the owner's own number, so this is the owner's own
-    # lane -- NOT a stranger admitted. Pin that it did not use the app key.
-    assert convo.keys == [OWNER_PHONE]
+    assert W.handle_inbound(row, convo, anticipy()) == "ignored_nonowner"
+    # An absent sender is no identity evidence. It must not acquire the
+    # canonical number by falling back to the worker's cache.
+    assert convo.keys == []
+    assert wired["claims"] == []
 
 
 def test_an_empty_answer_is_dropped_not_reasoned_about(wired):

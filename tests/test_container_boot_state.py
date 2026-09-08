@@ -150,6 +150,30 @@ def test_a_read_failure_that_is_not_a_404_still_aborts(owner_dir):
     assert caught.value.__cause__.response["Error"]["Code"] == "InternalError"
 
 
+def test_missing_memory_cannot_look_like_new_owner_when_clock_was_persisted(owner_dir):
+    class LostMemory(FakeR2):
+        def download_file(self, bucket, key, dest):
+            if key.endswith("memory.db"):
+                raise ClientError("NoSuchKey", 404)
+            return super().download_file(bucket, key, dest)
+
+    with pytest.raises(RuntimeError, match="owner with existing clock state"):
+        C.pull_state(LostMemory())
+
+    assert not (owner_dir / "memory.db").exists()
+    assert not (owner_dir / "clock_state.json").exists(), "no partial checkpoint is installed"
+
+
+def test_missing_remote_memory_preserves_evidence_in_an_existing_local_clock(owner_dir):
+    owner_dir.mkdir(parents=True)
+    (owner_dir / "clock_state.json").write_text('{"last_outreach_ts": 42}')
+
+    with pytest.raises(RuntimeError):
+        C.pull_state(FakeR2(download_error=ClientError("NoSuchKey", 404)))
+
+    assert json.loads((owner_dir / "clock_state.json").read_text()) == {"last_outreach_ts": 42}
+
+
 # ----------------------------------------------------------------- F43
 
 class FakePaginator:

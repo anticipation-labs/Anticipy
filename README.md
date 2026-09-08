@@ -12,8 +12,12 @@ context; regexes, word lists, and thresholds must not decide what people mean.
 
 ## Start here
 
-- [Mac development guide](docs/LOCAL-DEVELOPMENT-MAC.md): the prepared checkout,
-  local Worker, simulator, tools, and commands.
+- [Tejas Mac development guide](docs/LOCAL-DEVELOPMENT-TEJAS.md): this checkout,
+  private env handling, offline checks, actual tool limits and deliberate release.
+- [Current customer-journey readiness](research/2026-09-08-customer-readiness.md):
+  replacement guide, source-path inventories, repairs and live verification gaps.
+- [Earlier Mac development guide](docs/LOCAL-DEVELOPMENT-MAC.md): Omar's
+  machine and historical setup; do not assume its Xcode or paths exist here.
 - [Setup baseline, 2026-09-06](research/2026-09-06-mac-development-setup.md):
   measured checks and remaining limits.
 - [Current audit and delivery status](research/audit-2026-09-06/PLAN.md):
@@ -33,7 +37,8 @@ The iOS app is in `app/ios/`; the Cloudflare API Worker is in
 `migration/workers/`; the Python brain is in `brain/`; browser execution is in
 `extension/`. The production API is `https://api.anticipy.ai`.
 The PocketBase hooks and their startup instructions are gone; the migration runbooks are historical
-references. `backend/pb_public/` remains the source for Worker static assets.
+references. Worker static assets are tracked in `migration/workers/public/`;
+the old `backend/pb_public/` directory and asset-staging command are gone.
 
 iOS source changes and their build-number increase belong in the same commit.
 Edit both `app/ios/project.yml` and

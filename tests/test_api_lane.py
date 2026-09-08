@@ -25,12 +25,9 @@ executor half that now exists, and the polarity of every branch:
   * the browser stall notice and the device notice both skip this lane;
   * the main loop calls run_api_jobs EXACTLY ONCE (the mutation literal);
   * the constants the Worker route shares are the route's;
-  * and the measured hole: the extension's claim filter names `lane` and
-    does not exclude "api", so a shipped extension that polls first would
-    list an api-lane row. Pinned as a MEASUREMENT with the reason it is
-    tolerable (the workflow guard's lease keeps two hands off one row), so
-    the day it changes is a visible day and the docstring that records it
-    changes with it.
+  * the extension excludes server, phone and supervised-read lanes from its
+    action queue, and the Worker independently refuses browser API claims.
+    Lease ownership alone is not a substitute for selecting the right hand.
 """
 from __future__ import annotations
 
@@ -359,12 +356,13 @@ def test_the_constants_the_worker_route_shares_are_the_routes():
 
 
 def test_the_extensions_claim_filter_now_excludes_the_api_lane():
-    """A MEASUREMENT, not a wish. extension/background.js polls
-    `workflow_id!="" && lane!="research"`: it names `lane`, so the Worker's
-    research_lane hook appends nothing, and it excludes only research — an
-    api-lane row is listable by a shipped extension. brain/hands.py's
-    docstring records this and why it is tolerable. This leg goes red the
-    day either file changes, which is the day that paragraph must too."""
+    """The browser's explicit lane filter must enforce all four exclusions.
+
+    Naming lane skips the server's read rewrite. Claim-policy checks still
+    enforce ownership, but cannot prevent other hands' rows filling Chrome's
+    first page. The JS twin executes this filter through the real server DSL
+    and SQLite schema; this pin requires a conjunction, never an OR bypass.
+    """
     ext = open(os.path.join(ROOT, "extension", "background.js"), encoding="utf-8").read()
     hook = open(os.path.join(WORKERS, "src", "policy", "research_lane.ts"), encoding="utf-8").read()
     doc = hands.__doc__ or ""
@@ -377,8 +375,13 @@ def test_the_extensions_claim_filter_now_excludes_the_api_lane():
     # extension names both lanes (the courtesy), and the SERVER excludes api
     # in EXCLUDED_LANES (the floor). The leg-5 claimant check is unchanged and
     # is BACKLOG's "keys on the claimant's NAME" item, pinned here as-is.
-    assert m.group(1) == 'workflow_id!="" && lane!="research" && lane!="api"'
-    assert 'lane!="api"' in m.group(1)
+    clauses = re.split(r"\s*&&\s*", m.group(1))
+    expected = {
+        'workflow_id!=""', 'lane!="research"', 'lane!="api"',
+        'lane!="device_calendar"', 'lane!="supervised_read"',
+    }
+    assert set(clauses) == expected
+    assert len(clauses) == len(expected), "lane clauses must not be duplicated"
     assert 'EXCLUDED_LANES = ["research", SUPERVISED_LANE, DEVICE_LANE, API_LANE]' in hook
     assert 'lane === "research" && b.claimed_by !== WORKER_CLAIMANT' in hook
     assert '"api"' in hook

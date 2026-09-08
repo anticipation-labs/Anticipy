@@ -663,6 +663,7 @@ export function ownerLocalHour(timezone: string, now: number): number | null {
 
 interface PersonRow {
   owner_phone: unknown;
+  profile_id: unknown;
   profile_phone: unknown;
   timezone: unknown;
 }
@@ -670,7 +671,8 @@ interface PersonRow {
 /** The account row and its profile, in one read. */
 async function readPerson(env: NudgeWiringEnv, owner: string): Promise<PersonRow | null> {
   const row = await env.DB.prepare(
-    `SELECT o."phone" AS owner_phone, p."phone" AS profile_phone, p."timezone" AS timezone
+    `SELECT o."phone" AS owner_phone, p."id" AS profile_id,
+            p."phone" AS profile_phone, p."timezone" AS timezone
        FROM "owners" o
        LEFT JOIN "owner_profile" p ON p."owner_ref" = o."id"
       WHERE o."id" = ?1
@@ -680,13 +682,10 @@ async function readPerson(env: NudgeWiringEnv, owner: string): Promise<PersonRow
 }
 
 /**
- * WHERE THE TEXT GOES. The account's own number first, the profile's second.
- *
- * TWO COLUMNS BECAUSE THE TREE HAS TWO. `owners.phone` is the account's (E.164,
- * schema.sql 1.7) and `owner_profile.phone` is the one an inbound text is
- * routed by (`idx_owner_profile_phone`). An owner who has one and not the other
- * is a real shape in this database, and taking only one of them would make the
- * ask unreachable for whichever half of the table stored it elsewhere.
+ * WHERE THE TEXT GOES. An existing profile is current authority, including
+ * an empty phone: that is a revocation, not permission to reuse the sign-up
+ * number in owners.phone. The account number is a bootstrap fallback only
+ * while this owner's profile is absent, matching the brain's fetch_owner_phone.
  *
  * IT NEVER FALLS THROUGH TO ANOTHER COLUMN OR ANOTHER ROW. An owner with no
  * number is a hold — `sendConnectAsk` answers `no-phone` — never a guess. The
@@ -697,10 +696,12 @@ export function ownerPhone(env: NudgeWiringEnv) {
   return async (owner: OwnerId): Promise<string | null> => {
     const row = await readPerson(env, ownerId(String(owner ?? "")));
     if (!row) return null;
+    if (row.profile_id != null) {
+      const profile = typeof row.profile_phone === "string" ? row.profile_phone.trim() : "";
+      return profile || null;
+    }
     const account = typeof row.owner_phone === "string" ? row.owner_phone.trim() : "";
-    if (account !== "") return account;
-    const profile = typeof row.profile_phone === "string" ? row.profile_phone.trim() : "";
-    return profile !== "" ? profile : null;
+    return account || null;
   };
 }
 

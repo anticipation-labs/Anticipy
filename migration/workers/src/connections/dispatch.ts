@@ -6,6 +6,7 @@ import { ownerId } from '../../../../spike/two-hands/src/connections/contract.ts
 import { ownerPhone, prepareTextCommand, runTextCommandPlan,
   type TextCommandEnv, type TextCommandOutcome, type TextCommandContext } from './wiring.ts';
 import { sendText, chooseProvider } from '../messaging.ts';
+import { sha256Hex } from '../llm.ts';
 
 type Event = { id: string; owner_ref: string; kind: string; source: string;
   speaker: string; text: string; created: string; goal: string };
@@ -124,18 +125,31 @@ async function saveReply(env: TextCommandEnv, ev: Event, key: string, line: stri
     try {
       const to = await ownerPhone(env)(ownerId(ev.owner_ref));
       if (to && chooseProvider(env) !== 'none') {
+        const recipient_digest = await sha256Hex(to);
         const attemptId = crypto.randomUUID().replaceAll('-','').slice(0,15);
         const claimed = await env.DB.prepare(`INSERT INTO events
           (id,created,updated,device_id,kind,text,decision,goal,owner_ref,external_event_id)
-          SELECT ?,?,?,'anticipy-connections','notification_status','','sms_unconfirmed',?,?,?
+          SELECT ?,?,?,'anticipy-connections','notification_status',?,'sms_unconfirmed',?,?,?
           WHERE EXISTS(SELECT 1 FROM owners WHERE id=?)
           ON CONFLICT(external_event_id) WHERE external_event_id!='' DO NOTHING`)
-          .bind(attemptId,stamp,stamp,id,ev.owner_ref,`reply-sms:${id}`,ev.owner_ref).run();
+          .bind(attemptId,stamp,stamp,JSON.stringify({state:'sms_unconfirmed',recipient_digest}),
+            id,ev.owner_ref,`reply-sms:${id}`,ev.owner_ref).run();
         if (claimed.meta?.changes) {
+          // The claim awaited storage. The owner may have revoked or changed
+          // their number since the earlier lookup; it cannot authorize this
+          // final provider call. Unknown lookup retains the uncertainty fence.
+          const current = await ownerPhone(env)(ownerId(ev.owner_ref));
+          if (current !== to) {
+            await env.DB.prepare('UPDATE events SET decision=?,text=?,updated=? WHERE id=? AND owner_ref=?')
+              .bind('sms_skipped',JSON.stringify({state:'sms_skipped',recipient_digest}),
+                new Date().toISOString().replace('T',' '),attemptId,ev.owner_ref).run();
+            return true; // The answer is durably visible in the owner's app.
+          }
           const sent = await sendText(env,to,line,{tag:'connection reply'});
           const state = sent.ok ? (['DELIVERED','READ'].includes(sent.status.toUpperCase()) ? 'sms_delivered' : 'sms_accepted') : 'sms_unconfirmed';
-          await env.DB.prepare('UPDATE events SET decision=?,text=? WHERE id=? AND owner_ref=?')
-            .bind(state,JSON.stringify({state,provider_id:sent.ok?sent.id:''}),attemptId,ev.owner_ref).run();
+          await env.DB.prepare('UPDATE events SET decision=?,text=?,updated=? WHERE id=? AND owner_ref=?')
+            .bind(state,JSON.stringify({state,provider_id:sent.ok?sent.id:'',recipient_digest}),
+              new Date().toISOString().replace('T',' '),attemptId,ev.owner_ref).run();
         }
       }
     } catch { /* durable pending reply and attempt fence survive */ }

@@ -50,5 +50,20 @@ const isolated = await task();
 assert.equal((await update({DB:t.db}, req({recordId:isolated.id, ifMatch:isolated.etag,
   forcedScope:{column:'owner_ref',value:'someoneelse'}, body:{status:'queued'}}))).status,404);
 checks++;
+// Clock precision cannot stand in for question/authority identity. These
+// writes deliberately keep `updated` identical to the pre-model record.
+for (const [column,value] of [
+  ['result','A different question'], ['workflow_version',2], ['effect_key','new-effect'],
+  ['lease_token','new-lease'], ['lease_until','2030-01-01 00:00:00.000Z'],
+  ['receipt','different-receipt'], ['effect_uncertain',1], ['consequence','consequential'],
+] as const) {
+  const j = await task();
+  await t.db.prepare(`UPDATE jobs SET "${column}" = ? WHERE id = ?`).bind(value,j.id).run();
+  const attempt = await update({DB:t.db}, req({recordId:j.id, ifMatch:j.etag, storedRow:j.stored,
+    body:{status:'queued',params:'{"authorized":true}'}}));
+  assert.equal(attempt.status,412,`same-time ${column} change must reject old authority`);
+  assert.equal(t.query<Record<string,unknown>>('SELECT * FROM jobs WHERE id = ?',j.id)[0][column],value);
+  checks++;
+}
 t.close();
 console.log(`${checks} approval precondition checks passed`);

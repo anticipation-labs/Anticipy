@@ -36,7 +36,7 @@ import SwiftUI
 /// type may not hold a static stored property.
 private let dashboardFoot = "dashboard.foot"
 
-struct ConversationDashboard<Notices: View, Approval: View, Deck: View, SettingsLink: View>: View {
+struct ConversationDashboard<Notices: View, Approval: View, Working: View, Question: View, Deck: View, SettingsLink: View>: View {
 
     // What to draw
     let turns: [DashboardPolicy.Turn]
@@ -56,7 +56,8 @@ struct ConversationDashboard<Notices: View, Approval: View, Deck: View, Settings
     let onStartListening: () -> Void
     let onHoldListening: () -> Void
     let onStopListening: () -> Void
-    let onSend: (String) -> Void
+    /// True means recoverably queued on this device, not received by the brain.
+    let onSend: (String) -> Bool
     let onOpenSession: (DashboardPolicy.Session) -> Void
     /// WHERE THE WORDS WENT.
     ///
@@ -77,6 +78,11 @@ struct ConversationDashboard<Notices: View, Approval: View, Deck: View, Settings
     /// One approval, drawn by the card that already carries the consequence
     /// and the two buttons.
     @ViewBuilder let approval: (String) -> Approval
+    /// Real job/event IDs go back to Home's existing authoritative controls.
+    /// A transcript with a goal can also be a working turn, so its fallback
+    /// prose is passed along without pretending it identifies a queued job.
+    @ViewBuilder let working: (String, String) -> Working
+    @ViewBuilder let question: (String, String) -> Question
     /// Finished work, drawn by the deck that already carries the shelf rule.
     /// At the foot of the thread, after the newest turn, because it is the
     /// part of the day that is over.
@@ -92,6 +98,7 @@ struct ConversationDashboard<Notices: View, Approval: View, Deck: View, Settings
     /// person back into the thread as if they had pressed done.
     @State private var held = false
     @State private var typed = ""
+    @State private var sendFailed = false
     @State private var focusedReply: String?
     @State private var expandedTurn: DashboardPolicy.Turn?
     @State private var hasNewReply = false
@@ -254,18 +261,15 @@ struct ConversationDashboard<Notices: View, Approval: View, Deck: View, Settings
             PendingTurn(count: count)
         case .quiet(_, let count, _):
             QuietTurn(count: count) { onOpenHistory() }
-        case .working(_, let text, _):
-            WorkingTurn(text: text)
+        case .working(let id, let text, _):
+            working(id, text)
         case .said(let id, let text, _, let done):
             VStack(alignment: .leading, spacing: 6) {
                 SaidTurn(text: text, done: done) { UIPasteboard.general.string = text }
                 ReplyTextDeliveryBadge(state: replyTextDelivery[id] ?? .unknown)
             }
         case .question(let id, let text, _):
-            VStack(alignment: .leading, spacing: 6) {
-                QuestionTurn(text: text)
-                ReplyTextDeliveryBadge(state: replyTextDelivery[id] ?? .unknown)
-            }
+            question(id, text)
         case .approval(let id, _, _, _):
             approval(id)
         }
@@ -327,6 +331,12 @@ struct ConversationDashboard<Notices: View, Approval: View, Deck: View, Settings
                    placeholder: "Ask Anticipy, or tell her something…",
                    onSend: send,
                    focus: $writing)
+            if sendFailed {
+                Text("I couldn't save this message on this iPhone. Your draft is still here. Try again when storage is available.")
+                    .font(.caption)
+                    .foregroundStyle(OnboardTheme.text2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             if !writing {
             // DERIVED, NEVER HARDWIRED. A button that always says "Listen with
             // phone" is a button that says it over a live microphone — which is
@@ -381,10 +391,13 @@ struct ConversationDashboard<Notices: View, Approval: View, Deck: View, Settings
     private func send() {
         let line = typed.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !line.isEmpty else { return }
+        // No Task before this acknowledgement. A second tap sees the cleared
+        // field; an unsuccessful local write leaves the exact draft intact.
+        guard onSend(line) else { sendFailed = true; return }
+        sendFailed = false
         typed = ""
         writing = false
         followSentReply = true
-        onSend(line)
     }
 
     // MARK: - The capture moment
@@ -510,14 +523,9 @@ struct ConversationDashboard<Notices: View, Approval: View, Deck: View, Settings
                 NavigationStack {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 16) {
-                            if case .approval(let id, _, _, _) = turn {
-                                approval(id)
-                            } else {
-                                Text(title(of: turn))
-                                    .font(.body)
-                                    .textSelection(.enabled)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                            }
+                            // Stop, answer and Check outcome must remain
+                            // reachable while the phone is listening too.
+                            view(for: turn)
                         }.padding(20)
                     }
                     .navigationTitle("Details")

@@ -139,6 +139,7 @@ export type ApiHandRefusal =
   | "toolkit_required"
   | "tool_required"
   | "args_required"
+  | "plan_stale"
   | "effect_required"
   | "not_connected"
   | "account_ambiguous"
@@ -212,6 +213,9 @@ export interface ApiHandDeps {
   store?: ConnectionsStore;
   provider?: ComposioConnections;
   clock?: () => number;
+  /** Job callers revalidate authority after catalog awaits, immediately before
+   *  execute. A failed/unknown check refuses without a vendor effect. */
+  beforeExecute?: () => Promise<boolean>;
 }
 
 // ---------------------------------------------------------------------------
@@ -530,6 +534,16 @@ export async function runStep(
       effect,
       true,
     );
+  }
+
+  // The job may have changed while the catalog was being read. Check at the
+  // effect boundary, not only when the route originally loaded the arguments.
+  if (deps.beforeExecute) {
+    let current = false;
+    try { current = await deps.beforeExecute(); } catch { /* Unknown is a refusal. */ }
+    if (!current) {
+      return refuse(who, "plan_stale", "job authority changed before execute", effect, true);
+    }
   }
 
   // -- The one execute. ----------------------------------------------------

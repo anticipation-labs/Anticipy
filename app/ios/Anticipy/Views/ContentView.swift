@@ -1006,7 +1006,7 @@ struct HomeView: View {
     private var browserHandling: [AgentJob] {
         handling.filter {
             let lane = CalendarHandPolicy.normalizedLane($0.lane)
-            return lane != "research" && lane != CalendarHandPolicy.lane
+            return lane != "research" && lane != CalendarHandPolicy.lane && lane != "api"
         }
     }
     /// Terminal work: done, failed, AND called off.
@@ -1157,6 +1157,12 @@ struct HomeView: View {
     /// the thread because they are about the whole screen rather than about
     /// any one thing said, and they keep their own suites' shapes.
     @ViewBuilder private var dashboardNotices: some View {
+        if session.captureStorageFailed {
+            Text("I couldn't save or verify pending words on this iPhone. Listening pauses when new speech cannot be saved. Check available storage, then try again.")
+                .font(.callout)
+                .foregroundStyle(Theme.text2)
+                .fixedSize(horizontal: false, vertical: true)
+        }
         if let offer = contextOffer, let hit = ContextTrigger.ask(verdict: offer) {
             VStack(alignment: .leading, spacing: 10) {
                 Text(offer.reason ?? "").font(.callout)
@@ -1296,7 +1302,7 @@ struct HomeView: View {
                         else { session.startListening() }
                     },
                     onStopListening: { session.stopListening() },
-                    onSend: { line in typedLine = line; submitTyped() },
+                    onSend: { line in session.acceptTyped(line) },
                     // OPENING ONE BACK UP, which was never built until the
                     // transcript needed somewhere to live. The capture face
                     // shows tasks now; this is where the words went.
@@ -1309,6 +1315,25 @@ struct HomeView: View {
                     if let job = session.jobs.first(where: { $0.id == id }) {
                         ConfirmJobCard(job: job,
                                        canonicalPhoneState: session.canonicalOwnerPhoneState)
+                    }
+                } working: { id, text in
+                    if let job = handling.first(where: { $0.id == id }) {
+                        HandlingCard(job: job)
+                    } else {
+                        WorkingTurn(text: text)
+                    }
+                } question: { id, text in
+                    if let event = session.anticipySays.first(where: { $0.id == id }),
+                       openQuestions.contains(where: { $0.id == id })
+                        || session.unverifiedWrites.contains(id)
+                        || session.failedWrites.contains(id)
+                        || session.inFlight.contains(id) {
+                        AskCard(event: event)
+                    } else {
+                        VStack(alignment: .leading, spacing: 6) {
+                            QuestionTurn(text: text)
+                            ReplyTextDeliveryBadge(state: session.replyTextDelivery[id] ?? .unknown)
+                        }
                     }
                 } doneDeck: {
                     if !finishedShown.isEmpty {
@@ -1914,9 +1939,8 @@ struct HomeView: View {
     private func submitTyped() {
         let line = typedLine.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !line.isEmpty else { return }
-        // heard() owns the haptic — a second tap here reads as a stutter-bug.
+        guard session.acceptTyped(line) else { return }
         typedLine = ""
-        Task { await session.heard(line, explicit: true) }
     }
 
     /// Anticipy speaks first: a first-person briefing of what she heard and
@@ -2890,8 +2914,12 @@ struct HandlingCard: View {
     }
     private var usesResearchHand: Bool { normalizedLane == "research" }
     private var usesCalendarHand: Bool { normalizedLane == CalendarHandPolicy.lane }
+    private var usesAPIHand: Bool { normalizedLane == "api" }
 
     private var stageTitle: String {
+        if usesAPIHand {
+            return job.status == "running" ? "Connected app is working" : "Connected app task is queued"
+        }
         if usesResearchHand {
             return job.status == "running" ? "Research is working" : "Research is queued"
         }
@@ -2906,6 +2934,11 @@ struct HandlingCard: View {
 
     private var stageDetail: String? {
         if let doingNow { return doingNow }
+        if usesAPIHand {
+            return job.status == "running"
+                ? "This task is running through a connected app."
+                : "Waiting for connected-app execution."
+        }
         if usesResearchHand {
             return job.status == "running"
                 ? "The research service accepted this task."

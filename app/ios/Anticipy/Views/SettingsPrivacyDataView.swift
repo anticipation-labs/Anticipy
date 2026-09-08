@@ -41,7 +41,7 @@ struct SettingsPrivacyDataView: View {
                 SectionHeader("Waiting on this iPhone")
                 GroupedCard {
                     DisclosureRow("Review unsent speech",
-                                  subtitle: "Read the exact words that have not left this iPhone.",
+                                  subtitle: "Read pending words whose delivery is not yet confirmed.",
                                   systemImage: "doc.text.magnifyingglass",
                                   value: "\(session.pendingCount)") {
                         Haptics.engage()
@@ -52,7 +52,7 @@ struct SettingsPrivacyDataView: View {
                         confirmation = .pending
                     }
                 }
-                FootnoteText("These words have not left this iPhone. Deleting them here means they will never be sent.")
+                FootnoteText("Delivery is not yet confirmed for these words. Removing them stops this iPhone retrying; words already received by Anticipy remain on the server.")
             }
 
             SectionHeader("This iPhone")
@@ -120,10 +120,12 @@ struct SettingsPrivacyDataView: View {
         case .pending:
             return Alert(
                 title: Text("Delete unsent words?"),
-                message: Text("They have not left this iPhone. This cannot be undone."),
+                message: Text("This removes the local pending copy and stops retries. Words already received by Anticipy remain on the server. This cannot be undone."),
                 primaryButton: .destructive(Text("Delete")) {
-                    session.clearPendingLines()
-                    localNote = "The unsent words are gone."
+                    let cleared = session.clearPendingLines()
+                    localDeleteFailed = !cleared
+                    localNote = cleared ? "The pending words were removed from this iPhone."
+                        : "I couldn't update this iPhone's pending words. Check its storage, then try again."
                 },
                 secondaryButton: .cancel())
         case .local:
@@ -154,9 +156,12 @@ struct SettingsPrivacyDataView: View {
             // The call persists its outcome for Auth BEFORE it signs out. This
             // view is removed by that route change, so writing the verdict into
             // local @State afterwards would make a browser failure invisible.
-            _ = await session.forgetThisPhone()
+            let forgotten = await session.forgetThisPhone()
             forgettingLocal = false
-            Haptics.taskDone()
+            if session.isSignedIn, !forgotten {
+                localDeleteFailed = true
+                localNote = "I couldn't finish forgetting this iPhone. Check its storage, then try again."
+            } else { Haptics.taskDone() }
         }
     }
 
@@ -194,7 +199,7 @@ private struct PendingSpeechView: View {
                 }
             } else {
                 GroupedCard {
-                    InfoRow("These are the exact words currently waiting for a network. They have not been sent to Anticipy.",
+                    InfoRow("These words are waiting for confirmed delivery. Some may already have reached Anticipy while its response was lost.",
                             title: pendingSpeechTitle,
                             systemImage: "iphone")
                 }

@@ -15,7 +15,7 @@ var failures = 0
 // is its second copy, so tests/test_extension_version_pin.py holds all three
 // numbers -- extension/manifest.json, AnticipyApp.swift, this file -- to the
 // same value and goes red the moment one of them lags.
-let expected = "0.18.0"
+let expected = "0.18.1"
 func staleExtension(_ browser: String?) -> String? {
     guard let browser, let range = browser.range(of: "ext/") else { return nil }
     let running = String(browser[range.upperBound...]).prefix(while: { $0.isNumber || $0 == "." })
@@ -40,6 +40,8 @@ check("being up to date says nothing at all",
       staleExtension("Chrome/128.0.0.0 ext/\(expected)") == nil)
 check("the pre-repair browser is now visibly stale",
       staleExtension("Chrome/128.0.0.0 ext/0.16.0") == "0.16.0")
+check("the browser before the queue ownership repair is stale",
+      staleExtension("Chrome/128.0.0.0 ext/0.18.0") == "0.18.0")
 check("being AHEAD says nothing — no nagging a dev build",
       staleExtension("Chrome/128.0.0.0 ext/99.0.0") == nil)
 check("a minor-version gap is caught", staleExtension("Chrome/1 ext/0.8.1") == "0.8.1")

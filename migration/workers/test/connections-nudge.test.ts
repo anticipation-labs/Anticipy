@@ -1532,9 +1532,56 @@ await check("installed wiring is what production uses: no deps passed, one text 
   assert.equal(calls.length, 0);
 });
 
+for (const current of [null, "", "+12025550124", "unavailable"] as const) {
+  await check("a changed or unreadable phone at the send boundary cancels the nudge", async () => {
+    reset();
+    let reads = 0;
+    const r = d1Rig({ phone: async () => {
+      if (++reads === 1) return TO;
+      if (current === "unavailable") throw new Error("local read outage");
+      return current;
+    } });
+    try {
+      const out = await sendConnectAsk(r.env, OWNER, SLUG_A, "in_task", r.deps);
+      assert.equal(out.sent, false);
+      assert.equal(out.cause, "no-phone");
+      assert.equal(calls.length, 0, "no request may reach the carrier for stale authority");
+      assert.notEqual((await r.store.readNudge(OWNER, SLUG_A))?.state, "asked");
+      // A held-off text did not consume this owner's weekly interruption.
+      r.deps.phone = async () => TO;
+      assert.equal((await sendConnectAsk(r.env, OWNER, SLUG_A, "in_task", r.deps)).sent, true);
+      assert.equal(calls.length, 1);
+    } finally { r.d1.db.close(); }
+  });
+}
+
 // ===========================================================================
 // 7. WHOLE-SUITE SCANS
 // ===========================================================================
+
+for (const change of ["deleted", "revised"] as const) {
+  await check("an unsent nudge cannot undo a concurrent deletion or revision", async () => {
+    reset();
+    const r = d1Rig();
+    let reads = 0;
+    r.deps.phone = async () => {
+      if (++reads === 1) return TO;
+      if (change === "deleted") {
+        r.d1.db.prepare("DELETE FROM connect_nudges WHERE user_id = ? AND toolkit = ?").run(OWNER, SLUG_A);
+      } else {
+        r.d1.db.prepare("UPDATE connect_nudges SET level = 2 WHERE user_id = ? AND toolkit = ?").run(OWNER, SLUG_A);
+      }
+      return null;
+    };
+    try {
+      assert.equal((await sendConnectAsk(r.env, OWNER, SLUG_A, "in_task", r.deps)).sent, false);
+      assert.equal(calls.length, 0);
+      const stored = await r.store.readNudge(OWNER, SLUG_A);
+      if (change === "deleted") assert.equal(stored, null, "release cannot recreate erased state");
+      else assert.equal(stored?.level, 2, "release cannot replace a concurrent revision");
+    } finally { r.d1.db.close(); }
+  });
+}
 
 await check("no raw token ever reached a log line or a message body", () => {
   assert.ok(MINTED_TOKENS.length >= 30, "too few tokens were minted for this scan to mean much");

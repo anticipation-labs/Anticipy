@@ -48,6 +48,8 @@ sh "$HERE/run_owner_mirror_tests.sh"
 # response must not repopulate account B's jobs, event feed, notifications, or
 # browser-agent state after sign-out/sign-in yields the main actor.
 sh "$HERE/run_refresh_account_race_tests.sh"
+sh "$HERE/run_capture_account_race_tests.sh"
+sh "$HERE/run_actual_home_recovery_tests.sh"
 # The same question a third time, about a different table. Owner-mirror asks
 # whose device answers this phone holds; the race suite asks whose job feed a
 # late response lands in; this asks whose ACCOUNT a connection, a nudge and a

@@ -140,8 +140,8 @@ def assert_bucket_reachable(s3) -> None:
 
 
 def pull_state(s3) -> None:
-    """GET each state file from R2 into the owner's dir. Absent (404) = a new
-    owner; create the dir 0o700 and continue. ANY OTHER failure aborts the boot
+    """GET each state file from R2 into the owner's dir. Both absent (404)
+    can be a new owner; existing clock state with no memory is not. ANY OTHER failure aborts the boot
     loudly — that is the whole safety property of this function.
 
     The per-key 404 may only be trusted AFTER the bucket itself is proven to
@@ -179,6 +179,17 @@ def pull_state(s3) -> None:
             except Exception as err:
                 raise RuntimeError(f"R2 state for {name} failed validation; local checkpoint preserved") from err
             staged.append((name, dest))
+        restored = {name for name, _ in staged}
+        if ("memory.db" not in restored
+                and ("clock_state.json" in restored or (_owner_dir / "clock_state.json").exists())):
+            # The worker opens its memory before it writes outreach state,
+            # and snapshots upload memory first. An existing clock therefore
+            # proves this is not a fresh owner. Do not turn a missing mind
+            # into a new empty checkpoint on the next snapshot tick.
+            raise RuntimeError(
+                "R2 memory.db is missing for an owner with existing clock state; "
+                "refusing to boot an empty mind. Restore the owner checkpoint first."
+            )
         for name, dest in staged:
             os.chmod(dest, 0o600)
             dest.replace(_owner_dir / name)

@@ -34,6 +34,7 @@
  */
 import { parseFilter, provesOwnerScope, legacyOwnedList, FilterError } from "../../filter-dsl.ts";
 import { ACCOUNT_REACHABLE } from "../api/schema.ts";
+import { SERVER_EVENT_KINDS } from "../api/records.ts";
 import { refuse, badRequest } from "../api/wire.ts";
 import type { Ctx, Policy } from "./chain.ts";
 
@@ -197,6 +198,23 @@ async function accountRung(ctx: Ctx, env: GuardEnv, authId: string): Promise<Res
 
   if (!ACCOUNT_REACHABLE.includes(collection as typeof ACCOUNT_REACHABLE[number])) {
     return refuse(403, "account is not allowed to access that collection");
+  }
+
+  if (collection === "events" && ["POST", "PATCH", "DELETE"].includes(method)) {
+    // Inspect BOTH sides: looking only at the requested kind lets an account
+    // edit evidence without echoing kind, or launder it into app_reply first.
+    let stored: Record<string, unknown> | null = null;
+    if (recordId) {
+      try { stored = await loadRow(ctx, collection, recordId); }
+      catch { return refuse(403, "event ownership and evidence could not be verified"); }
+      if (stored?.owner_ref !== authId) {
+        return refuse(403, "record belongs to a different owner");
+      }
+    }
+    if (SERVER_EVENT_KINDS.includes(String(stored?.kind ?? ""))
+        || SERVER_EVENT_KINDS.includes(String(b.kind ?? ""))) {
+      return refuse(403, "server-authored event evidence is read-only for accounts");
+    }
   }
 
   // guard.pb.js:429-433 — pair-code lookup, deliberately pre-owner.

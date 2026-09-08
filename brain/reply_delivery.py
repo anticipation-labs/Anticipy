@@ -10,6 +10,7 @@ import json
 import time
 from datetime import datetime, timedelta, timezone
 from . import backend
+from .reply_authority import recipient_digest, task_snapshot
 
 
 class ReplyDelivery:
@@ -100,7 +101,8 @@ class ReplyDelivery:
                 job = response.json()
                 if (job.get('owner_ref') != self.owner or job.get('status') != meta['status']
                         or job.get('workflow_version', 0) != meta['version']
-                        or job.get('result') != meta['question']):
+                        or job.get('result') != meta['question']
+                        or (meta.get('binding_version') == 1 and task_snapshot(job) != meta)):
                     self.finish(row, 'question_superseded')
                     return
         phone = self.phone()
@@ -118,7 +120,7 @@ class ReplyDelivery:
             return
         try:
             attempt = self.create(kind='notification_status',
-                text='Text delivery started; provider acceptance is not yet known.',
+                text=json.dumps({'state': 'sms_unconfirmed', 'recipient_digest': recipient_digest(phone)}),
                 goal=message['id'], decision='sms_unconfirmed', external_event_id=key)
         except Exception:
             # Only an unambiguous create winner is allowed to contact SendBlue.
@@ -142,7 +144,8 @@ class ReplyDelivery:
             response = backend.patch(f'{self.url}/{attempt["id"]}', json={
                 'decision': state,
                 'text': json.dumps({'state': state, 'provider_id':
-                                   (result or {}).get('sid', '')}),
+                                   (result or {}).get('sid', ''),
+                                   'recipient_digest': recipient_digest(phone)}),
             })
             response.raise_for_status()
             self.finish(row, state)

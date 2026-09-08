@@ -1526,6 +1526,17 @@ async function d1ClaimAsk(
 
   const cols = NUDGE_COLUMNS.filter((c) => live.has(c));
   const vals = cols.map((c) => (write as unknown as Record<string, unknown>)[c] ?? null);
+  if (budget === null) {
+    // A release is never an upsert. The owner may have erased this row while
+    // the phone/model/provider was awaited, or another writer may have changed
+    // a field other than state/sent_at. Restore only the exact claim we took.
+    const expected = cols.map((c) => (expect as unknown as Record<string, unknown>)[c] ?? null);
+    const res = await store.DB.prepare(
+      `UPDATE "connect_nudges" SET ${cols.map((c, i) => `${col(c)} = ?${i + 1}`).join(", ")}`
+      + ` WHERE ${cols.map((c, i) => `${col(c)} IS ?${cols.length + i + 1}`).join(" AND ")}`,
+    ).bind(...vals, ...expected).run();
+    return Number(res.meta?.changes ?? 0) === 1;
+  }
   const setters = cols
     .filter((c) => c !== "user_id" && c !== "toolkit")
     .map((c) => `${col(c)} = excluded.${col(c)}`)
@@ -1870,6 +1881,20 @@ export async function sendConnectAsk(
         + "nothing",
       "ask",
     );
+  }
+
+  // The profile can change while the model composes or the lease is acquired.
+  // Re-read at the effect boundary: a different number is not authority to
+  // redirect this already-prepared message, and an unreadable number is not
+  // permission to use the cached one. Release only our own unsent claim.
+  let currentPhone = "";
+  try {
+    const current = await deps.phone(who);
+    currentPhone = typeof current === "string" ? current.trim() : "";
+  } catch { /* Unknown authority must stay silent. */ }
+  if (!currentPhone || currentPhone !== to) {
+    try { await claim(asked, before, null); } catch { /* Quiet if release fails. */ }
+    return outcome("no-phone", "the current phone could not be confirmed before sending", "ask");
   }
 
   // 9. ONE TEXT, through src/messaging.ts, which owns the provider choice and

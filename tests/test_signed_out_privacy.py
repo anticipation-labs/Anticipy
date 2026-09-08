@@ -23,6 +23,23 @@ ROOT = Path(__file__).resolve().parent.parent
 APP = (ROOT / "app/ios/Anticipy/AnticipyApp.swift").read_text()
 
 
+def shipping_body(signature):
+    """The full declaration, without comment-only matches or character limits."""
+    source = "\n".join(line for line in APP.splitlines()
+                       if not line.lstrip().startswith("//"))
+    start = source.index(signature)
+    opening = source.index("{", start)
+    depth = 0
+    for index in range(opening, len(source)):
+        if source[index] == "{":
+            depth += 1
+        elif source[index] == "}":
+            depth -= 1
+            if not depth:
+                return source[opening + 1:index]
+    raise AssertionError(f"unclosed {signature}")
+
+
 def test_signing_out_stops_the_microphone():
     body = APP.split("func signOut() {", 1)[1].split("}", 1)[0]
     assert "listener.stop()" in body, (
@@ -38,50 +55,29 @@ def test_keep_listening_stays_the_persons_own_preference():
 
 
 def test_nothing_is_captured_without_an_owner():
-    """The guard must run before anything leaves, and nothing may leave between.
+    """Every real capture path must use the exact authenticated staging gate.
 
-    This asserted the guard sat within the last 600 CHARACTERS before the push.
-    That is a proxy for "close to it", and on 2026-08-25 it went red because
-    legitimate capture-envelope work was added in between — the guard was
-    untouched, still first, still returning early. A distance check reads a
-    reformat as a privacy regression, which is expensive in exactly the wrong
-    direction: it cries wolf on safe edits, and a real leak that happened to fit
-    inside 600 characters would have passed.
-
-    So the intent is asserted directly instead. The guard precedes every exit,
-    and NOTHING between the guard and the push can itself push or queue — which
-    is the property the distance was standing in for, and it holds however the
-    code is laid out.
+    heard no longer has a separate live POST: first-send and retry both use the
+    durable outbox. Follow the caller into that real guard rather than pinning
+    the old function's literal guard spelling. The Swift race runner separately
+    executes these production functions against delayed in-memory transport.
     """
-    # Scoped to heard() ONLY. Splitting the whole file on the transcript push
-    # sweeps in every earlier function that legitimately pushes — the profile
-    # upsert, the app_reply write — and reads them as leaks.
-    # COMMENTS STRIPPED FIRST. Searching raw source means a guard commented
-    # OUT still reads as present — a mutation proved exactly that on
-    # 2026-08-25, and the check this replaced had the same hole. The shell
-    # runners in app/ios/Tests already do this (`code()`); this now matches.
-    live = "\n".join(l for l in APP.split("\n")
-                     if not l.lstrip().startswith("//"))
-    heard = live.split("func heard(", 1)[1]
-    heard = heard.split("try await backend.pushEvent(kind: \"transcript\"", 1)[0]
-    guard = 'guard !accountID.isEmpty else { return }'
-    assert guard in heard, (
-        "a line spoken with no signed-in account must not be pushed or queued")
-
-    # Nothing may reach the wire, or the on-disk queue, BEFORE the owner check.
-    before = heard[:heard.index(guard)]
-    for leak in ("pushEvent", "queueUnsent", "unsentLines"):
-        assert leak not in before, (
-            f"{leak} runs before the signed-out guard — a line spoken with no "
-            "owner would leave the phone")
-
-    # And nothing between the guard and the push may leave either: the guard is
-    # the LAST word before the wire, not merely somewhere above it.
-    between = heard[heard.index(guard) + len(guard):]
-    for leak in ("pushEvent", "queueUnsent"):
-        assert leak not in between, (
-            f"{leak} sits between the owner check and the push, so a path "
-            "exists that the guard does not cover")
+    heard = shipping_body("func heard(")
+    assert "guard stageTranscript(" in heard
+    assert heard.index("guard stageTranscript(") < heard.index("await flushUnsent()")
+    assert "pushEvent" not in heard
+    typed = shipping_body("func acceptTyped(")
+    assert typed.index("stageTranscript(") < typed.index("Task { await flushUnsent() }")
+    stage = shipping_body("private func stageTranscript(")
+    gate = stage.index("guard let lease = AccountWriteLeasePolicy.begin(")
+    assert "accountID: accountID, authToken: authToken, isSignedIn: isSignedIn" in stage
+    assert "else { return false }" in stage
+    for operation in ("readPendingLines()", "persistPendingLines(", "transcript.append("):
+        assert gate < stage.index(operation)
+    assert "pushEvent" not in stage and "await" not in stage
+    assert "account: lease.accountID" in stage
+    begin = shipping_body("static func begin(accountID: String, authToken: String,")
+    assert "guard isSignedIn, !accountID.isEmpty, !authToken.isEmpty else { return nil }" in begin
 
 
 def test_a_buffered_line_remembers_whose_words_it_is():
@@ -107,8 +103,8 @@ def test_a_buffered_line_remembers_whose_words_it_is():
     assert _re2.search(r"^\s*(?:var|let)\s+account\s*:", decl, _re2.M), (
         "a queued line must carry the account that captured it")
     # every construction site stamps it
-    for frag in ("account: accountID", "account: nil"):
-        assert frag in APP
+    assert "account: lease.accountID" in shipping_body("private func stageTranscript(")
+    assert "account: nil" in shipping_body("private func readPendingLines()")
 
 
 def test_the_queue_is_never_flushed_into_someone_elses_account():
@@ -117,11 +113,15 @@ def test_the_queue_is_never_flushed_into_someone_elses_account():
     # ahead of the loop and pushed the guard past the window — the guard was
     # still in the code; the test had stopped looking at it. Scope to the
     # whole function body instead, the way the other splits in this file do.
-    flush = APP.split("private func flushUnsent() async {", 1)[1] \
-               .split("\n    }", 1)[0]
-    assert "!accountID.isEmpty" in flush, "no owner, no flush"
-    assert "line.account == accountID" in flush, (
-        "only lines captured by THIS account may be posted to it")
+    flush = shipping_body("private func flushUnsent() async")
+    assert "let lease = AccountWriteLeasePolicy.begin(accountID: accountID" in flush
+    assert "authToken: authToken, isSignedIn: isSignedIn" in flush
+    assert "guard original.account == lease.accountID else" in flush
+    assert "let requestedBackend = backend" in flush
+    assert "await requestedBackend.pushEvent(" in flush
+    assert "await backend.pushEvent(" not in flush
+    assert flush.count("AccountWriteLeasePolicy.isCurrent(") >= 6
+    assert "$0.account == lease.accountID && $0.externalEventID == externalID" in flush
 
 
 # ------------------------- venting is not an instruction

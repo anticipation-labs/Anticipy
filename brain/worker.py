@@ -214,8 +214,10 @@ def run_nightly_consolidation(memory, now: float | None = None) -> None:
                 print(f"consolidation: retired {expired} fact(s) past their horizon")
 
         totals = {"episodes": 0, "new": 0, "merged": 0}
+        deferred = 0
         for _ in range(CONSOLIDATE_MAX_BATCHES):
             out = memory.consolidate(now=now)
+            deferred = out.get("deferred", deferred)
             if not out.get("ran"):
                 print(f"consolidation: pass skipped ({out.get('reason', '?')})")
                 break
@@ -225,6 +227,9 @@ def run_nightly_consolidation(memory, now: float | None = None) -> None:
                 break
         print(f"consolidation: {totals['episodes']} episodes -> "
               f"{totals['new']} new facts, {totals['merged']} merged")
+        if deferred:
+            print(f"consolidation: {deferred} fact(s) awaiting a write-permission verdict; "
+                  "saved for a later retry")
     except Exception as e:
         # This must never be able to take hearing down with it.
         print(f"consolidation failed (harmless): {e}")
@@ -234,7 +239,8 @@ def fetch_owner_phone(owner_ref: str = "") -> str | None:
     """Return the canonical SMS route, preserving empty vs unknown.
 
     A string, including "", is a successful server answer. None means the
-    answer could not be read and must not overwrite the worker's cached state.
+    answer could not be read; callers must not treat their cached route as
+    current authority or mistake the missing answer for verified revocation.
     Once an owner_profile row exists it is authoritative even when its phone
     is empty; falling through to the immutable sign-up owners.phone would
     silently re-affiliate a number the person explicitly removed.
@@ -4344,7 +4350,7 @@ def handle_inbound(ev: dict, convo, anticipy) -> str:
     # CONVERSATION"). The app sends no phone, so it uses the owner's own number
     # and lands in the SAME thread his texts do; answering in the app continues
     # the conversation rather than starting a second one beside it.
-    phone = ev.get("goal", "").strip() or anticipy.owner_phone
+    phone = ev.get("goal", "").strip()
     if in_app:
         phone = anticipy.owner_phone or f"app:{anticipy.owner_ref}"
     if not text:
@@ -4366,10 +4372,20 @@ def handle_inbound(ev: dict, convo, anticipy) -> str:
     # row IS the proof of who typed it. Demanding same_phone() here as well
     # would refuse every answer from an owner who has given no phone number,
     # which is the entire point of answering in the app.
-    if not in_app and not same_phone(phone, anticipy.owner_phone):
-        mark_processed(ev["id"], "ignored_nonowner")
-        print(f"{lane}: from non-owner {phone!r} — ignored")
-        return "ignored_nonowner"
+    if not in_app:
+        # A failed periodic refresh clears the outbound cache on purpose. It
+        # does not prove this sender is a stranger. Ask the canonical source
+        # at this authorization boundary and leave an unanswered event wholly
+        # unclaimed so the same id can be retried when the profile recovers.
+        if not refresh_owner_phone(anticipy):
+            print(f"{lane}: canonical owner phone unavailable — retrying later")
+            return "unclaimed"
+        # The sender must come from the webhook's event. An absent sender may
+        # not borrow the owner's own number and thereby authenticate itself.
+        if not same_phone(phone, anticipy.owner_phone):
+            mark_processed(ev["id"], "ignored_nonowner")
+            print(f"{lane}: sender does not match the canonical owner — ignored")
+            return "ignored_nonowner"
     if not claim(ev["id"]):
         print(f"{lane}: could not claim, retrying later")
         return "unclaimed"

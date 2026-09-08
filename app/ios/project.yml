@@ -861,7 +861,10 @@ settings:
     # 169: Bind task text status to actual receipts and show recorded pauses.
     #      Preserve contextual missing questions and answers across task revisions.
     # 170: Advertise the extension that retains quoted task context.
-    CURRENT_PROJECT_VERSION: "171"
+    # 172: Restore task controls on the actual Home screen, reopen declined
+    #      context access from Settings, and preserve owner-bound input through
+    #      interrupted sends. Detect the 0.18.1 browser queue ownership repair.
+    CURRENT_PROJECT_VERSION: "172"
     DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: NO
@@ -921,7 +924,7 @@ targets:
         # literal from a Mac one, and two products answering "which build
         # are you holding" with different numbers is the exact disease this
         # gate exists to prevent.
-        CURRENT_PROJECT_VERSION: "171"
+        CURRENT_PROJECT_VERSION: "172"
         DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_ENTITLEMENTS: ../macos/AnticipyMac/AnticipyMac.entitlements

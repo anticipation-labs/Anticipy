@@ -35,6 +35,7 @@ import requests
 
 from . import backend
 from .source_context import source_records
+from .reply_authority import ReplyAuthority, task_snapshot
 
 from .anticipy_core import TEXTING_STYLE, _missing_fact_question, memory_notes
 from .llm import LLM, decision_budget
@@ -337,6 +338,8 @@ class Conversation:
         self._incoming_event = None
         self.reply_delivery = None
         self._reply_work_context = {}
+        self._reply_authority = None
+        self._reply_metadata = None
 
     @contextlib.contextmanager
     def from_event(self, event: dict):
@@ -400,7 +403,10 @@ class Conversation:
         # Persist before the provider call, including when reply_in_app is
         # active. The app and text then show the same saved answer.
         if self.reply_delivery is not None and self._incoming_event is not None:
-            out = self.reply_delivery(self._incoming_event, body, media)
+            out = (self.reply_delivery(self._incoming_event, body, media,
+                                       metadata=self._reply_metadata)
+                   if self._reply_metadata is not None else
+                   self.reply_delivery(self._incoming_event, body, media))
             self._thread(phone).append(Turn("anticipy", out.get("body", body)))
             return out
         # THE DEDUPE STILL READS THE BODY ALONE, AND THAT IS A DECISION.
@@ -470,10 +476,25 @@ class Conversation:
         """Free-form owner text in; understood intent + conversational reply
         out. Job release/cancel happens HERE (queue flip), not in the model."""
         with decision_budget():
-            return self._on_reply(phone, text, reply_context)
+            try:
+                return self._on_reply(phone, text, reply_context)
+            finally:
+                # Spoken-answer helpers also use this Conversation object.
+                # A previous SMS's selected presentation cannot leak to them.
+                self._reply_authority = None
+                self._reply_metadata = None
 
     def _on_reply(self, phone: str, text: str, reply_context: Optional[dict] = None) -> dict:
         self._reply_work_context = {}
+        self._reply_authority = None
+        self._reply_metadata = None
+        event = self._incoming_event or {}
+        if event.get('kind') == 'sms_reply':
+            self._reply_authority = ReplyAuthority(
+                self.anticipy.backend_url, self.anticipy.owner_ref, event)
+            # A cached app-visible or failed-to-send message is not an SMS
+            # presentation. Rebuild this channel from durable delivery facts.
+            self.threads[phone] = self._thread_from_record(phone)
         self._thread(phone).append(Turn("owner", text))
         if reply_context:
             target = self._fetch(str(reply_context.get("reply_to_job_id") or ""))
@@ -484,6 +505,9 @@ class Conversation:
                 reply = "That task changed while you were answering. Open its latest question so I can use your answer in the right place."
                 self.say(phone, reply)
                 return {"intent": "stale_question", "pending_id": None, "changes": None, "acted": None, "reply": reply}
+            self._reply_authority = ReplyAuthority(
+                self.anticipy.backend_url, self.anticipy.owner_ref, event,
+                app_snapshot=task_snapshot(target))
         parsed = (self._classify(phone, text, reply_context=reply_context)
                   if reply_context else self._classify(phone, text))
         intent = parsed.get("intent", "unavailable")
@@ -561,6 +585,9 @@ class Conversation:
                     verb = "stop" if do_cancel else "start"
                     reply = (f"{reply} I couldn't {verb} {left} — say that one "
                              "again and I'll go after it.").strip()
+                    if self._reply_authority and self._reply_authority.refused:
+                        reply = (f"{reply} Please review its latest task question; "
+                                 "I couldn't bind that reply to its current version.")
                 self.say(phone, reply)
                 return {"intent": intent, "pending_id": None, "changes": changes,
                         "acted": "multi" if done_goals else None,
@@ -693,6 +720,8 @@ class Conversation:
                 reply = "Hit a snag updating that on my end — say it again in a minute?"
             else:
                 job = self._fetch(job_id_acted)
+                if self._reply_authority:
+                    job = self._reply_authority.changed.get(job_id_acted, job)
                 goal = ((job or {}).get("goal") or "").replace("_", " ").strip()
                 # What the queue did is ground truth; the model's sentence is
                 # a draft written before the flip. For the two verbs that mean
@@ -713,6 +742,10 @@ class Conversation:
                     else:
                         reply = (f"I've saved that change. {remaining}" if remaining
                                  else "I've saved that change. Ready for me to go ahead?")
+                        if job and self._reply_authority:
+                            # A follow-up 'yes' must refer to THIS newly saved
+                            # correction, not an older task-question outbox.
+                            self._reply_metadata = task_snapshot(job)
                 elif verb == "cancelled":
                     reply = "Okay — I've cancelled that task."
                 elif job and verb in ("released", "resumed"):
@@ -726,6 +759,9 @@ class Conversation:
                         reply += " Your changes are saved."
         if redo_spoken:
             reply = f"{reply} {redo_spoken}".strip()
+        if self._reply_authority and self._reply_authority.refused:
+            reply = ("I couldn't match that reply to the task's current question. "
+                     "I haven't applied that change or approval. Please review the latest task card.")
         self.say(phone, reply)
         return {"intent": intent, "pending_id": pending_id,
                 "changes": changes, "acted": acted, "reply": reply}
@@ -1072,6 +1108,9 @@ Use {"facts": {}} when there is nothing durable."""
 
     def _requeue(self, job: dict, learned: Optional[dict] = None,
                  owner_text: str = "") -> Optional[str]:
+        job = self._bind_reply_authority(job, owner_text)
+        if not job:
+            return None
         try:
             base = self.anticipy.backend_url
             try:
@@ -1267,6 +1306,11 @@ Use {"facts": {}} when there is nothing durable."""
             for ev in reversed(r.json().get("items", [])):
                 if ev.get("id") and ev.get("id") == (self._incoming_event or {}).get("id"):
                     continue
+                authority = self._reply_authority
+                if authority and authority.sms and ev.get('kind') in ('anticipy_says', 'anticipy_text'):
+                    delivered = {message['id'] for message in authority.evidence['messages']}
+                    if ev.get('id') not in delivered:
+                        continue
                 text = (ev.get("text") or "").strip()
                 if not text:
                     continue
@@ -1651,6 +1695,18 @@ Reply ONLY with compact JSON: {"verdict": "go"|"detail"|"no"}
         pending = self._open_work() if pool is None else pool
         return "ambiguous" if pending else None
 
+    def _bind_reply_authority(self, job, owner_text):
+        authority = self._reply_authority
+        if authority is None:
+            return job
+        context = dict(self._reply_work_context)
+        if authority.sms:
+            context['thread'] = [
+                {'who': t.role, 'text': t.text} for t in self._thread(
+                    str((self._incoming_event or {}).get('goal') or ''))[-20:]]
+        return authority.bind(job, model=self._judgment_model(), text=owner_text,
+                              context=context)
+
     @staticmethod
     def _fold_corrections(params: dict, changes: Optional[dict] = None) -> dict:
         """Put every value he has retracted-and-replaced into the authority.
@@ -1684,6 +1740,9 @@ Reply ONLY with compact JSON: {"verdict": "go"|"detail"|"no"}
             return "ambiguous"
         if not job:
             return None
+        job = self._bind_reply_authority(job, owner_text)
+        if not job:
+            return f"failed:{job_id}"
         # Only a job still waiting on the owner may be released. Without this,
         # a model-supplied id could re-queue a cancelled/failed/done job — the
         # resurrection class the 2026-07-31 audit flagged. A job the browser
@@ -1854,6 +1913,9 @@ No model access or insufficient context is unavailable, never answered."""
             return "ambiguous"
         if not job:
             return None
+        job = self._bind_reply_authority(job, owner_text)
+        if not job:
+            return f"failed:{job_id}"
         try:
             params = json.loads(job.get("params") or "{}")
         except Exception:
@@ -2026,11 +2088,21 @@ No model access or insufficient context is unavailable, never answered."""
         'yes', the write 4xx's, and Anticipy says 'On it' about a job that
         never moved."""
         try:
+            authority = self._reply_authority
+            guarded = authority is not None and verb in ('released', 'resumed', 'amended')
+            headers = authority.headers(job_id) if guarded else None
+            if guarded and not headers:
+                authority.refused = True
+                return f"failed:{job_id}"
             r = backend.patch(
                 f"{self.anticipy.backend_url}/api/collections/jobs/records/{job_id}",
-                json=fields, timeout=10)
+                json=fields, timeout=10, **({'headers': headers} if headers else {}))
             if not getattr(r, "ok", False):
+                if guarded and getattr(r, 'status_code', 0) == 412:
+                    authority.refused = True
                 return f"failed:{job_id}"
+            if guarded:
+                authority.saved(job_id, fields)
         except Exception:
             return f"failed:{job_id}"
         return f"{verb}:{job_id}"

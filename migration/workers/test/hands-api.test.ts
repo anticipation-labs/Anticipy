@@ -51,6 +51,7 @@ import {
   handsApiRun,
   settleWorkflow,
   stepFromRow,
+  planInputsMatch,
   type HandsApiDeps,
   type HandsApiEnv,
 } from "../src/routes/hands_api.ts";
@@ -59,6 +60,10 @@ import { COMPOSIO_BASE_URL, ComposioConnections } from "../src/connections/provi
 import { createD1Store, forgetLiveColumns, type StoredConnection } from "../src/connections/store.ts";
 import { webhookStore } from "../src/routes/connections_webhook.ts";
 import { FakeD1, asD1 } from "./fake-d1.ts";
+
+// Every vendor fixture injects its own transport. A missing injection must
+// fail locally even when a regression unexpectedly reaches the real hand.
+globalThis.fetch = async () => { throw new Error("unmocked network in hands-api test"); };
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(here, "..", "..", "..");
@@ -128,7 +133,9 @@ function plan(over: Record<string, unknown> = {}): Record<string, unknown> {
 
 function note(over: Record<string, unknown> = {}): Record<string, unknown> {
   return { hand: "api", reason: "his mail app is connected", app: APP, effect: "read",
-           asked: 1, lane: API_LANE, tool: READ_TOOL, args: { ...ARGS }, ...over };
+           asked: 1, lane: API_LANE, tool: READ_TOOL, args: { ...ARGS },
+           plan_input: { goal: "what did Dana send me this week", source: "test",
+             owner_ref: OWNER, workflow_version: 1 }, ...over };
 }
 
 interface JobSeed {
@@ -150,7 +157,7 @@ function seedJob(db: FakeD1, s: JobSeed = {}): string {
   ).run(
     id, NOW, NOW, String(wf?.goal ?? "what did Dana send me this week"), JSON.stringify(params),
     s.status ?? "running", s.owner_ref ?? OWNER, s.lane ?? API_LANE, s.claimed_by ?? API_CLAIMANT,
-    NOW, s.attempts ?? 1, wf ? String(wf.plan_id) : "", wf ? 1 : 0, wf ? String(wf.state) : "",
+    NOW, s.attempts ?? 1, wf ? String(wf.plan_id) : "", wf ? Number(wf.version) : 0, wf ? String(wf.state) : "",
     wf ? String(wf.consequence) : "", wf ? String(wf.lineage_key) : "", wf ? String(wf.effect_key) : "",
     wf ? String(wf.scope_digest) : "", wf ? LEASE : "", wf ? NOW : "",
   );
@@ -158,6 +165,7 @@ function seedJob(db: FakeD1, s: JobSeed = {}): string {
 }
 
 interface Row {
+  goal: string;
   status: string; lane: string; result: string; params: string; claimed_by: string;
   claimed_at: string; lease_token: string; lease_until: string; workflow_state: string;
   receipt: string; effect_uncertain: number; updated: string;
@@ -395,6 +403,86 @@ await check("an alias on the note reaches the hand; an empty one is null", () =>
   assert.equal(stepFromRow({ owner_ref: OWNER }, note(), null).alias, null);
 });
 
+await check("a corrected task never calls the API and hands current details to the browser", async () => {
+  const r = rig();
+  const corrected = plan({ goal: "what did Dana send me last month", version: 2,
+    authority_text: "Actually use last month", facts: { period: "last month" },
+    scope_digest: "scope-digest-2", effect_key: "effect-key-2" });
+  seedJob(r.db, { workflow: corrected, extraParams: { source: "Actually use last month" } });
+  await r.store.putConnection(connection());
+  const v = vendor([]);
+  const provider = new ComposioConnections({ apiKey: KEY, fetchImpl: v.impl });
+  const out = await run(r, { provider, store: r.store });
+  assert.equal(out.status, 200, out.text);
+  assert.equal(out.body.reason, "plan_stale");
+  assert.deepEqual(v.calls, [], "a stale plan reached the vendor, even for a catalog read");
+  const row = readJob(r.db);
+  assert.equal(row.lane, BROWSER_LANE);
+  assert.equal(row.goal, corrected.goal);
+  assert.equal(row.p.source, "Actually use last month");
+  assert.equal(row.p._workflow.goal, corrected.goal);
+  assert.equal(row.p._workflow.version, 2);
+  assert.deepEqual(row.p._workflow.facts, { period: "last month" });
+  assert.equal(row.p._workflow.scope_digest, "scope-digest-2");
+  assert.equal(row.p._workflow.effect_key, "effect-key-2");
+  assert.equal(row.p._hand.hand, "browser");
+  assert.equal(row.p._hand.tool, "");
+  assert.equal(row.p._hand.args, null);
+  assert.equal(row.p._hand.plan_input, null);
+  assertConsistent(row);
+});
+
+await check("each changed planning input and a missing legacy binding blocks API execution", async () => {
+  const base = note().plan_input as Record<string, unknown>;
+  for (const input of [undefined, null, {}, { ...base, goal: "a different goal" },
+    { ...base, source: "a different request" }, { ...base, owner_ref: STRANGER },
+    { ...base, workflow_version: 2 }, { ...base, workflow_version: "1" },
+    { ...base, workflow_version: true }]) {
+    const r = rig();
+    seedJob(r.db, { note: note({ plan_input: input }) });
+    const script = scripted(ran({ effect: "write" }));
+    const out = await run(r, script);
+    assert.equal(out.status, 200, out.text);
+    assert.equal(out.body.reason, "plan_stale");
+    assert.equal(script.seen.length, 0, JSON.stringify(input));
+    assertConsistent(readJob(r.db));
+  }
+});
+
+await check("a fact-only revision also makes old arguments stale", async () => {
+  const r = rig();
+  seedJob(r.db, { workflow: plan({ version: 2, facts: { period: "last month" } }) });
+  const script = scripted(ran({ effect: "write" }));
+  const out = await run(r, script);
+  assert.equal(out.body.reason, "plan_stale");
+  assert.equal(script.seen.length, 0);
+  assert.deepEqual(readJob(r.db).p._workflow.facts, { period: "last month" });
+});
+
+await check("a freshly planned current revision keeps the API hand", async () => {
+  const r = rig();
+  const goal = "what did Dana send me last month";
+  const source = "Actually use last month";
+  seedJob(r.db, { workflow: plan({ goal, version: 2 }), extraParams: { source },
+    note: note({ args: { period: "last month" },
+      plan_input: { goal, source, owner_ref: OWNER, workflow_version: 2 } }) });
+  const script = scripted(ran());
+  const out = await run(r, script);
+  assert.equal(out.status, 200, out.text);
+  assert.equal(script.seen.length, 1);
+  assert.deepEqual(script.seen[0].args, { period: "last month" });
+});
+
+await check("planning bindings cannot bridge disagreeing row and workflow identity", () => {
+  const row = { owner_ref: OWNER, goal: "what did Dana send me this week",
+    workflow_id: "wf-api-0001", workflow_version: 1 };
+  assert.equal(planInputsMatch(row, note(), { source: "test" }, plan()), true);
+  for (const changed of [{ owner_ref: STRANGER }, { plan_id: "wf-other" },
+    { goal: "different" }, { version: 2 }]) {
+    assert.equal(planInputsMatch(row, note(), { source: "test" }, plan(changed)), false);
+  }
+});
+
 // ===========================================================================
 // 3. ONLY A CLAIMED, API-LANE ROW RUNS.
 // ===========================================================================
@@ -449,6 +537,39 @@ await check("a row that moved while the hand ran is not written over", async () 
   const row = readJob(r.db);
   assert.equal(row.status, "queued");
   assert.equal(row.result, "");
+});
+
+await check("a same-claim correction during execution survives the old outcome", async () => {
+  const r = rig();
+  seedJob(r.db);
+  let correctedParams = "";
+  const hand: NonNullable<HandsApiDeps["hand"]> = async () => {
+    const current = readJob(r.db).p;
+    correctedParams = JSON.stringify({ ...current, source: "Actually last month",
+      _workflow: { ...current._workflow, version: 2, goal: "last month's result" } });
+    r.db.db.prepare("UPDATE jobs SET params=?, goal=?, workflow_version=2 WHERE id=?")
+      .run(correctedParams, "last month's result", JOB);
+    return ran();
+  };
+  const out = await run(r, { hand });
+  assert.equal(out.status, 409);
+  const row = readJob(r.db);
+  assert.equal(row.params, correctedParams);
+  assert.equal(row.goal, "last month's result");
+  assert.equal(row.status, "running");
+  assert.equal(row.receipt, "");
+});
+
+await check("a replaced execution lease cannot accept the previous outcome", async () => {
+  const r = rig();
+  seedJob(r.db);
+  const hand: NonNullable<HandsApiDeps["hand"]> = async () => {
+    r.db.db.prepare("UPDATE jobs SET lease_token=? WHERE id=?").run("replacement-lease", JOB);
+    return ran();
+  };
+  assert.equal((await run(r, { hand })).status, 409);
+  assert.equal(readJob(r.db).lease_token, "replacement-lease");
+  assert.equal(readJob(r.db).status, "running");
 });
 
 // ===========================================================================
@@ -703,19 +824,18 @@ await check("a connection store that cannot write does not lose the job's outcom
 // 5. THE ROW STAYS ONE THE BRAIN CAN READ.
 // ===========================================================================
 
-await check("a pre-workflow row is written the same way, with no plan invented for it", async () => {
-  for (const [outcome, status, lane] of [
-    [ran(), "queued", SYNTHESIS_LANE],
-    [refused("not_connected"), "queued", BROWSER_LANE],
-    [failed("other", { effect: "write" }), "needs_user", API_LANE],
-  ] as const) {
+await check("pre-workflow rows cannot execute API arguments without a revision binding", async () => {
+  for (const outcome of [ran(), refused("not_connected"), failed("other", { effect: "write" })]) {
     const r = rig();
     seedJob(r.db, { workflow: null, note: note({ effect: outcome.outcome === "failed" ? "write" : "read" }) });
-    const out = await run(r, scripted(outcome));
+    const script = scripted(outcome);
+    const out = await run(r, script);
     assert.equal(out.status, 200, out.text);
     const row = readJob(r.db);
-    assert.equal(row.status, status);
-    assert.equal(row.lane, lane);
+    assert.equal(row.status, "queued");
+    assert.equal(row.lane, BROWSER_LANE);
+    assert.equal(script.seen.length, 0);
+    assert.equal(row.p._hand.outcome.reason, "plan_stale");
     assert.equal(row.workflow_state, "");
     assert.equal(row.receipt, "");
     assert.equal(row.p._workflow, undefined, "a plan was invented for a row that had none");
@@ -813,6 +933,58 @@ await check("THE JOIN, WITH THE REAL HAND: a connected row and a listed read too
   assertConsistent(row);
 });
 
+await check("a correction during the catalog await blocks the pending vendor write", async () => {
+  const r = rig();
+  await r.store.putConnection(connection({ writes_enabled: true }));
+  seedJob(r.db, { note: note({ effect: "write" }) });
+  const v = vendor(CATALOG);
+  let revisedParams = "";
+  const provider = new ComposioConnections({ apiKey: KEY, fetchImpl: (async (input, init) => {
+    if ((init?.method ?? "GET") === "GET") {
+      const current = readJob(r.db).p;
+      revisedParams = JSON.stringify({ ...current, source: "Actually use the corrected details",
+        _workflow: { ...current._workflow, version: 2, goal: "the corrected task" } });
+      r.db.db.prepare("UPDATE jobs SET params=?, goal=?, workflow_version=2 WHERE id=?")
+        .run(revisedParams, "the corrected task", JOB);
+    }
+    return v.impl(input, init);
+  }) as typeof fetch });
+  const out = await run(r, { provider, store: r.store });
+  assert.equal(out.status, 409, out.text);
+  assert.deepEqual(v.calls.map(call => call.method), ["GET"], "old arguments reached execute");
+  assert.equal(readJob(r.db).params, revisedParams);
+  assert.equal(readJob(r.db).receipt, "");
+});
+
+await check("a replaced lease during the catalog await blocks execution", async () => {
+  const r = rig();
+  await r.store.putConnection(connection({ writes_enabled: true }));
+  seedJob(r.db, { note: note({ effect: "write" }) });
+  const v = vendor(CATALOG);
+  const provider = new ComposioConnections({ apiKey: KEY, fetchImpl: (async (input, init) => {
+    r.db.db.prepare("UPDATE jobs SET lease_token=? WHERE id=?").run("newer-api-lease", JOB);
+    return v.impl(input, init);
+  }) as typeof fetch });
+  const out = await run(r, { provider, store: r.store });
+  assert.equal(out.status, 409, out.text);
+  assert.deepEqual(v.calls.map(call => call.method), ["GET"]);
+  assert.equal(readJob(r.db).lease_token, "newer-api-lease");
+});
+
+await check("an unreadable final job authority check blocks the vendor effect", async () => {
+  const r = rig();
+  await r.store.putConnection(connection({ writes_enabled: true }));
+  seedJob(r.db, { note: note({ effect: "write" }) });
+  r.db.failOn = sql => sql.includes("SELECT 1 AS current");
+  const v = vendor(CATALOG);
+  const provider = new ComposioConnections({ apiKey: KEY, fetchImpl: v.impl });
+  const out = await run(r, { provider, store: r.store });
+  assert.equal(out.status, 200, out.text);
+  assert.equal(out.body.reason, "plan_stale");
+  assert.deepEqual(v.calls.map(call => call.method), ["GET"]);
+  assertConsistent(readJob(r.db));
+});
+
 await check("THE JOIN, WITH THE REAL HAND: a tool the note never named is refused before the vendor hears of it", async () => {
   const r = rig();
   await r.store.putConnection(connection());
@@ -878,7 +1050,7 @@ await check("the route reads no prose: its only string comparisons are enums and
   const code = ROUTE_SOURCE.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
   const literals = [...code.matchAll(/[!=]==\s*"([^"]+)"/g)].map((m) => m[1]!);
   const allowed = new Set(["ran", "refused", "failed", "confirmation_required", "owner_required", "auth",
-                           "read", "api", "running", "succeeded", "queued", "POST", "string", "object"]);
+                           "plan_stale", "read", "api", "running", "succeeded", "queued", "POST", "string", "object"]);
   const stray = literals.filter((l) => !allowed.has(l));
   assert.deepEqual(stray, [], `unexpected string comparisons: ${stray.join(", ")}`);
 });

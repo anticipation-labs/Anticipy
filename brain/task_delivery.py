@@ -1,12 +1,11 @@
 """Task questions use the same durable message/receipt path as chat replies."""
 import hashlib
 import json
+from .reply_authority import task_snapshot
 
 
 def context(job):
-    return {'purpose': 'task_question', 'job_id': job['id'],
-            'version': job.get('workflow_version', 0), 'status': job['status'],
-            'question': job.get('result') or ''}
+    return task_snapshot(job)
 
 
 def identity(job):

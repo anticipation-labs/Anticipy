@@ -80,6 +80,7 @@ const suites = [
   "test_wall_is_not_a_word_match.mjs",
   "test_recipes.mjs",
   "test_claim_evidence.mjs",
+  "test_browser_queue_ownership.mjs",
   "test_agent_integration.mjs",
   "test_theme_contract.mjs",
   "test_config_backend_base.mjs",

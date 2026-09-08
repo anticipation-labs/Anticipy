@@ -24,7 +24,7 @@ const map = readFileSync(join(here, "../page_map.js"), "utf8");
 // callers named against it.
 // lane!="api" joined 2026-09-06: the API hand's rows are the worker's, and a
 // browser that listed them claimed them (test_api_lane_is_not_browser_work.mjs).
-assert.ok(/const BROWSER_LANE = 'workflow_id!="" && lane!="research" && lane!="api"';/.test(bg),
+assert.ok(/const BROWSER_LANE = 'workflow_id!="" && lane!="research" && lane!="api" && lane!="device_calendar" && lane!="supervised_read"';/.test(bg),
   "one definition of the lanes this browser may take work from");
 for (const [what, fn] of [["sweep", "requeueStaleJobs"], ["claim", "claimJob"]]) {
   const body = bg.match(new RegExp(`async function ${fn}\\(\\)[\\s\\S]*?\\n\\}`))[0];

@@ -106,6 +106,7 @@ struct SettingsSourceView: View {
     let source: ContextSource
     @Environment(\.dismiss) private var dismiss
     @State private var granted = false
+    @State private var declined = false
     @State private var watching = false
 
     var body: some View {
@@ -159,12 +160,26 @@ struct SettingsSourceView: View {
                     }
                 }
             } else {
-                FootnoteText("Anticipy has not used this source. It will ask when a task needs access, and you can decline.")
+                if declined {
+                    FootnoteText("You said not now. Anticipy will not ask again unless you reopen the question here.")
+                    GroupedCard {
+                        ActionRow("Allow Anticipy to ask again", systemImage: "hand.raised") {
+                            ContextGrants().reopen(source)
+                            declined = false
+                            Haptics.engage()
+                        }
+                    }
+                } else {
+                    FootnoteText("Access is off. Anticipy may ask when a task needs this source, and you can decline. Nothing is read until you agree.")
+                }
             }
         }
         .navigationDestination(isPresented: $watching) {
             SupervisedReadView(session: session)
         }
-        .onAppear { granted = ContextGrants().granted(source) }
+        .onAppear {
+            granted = ContextGrants().granted(source)
+            declined = ContextGrants().declined(source)
+        }
     }
 }

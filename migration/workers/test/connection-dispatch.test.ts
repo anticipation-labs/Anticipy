@@ -5,6 +5,7 @@ import {connectionCommand} from '../src/routes/connection_command.ts';
 import {resetConnectionsProvider} from '../src/connections/provider.ts';
 import {eraseVerifiedOwner} from '../src/routes/account_delete.ts';
 import {sendblueInbound} from '../src/routes/sendblue.ts';
+import {sha256Hex} from '../src/llm.ts';
 
 const owner='ownerdispatch01', stranger='ownerdispatch02';
 const stamp='2026-09-07 12:00:00.000Z';
@@ -92,10 +93,37 @@ await check('SMS retries queue one reply for the shared delivery worker',async()
  const queued=db.db.prepare("SELECT goal,decision FROM events WHERE kind='reply_outbox'").all();
  assert.equal(queued.length,1);assert.equal(queued[0].goal,saved(db)[0].id);
  assert.equal(queued[0].decision,'reply_pending');
+ const attempt=db.db.prepare("SELECT text,updated FROM events WHERE kind='notification_status'").get()!;
+ assert.equal(JSON.parse(String(attempt.text)).recipient_digest,await sha256Hex('+15555550123'));
+ assert.ok(Number.isFinite(Date.parse(String(attempt.updated))));
  await dispatchConnectionEvent(smsEnv,owner,'inputevent001');
  assert.equal(calls,firstCalls);assert.equal(saved(db).length,1);
  assert.equal(db.db.prepare("SELECT count(*) AS n FROM events WHERE kind='reply_outbox'").get()?.n,1);
 });
+for (const change of ['revoked','changed','unknown']) {
+ await check(`SMS destination ${change} while claiming cannot reach the provider`,async()=>{
+  const {db,env}=rig('sms_reply','sms');
+  db.db.prepare('UPDATE owners SET phone=? WHERE id=?').run('+15555550123',owner);
+  let claimed=false;
+  db.failOn=sql=>{
+   if(sql.includes("'notification_status'")&&sql.includes('INSERT INTO events')) {
+    claimed=true;
+    if(change!=='unknown') db.db.prepare('UPDATE owners SET phone=? WHERE id=?')
+      .run(change==='revoked'?'':'+15555550999',owner);
+   }
+   return change==='unknown'&&claimed&&sql.includes('SELECT')&&sql.includes('owner_profile');
+  };
+  const smsEnv={...env,SENDBLUE_API_KEY_ID:'fixture',SENDBLUE_API_SECRET_KEY:'fixture',SENDBLUE_FROM_NUMBER:'+15555550124'};
+  const out=await dispatchConnectionEvent(smsEnv,owner,'inputevent001');
+  assert.equal(out.status,'completed');assert.equal(calls,1,'only the model fixture, never SendBlue');
+  assert.equal(saved(db).length,1,'owner still has the durable app answer');
+  const attempt=db.db.prepare("SELECT decision FROM events WHERE kind='notification_status'").get()!;
+  assert.equal(attempt.decision,change==='unknown'?'sms_unconfirmed':'sms_skipped');
+  db.failOn=null;
+  await dispatchConnectionEvent(smsEnv,owner,'inputevent001');
+  assert.equal(calls,1,'no retry sends after the unmade provider attempt');
+ });
+}
 await check('a missing or foreign task target cannot redirect an answer',async()=>{
  const {db,env}=rig();
  db.db.prepare('UPDATE events SET goal=? WHERE id=?').run(JSON.stringify({reply_to_job_id:'missing'}),'inputevent001');

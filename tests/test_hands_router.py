@@ -439,23 +439,30 @@ class _R:
         return {"items": self._items}
 
 
-def test_connections_are_read_through_the_records_client(monkeypatch):
+class _ConnectionsR(_R):
+    def __init__(self, owner="own1", **kwargs):
+        super().__init__(**kwargs)
+        self.owner = owner
+
+    def json(self):
+        return {"ok": True, "owner": self.owner, "items": self._items}
+
+
+def test_connections_are_read_through_the_scoped_service_route(monkeypatch):
     seen = {}
 
     def fake_get(url, params=None, timeout=None, **kw):
         seen["url"], seen["params"], seen["timeout"] = url, params, timeout
-        return _R(items=[
+        return _ConnectionsR(owner="qeuy6sv1raof9rw", items=[
             {"toolkit": "mailer", "alias": "work", "status": "connected",
-             "writes_enabled": 1},
+             "writes_enabled": True},
             {"toolkit": "notes", "alias": "", "status": "needs_reconnect",
-             "writes_enabled": 0},
-            {"toolkit": "", "status": "connected"},          # unusable row
-            "not a row",
+             "writes_enabled": False},
         ])
     monkeypatch.setattr(hands.backend, "get", fake_get)
-    rows = hands.read_connections('own"1', "https://api.example/")
-    assert seen["url"] == "https://api.example/api/collections/connections/records"
-    assert seen["params"]["filter"] == 'user_id="own\\"1"'
+    rows = hands.read_connections("qeuy6sv1raof9rw", "https://api.example/")
+    assert seen["url"] == "https://api.example/hands/api/connections"
+    assert seen["params"] == {"owner": "qeuy6sv1raof9rw"}
     assert seen["timeout"] == hands.FACT_TIMEOUT
     assert rows == (ConnectedApp("mailer", "work", "connected", True),
                     ConnectedApp("notes", "", "needs_reconnect", False))
@@ -469,8 +476,24 @@ def test_connections_that_cannot_be_read_are_unknown(monkeypatch):
     assert hands.read_connections("own1", "https://api.example") is None
     # An owner with no rows is NOT unknown — it is an owner who connected
     # nothing, and the prompt must say so in different words.
-    monkeypatch.setattr(hands.backend, "get", lambda *a, **k: _R(items=[]))
+    monkeypatch.setattr(hands.backend, "get", lambda *a, **k: _ConnectionsR(items=[]))
     assert hands.read_connections("own1", "https://api.example") == ()
+
+
+@pytest.mark.parametrize("body", [
+    {}, {"items": []}, {"ok": True, "owner": "somebody-else", "items": []},
+    {"ok": True, "owner": "own1"}, {"ok": True, "owner": "own1", "items": {}},
+    {"ok": False, "owner": "own1", "items": []},
+    {"ok": True, "owner": "own1", "items": ["not a row"]},
+    {"ok": True, "owner": "own1", "items": [{"toolkit": "mailer"}]},
+    {"ok": True, "owner": "own1", "items": [{"toolkit": "mailer", "alias": "", "status": "connected", "writes_enabled": "true"}]},
+    {"ok": True, "owner": "own1", "items": [{"toolkit": "mailer", "alias": "", "status": "invented", "writes_enabled": True}]},
+])
+def test_connections_unscoped_or_malformed_reply_is_unknown(monkeypatch, body):
+    response = _R()
+    response.json = lambda: body
+    monkeypatch.setattr(hands.backend, "get", lambda *a, **k: response)
+    assert hands.read_connections("own1", "https://api.example") is None
 
 
 def test_browser_online_reads_the_agents_heartbeat(monkeypatch):
@@ -781,7 +804,8 @@ def test_an_api_verdict_names_the_tool_on_the_row(monkeypatch, offline):
     args = {"timeMin": "2026-09-07T00:00:00-07:00",
             "timeMax": "2026-09-07T23:59:59-07:00"}
     ctx = HandContext(connections=(ConnectedApp("googlecalendar"),),
-                      browser_online=True, catalogs={"googlecalendar": CALENDAR})
+                      browser_online=True, catalogs={"googlecalendar": CALENDAR},
+                      source="test", owner_ref="owner0000000001", workflow_version=2)
     got, params, llm = route(monkeypatch, "what's on my calendar tomorrow",
                              says(HAND_API, app="googlecalendar", effect="read"),
                              names("GOOGLECALENDAR_FIND_EVENT", args), ctx=ctx)
@@ -792,6 +816,8 @@ def test_an_api_verdict_names_the_tool_on_the_row(monkeypatch, offline):
     assert note["tool"] == "GOOGLECALENDAR_FIND_EVENT"
     assert note["args"] == args
     assert note["effect"] == "read"
+    assert note["plan_input"] == {"goal": "what's on my calendar tomorrow", "source": "test",
+                                  "owner_ref": "owner0000000001", "workflow_version": 2}
     assert note["tool_verdict"] == hands.TOOL_CHOSEN
     assert note["asked"] == 1 and note["tool_asked"] == 1
     assert len(llm.asked) == 2              # two questions, each on its own
@@ -1196,6 +1222,7 @@ def test_gather_context_carries_the_backend_for_the_catalog(monkeypatch):
     monkeypatch.setattr(hands, "active_owner_ref", lambda owner_ref="": "own1")
     ctx = hands.gather_context({"source": "s"})
     assert ctx.backend_url == "https://api.example" and ctx.catalogs is None
+    assert ctx.owner_ref == "own1" and ctx.workflow_version == 1
     assert len(reads) == 2                  # connections and agents; the catalog waits for a verdict
     # catalog_for: rows in hand first, else the read; dict rows are read too
     ctx = HandContext(catalogs={"Mailer": ({"slug": "MAILER_SEARCH", "toolkit": "mailer"},)})
@@ -1204,10 +1231,19 @@ def test_gather_context_carries_the_backend_for_the_catalog(monkeypatch):
     assert hands.catalog_for(ctx, "other") is None
     assert hands.catalog_for(HandContext(backend_url="https://api.example"), "mailer") == ()
     assert len(reads) == 3
-    # the note's keys are always the same nine, so the Worker reads one shape
+    # The note carries one explicit planning-input binding on every shape.
     assert set(HandVerdict(HAND_RESEARCH, "r").as_note()) == {
         "hand", "reason", "app", "effect", "asked", "tool", "args",
-        "tool_verdict", "tool_asked"}
+        "tool_verdict", "tool_asked", "plan_input"}
+
+
+@pytest.mark.parametrize("version,want", [(2, 2), (1, 1), (None, 0), ("2", 0), (True, 0), (0, 0)])
+def test_replanning_carries_existing_workflow_revision(monkeypatch, version, want):
+    monkeypatch.setattr(hands, "read_connections", lambda *a: ())
+    monkeypatch.setattr(hands, "browser_is_online", lambda *a: True)
+    ctx = hands.gather_context({"_workflow": {"version": version}}, owner_ref="owner0000000001")
+    assert ctx.workflow_version == want
+    assert ctx.owner_ref == "owner0000000001"
 
 
 def test_choose_hand_asks_the_tool_question_exactly_once():

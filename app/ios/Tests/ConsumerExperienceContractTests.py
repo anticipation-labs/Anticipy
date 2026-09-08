@@ -433,6 +433,11 @@ unsent_property = body(
     r"\bprivate\s+var\s+unsent\s*:\s*\[BufferedLine\]\s*\{",
     "AnticipySession.unsent",
 )
+pending_writer = body(session_source,
+    r"\bprivate\s+func\s+persistPendingLines\s*\([^)]*\)\s+throws\s*\{",
+    "AnticipySession.persistPendingLines")
+forbid("Pending writes cannot guess an empty queue", unsent_property,
+       r"\bset\s*\{", "the display fallback has a mutating setter again.")
 # The queue is BOUNDED before it is stored, so the rows that exist after a
 # write are `kept`, not `newValue` — those differ by exactly the rows that
 # just overflowed. Counting `newValue` would report speech the phone had
@@ -442,19 +447,22 @@ unsent_property = body(
 # goes through the ownership helper, it must go through it over THE SAME
 # VALUE THAT WAS PERSISTED, and the overflow must reach the journal. Counting
 # one array and storing another would satisfy any one of these alone.
-require("Pending count ownership", unsent_property,
+require("Pending count ownership", pending_writer,
         r"pendingCount\s*=\s*pendingLinesOwnedByCurrentAccount\s*\(\s*in\s*:\s*kept\s*\)\s*\.\s*count",
         "queue writes count every account's rows instead of the signed-in account's rows.")
-require("Pending count ownership", unsent_property,
+require("Pending count ownership", pending_writer,
         r"encode\s*\(\s*kept\s*\)",
         "the queue stores a different array than the one it counted.")
-require("Pending queue is bounded", unsent_property,
-        r"PendingSpeechRetention\s*\.\s*bounded\s*\(\s*newValue\s*\)",
+require("Pending queue is bounded", pending_writer,
+        r"PendingSpeechRetention\s*\.\s*bounded\s*\(\s*rows\s*\)",
         "the unsent queue is written without a bound; a long outage grows it without limit.")
-require("Pending queue is bounded", unsent_property,
+require("Pending queue is bounded", pending_writer,
         r"if\s+dropped\s*>\s*0\s*\{[\s\S]*?ListenJournal\s*\.\s*shared\s*\.\s*record\s*\("
         r"\s*\.\s*speechDropped\s*\(\s*count\s*:\s*dropped\s*\)",
         "the queue discards heard speech without recording that it did.")
+require("Pending write has a throwing disk boundary", pending_writer,
+        r"try\s+CaptureOutboxPersistence\s*\.\s*write[\s\S]*?unsentStore\s*=",
+        "legacy storage is removed before the recoverable file replacement succeeds.")
 owned_lines = body(
     session_source,
     r"\bprivate\s+func\s+pendingLinesOwnedByCurrentAccount\s*\("
@@ -473,7 +481,7 @@ refresh_pending = body(
     "AnticipySession.refreshPendingCount",
 )
 require("Pending count ownership", refresh_pending,
-        r"pendingCount\s*=\s*pendingLinesOwnedByCurrentAccount\s*\(\s*in\s*:\s*unsent\s*\)\s*\.\s*count",
+        r"pendingCount\s*=\s*pendingLinesOwnedByCurrentAccount\s*\(\s*in\s*:\s*try\s+readPendingLines\s*\(\s*\)\s*\)\s*\.\s*count",
         "account changes do not recompute the scoped count through the ownership helper.")
 for function_name, declaration in (
     ("signIn", r"\bfunc\s+signIn\s*\([^)]*\)\s+async\s*->\s*String\?\s*\{"),
@@ -493,22 +501,22 @@ require("Pending viewer ownership", pending_lines,
         "the Settings viewer bypasses the account ownership helper.")
 clear_pending = body(
     session_source,
-    r"\bfunc\s+clearPendingLines\s*\(\s*\)\s*\{",
+    r"\bfunc\s+clearPendingLines\s*\(\s*\)\s*->\s*Bool\s*\{",
     "AnticipySession.clearPendingLines",
 )
 require("Pending delete ownership", clear_pending,
-        r"guard\s+!accountID\s*\.\s*isEmpty\s+else\s*\{\s*return\s*\}",
+        r"guard\s+!accountID\s*\.\s*isEmpty\s+else\s*\{\s*return\s+false\s*\}",
         "signed-out deletion can clear another account's sealed queue.")
 require("Pending delete ownership", clear_pending,
         r"clearPendingLinesOwned\s*\(\s*by\s*:\s*accountID\s*\)",
         "deleting this account's pending speech bypasses the owner-scoped erasure helper.")
 clear_pending_owned = body(
     session_source,
-    r"\bprivate\s+func\s+clearPendingLinesOwned\s*\(\s*by\s+ownerAccount\s*:\s*String\s*\)\s*\{",
+    r"\bprivate\s+func\s+clearPendingLinesOwned\s*\(\s*by\s+ownerAccount\s*:\s*String\s*\)\s*->\s*Bool\s*\{",
     "AnticipySession.clearPendingLinesOwned",
 )
 require("Pending delete ownership", clear_pending_owned,
-        r"unsent\s*=\s*unsent\s*\.\s*filter\s*\{\s*\$0\s*\.\s*account\s*!=\s*ownerAccount\s*\}",
+        r"let\s+rows\s*=\s*try\s+readPendingLines\s*\(\s*\)[\s\S]*?try\s+persistPendingLines\s*\(\s*rows\s*\.\s*filter\s*\{\s*\$0\s*\.\s*account\s*!=\s*ownerAccount\s*\}",
         "the owner-scoped helper does not preserve every other account's rows.")
 flush_unsent = body(
     session_source,
@@ -517,7 +525,7 @@ flush_unsent = body(
 )
 foreign = body(
     flush_unsent,
-    r"\bguard\s+line\s*\.\s*account\s*==\s*accountID\s+else\s*\{",
+    r"\bguard\s+original\s*\.\s*account\s*==\s*lease\s*\.\s*accountID\s+else\s*\{",
     "AnticipySession.flushUnsent foreign-account branch",
 )
 # The flush used to take the whole queue, write an EMPTY array straight to
@@ -539,18 +547,14 @@ forbid("Pending flush ownership", foreign,
        r"dropDeliveredLine|unsent\s*=",
        "another account reconnecting drops this account's sealed row.")
 require("Pending flush durability", flush_unsent,
-        r"ListenJournal\s*\.\s*shared\s*\.\s*record\s*\(\s*\.\s*posted\s*\(\s*ok\s*:\s*true[\s\S]*?"
-        r"dropDeliveredLine\s*\(\s*line\s*\)",
-        "a row is removed from the queue somewhere other than after its confirmed post.")
-drop_delivered = body(
-    session_source,
-    r"\bprivate\s+func\s+dropDeliveredLine\s*\(\s*_\s+line\s*:\s*BufferedLine\s*\)\s*\{",
-    "AnticipySession.dropDeliveredLine",
-)
-require("Pending flush durability", drop_delivered,
-        r"var\s+current\s*=\s*unsent[\s\S]*?firstIndex\s*\(\s*of\s*:\s*line\s*\)",
-        "the delivered row is located by a stale position instead of by value against "
-        "the queue as it stands after the await.")
+        r"guard\s+let\s+id\s*=\s*confirmedID[\s\S]*?var\s+remaining\s*=\s*try\s+readPendingLines[\s\S]*?remaining\s*\.\s*removeAll[\s\S]*?try\s+persistPendingLines\s*\(\s*remaining\s*\)",
+        "a row leaves storage before confirmed identity and a fresh read of the durable queue.")
+require("Pending flush stable ownership", flush_unsent,
+        r"remaining\s*\.\s*removeAll\s*\{\s*\$0\s*\.\s*account\s*==\s*lease\s*\.\s*accountID\s*&&\s*\$0\s*\.\s*externalEventID\s*==\s*externalID\s*\}",
+        "a completion removes by text or stale index instead of exact owned durable identity.")
+require("Pending first-send persistence", flush_unsent,
+        r"try\s+persistPendingLines\s*\(\s*current\s*\)[\s\S]*?await\s+requestedBackend\s*\.\s*pushEvent[\s\S]*?externalEventID\s*:\s*externalID",
+        "a legacy row is posted before its stable retry identity is persisted.")
 
 history = struct(SOURCE["privacy"], "ListeningHistoryView")
 for state in ("events", "page", "totalPages", "totalItems", "loading"):
@@ -858,11 +862,9 @@ require("Local forget boundary", forget,
         r"await\s+session\s*\.\s*forgetThisPhone\s*\(\s*\)",
         "the view does not await the session-owned forget and verified browser disconnect.")
 after_forget = forget.split("await session.forgetThisPhone()", 1)[-1]
-if re.search(r"\blocalNote\s*=", swift_code(after_forget)):
-    FAILURES.append(
-        "Local forget navigation: the browser verdict is still written into "
-        "Settings @State after sign-out removes that view."
-    )
+require("Local forget failure before navigation", after_forget,
+        r"if\s+session\s*\.\s*isSignedIn\s*,\s*!forgotten\s*\{[\s\S]*?localDeleteFailed\s*=\s*true",
+        "a failed local disk erase has no recovery while Settings remains signed in.")
 
 forget_phone = body(
     session_source,
@@ -885,12 +887,18 @@ for pattern, reason in (
     require("Session local-forget boundary", forget_phone, pattern, reason + ".")
 device_queue_clear = body(
     session_source,
-    r"\bprivate\s+func\s+clearAllPendingLinesOnDevice\s*\(\s*\)\s*\{",
+    r"\bprivate\s+func\s+clearAllPendingLinesOnDevice\s*\(\s*\)\s*->\s*Bool\s*\{",
     "AnticipySession.clearAllPendingLinesOnDevice",
 )
 require("Device-wide pending speech erasure", device_queue_clear,
-        r"unsent\s*=\s*PendingSpeechRetention\s*\.\s*afterDeviceForget\s*\(\s*unsent\s*\)",
+        r"try\s+persistPendingLines\s*\(\s*PendingSpeechRetention\s*\.\s*afterDeviceForget\s*\(\s*\[BufferedLine\]\s*\(\s*\)\s*\)\s*\)",
         "device Forget does not replace the entire queue; nil/prior/current rows can survive.")
+delete_account = body(session_source,
+    r"\bfunc\s+deleteEverythingOnServer\s*\(\s*\)\s+async\s*->\s*\([^)]*\)\s*\{",
+    "AnticipySession.deleteEverythingOnServer")
+require("Delayed account deletion reports local erase failure", delete_account,
+        r"let\s+ownedQueueCleared\s*=\s*clearPendingLinesOwned[\s\S]*?guard\s+stillCurrent\s*\|\|\s*expiredSameAccount\s+else\s*\{[\s\S]*?if\s+!ownedQueueCleared\s*\{\s*return\s*\(\s*false",
+        "a delayed deleted-account completion claims success after its scoped local queue erase failed.")
 require(
     "Local forget navigation",
     forget_phone,

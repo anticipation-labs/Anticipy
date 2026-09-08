@@ -238,7 +238,7 @@ def test_inbound_reply_rechecks_after_owner_match_and_keeps_the_app_copy(
         monkeypatch):
     """Removal after inbound authorization cannot leak one last SMS.
 
-    ``handle_inbound`` first compares the event's sender with the worker cache.
+    ``handle_inbound`` first compares the event's sender with the canonical profile.
     The canonical profile changes inside ``on_reply`` below: deliberately after
     that comparison and immediately before ``Conversation.say`` reaches the
     Twilio transport. The reply remains useful in the app, but the old phone is
@@ -291,8 +291,8 @@ def test_inbound_reply_rechecks_after_owner_match_and_keeps_the_app_copy(
         "text": "yes", "goal": old_phone,
     }, convo, instance)
 
-    assert outcome == "chat", "the cached owner match must reach the send boundary"
-    assert reads == ["account-one"]
+    assert outcome == "chat", "the verified owner match must reach the send boundary"
+    assert reads == ["account-one", "account-one"], "inbound authority and outbound effect each recheck"
     assert instance.owner_phone == ""
     assert arm.effects == [], "the removed number must receive no final reply"
     assert ("sms-reply-after-removal", "processing") in marks

@@ -37,6 +37,13 @@ export interface Env {
 const DEFAULT_PER_PAGE = 30;
 const MAX_PER_PAGE = 500;
 
+// Server-authored transport evidence is readable by its owner, not writable
+// by an account. Shared with the front-door guard so create/transition checks
+// and the atomic update/delete SQL protect the same event kinds.
+export const SERVER_EVENT_KINDS: readonly string[] = Object.freeze([
+  "reply_outbox", "notification_status", "anticipy_text", "sms_reply",
+]);
+
 const UNSUPPORTED = ["expand", "skipTotal"] as const;
 
 // `fields=` IS used now — by the gates, not the phone or the extension:
@@ -194,8 +201,9 @@ export interface RecordsRequest {
 
 // Text columns defining job authority. The token is opaque to clients; the SQL
 // comparison uses the original values, so two concurrent approvals cannot win.
-const JOB_AUTHORITY = ["id", "owner_ref", "owner", "status", "goal", "params",
-  "workflow_id", "workflow_state", "scope_digest", "approval", "updated"] as const;
+const JOB_AUTHORITY = ["id", "owner_ref", "owner", "status", "goal", "params", "result",
+  "workflow_id", "workflow_version", "workflow_state", "scope_digest", "effect_key",
+  "approval", "receipt", "lease_token", "lease_until", "effect_uncertain", "consequence", "updated"] as const;
 
 export async function jobETag(row: Record<string, unknown>): Promise<string> {
   const bytes = new TextEncoder().encode(JSON.stringify(JOB_AUTHORITY.map(k => row[k] ?? "")));
@@ -622,6 +630,7 @@ export async function update(env: Env, req: RecordsRequest): Promise<Response> {
     where += ` AND ${quoteIdent(req.forcedScope.column)} = ?${vals.length + 1}`;
     vals.push(req.forcedScope.value);
   }
+  where += accountEventWriteFence(req, vals);
 
   if (expected) {
     for (const key of JOB_AUTHORITY) {
@@ -677,6 +686,7 @@ export async function remove(env: Env, req: RecordsRequest): Promise<Response> {
     where += ` AND ${quoteIdent(req.forcedScope.column)} = ?2`;
     vals.push(req.forcedScope.value);
   }
+  where += accountEventWriteFence(req, vals);
   const res = await env.DB.prepare(
     `DELETE FROM ${quoteIdent(def.name)} WHERE ${where}`,
   ).bind(...vals).run();
@@ -687,6 +697,17 @@ export async function remove(env: Env, req: RecordsRequest): Promise<Response> {
 // ---------------------------------------------------------------------------
 // helpers
 // ---------------------------------------------------------------------------
+
+function accountEventWriteFence(req: RecordsRequest, vals: unknown[]): string {
+  if (req.collection.name !== "events" || req.principal.kind !== "account") return "";
+  // A service may change the row after the guard read. Authorize its kind at
+  // the write itself; an earlier ordinary row cannot become forged evidence.
+  const placeholders = SERVER_EVENT_KINDS.map(kind => {
+    vals.push(kind);
+    return `?${vals.length}`;
+  });
+  return ` AND COALESCE("kind", '') NOT IN (${placeholders.join(", ")})`;
+}
 
 function quoteIdent(name: string): string {
   return '"' + name.replace(/"/g, '""') + '"';

@@ -63,6 +63,7 @@ def run_inbound(text: str, blow_up: bool, voice_works: bool = True,
         ev["goal"] = ""
 
     W.backend.get = lambda url, **kw: Resp([ev] if "/events/" in url else [])
+    W.fetch_owner_phone = lambda owner_ref="": "+16047245161"
     W.backend.post = lambda url, **kw: Resp()
     W.backend.patch = lambda url, **kw: Resp()
     W.post_event = lambda kind_, text_, **kw: posted.append(text_)
@@ -142,12 +143,31 @@ check("...and it lands where the app can render it",
 import inspect
 main_src = inspect.getsource(W.main)
 check("main() delegates to the handler these tests drive",
-      "handle_inbound(" in main_src,
-      "main() no longer calls handle_inbound — these tests now prove nothing")
+      "service_direct_inputs(" in main_src,
+      "main() no longer services the shared inbound path — these tests now prove nothing")
+polled = {}
+received = []
+
+
+def direct_rows(url, **kwargs):
+    polled.update(kwargs.get("params") or {})
+    return Resp([{"id": "sms", "kind": "sms_reply"},
+                 {"id": "app", "kind": "app_reply"}])
+
+
+W.backend.get = direct_rows
+real_handler = W.handle_inbound
+W.handle_inbound = lambda event, *_args: received.append(event["kind"])
+try:
+    W.service_direct_inputs(None, types.SimpleNamespace(owner_ref="ref1"))
+finally:
+    W.handle_inbound = real_handler
 check("both channels are read into that one handler",
-      'fetch_unprocessed("sms_reply"' in main_src
-      and 'fetch_unprocessed("app_reply"' in main_src,
-      "one of the two answer channels is not being polled")
+      'kind="sms_reply"' in polled.get("filter", "")
+      and 'kind="app_reply"' in polled.get("filter", "")
+      and 'owner_ref="ref1"' in polled.get("filter", "")
+      and received == ["sms_reply", "app_reply"],
+      "the owner-scoped shared poll did not deliver both answer channels")
 
 print(f"\nnever silent: {PASS} passed, {FAIL} failed")
 sys.exit(1 if FAIL else 0)

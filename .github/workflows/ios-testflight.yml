@@ -135,15 +135,14 @@ jobs:
         env:
           ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
         run: |
+          umask 077
           mkdir -p $RUNNER_TEMP/asc $HOME/.appstoreconnect/private_keys
           echo -n "$ASC_KEY_P8" | base64 --decode -o $RUNNER_TEMP/asc/AuthKey.p8
           cp $RUNNER_TEMP/asc/AuthKey.p8 $HOME/.appstoreconnect/private_keys/AuthKey_${ASC_KEY_ID}.p8
-      - name: Clear orphaned cloud-signing certificates
-        if: steps.ship.outputs.ship == 'yes'
-        env:
-          ASC_KEY_PATH: ${{ runner.temp }}/asc/AuthKey.p8
-        run: |
-          python3 app/ios/scripts/app_store_connect.py free-signing-slot
+      # A certificate named "Created via API" is not evidence that it is
+      # orphaned or belongs to this run. Never revoke shared Apple-team
+      # certificates automatically. Attempt signing with the current pool;
+      # a pool-limit failure requires a separate, certificate-specific review.
       - name: Build number — the source's, unless Apple already holds it
         if: steps.ship.outputs.ship == 'yes'
         working-directory: app/ios
@@ -198,6 +197,7 @@ jobs:
             -authenticationKeyPath $RUNNER_TEMP/asc/AuthKey.p8 \
             -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID"
       - name: Export and upload to TestFlight
+        id: upload
         if: steps.ship.outputs.ship == 'yes'
         working-directory: app/ios
         run: |
@@ -232,6 +232,7 @@ jobs:
             exit 1
           }
       - name: Wait for Apple's TestFlight processing verdict
+        id: processing
         if: steps.ship.outputs.ship == 'yes'
         env:
           ASC_KEY_PATH: ${{ runner.temp }}/asc/AuthKey.p8
@@ -241,10 +242,9 @@ jobs:
 
       - name: Say what this run did
         if: always()
-        run: |
-          if [ "${{ steps.ship.outputs.ship }}" = "yes" ]; then
-            echo "Shipped: build $ANTICIPY_UPLOAD_BUILD was offered to App Store Connect."
-          else
-            echo "Built and tested only. Nothing was uploaded."
-            echo "To ship this tree: gh workflow run ios-testflight.yml --ref ${{ github.ref_name }}"
-          fi
+        env:
+          RELEASE_JOB_STATUS: ${{ job.status }}
+          RELEASE_SHIP_INTENT: ${{ steps.ship.outputs.ship }}
+          RELEASE_UPLOAD_OUTCOME: ${{ steps.upload.outcome }}
+          RELEASE_PROCESSING_OUTCOME: ${{ steps.processing.outcome }}
+        run: sh app/ios/scripts/release_summary.sh

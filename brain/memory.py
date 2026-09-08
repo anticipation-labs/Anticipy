@@ -108,6 +108,14 @@ CREATE TABLE IF NOT EXISTS consolidation_state (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
+-- Unanswered permission checks are retryable per fact. Keeping them in the
+-- owner's checkpoint lets the episode cursor advance without forgetting the
+-- candidates, or replaying every successful fact on the next nightly pass.
+CREATE TABLE IF NOT EXISTS deferred_consolidation (
+    id INTEGER PRIMARY KEY,
+    candidate TEXT NOT NULL,
+    last_attempt_ts REAL NOT NULL
+);
 -- THE VETO. design/day-zero.md §3: "Every fact is vetoable. A tap deletes it
 -- and marks it never-re-derive." Deleting the row alone is not a veto — the
 -- next supervised read reads the same inbox and helpfully puts the same fact
@@ -721,6 +729,10 @@ class ProcedureStore:
             pass
 
 
+class MemoryWriteDeferred(RuntimeError):
+    """No verdict permits this fact write yet; retry without guessing."""
+
+
 class Memory:
     def __init__(self, path: str | Path = ":memory:", llm=None):
         self.db = sqlite3.connect(str(path))
@@ -1023,9 +1035,8 @@ class Memory:
         dead_episodes = (set() if retired == RETIRED_QUOTED
                          else self._episodes_behind_retired_facts())
         facts = []
-        for eid, ts, text, speaker in self._search_episodes(words):
-            if eid in dead_episodes:
-                continue
+        for eid, ts, text, speaker in self._search_episodes(
+                words, excluded=dead_episodes):
             hits = sum(1 for w in words if w in text.lower())
             if hits >= 2 or (hits == 1 and len(words) == 1):
                 facts.append({"fact": f'heard: "{text}"',
@@ -1107,35 +1118,56 @@ class Memory:
                     out.add(e)
         return out
 
-    def _search_episodes(self, words: set[str], limit: int = 300):
+    def _search_episodes(self, words: set[str], limit: int = 300,
+                         excluded: Optional[set[int]] = None):
         """Every episode ever heard is searchable — no recency cliff. Uses
-        the FTS index when it exists, and a LIKE query otherwise, so an old
+        the FTS index when it exists, and a literal text search otherwise, so an old
         database keeps working without a rebuild.
 
         Rows are (id, ts, text, speaker). `speaker` rides along because the
         caller has to label the row with it: it was already stored and simply
         never read back out on this path."""
-        if not words:
+        if not words or limit <= 0:
             return []
-        terms = sorted(words)[:8]
+        terms = sorted(words)
+        # Rank the entire matching history BEFORE taking a bounded window.
+        # Limiting the newest OR matches first made one relevant old episode
+        # disappear at exactly 300 newer one-word matches. This is retrieval
+        # ordering only: no overlap score authorizes a memory mutation.
+        # A VALUES relation keeps query length out of SQL expression depth.
+        # A flat SUM/OR of 1,000 terms exceeds SQLite's parser depth even
+        # though this is a perfectly representable retrieval query.
+        query_terms = "WITH query_terms(term) AS (VALUES " + ",".join("(?)" for _ in terms) + ") "
+        score = "(SELECT COUNT(*) FROM query_terms WHERE INSTR(LOWER(e.text), term) > 0)"
+
+        def window(cursor):
+            found, seen = [], set()
+            for row in cursor:
+                if row[0] in (excluded or ()) or row[2] in seen:
+                    continue
+                seen.add(row[2])
+                found.append(row)
+                if len(found) >= limit:
+                    break
+            return found
+
         try:
-            q = " OR ".join(f'"{t}"' for t in terms)
-            rows = self.db.execute(
-                "SELECT e.id, e.ts, e.text, e.speaker FROM episodes_fts f "
+            q = " OR ".join('"' + t.replace('"', '""') + '"' for t in terms)
+            rows = window(self.db.execute(
+                query_terms + "SELECT e.id, e.ts, e.text, e.speaker FROM episodes_fts f "
                 "JOIN episodes e ON e.id = f.rowid "
-                "WHERE episodes_fts MATCH ? ORDER BY e.ts DESC LIMIT ?",
-                (q, limit),
-            ).fetchall()
+                f"WHERE episodes_fts MATCH ? ORDER BY ({score}) DESC, e.ts DESC, e.id DESC",
+                [*terms, q],
+            ))
             if rows:
                 return rows
         except sqlite3.Error:
             pass
-        clause = " OR ".join("LOWER(text) LIKE ?" for _ in terms)
-        args = [f"%{t}%" for t in terms] + [limit]
-        return self.db.execute(
-            f"SELECT id, ts, text, speaker FROM episodes WHERE {clause} "
-            f"ORDER BY ts DESC LIMIT ?", args,
-        ).fetchall()
+        return window(self.db.execute(
+            query_terms + "SELECT e.id, e.ts, e.text, e.speaker FROM episodes e "
+            "WHERE EXISTS (SELECT 1 FROM query_terms WHERE INSTR(LOWER(e.text), term) > 0) "
+            f"ORDER BY ({score}) DESC, e.ts DESC, e.id DESC", terms,
+        ))
 
     def open_loops(self) -> list[dict]:
         """Open commitments, oldest first — the orchestrator's to-do list.
@@ -1436,7 +1468,7 @@ class Memory:
                 return True
             unknown |= coverage != "outside"
         if unknown:
-            raise RuntimeError("memory veto comparison unanswered; fact write deferred")
+            raise MemoryWriteDeferred("memory veto comparison unanswered; fact write deferred")
         return False
 
     def _lift_veto(self, text: str) -> None:
@@ -1557,7 +1589,10 @@ class Memory:
         last consolidated id, have the model distill stable facts, merge or
         insert them, then advance the cursor — all in ONE transaction, so a
         crash mid-pass loses nothing and the same episodes are simply read
-        again next time. With llm=None the pass is skipped entirely: the
+        again next time. An unanswered write-permission comparison defers only that candidate in
+        the same transaction; later passes retry it from durable state while
+        newer episodes continue to consolidate. With llm=None the pass is
+        skipped entirely: the
         profile just stays empty, nothing crashes.
 
         Returns counters: {"ran", "episodes", "new", "merged", "retired",
@@ -1591,11 +1626,15 @@ class Memory:
             "SELECT id, ts, text, speaker FROM episodes WHERE id>? "
             "ORDER BY id LIMIT ?",
             (last, batch)).fetchall()
-        if not rows:
+        pending = self.db.execute(
+            "SELECT id, candidate FROM deferred_consolidation "
+            "WHERE last_attempt_ts < ? ORDER BY last_attempt_ts, id LIMIT ?", (now, batch)).fetchall()
+        if not rows and not pending:
             self._state_set("last_run_ts", str(now))
             self.db.commit()
             return {"ran": True, "episodes": 0, "new": 0, "merged": 0,
-                    "retired": 0, "remaining": 0}
+                    "retired": 0, "remaining": 0,
+                    "deferred": self.db.execute("SELECT COUNT(*) FROM deferred_consolidation").fetchone()[0]}
         try:
             # WHO SPOKE RIDES WITH THE LINE. The listing was "[id] text" and
             # the speaker verdict — stored on the row, carried into
@@ -1609,8 +1648,11 @@ class Memory:
             # model that can see the whole day. Nothing here reads a word.
             listing = "\n".join(
                 f"[{r[0]}]{_speaker_tag(r[3])} {r[2]}" for r in rows)
-            res = self.llm.chat(CONSOLIDATE_SYSTEM, listing)
-            cands = json.loads(_extract_json(res.text)).get("facts")
+            if rows:
+                res = self.llm.chat(CONSOLIDATE_SYSTEM, listing)
+                cands = json.loads(_extract_json(res.text)).get("facts")
+            else:
+                cands = []
             if not isinstance(cands, list):
                 raise ValueError("no facts list in model output")
         except Exception as e:
@@ -1651,6 +1693,7 @@ class Memory:
         spoke = {r[0]: _speaker_verdict(r[3]) for r in rows}  # id -> verdict
         new = merged = retired = 0
         try:
+            work = [(rid, json.loads(candidate)) for rid, candidate in pending]
             for c in cands:
                 if not isinstance(c, dict):
                     continue
@@ -1692,38 +1735,40 @@ class Memory:
                 src = (OVERHEARD
                        if eps and all(spoke.get(e) == "other" for e in eps)
                        else "consolidation")
-                match, relation = self._relate_fact(text, fact_ts)
-                if match is not None and relation == "same":
-                    self._merge_fact(match, imp, fact_ts, eps,
-                                     source=src, kind=kind)
-                    merged += 1
-                elif match is not None and relation == "replaces":
-                    # Counted separately, and counted only when a row landed
-                    # AND SOMETHING ACTUALLY DIED: `retired` is the number that
-                    # says the profile is CORRECTING itself rather than only
-                    # growing, and the nightly print is the one place anybody
-                    # would notice supersession quietly stopping. _supersede
-                    # returns a truthy row id on the provenance-fence path too,
-                    # having retired nothing — latent while only mail and
-                    # calendar were fenced and consolidation could not produce
-                    # them, and REACHABLE the moment an overheard line could.
-                    # A mislabel here reads as "she corrected herself" on a
-                    # night she refused to.
-                    landed = self._supersede(match, text, imp, 0.6, src,
-                                             fact_ts, eps, kind=kind)
-                    if landed:
-                        new += 1
-                        if self._is_retired(match) or self._is_retired(landed):
-                            retired += 1
+                work.append((None, {"text": text, "importance": imp,
+                                   "kind": kind, "episode_ids": eps,
+                                   "ts": fact_ts, "source": src}))
+
+            # A savepoint only isolates the known retryable verdict absence.
+            # Real database/programming failures still roll back the whole
+            # pass, including its cursor and deferred queue. BEGIN explicitly:
+            # otherwise releasing the first savepoint could commit it alone.
+            if not self.db.in_transaction:
+                self.db.execute("BEGIN")
+            for pending_id, candidate in work:
+                self.db.execute("SAVEPOINT consolidation_fact")
+                try:
+                    added, combined, superseded = self._apply_consolidation_candidate(candidate)
+                except MemoryWriteDeferred:
+                    self.db.execute("ROLLBACK TO consolidation_fact")
+                    if pending_id is None:
+                        self.db.execute(
+                            "INSERT INTO deferred_consolidation(candidate, last_attempt_ts) VALUES (?,?)",
+                            (json.dumps(candidate), now))
+                    else:
+                        self.db.execute(
+                            "UPDATE deferred_consolidation SET last_attempt_ts=? WHERE id=?",
+                            (now, pending_id))
                 else:
-                    # Counted only if a row actually landed. _insert_fact
-                    # returns 0 for a vetoed fact, and a pass that reports
-                    # writing facts it refused would make the veto invisible
-                    # in the one number anybody watches.
-                    if self._insert_fact(text, imp, 0.6, src,
-                                         fact_ts, eps, kind=kind):
-                        new += 1
-            self._state_set("last_episode_id", str(rows[-1][0]))
+                    new += added
+                    merged += combined
+                    retired += superseded
+                    if pending_id is not None:
+                        self.db.execute("DELETE FROM deferred_consolidation WHERE id=?", (pending_id,))
+                finally:
+                    self.db.execute("RELEASE consolidation_fact")
+            through = rows[-1][0] if rows else last
+            self._state_set("last_episode_id", str(through))
             self._state_set("last_run_ts", str(now))
             self._state_set(f"consolidate_fail_{last}", "0")
             self.db.commit()
@@ -1732,7 +1777,31 @@ class Memory:
             raise
         return {"ran": True, "episodes": len(rows), "new": new,
                 "merged": merged, "retired": retired,
-                "remaining": self._episodes_after(rows[-1][0])}
+                "remaining": self._episodes_after(through),
+                "deferred": self.db.execute("SELECT COUNT(*) FROM deferred_consolidation").fetchone()[0]}
+
+    def _apply_consolidation_candidate(self, candidate: dict) -> tuple[int, int, int]:
+        """Apply one evidenced fact; return actual inserts, merges, retirements.
+
+        Retry candidates retain the original episode time and speaker source.
+        The current profile and vetoes are judged afresh, so waiting neither
+        launders a stranger's words nor makes old evidence a new correction.
+        """
+        text, imp = candidate["text"], candidate["importance"]
+        ts, eps = candidate["ts"], candidate["episode_ids"]
+        src, kind = candidate["source"], candidate["kind"]
+        match, relation = self._relate_fact(text, ts)
+        if match is not None and relation == "same":
+            self._merge_fact(match, imp, ts, eps, source=src, kind=kind)
+            return 0, 1, 0
+        if match is not None and relation == "replaces":
+            landed = self._supersede(match, text, imp, 0.6, src, ts, eps, kind=kind)
+            # Provenance fencing can insert without retiring. Count only an
+            # actual retirement, and never count a vetoed insertion as one.
+            return (int(bool(landed)), 0,
+                    int(bool(landed) and (self._is_retired(match) or self._is_retired(landed))))
+        landed = self._insert_fact(text, imp, 0.6, src, ts, eps, kind=kind)
+        return int(bool(landed)), 0, 0
 
     def last_consolidation_ts(self) -> float:
         try:
@@ -1888,7 +1957,7 @@ class Memory:
             candidates.append((overlap, rid, fact, last_seen, retired_ts))
         result = self._ask_the_model_which_note(text, ts, candidates)
         if result[1] == "unknown" and any(c[4] is not None for c in candidates):
-            raise RuntimeError("memory historical comparison unanswered; fact write deferred")
+            raise MemoryWriteDeferred("memory historical comparison unanswered; fact write deferred")
         return result
 
     def _ask_the_model_which_note(self, text: str, ts: Optional[float],

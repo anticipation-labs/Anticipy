@@ -525,6 +525,32 @@ class LLMResult:
 _LEDGER = os.environ.get("ANTICIPY_LLM_LEDGER", "")
 
 
+def _gemini_usage(metadata) -> dict:
+    """Adapt reported Gemini counters without estimating missing usage/cost.
+
+    UsageMetadata: https://ai.google.dev/api/generate-content#UsageMetadata
+    Prompt tokens already include cached content. Candidate tokens exclude
+    thinking tokens, which remain separate here; total_tokens is Google's
+    reported aggregate, never a sum that assumes missing counters are zero.
+    Consumers comparing providers should use total_tokens and mode, rather
+    than assuming every provider's completion counter includes reasoning.
+    """
+    data = metadata if isinstance(metadata, dict) else {}
+
+    def count(key):
+        value = data.get(key)
+        return value if type(value) is int and value >= 0 else None
+
+    return {
+        "prompt_tokens": count("promptTokenCount"),
+        "completion_tokens": count("candidatesTokenCount"),
+        "total_tokens": count("totalTokenCount"),
+        "tool_prompt_tokens": count("toolUsePromptTokenCount"),
+        "prompt_tokens_details": {"cached_tokens": count("cachedContentTokenCount")},
+        "completion_tokens_details": {"reasoning_tokens": count("thoughtsTokenCount")},
+    }
+
+
 def _caller() -> str:
     """The first frame outside this module — i.e. who asked for the call."""
     import traceback
@@ -548,6 +574,8 @@ def _record(model: str, system: str, user: str, usage: dict, mode: str) -> None:
             "user_chars": len(user),
             "prompt_tokens": (usage or {}).get("prompt_tokens"),
             "completion_tokens": (usage or {}).get("completion_tokens"),
+            "total_tokens": (usage or {}).get("total_tokens"),
+            "tool_prompt_tokens": (usage or {}).get("tool_prompt_tokens"),
             # Proof the cache breakpoint is actually being honoured. Zero here
             # on a big prompt means the saving is imaginary.
             "cached_tokens": ((usage or {}).get("prompt_tokens_details") or {}).get("cached_tokens"),
@@ -873,13 +901,15 @@ class LLM:
         }
         url = GEMINI_URL.format(model=model)
         data = _post_json(url, headers, payload)
+        # Empty, blocked and truncated replies can still carry billable usage.
+        # Record it before interpreting candidates so fallthrough never erases
+        # the primary provider's reported work from the ledger.
+        _record(model, system, user, _gemini_usage(data.get("usageMetadata")), "gemini")
         candidate = (data.get("candidates") or [{}])[0]
         parts = ((candidate.get("content") or {}).get("parts") or [])
         text = "".join(str(part.get("text") or "") for part in parts if isinstance(part, dict))
         if not text:
             raise ValueError("Gemini returned no text")
-        _record(model, system, user,
-                (data.get("usageMetadata") or {}), "gemini")
         # MAX_TOKENS is the one reason that means "there was more to say".
         # SAFETY and RECITATION are refusals, not truncations, and are left to
         # the caller's own emptiness handling rather than relabelled here.

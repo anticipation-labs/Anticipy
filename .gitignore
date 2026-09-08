@@ -14,6 +14,7 @@ venv/
 .env
 .env.*
 *.env
+.dev.vars*
 !.env.example
 
 # Editor / OS noise
@@ -58,6 +59,9 @@ migration/workers/owners/
 # under migration/spike/containers-sdk/node_modules are a deliberately vendored
 # 220K SDK and stay tracked; gitignore does not untrack what is already in.
 node_modules/
+# The root mirrors CI with a symlink to the locked API Worker dependencies.
+# A directory-only ignore does not cover a symlink named node_modules.
+/node_modules
 
 # Vendor agent skills, installed by `npx skills add`. They are somebody else's
 # instructions living in this working tree, not Anticipy source, and committing
@@ -73,3 +77,6 @@ skills-lock.json
 # Local browser screenshots and traces can contain session headers or personal data.
 # Commit reviewed, redacted findings under research/ instead.
 /output/playwright/
+
+# Local PDF inspection renders (source guide lives under docs/ and output/pdf/).
+/tmp/pdfs/

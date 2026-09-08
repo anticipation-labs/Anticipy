@@ -49,6 +49,7 @@ import { transcriptionToken, type SmsEnv } from "./routes/sms.ts";
 import { sendblueInbound, type SendblueEnv } from "./routes/sendblue.ts";
 import { connectionCommand } from "./routes/connection_command.ts";
 import { taskAccess } from "./routes/task_access.ts";
+import { replyPresentations } from "./routes/reply_presentations.ts";
 import { contextRequest } from "./routes/context_request.ts";
 import { notificationPolicy } from "./routes/notification_policy.ts";
 import { connectRoute, installConnectWiring, type ConnectEnv } from "./routes/connect.ts";
@@ -65,6 +66,7 @@ import { installConnectSessionReader } from "./routes/connect.ts";
 import { workerOwners, purgeAudit, authClaim, phoneRemove, profileUpsert, type ServiceEnv } from "./routes/service.ts";
 import { handsApiRun, HANDS_API_RUN_PATH, type HandsApiEnv } from "./routes/hands_api.ts";
 import { handsApiTools, HANDS_API_TOOLS_PATH, type HandsApiToolsEnv } from "./routes/hands_api_tools.ts";
+import { handsApiConnections, HANDS_API_CONNECTIONS_PATH } from "./routes/hands_api_connections.ts";
 import { adminConnectLink, ADMIN_CONNECT_LINK_PATH, type AdminConnectLinkEnv } from "./routes/admin_connect_link.ts";
 import { adminSmsLines, ADMIN_SMS_LINES_PATH, type AdminSmsLinesEnv } from "./routes/admin_sms_lines.ts";
 import { adminBrainStatus } from "./routes/admin_brain_status.ts";
@@ -210,6 +212,7 @@ export default {
     if (path === "/admin/account-reset") return adminAccountReset(request, env as never);
     if (path === "/worker/connection-command") return connectionCommand(request, env);
     if (path === "/worker/task-access") return taskAccess(request, env);
+    if (path === "/worker/reply-presentations") return replyPresentations(request, env);
     if (path === "/worker/owners" && method === "GET") {
       return workerOwners(request, env as unknown as ServiceEnv);
     }
@@ -239,6 +242,9 @@ export default {
     // only; see routes/hands_api_tools.ts.
     if (path === HANDS_API_TOOLS_PATH) {
       return handsApiTools(request, env as unknown as HandsApiToolsEnv);
+    }
+    if (path === HANDS_API_CONNECTIONS_PATH) {
+      return handsApiConnections(request, env);
     }
     // The Week A gate's manual trigger: mint a connect page for one owner and
     // text it. Internal-key only; see routes/admin_connect_link.ts.

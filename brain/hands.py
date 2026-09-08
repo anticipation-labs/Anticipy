@@ -38,8 +38,8 @@ a public lookup or a fabricated completion.
 
 THE FACTS ARE HANDED TO THE MODEL, NOT GUESSED FROM WORDS. `gather_context`
 reads which apps this owner has connected and whether writes are switched on
-for each (the `connections` table, through the same records client the brain
-uses for every other collection) and whether his Mac is there (the `agents`
+for each (the read-only, owner-scoped `/hands/api/connections` service route)
+and whether his Mac is there (the `agents`
 heartbeat, the same row worker.browser_reachable reads). A fact that could not
 be read is UNKNOWN and says so in the prompt — and unknown never licenses the
 api hand, because rule 2 needs a connection the code can see.
@@ -228,6 +228,7 @@ SIDE_EFFECT_ORDER = {EFFECT_READ: 0, EFFECT_WRITE: 1, EFFECT_IRREVERSIBLE: 2}
 # module docstring says so. One constant, so the day it ships is one edit
 # here and one leg in overnight/is_connect_live.py.
 API_HAND_TOOLS_PATH = "/hands/api/tools"
+API_HAND_CONNECTIONS_PATH = "/hands/api/connections"
 # A catalog read is the Worker walking up to ten vendor pages: longer than a
 # fact read, still bounded, and a miss is UNKNOWN rather than an exception.
 CATALOG_TIMEOUT = 20
@@ -332,6 +333,10 @@ class HandContext:
     catalogs: Optional[dict] = None
     effect_channel: str = ""
     source_context: str = ""
+    owner_ref: str = ""
+    # Routing precedes new_plan at mint (version 1). A caller replanning an
+    # existing workflow must carry its actual revision, never reset it to 1.
+    workflow_version: int = 1
 
     def connected(self, toolkit: str) -> Optional[ConnectedApp]:
         want = (toolkit or "").strip().lower()
@@ -358,6 +363,7 @@ class HandVerdict:
     args: Optional[dict] = None
     tool_verdict: str = ""
     tool_asked: int = 0
+    plan_input: Optional[dict] = None
 
     @property
     def decided(self) -> bool:
@@ -370,7 +376,7 @@ class HandVerdict:
                 "effect": self.effect, "asked": self.asked,
                 "tool": self.tool, "args": self.args,
                 "tool_verdict": self.tool_verdict,
-                "tool_asked": self.tool_asked}
+                "tool_asked": self.tool_asked, "plan_input": self.plan_input}
 
 
 @dataclass(frozen=True)
@@ -1028,7 +1034,10 @@ def plan_api_step(verdict: HandVerdict, goal: str, ctx: HandContext,
                      heard=ctx.source, effect=verdict.effect,
                      source_context=ctx.source_context)
     note = dict(tool=tv.tool, args=tv.args, tool_verdict=tv.verdict,
-                tool_asked=tv.asked)
+                tool_asked=tv.asked,
+                plan_input={"goal": goal.strip(), "source": ctx.source,
+                            "owner_ref": ctx.owner_ref,
+                            "workflow_version": ctx.workflow_version})
     if not tv.chosen:
         return replace(verdict, hand=HAND_BROWSER,
                        reason=f"{verdict.reason} — no tool for the api hand "
@@ -1053,37 +1062,47 @@ def _escaped(value: str) -> str:
 
 
 def read_connections(owner_ref: str, backend_url: str) -> Optional[tuple]:
-    """This owner's rows from the `connections` table, through the records
-    client every other brain read uses. None when they could not be read —
-    a backend that does not serve the table, a refused credential, a
-    timeout — and None is UNKNOWN, never "connected nothing". The owner id
-    is the process' own scope, never a body."""
+    """This owner's connection facts from the read-only service route.
+
+    The shared backend client supplies the service token. The route requires
+    an explicit owner and echoes its scope; missing/mismatched scope or an
+    unreadable row means UNKNOWN, never "connected nothing". The owner id is
+    the process' own scope, never an owner's message or a job argument.
+    """
     ref = str(owner_ref or "").strip()
     base = str(backend_url or "").strip().rstrip("/")
     if not ref or not base:
         return None
     try:
-        r = backend.get(f"{base}/api/collections/connections/records",
-                   params={"filter": f'user_id="{_escaped(ref)}"',
-                           "perPage": 100},
+        r = backend.get(f"{base}{API_HAND_CONNECTIONS_PATH}",
+                   params={"owner": ref},
                    timeout=FACT_TIMEOUT)
         if not r.ok:
             return None
-        items = r.json().get("items", [])
+        body = r.json()
+        if not isinstance(body, dict) or body.get("ok") is not True or body.get("owner") != ref:
+            return None
+        items = body.get("items")
     except Exception:
         return None
+    if not isinstance(items, list):
+        return None
     rows = []
-    for item in items if isinstance(items, list) else []:
+    for item in items:
         if not isinstance(item, dict):
-            continue
-        toolkit = str(item.get("toolkit") or "").strip()
-        if not toolkit:
-            continue
+            return None
+        toolkit = item.get("toolkit")
+        alias = item.get("alias")
+        status = item.get("status")
+        writes_enabled = item.get("writes_enabled")
+        if (not isinstance(toolkit, str) or not toolkit.strip()
+                or not isinstance(alias, str)
+                or status not in ("connected", "needs_reconnect", "disconnected")
+                or not isinstance(writes_enabled, bool)):
+            return None
         rows.append(ConnectedApp(
-            toolkit=toolkit,
-            alias=str(item.get("alias") or "").strip(),
-            status=str(item.get("status") or "").strip() or "disconnected",
-            writes_enabled=item.get("writes_enabled") in (1, True, "1", "true"),
+            toolkit=toolkit.strip(), alias=alias.strip(), status=status,
+            writes_enabled=writes_enabled,
         ))
     return tuple(rows)
 
@@ -1178,11 +1197,17 @@ def gather_context(params: Optional[dict] = None, owner_ref: str = "",
     from .source_context import quoted_context
     ref = active_owner_ref(owner_ref)
     base = str(backend_url or os.environ.get("ANTICIPY_PB") or "").strip()
+    workflow = p.get("_workflow")
+    version = workflow.get("version", 0) if isinstance(workflow, dict) else 1
+    if not isinstance(version, int) or isinstance(version, bool) or version < 1:
+        version = 0  # Unknown revision cannot license an API argument plan.
     return HandContext(
         connections=read_connections(ref, base),
         browser_online=browser_is_online(ref, base),
         source=str(p.get("source") or ""),
         source_context=quoted_context(p.get("_source_context")),
+        owner_ref=ref,
+        workflow_version=version,
         rung=NO_LEDGER_RUNG,
         backend_url=base,
         effect_channel=str((p.get("_effect") or {}).get("touches") or "")

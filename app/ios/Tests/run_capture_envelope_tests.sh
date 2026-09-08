@@ -90,7 +90,10 @@ fi
 #    one way and the queue flush another, a buffered line and a live line stop
 #    meaning the same thing — and the buffered ones are precisely the rows the
 #    boundary work exists for.
-if ! grep -q 'CaptureEnvelope.of(startedAt: capturedAt, endedAt: endedAt)' "$session"; then
+# Both first send and retries now use one durable outbox delivery path. The
+# captured instants must enter that row unchanged and be read by the one POST.
+if ! grep -q 'capturedAt: capturedAt, endedAt: endedAt' "$session" \
+   || ! grep -q 'CaptureEnvelope.of(startedAt: line.capturedAt, endedAt: line.endedAt)' "$session"; then
     echo "The session no longer builds its envelope through the shared rule."
     exit 2
 fi

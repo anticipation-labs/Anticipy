@@ -2700,6 +2700,14 @@ class Anticipy:
             # already been told about; a dead POST means no card at all, and
             # those two must never take the same branch.
             write_failed = job_id == QUEUE_WRITE_FAILED
+            if job_id is None:
+                # A deliberate retraction/no-op is not a duplicate card.
+                # There is no job to poll, so neither an active loop nor an
+                # "act" row may claim that the browser is working on it.
+                return {"memory": mem, "decision": replace(decision,
+                    decision="ignore", goal=None,
+                    reason="queue deliberately produced no new work"),
+                    "anticipy_says": None, "question_job_id": None}
             running_dup = getattr(self, "_running_dup", None)
             repeat = bool(running_dup) or (
                 not write_failed
@@ -2723,7 +2731,11 @@ class Anticipy:
                         "anticipy_says": execution["question"], "question_job_id": job_id}
             # Her words are GENERATED for this exact moment — a template can
             # never sound like a person.
-            if running_dup:
+            if write_failed:
+                # A failed persistence operation has no execution state to
+                # acknowledge, and does not need a model call to describe it.
+                handled = None
+            elif running_dup:
                 # The plan is ALREADY EXECUTING: never re-ask for approval
                 # ("I'll hold off" about work in motion is a lie in both
                 # directions) and never claim it finished. One reassurance,
@@ -2773,10 +2785,12 @@ class Anticipy:
                 # so status_report() cannot read it out as work in hand, and
                 # review_loops() skips it (it has no job id to poll).
                 loop.status = "failed"
-                handled = None
+                handled = ("I couldn't save that task. Please try again."
+                           if explicit else None)
                 print(f"queue write failed for {decision.goal!r} — no card "
-                      "exists, so she says nothing rather than claiming it "
-                      "is in hand")
+                      "exists; no action is reported")
+                decision = replace(decision, decision="ignore", goal=None,
+                                   reason="queue write failed; no task was saved")
             elif held and not repeat and say_verdict:
                 if not self.notify_owner(handled):
                     handled = None

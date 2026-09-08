@@ -228,6 +228,10 @@ export function dispose(outcome: ApiHandOutcome, attempts: number): Disposition 
   }
 
   if (outcome.outcome === "refused") {
+    if (outcome.reason === "plan_stale") {
+      return handback(outcome.reason,
+        "The task changed after this step was planned. I'll use its current details in your browser.");
+    }
     if (outcome.reason === "confirmation_required") {
       return {
         state: "needs_user", lane: API_LANE, reason: outcome.reason,
@@ -296,11 +300,13 @@ export function apiReadEvidence(outcome: ApiHandOutcome): Record<string, unknown
 interface JobRow {
   id: string;
   owner_ref: string;
+  goal: string;
   status: string;
   lane: string;
   claimed_by: string;
   params: string;
   workflow_id: string;
+  workflow_version: number;
   workflow_state: string;
   effect_key: string;
   attempts: number;
@@ -349,6 +355,30 @@ export function approvedForCurrentVersion(workflow: Record<string, unknown> | nu
     && Number(a.plan_version ?? -1) === Number(workflow.version ?? -2)
     && str(a.scope_digest) === str(workflow.scope_digest)
     && (words.length > 0 || gesture);
+}
+
+/**
+ * Argument plans belong to the exact goal, source, owner and workflow revision
+ * the brain planned. A corrected workflow must not execute arguments retained
+ * from its previous revision. Comparing identities here is a seatbelt, not a
+ * judgment about what either sentence means. Pre-binding jobs fail closed too.
+ */
+export function planInputsMatch(
+  row: Pick<JobRow, "owner_ref" | "goal" | "workflow_id" | "workflow_version">,
+  note: Record<string, unknown>,
+  params: Record<string, unknown>,
+  workflow: Record<string, unknown> | null,
+): boolean {
+  const input = note.plan_input;
+  if (!isPlainObject(input) || !workflow) return false;
+  return input.owner_ref === row.owner_ref
+    && workflow.owner_ref === row.owner_ref
+    && input.goal === row.goal && workflow.goal === row.goal
+    && input.source === str(params.source)
+    && Number.isInteger(input.workflow_version) && Number(input.workflow_version) >= 1
+    && input.workflow_version === workflow.version
+    && workflow.version === row.workflow_version
+    && workflow.plan_id === row.workflow_id;
 }
 
 /** The step, off the row and nowhere else. */
@@ -448,7 +478,7 @@ export async function handsApiRun(
   let row: JobRow | null;
   try {
     row = await env.DB.prepare(
-      `SELECT "id","owner_ref","status","lane","claimed_by","params","workflow_id",
+      `SELECT "id","owner_ref","goal","status","lane","claimed_by","params","workflow_id","workflow_version",
               "workflow_state","effect_key","attempts","lease_token"
          FROM "jobs" WHERE "id" = ?1 LIMIT 1`,
     ).bind(jobId).first<JobRow>();
@@ -491,8 +521,24 @@ export async function handsApiRun(
   if (deps.store) handDeps.store = deps.store;
   if (deps.provider) handDeps.provider = deps.provider;
   if (deps.clock) handDeps.clock = deps.clock;
+  // runStep calls this after the catalog await, just before vendor execution.
+  // The initial binding check alone cannot see an intervening correction.
+  handDeps.beforeExecute = async () => {
+    const stillCurrent = await env.DB.prepare(
+      `SELECT 1 AS current FROM "jobs" WHERE "id" = ?1 AND "params" = ?2
+        AND "goal" = ?3 AND "lease_token" = ?4 AND "owner_ref" = ?5
+        AND "status" = 'running' AND "claimed_by" = ?6 AND "lane" = ?7
+        AND "workflow_version" = ?8 AND "workflow_id" = ?9`,
+    ).bind(row.id, row.params, row.goal, row.lease_token, row.owner_ref,
+           API_CLAIMANT, API_LANE, row.workflow_version, row.workflow_id).first();
+    return stillCurrent !== null;
+  };
   const step = stepFromRow(row, note, workflow);
-  const outcome = await hand(env, step, handDeps);
+  const outcome: ApiHandOutcome = planInputsMatch(row, note, params, workflow)
+    ? await hand(env, step, handDeps)
+    : { outcome: "refused", reason: "plan_stale",
+        detail: "the stored arguments do not belong to this workflow revision",
+        effect: null, catalogRead: false };
   const attempts = Number(row.attempts ?? 0) || 0;
   const d = dispose(outcome, attempts);
 
@@ -516,6 +562,9 @@ export async function handsApiRun(
   const status = STATUS_FOR_STATE[d.state];
   const nextNote: Record<string, unknown> = {
     ...note,
+    ...(outcome.outcome === "refused" && outcome.reason === "plan_stale"
+      ? { hand: "browser", tool: "", args: null, plan_input: null }
+      : {}),
     lane: d.lane,
     outcome: {
       outcome: outcome.outcome,
@@ -548,12 +597,13 @@ export async function handsApiRun(
       `UPDATE "jobs" SET "status" = ?1, "lane" = ?2, "result" = ?3, "params" = ?4,
               "claimed_by" = ?5, "claimed_at" = ?6, "lease_token" = '', "lease_until" = '',
               "workflow_state" = ?7, "receipt" = ?8, "effect_uncertain" = ?9, "updated" = ?10
-        WHERE "id" = ?11 AND "status" = 'running' AND "claimed_by" = ?12`,
+        WHERE "id" = ?11 AND "status" = 'running' AND "claimed_by" = ?12
+          AND "params" = ?13 AND "lease_token" = ?14 AND "goal" = ?15`,
     ).bind(
       status, d.lane, d.result.slice(0, RESULT_MAX), JSON.stringify(nextParams),
       resting ? "" : API_CLAIMANT, resting ? "" : stamp,
       workflowState, receipt, d.effectUncertain ? 1 : 0, stamp,
-      row.id, API_CLAIMANT,
+      row.id, API_CLAIMANT, row.params, row.lease_token, row.goal,
     ).run();
     written = Number(res.meta?.changes ?? 0);
   } catch (err) {
