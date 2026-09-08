@@ -48,9 +48,11 @@ PRs. The artifact itself passed; its branch was integrated directly without
 conflict. The signed ZIP's SHA-256 is
 `c27dd01e3257e2d8df99e2f5ff1a80f943b53eab01a5d9ab8431bed8186e1cbb`.
 
-The API deployment to publish this static ZIP will be dispatched after the
-handoff commit is pushed. Until live byte verification succeeds, distinguish
-**committed notarized Mac 171** from **the public URL serving Mac 171**.
+The API deployment to publish this static ZIP was dispatched from `d52eaf38`:
+https://github.com/anticipation-labs/Anticipy/actions/runs/34180318042
+It was **in progress** at handoff. Until live byte verification succeeds,
+distinguish **committed notarized Mac 171** from **the public URL serving
+Mac 171**. No further repairs or unattended follow-ups were started.
 
 Deployment command, if the next operator needs to rerun it:
 
