@@ -1,0 +1,18 @@
+{
+  "checked_at_utc": "2026-09-07T22:09:56Z",
+  "tester": "Tejas Kaushik",
+  "email_masked": "te***@outlook.com",
+  "app_bundle": "ai.anticipy.app",
+  "build": "169",
+  "source_branch": "cloudflare-backend",
+  "group": "Tejas private pilot",
+  "public_link_enabled": false,
+  "processing_state": "VALID",
+  "external_build_state": "IN_BETA_TESTING",
+  "tester_state": "INVITED",
+  "ready_to_install": true,
+  "physical_installation_verified": false,
+  "workflow_run": "https://github.com/anticipation-labs/Anticipy/actions/runs/34165681886",
+  "verification": "Readback of the named tester group after external preparation confirms INVITED and exact build 169 membership. The earlier preparation read briefly reported NOT_INVITED before Apple's invitation state advanced.",
+  "scope": "Private TestFlight access only; no repository or App Store Connect role granted."
+}

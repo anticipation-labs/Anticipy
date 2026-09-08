@@ -1,0 +1,13 @@
+{
+  "message": "Processing complete",
+  "id": "4deaee84-257a-46d5-8602-6243b27034f2",
+  "status": "Accepted",
+  "build": "171",
+  "version": "1.1.1",
+  "sha256": "c27dd01e3257e2d8df99e2f5ff1a80f943b53eab01a5d9ab8431bed8186e1cbb",
+  "source_commit": "0cb078e6aac27561cf9eb0cfe24ccc7c5d9ea562",
+  "workflow_run": "https://github.com/anticipation-labs/Anticipy/actions/runs/34179162484",
+  "local_codesign": true,
+  "local_stapler": true,
+  "local_gatekeeper": true
+}

@@ -72,5 +72,13 @@ Use `sh app/macos/Tests/run_all.sh` for the offline suites.
 
 ## Publication
 
-Pending Apple notarization and replacement of the Worker-served ZIP. A final
-receipt will record the published hash, Apple ticket and deployment revision.
+Apple accepted build 171 (1.1.1), ticket
+`4deaee84-257a-46d5-8602-6243b27034f2`. CI run `34179162484` passed all Mac
+tests, notarization, signature, version and Gatekeeper checks. It failed only
+because GitHub Actions is not permitted to create pull requests. Its release
+branch was fast-forwarded into `cloudflare-backend` without conflict.
+
+The checked-in notarized archive SHA-256 is
+`c27dd01e3257e2d8df99e2f5ff1a80f943b53eab01a5d9ab8431bed8186e1cbb`.
+Local re-verification also passed codesign, stapler and Gatekeeper. Worker
+publication is a separate deployment; see `docs/HANDOFF-NOW.md` for its status.

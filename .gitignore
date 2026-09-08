@@ -69,3 +69,7 @@ skills-lock.json
 # lock, and per-machine local settings. None of it is Anticipy source, and the
 # worktrees in particular are whole checkouts of this repo inside itself.
 .claude/
+
+# Local browser screenshots and traces can contain session headers or personal data.
+# Commit reviewed, redacted findings under research/ instead.
+/output/playwright/
