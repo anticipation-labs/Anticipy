@@ -39,6 +39,9 @@ import {
   API_CLAIMANT,
   API_LANE,
   BROWSER_LANE,
+  SYNTHESIS_LANE,
+  apiReadEvidence,
+  API_EVIDENCE_MAX,
   HANDS_API_RUN_PATH,
   MAX_ATTEMPTS,
   RESULT_MAX,
@@ -452,40 +455,61 @@ await check("a row that moved while the hand ran is not written over", async () 
 // 4. THE OUTCOME TABLE, branch by branch, each with its control.
 // ===========================================================================
 
-await check("ran -> done: the answer on the row, a verified receipt naming the vendor's log, lease released", async () => {
+await check("a successful read queues synthesis with evidence and no completion receipt", async () => {
   const r = rig();
   seedJob(r.db);
-  const out = await run(r, scripted(ran()));
+  const outcome = ran();
+  const out = await run(r, scripted(outcome));
   assert.equal(out.status, 200, out.text);
   assert.deepEqual({ outcome: out.body.outcome, status: out.body.status, lane: out.body.lane },
-                   { outcome: "ran", status: "done", lane: API_LANE });
+                   { outcome: "ran", status: "queued", lane: SYNTHESIS_LANE });
   const row = readJob(r.db);
-  assert.equal(row.status, "done");
-  assert.equal(row.lane, API_LANE);
-  assert.ok(row.result.includes('"subject":"the form"'), row.result);
-  assert.ok(row.result.startsWith(`Ran ${APP}/${READ_TOOL}`));
-  assert.equal(row.workflow_state, "succeeded");
+  assert.equal(row.status, "queued");
+  assert.equal(row.lane, SYNTHESIS_LANE);
+  assert.equal(row.workflow_state, "queued");
   assert.equal(row.effect_uncertain, 0);
-  assert.equal(row.claimed_by, API_CLAIMANT, "who ran it stays on the row");
-  const wf = row.p._workflow;
-  assert.deepEqual(wf.receipt.evidence, ["vendor-log:log_777"]);
-  assert.equal(wf.receipt.effect_key, "effect-key-1");
-  assert.equal(wf.reason, "verified complete");
+  assert.equal(row.claimed_by, "");
+  assert.equal(row.p._workflow.receipt, null);
+  assert.deepEqual(row.p._api_evidence, apiReadEvidence(outcome));
+  assert.equal(JSON.parse(row.p._api_evidence.content).items[0].subject, "the form");
   assert.equal(row.p._hand.outcome.outcome, "ran");
   assert.equal(row.p._hand.outcome.tool, READ_TOOL);
-  assert.ok(!("args" in row.p._hand.outcome) && !("data" in row.p._hand.outcome));
-  assert.notEqual(row.updated, NOW, "updated was not stamped");
+  assertConsistent(row);
+});
+
+await check("an empty or truncated read cannot assert task completion", () => {
+  for (const data of [{records: []}, {blob: "x".repeat(20000)}]) {
+    const out = ran({data});
+    const disposition = dispose(out, 1);
+    assert.equal(disposition.state, "queued");
+    assert.equal(disposition.lane, SYNTHESIS_LANE);
+    assert.deepEqual(disposition.evidence, []);
+    const evidence = apiReadEvidence(out)!;
+    assert.ok(String(evidence.content).length <= API_EVIDENCE_MAX);
+    assert.equal(evidence.truncated, JSON.stringify(data).length > API_EVIDENCE_MAX);
+  }
+});
+
+await check("a verified write retains its vendor receipt and does not rerun through synthesis", async () => {
+  const r = rig();
+  seedJob(r.db, {note: note({effect: "write"})});
+  const out = await run(r, scripted(ran({effect: "write"})));
+  assert.equal(out.body.status, "done");
+  const row = readJob(r.db);
+  assert.equal(row.lane, API_LANE);
+  assert.deepEqual(row.p._workflow.receipt.evidence, ["vendor-log:log_777"]);
+  assert.equal(row.p._api_evidence, undefined);
   assertConsistent(row);
 });
 
 await check("ran with no vendor log id still cites the run itself", () => {
-  const d = dispose(ran({ logId: null }), 1);
+  const d = dispose(ran({ logId: null, effect: "write" }), 1);
   assert.equal(d.state, "succeeded");
   assert.deepEqual(d.evidence, [`vendor-run:${APP}/${READ_TOOL}@${ACCOUNT}`]);
 });
 
 await check("a huge vendor reply is bounded in result", () => {
-  const d = dispose(ran({ data: { blob: "x".repeat(20_000) } }), 1);
+  const d = dispose(ran({ effect: "write", data: { blob: "x".repeat(20_000) } }), 1);
   assert.ok(d.result.length <= RESULT_MAX);
   assert.ok(d.result.endsWith("…"));
 });
@@ -681,7 +705,7 @@ await check("a connection store that cannot write does not lose the job's outcom
 
 await check("a pre-workflow row is written the same way, with no plan invented for it", async () => {
   for (const [outcome, status, lane] of [
-    [ran(), "done", API_LANE],
+    [ran(), "queued", SYNTHESIS_LANE],
     [refused("not_connected"), "queued", BROWSER_LANE],
     [failed("other", { effect: "write" }), "needs_user", API_LANE],
   ] as const) {
@@ -702,7 +726,7 @@ await check("a pre-workflow row is written the same way, with no plan invented f
 
 await check("settleWorkflow: a resting plan has no lease, only success carries a receipt", () => {
   const at = "2026-09-06T20:00:01+00:00";
-  const ok = dispose(ran(), 1);
+  const ok = dispose(ran({effect: "write"}), 1);
   const succeeded = settleWorkflow(plan(), { effect_key: "effect-key-1" }, ok, at);
   assert.equal(succeeded.state, "succeeded");
   assert.equal(succeeded.lease, null);
@@ -769,7 +793,7 @@ await check("THE JOIN, WITH THE REAL HAND: no connection row -> refused not_conn
   assertConsistent(row);
 });
 
-await check("THE JOIN, WITH THE REAL HAND: a connected row and a listed read tool -> the vendor runs it -> done", async () => {
+await check("THE JOIN, WITH THE REAL HAND: a connected row and a listed read tool -> the vendor runs it -> evidence for synthesis", async () => {
   const r = rig();
   await r.store.putConnection(connection({ writes_enabled: false }));
   seedJob(r.db);
@@ -778,12 +802,14 @@ await check("THE JOIN, WITH THE REAL HAND: a connected row and a listed read too
   const out = await run(r, { store: r.store, provider });
   assert.equal(out.status, 200, out.text);
   assert.equal(out.body.outcome, "ran");
-  assert.equal(out.body.status, "done");
+  assert.equal(out.body.status, "queued");
   assert.deepEqual(v.calls.map((c) => c.method), ["GET", "POST"], "one catalog read, one execute");
   const row = readJob(r.db);
-  assert.equal(row.status, "done");
-  assert.ok(row.result.includes('"found":1'), row.result);
-  assert.deepEqual(row.p._workflow.receipt.evidence, ["vendor-log:log_e2e"]);
+  assert.equal(row.status, "queued");
+  assert.equal(JSON.parse(row.p._api_evidence.content).found, 1);
+  assert.equal(row.lane, SYNTHESIS_LANE);
+  assert.equal(row.p._workflow.receipt, null);
+  assert.equal(row.p._api_evidence.vendor_log_id, "log_e2e");
   assertConsistent(row);
 });
 

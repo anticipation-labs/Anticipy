@@ -273,7 +273,7 @@ class Extraction:
                 "from any other field is audit item 43 (Law 1).")
 
 
-EXTRACT_SYSTEM = """You extract memory from one line someone said during their day.
+EXTRACT_SYSTEM = """You extract memory from the complete supplied conversation.
 Reply ONLY with compact JSON:
 {"people":["..."],"places":["..."],"topics":["..."],
  "commitment":"<what the speaker promised to do, or null>",
@@ -282,7 +282,23 @@ Reply ONLY with compact JSON:
 People are proper names only. Topics are 1-3 word noun phrases. A commitment is
 only something the SPEAKER promised to do. "completed" is for past-tense
 reports of finishing something ("sent Priya the deck", "already paid it",
-"that's done") — the thing that got done, not the whole sentence."""
+"that's done") — the thing that got done, not the whole sentence.
+
+Read the whole conversation before filling these fields. A past incident does
+not create an open promise, even when it is the only action in a long story.
+Use null for commitment unless the speaker has an actual outstanding intention
+or promise. A report of another person's promise is not the speaker's promise.
+An action already finished belongs only in completed, never both fields.
+For example, "I returned the keys this morning" has completed="returned the
+keys" and commitment=null; "I will return the keys after lunch" has a commitment
+and completed=null. Ordinary conversation can have neither. Do not fill a field
+merely because the output schema includes it.
+
+Fictional dialogue, a rehearsal, quoted instructions and hypothetical examples
+are not real commitments. Names identified as fictional characters stay in the
+recorded episode, not the people array. Real people mentioned alongside a
+fictional scene can still be remembered; distinguish them using the context.
+Never promote an adjective, greeting, place or topic into a person's name."""
 
 CONSOLIDATE_SYSTEM = """You distill what someone's assistant should KNOW about them from
 lines overheard during their day. Each input line is "[id] text", and a line

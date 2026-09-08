@@ -141,7 +141,7 @@ def licence_reply(system: str, licensed: bool = True):
 # different name, which is the blind spot overnight/tape_gate.py:197-200 names
 # as one no gate can catch. tests/test_library_nobody_looked_is_not_nothing_
 # here.py pins that.
-EXTRACT_KEY = "extract memory from one line"
+from brain.memory import EXTRACT_SYSTEM as EXTRACT_KEY
 
 
 @dataclass

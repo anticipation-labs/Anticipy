@@ -35,9 +35,10 @@
  * WHAT THE OUTCOME BECOMES. `runStep` answers one of three shapes and this file
  * branches on the CLOSED ENUMS it carries — never on prose:
  *
- *   ran                          -> done. `result` carries the vendor's data,
- *                                   the workflow gets a verified receipt naming
- *                                   the vendor's log id.
+ *   ran, read                    -> queued on research. The actual data is
+ *                                   retained as _api_evidence; the server
+ *                                   composes and verifies the owner's result.
+ *   ran, write/irreversible      -> done with the vendor execution receipt.
  *   refused, any reason but two  -> HANDED BACK TO THE BROWSER LANE (lane "",
  *                                   status queued, claim cleared). api_hand.ts:
  *                                   "a refusal here is the router routing to
@@ -113,6 +114,7 @@ import { json, pbNow } from "../api/wire.ts";
 export const HANDS_API_RUN_PATH = "/hands/api/run";
 /** brain/hands.py LANE_API — the lane an `api` verdict lands on. */
 export const API_LANE = "api";
+export const SYNTHESIS_LANE = "research";
 /** brain/worker.py API_CLAIMANT — the actor the brain stamps before it POSTs. */
 export const API_CLAIMANT = "worker-api";
 /** anticipy_core's browser lane, where a handback goes. */
@@ -159,7 +161,7 @@ export type NextState = "succeeded" | "queued" | "needs_user" | "failed";
 
 export interface Disposition {
   state: NextState;
-  lane: typeof API_LANE | typeof BROWSER_LANE;
+  lane: typeof API_LANE | typeof BROWSER_LANE | typeof SYNTHESIS_LANE;
   /** What goes in `result`: the answer, the question for the owner, or why. */
   result: string;
   reason: string;
@@ -203,6 +205,17 @@ export function dispose(outcome: ApiHandOutcome, attempts: number): Disposition 
   if (outcome.outcome === "ran") {
     const where = `${outcome.toolkit}/${outcome.tool}`;
     const data = renderData(outcome.data);
+    // A successful READ proves retrieval, not the owner's whole request.
+    // The existing server composer and independent verifier must consume the
+    // actual evidence before a summary/comparison is called complete. This
+    // transition follows the executed effect, never words in the task title.
+    if (outcome.effect === "read") {
+      return {
+        state: "queued", lane: SYNTHESIS_LANE, reason: "API evidence awaits task verification",
+        result: "The connected app responded. I still need to check its results against your request.",
+        effectUncertain: false, reconnect: false, evidence: [],
+      };
+    }
     return {
       state: "succeeded", lane: API_LANE, reason: "verified complete",
       result: (`Ran ${where} on the connected account (${outcome.ms}ms).`
@@ -260,6 +273,20 @@ export function dispose(outcome: ApiHandOutcome, attempts: number): Disposition 
     `api hand failed: ${said}`,
     `The API hand hit an error on ${where} (${said}); it goes to the browser instead.`,
   );
+}
+
+export const API_EVIDENCE_MAX = 16000;
+
+/** Retrieved content is quoted evidence for the server, never instructions. */
+export function apiReadEvidence(outcome: ApiHandOutcome): Record<string, unknown> | null {
+  if (outcome.outcome !== "ran" || outcome.effect !== "read") return null;
+  const content = JSON.stringify(outcome.data) ?? "null";
+  return {
+    kind: "api_read", toolkit: outcome.toolkit, tool: outcome.tool,
+    vendor_log_id: outcome.logId ?? null,
+    content: content.slice(0, API_EVIDENCE_MAX),
+    truncated: content.length > API_EVIDENCE_MAX,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -504,6 +531,8 @@ export async function handsApiRun(
     },
   };
   const nextParams: Record<string, unknown> = { ...params, _hand: nextNote };
+  const retrieved = apiReadEvidence(outcome);
+  if (retrieved) nextParams._api_evidence = retrieved;
   let workflowState = row.workflow_state ?? "";
   let receipt = "";
   if (workflow) {

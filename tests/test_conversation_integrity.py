@@ -97,6 +97,17 @@ def _two_held():
              "params": json.dumps({"source": "email mark the deck"})}]
 
 
+def test_a_saved_change_to_queued_work_does_not_ask_for_another_go_ahead(monkeypatch):
+    _pb(monkeypatch, [{"id": "summary", "goal": "Private source summary",
+                       "status": "queued", "params": "{}"}])
+    c = _spoken(monkeypatch, {"intent": "modify", "pending_id": "summary",
+                              "changes": {"format": "brief"}, "reply": "Saved."})
+    monkeypatch.setattr(c, "_amend", lambda *a, **k: "amended:summary")
+    out = c.on_reply("+15550001", "Keep that summary brief.")
+    assert out["acted"] == "amended:summary"
+    assert out["reply"] == "Your changes are saved. The task is still queued."
+
+
 # ---------------------------------------------------------------- multi-item
 
 def test_a_detail_in_a_two_item_yes_lands_only_on_its_own_job(monkeypatch):
