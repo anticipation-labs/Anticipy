@@ -74,6 +74,16 @@ Developer ID identity, or the `Mac release` workflow.
 - **"It started" is not "it is recording".** Core Audio succeeds without a
   privacy grant and delivers zeros; `CaptureStreamHealth` is what tells the
   owner, in those words.
-- **The queue is the truth about sync.** A row leaves `unsent.jsonl` on a 2xx
-  and on nothing else; a 401/403 ends the session rather than retrying
-  forever behind a dead token.
+- **The queue is the truth about sync.** A row leaves `unsent.jsonl` only
+  after the API returns its exact stored capture. Its stable ID makes retries
+  safe after response loss; the last offline line retries without new speech.
+  A current-session 401/403 reopens sign-in. An old session's response cannot
+  sign out a newer account, and unreadable queue files are retained with a
+  visible error in Settings.
+
+The release script builds the committed Xcode project without regenerating it.
+`mac-release.yml` can either build using the repository's Developer ID secrets,
+or notarize a reviewed local signature supplied as a draft-release asset. The
+latter pins both the source commit and archive SHA-256 and uses the existing
+Apple CI credentials, without exporting the local signing key. Both modes
+verify Apple's ticket and open a PR replacing the Worker-served Mac ZIP.

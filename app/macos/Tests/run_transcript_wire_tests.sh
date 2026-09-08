@@ -78,27 +78,9 @@ if code "$client" "$app" | grep -qE '"mac_mic"|"mac_system"'; then
     echo "anything else."
     exit 2
 fi
-# A refused push must not be a queued push. A token the Worker will not
-# verify — the Railway session build 119 left in the Keychain — 403s every
-# row, and until this existed every one of them went back on disk forever
-# while the menu said "signed in". The door has to reappear.
-if ! code "$client" | grep -q 'case 401, 403: result.mark(.refused)'; then
-    echo "MacBackend.swift no longer reads a 401/403 as a refusal."
-    echo "A refused row is not a delayed row: it is queued behind a token the"
-    echo "server will never accept, and nothing on screen says so."
-    exit 2
-fi
-# ...and the refusal has to reach the door. Joined, because the call is wrapped
-# across lines; what matters is that the refused pass ends in signOut(), not
-# how the closure is laid out.
-joined() { code "$client" | tr '\n' ' ' | tr -s ' '; }
-if ! joined | grep -q 'if refused { DispatchQueue.main.async { \[weak self\] in self?.signOut() } }'; then
-    echo "A refused push no longer signs the Mac out."
-    echo "The menu goes on saying 'signed in' about a token the server will"
-    echo "never accept, and every line recorded from then on is queued behind it."
-    exit 2
-fi
-echo "the app builds the row through the wire, and a refusal opens the door"
+# Refusal, retry and account-switch behavior are exercised against the real
+# MacBackend with a URLProtocol server in run_backend_delivery_tests.sh.
+echo "the app builds the row through the wire"
 
 # swiftc only permits top-level code in a file literally named main.swift.
 cp "$here/TranscriptWireTests.swift" "$out/main.swift"

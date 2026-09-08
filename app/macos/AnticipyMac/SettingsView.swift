@@ -17,13 +17,16 @@ struct MacSettingsView: View {
                     LabeledContent("Signed in as", value: backend.ownerEmail)
                     LabeledContent("Sync") {
                         Text(backend.pendingCount == 0
-                             ? "Every line has reached your Anticipy."
+                             ? "No transcript lines waiting to sync."
                              : "\(backend.pendingCount) line\(backend.pendingCount == 1 ? "" : "s") waiting for a connection.")
                             .foregroundStyle(backend.pendingCount == 0 ? MacTheme.muted : MacTheme.caution)
                     }
+                    if let error = backend.syncError {
+                        Text(error).foregroundStyle(MacTheme.caution)
+                    }
                     Button("Sign out") { backend.signOut() }
                 } else {
-                    Text("Not signed in. Recordings stay on this Mac until you are.")
+                    Text("Not signed in. New recordings stay on this Mac. Sign in before recording to send transcript text to Anticipy.")
                         .foregroundStyle(MacTheme.text2)
                     SignInForm(compact: true)
                 }

@@ -17,6 +17,8 @@ sh "$HERE/run_capture_core_tests.sh"
 sh "$HERE/run_meeting_archive_tests.sh"
 # The row a line becomes, sent to the brain the phone feeds.
 sh "$HERE/run_transcript_wire_tests.sh"
+# Real client behavior under response loss, offline delivery and account changes.
+sh "$HERE/run_backend_delivery_tests.sh"
 # The library reads what the recorder wrote: titles, clocks, days, Markdown.
 sh "$HERE/run_meeting_library_tests.sh"
 # Which screen opens, and what a permission row may say.

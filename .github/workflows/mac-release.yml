@@ -38,6 +38,14 @@ on:
         description: 'Type RELEASE to build, notarize and open the PR that commits the zip'
         required: true
         default: ''
+      signed_candidate_tag:
+        description: 'Optional draft release containing a locally Developer-ID-signed Anticipy-for-Mac.zip from this exact commit'
+        required: false
+        default: ''
+      signed_candidate_sha256:
+        description: 'Required with a signed candidate: exact SHA-256 of the reviewed archive'
+        required: false
+        default: ''
 
 concurrency:
   group: mac-release
@@ -69,10 +77,8 @@ jobs:
       - name: Mac logic gate — the suites run before anything is signed
         run: sh app/macos/Tests/run_all.sh
 
-      - name: Install xcodegen
-        run: brew install xcodegen
-
       - name: Import the Developer ID identity into a throwaway keychain
+        if: ${{ inputs.signed_candidate_tag == '' }}
         env:
           MAC_SIGNING_P12_BASE64: ${{ secrets.MAC_SIGNING_P12_BASE64 }}
           MAC_SIGNING_P12_PASSWORD: ${{ secrets.MAC_SIGNING_P12_PASSWORD }}
@@ -109,12 +115,33 @@ jobs:
           echo -n "$ASC_KEY_P8" | base64 --decode -o "$RUNNER_TEMP/asc/AuthKey.p8"
 
       - name: Build, sign, notarize, staple — app/macos/Tools/build_release.sh, verbatim
+        if: ${{ inputs.signed_candidate_tag == '' }}
         env:
           NOTARY_KEY_PATH: ${{ runner.temp }}/asc/AuthKey.p8
           NOTARY_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           NOTARY_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
         run: |
           sh app/macos/Tools/build_release.sh "$RUNNER_TEMP/macbuild"
+
+      - name: Notarize the reviewed local signature using Apple's CI credentials
+        if: ${{ inputs.signed_candidate_tag != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CANDIDATE_TAG: ${{ inputs.signed_candidate_tag }}
+          CANDIDATE_SHA256: ${{ inputs.signed_candidate_sha256 }}
+          NOTARY_KEY_PATH: ${{ runner.temp }}/asc/AuthKey.p8
+          NOTARY_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          test -n "$CANDIDATE_SHA256"
+          target=$(gh release view "$CANDIDATE_TAG" --json targetCommitish --jq .targetCommitish)
+          test "$target" = "$GITHUB_SHA" || { echo "::error::candidate was not built from this commit"; exit 1; }
+          mkdir -p "$RUNNER_TEMP/macbuild"
+          gh release download "$CANDIDATE_TAG" --pattern Anticipy-for-Mac.zip --dir "$RUNNER_TEMP/macbuild"
+          zip="$RUNNER_TEMP/macbuild/Anticipy-for-Mac.zip"
+          actual=$(shasum -a 256 "$zip" | cut -d' ' -f1)
+          test "$actual" = "$CANDIDATE_SHA256" || { echo "::error::candidate checksum differs"; exit 1; }
+          sh app/macos/Tools/notarize_release.sh "$zip"
 
       - name: The zip is the tree's app — version, build, signature, ticket
         run: |
@@ -127,6 +154,10 @@ jobs:
           want=$(grep -E '^[[:space:]]*CURRENT_PROJECT_VERSION:' app/ios/project.yml | head -1 | sed 's/.*"\(.*\)".*/\1/')
           test "$build" = "$want" || { echo "::error::the app says build $build, project.yml says $want"; exit 1; }
           codesign --verify --deep --strict --verbose=2 "$app"
+          test "$(lipo -archs "$app/Contents/MacOS/AnticipyMac")" = "x86_64 arm64"
+          if /usr/libexec/PlistBuddy -c 'Print :LSUIElement' "$app/Contents/Info.plist" 2>/dev/null | grep -q true; then
+            echo "::error::candidate is the old menu-bar-only app"; exit 1
+          fi
           xcrun stapler validate "$app"
           spctl -a -vvv -t exec "$app"
           # Into a file, not a pipe: `grep -q` quits on the first match and a
@@ -144,7 +175,9 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: Anticipy-for-Mac-${{ env.MAC_VERSION }}-${{ env.MAC_BUILD }}
-          path: ${{ runner.temp }}/macbuild/Anticipy-for-Mac.zip
+          path: |
+            ${{ runner.temp }}/macbuild/Anticipy-for-Mac.zip
+            ${{ runner.temp }}/macbuild/Anticipy-for-Mac.zip.notary.json
           if-no-files-found: error
 
       - name: Open the PR that commits the zip where the Worker serves it
@@ -159,7 +192,8 @@ jobs:
           git add migration/workers/public/mac/Anticipy-for-Mac.zip
           git commit -m "Ship notarized Mac recorder build ${MAC_BUILD} (${MAC_VERSION})" \
             -m "Built by mac-release.yml run ${{ github.run_id }} from ${{ github.sha }}. sha256: $(shasum -a 256 migration/workers/public/mac/Anticipy-for-Mac.zip | cut -d' ' -f1)" \
-            -m "After merging: cd migration/workers && npm run deploy — the Worker serves this file as a static asset, and overnight/stranger_gate.py leg 11 compares what /download hands over against these bytes."
+            -m "After merging: cd migration/workers && npm run deploy — the Worker serves this file as a static asset, and overnight/stranger_gate.py leg 11 compares what /download hands over against these bytes." \
+            -- migration/workers/public/mac/Anticipy-for-Mac.zip
           git push -u origin "$branch"
           {
             echo "Built, signed, notarized and stapled by mac-release.yml run ${{ github.run_id }} from ${{ github.sha }}."

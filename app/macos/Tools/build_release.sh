@@ -15,7 +15,7 @@ trap 'rm -rf "$derived"' EXIT
 
 mkdir -p "$output_dir"
 cd "$ios"
-xcodegen generate
+# Build the reviewed, committed project; never regenerate a shared checkout.
 xcodebuild -project Anticipy.xcodeproj -scheme AnticipyMac \
     -configuration Release -destination 'generic/platform=macOS' \
     -derivedDataPath "$derived" ARCHS='arm64 x86_64' ONLY_ACTIVE_ARCH=NO \
