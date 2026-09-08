@@ -1,0 +1,21 @@
+{
+  "person": "mateo",
+  "source_job_id": "i4xav21o2yip3up",
+  "brain_lane": "",
+  "model": "google/gemini-3.1-pro-preview",
+  "readOnly": true,
+  "start": "https://travel.audit.invalid/brief",
+  "goal": "compare the bus vendor offer against the revised brief for 31 passengers and 3 step-free",
+  "scope": "compare the bus vendor offer against the revised brief for 31 passengers and 3 step-free Original owner evidence: It’s Mateo Silva. Morning, how was the train? Mine stopped between stations again, but I got a seat this time. I was looking at the photographs from the weekend. The one with everyone squinting into the sun is probably my favourite, even though nobody was ready. Anyway, I have about twenty minutes before lunch. I brought food from home; the place downstairs has been closed all week. Let me find the notes from our last conversation because I have had a few different things in my head.\n\nEstamos organizando el viaje. Primero eran veintiocho personas, pero ahora son treinta y una. Three passengers need step-free boarding; a large bus that cannot board them is not a fit. The vendor offer may quote a thirty-seat vehicle, and I want the actual offer compared with our revised brief. We have not approved a deposit or sharing the passenger list. A helpful comparison would tell us which requirements are met and which remain unknown, rather than declaring that the closest-looking offer is good enough.\n\nHang on, someone is at the door. All right, I’m back. That was a parcel for the other office, so I pointed them downstairs. Where were we? Right, the notes. I have an older printout beside the current one and I keep picking up the wrong sheet. Yesterday was a long day. We got talking after the review and I missed the early train. My colleague said they would sort out their own travel this afternoon. I told them about the station closure, and we spent another five minutes comparing routes. The rain has finally stopped now, which makes a nice change.\n\nA colleague just asked whether I had tried the new lunch place. I haven’t, but apparently the soup is good. We were laughing about the tiny paper cups at the conference last week. I probably had four cups and still wanted a normal coffee. Anyway, that’s where things stand on the work we were discussing. I’m going to leave these notes open while I get something to eat. We can pick the conversation up from there afterward.",
+  "pages": {
+    "https://travel.audit.invalid/brief": "<h1>Current community trip brief</h1><p>31 confirmed passengers. Old estimate 28 is superseded. Three require step-free boarding.</p><a href=\"https://travel.audit.invalid/offer\">Vendor offer</a>",
+    "https://travel.audit.invalid/offer": "<h1>Vendor offer</h1><p>Thirty-seat coach, capacity 30. Boarding access not specified. Deposit due on booking; no payment made.</p>"
+  },
+  "expectedStatuses": [
+    "done"
+  ],
+  "expectedFragments": [
+    "31",
+    "30"
+  ]
+}

@@ -1,0 +1,55 @@
+{
+  "python_full": {
+    "log_sha256": "36fb76a638d46749af3111eb425edb27fae463b63bef51e5776c51602299a404",
+    "last_lines": [
+      "........................................................................ [ 95%]",
+      "........................................................................ [ 97%]",
+      "........................................................................ [ 99%]",
+      "..                                                                       [100%]",
+      "3024 passed, 2 skipped in 48.40s"
+    ]
+  },
+  "worker_full": {
+    "log_sha256": "09fd888106d323adcc08444e27971d2f2a556389b327c63438366a297bef3dd4",
+    "last_lines": [
+      "Context request: identity, conversational evidence, idempotency, consent, malformed models and revocation passed",
+      "8 task access checks passed",
+      "conversation discovery: catalog identity, four-state uncertainty, owner scope and daily claim passed",
+      "held task revision: 27 checks passed",
+      "connections-endtoend: 40 checks passed, 0 failed"
+    ]
+  },
+  "worker_typecheck": {
+    "log_sha256": "8fa1cf5506304e8abac55868e7f1a136c9b1dde57a3981a382da4c21ea129a6f",
+    "last_lines": [
+      "",
+      "> typecheck",
+      "> tsc --noEmit",
+      ""
+    ]
+  },
+  "focused_reply_final": {
+    "log_sha256": "85199b5f6a140ea892fa5b0f228fef07999bc5c93feb8733c264146d501efe1e",
+    "last_lines": [
+      ".......................                                                  [100%]",
+      "23 passed in 0.22s"
+    ]
+  },
+  "ios_before_edits": {
+    "log_sha256": "cdba568db66f2d6af497cb04fa70132333a57a8c44f99bf431222d565b48e84e",
+    "last_lines": [
+      "  ok    a one-word transcript is refused, not written as a decode",
+      "  ok    sf_ctx and sf_noctx differ by exactly the vocabulary",
+      "scratch recorder: the phone can record for the harness",
+      "build 169, and the iOS source has not moved since it was set",
+      "iOS logic gate: all suites passed"
+    ]
+  },
+  "api_routes": {
+    "log_sha256": "ed32d49c8819aafa0e334c9f8235c0b563d62e18d577258fbb74346ceca5b4f6",
+    "last_lines": [
+      "hands-api: 41 checks passed, 0 failed"
+    ]
+  },
+  "CI": "https://github.com/anticipation-labs/Anticipy/actions/runs/34172117792"
+}

@@ -1,0 +1,26 @@
+{
+  "checked_utc": "2026-09-08T00:14:24.444724+00:00",
+  "repair_commit": "61db0e7dc7ca8c2cb7bad11bfa7f36d73aecc2ea",
+  "brain": {
+    "http_status": 200,
+    "revision": "61db0e7dc7ca8c2cb7bad11bfa7f36d73aecc2ea",
+    "ok": true,
+    "observed_workers": 8,
+    "verified_source_process_snapshot_workers": 8,
+    "source_sha256": "b757bddb11f281fa32d77a87ea743a48c6922bdb0172d27dec890a336b505c32",
+    "pending_archive_cleanups": 0
+  },
+  "api": {
+    "http_status": 200,
+    "revision": "61db0e7dc7ca8c2cb7bad11bfa7f36d73aecc2ea",
+    "version": "f1e83a35-63a2-421a-ab9c-880239650d08",
+    "body": {
+      "code": 200,
+      "message": "API is healthy.",
+      "data": {}
+    }
+  },
+  "brain_workflow": "https://github.com/anticipation-labs/Anticipy/actions/runs/34172135792",
+  "api_workflow": "https://github.com/anticipation-labs/Anticipy/actions/runs/34172189616",
+  "scope": "Independent read-only live version/process/snapshot checks. Workflows also ran live deployment and account isolation proofs; this read does not run vendor tasks."
+}

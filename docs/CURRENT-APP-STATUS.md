@@ -1,6 +1,7 @@
 # Anticipy app readiness
 
-Last checked September 7, 2026, approximately 3:50 PM Vancouver time.
+Backend last checked September 7, 2026, 5:14 PM Vancouver time.
+Phone and installed-extension observations below retain their earlier timestamps.
 This is a dated readiness check, not a promise that every user journey works.
 
 ## What is live
@@ -8,13 +9,27 @@ This is a dated readiness check, not a promise that every user journey works.
 - iPhone build **169** is available to the owner's Internal TestFlight group.
   Apple availability was independently verified; the installed phone version was
   not read during this check.
-- API source: `057b293d1e1ae4e9ac33ad26b3359f760e4f429c`.
-- Brain control plane: `7aee24c621bd23233162263c034f816c93e18770`.
-  A fresh production status read at 22:48:48 UTC returned HTTP 200, eight served
-  workers, no failed workers, and current memory snapshots for all eight.
-- Local source and GitHub `cloudflare-backend` both pointed to `c67136a9` before
-  this status document was added. The different runtime commits above reflect
-  separately deployed components, not missing merges.
+- API and brain source: `61db0e7dc7ca8c2cb7bad11bfa7f36d73aecc2ea`.
+  A direct production read at 00:14:24 UTC on September 8 returned HTTP 200,
+  eight running served workers with matching source and current memory snapshots,
+  and zero failed archive cleanups. The API URL serves the same commit and
+  version `f1e83a35-63a2-421a-ab9c-880239650d08`.
+- That repair commit was pushed to `cloudflare-backend`; the lab/report commit
+  adds reproducible evidence without changing the deployed runtime source.
+
+## Latest backend repairs and synthetic lab
+
+Fifteen fictional owners exercised transcripts, separate SQLite memories,
+short replies and task persistence. The lab repaired lost text-task context,
+premature API-read completion, misleading amendment replies, malformed connection
+decisions and invented memories. Seven real Chrome fixture cases, five connection
+dispatcher cases and 24 API fault checks passed. The full Python suite passed
+3,024 tests with two skips; the Worker suite and typecheck passed.
+
+These are simulated provider/texting and isolated Chrome proofs. They do not
+establish the owner's installed browser, real OAuth or carrier delivery.
+See the [complete lab report](../research/overnight-2026-09-07/persona-lab-status.md)
+and [live release receipt](../research/overnight-2026-09-07/persona-lab-release.json).
 
 ## What the user should experience
 

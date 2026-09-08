@@ -1,0 +1,23 @@
+{
+  "person": "mina",
+  "source_job_id": "bpcdpty8l2hasqr",
+  "brain_lane": "research",
+  "model": "google/gemini-3.1-pro-preview",
+  "readOnly": true,
+  "start": "https://shop.audit.invalid/lamp",
+  "goal": "compare prices for the Canvas Desk Lamp on shop.audit.invalid and outlet.audit.invalid",
+  "scope": "compare prices for the Canvas Desk Lamp on shop.audit.invalid and outlet.audit.invalid Original owner evidence: It’s Mina Chen. Morning, how was the train? Mine stopped between stations again, but I got a seat this time. I was looking at the photographs from the weekend. The one with everyone squinting into the sun is probably my favourite, even though nobody was ready. Anyway, I have about twenty minutes before lunch. I brought food from home; the place downstairs has been closed all week. Let me find the notes from our last conversation because I have had a few different things in my head.\n\nJo and I are getting the studio ready for the autumn display. The Canvas Desk Lamp appears on both https://shop.audit.invalid/lamp and https://outlet.audit.invalid/lamp. We only need one. I keep forgetting which listing is lower; having both listed prices and links together would save me another round of opening tabs. This is only a comparison; I am not buying it today.\n\nHang on, someone is at the door. All right, I’m back. That was a parcel for the other office, so I pointed them downstairs. Where were we? Right, the notes. I have an older printout beside the current one and I keep picking up the wrong sheet. Yesterday was a long day. We got talking after the review and I missed the early train. My colleague said they would sort out their own travel this afternoon. I told them about the station closure, and we spent another five minutes comparing routes. The rain has finally stopped now, which makes a nice change.\n\nA colleague just asked whether I had tried the new lunch place. I haven’t, but apparently the soup is good. We were laughing about the tiny paper cups at the conference last week. I probably had four cups and still wanted a normal coffee. Anyway, that’s where things stand on the work we were discussing. I’m going to leave these notes open while I get something to eat. We can pick the conversation up from there afterward.",
+  "pages": {
+    "https://shop.audit.invalid/lamp": "<h1>Canvas Desk Lamp</h1><table><tr><th>Current listing</th><td>USD 87.00</td></tr><tr><th>Last month</th><td><s>USD 64.00</s></td></tr></table><a href=\"https://outlet.audit.invalid/lamp\">Outlet</a>",
+    "https://outlet.audit.invalid/lamp": "<h1>Canvas Desk Lamp</h1><p>Current price USD 94.00. Previous promotion USD 59.00 has ended.</p>"
+  },
+  "expectedStatuses": [
+    "done"
+  ],
+  "expectedFragments": [
+    "87",
+    "94",
+    "https://shop.audit.invalid/lamp",
+    "https://outlet.audit.invalid/lamp"
+  ]
+}

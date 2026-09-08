@@ -1,0 +1,22 @@
+{
+  "person": "noah",
+  "source_job_id": "uf51iapred4mpw5",
+  "brain_lane": "research",
+  "model": "google/gemini-3.1-pro-preview",
+  "readOnly": true,
+  "start": "https://events.audit.invalid/brief",
+  "goal": "compare Birch room capacity for 26 people and check if the offer quotes Cedar using the provided links",
+  "scope": "compare Birch room capacity for 26 people and check if the offer quotes Cedar using the provided links Original owner evidence: It’s Noah Brooks. Morning, how was the train? Mine stopped between stations again, but I got a seat this time. I was looking at the photographs from the weekend. The one with everyone squinting into the sun is probably my favourite, even though nobody was ready. Anyway, I have about twenty minutes before lunch. I brought food from home; the place downstairs has been closed all week. Let me find the notes from our last conversation because I have had a few different things in my head.\n\nAlex Rivera sent https://venue.audit.invalid/offer. Our actual event brief is https://events.audit.invalid/brief. We started at twenty people and then six more accepted, so use twenty-six. I want to know whether Birch can accommodate us, and whether the offer actually quotes Cedar. We have not picked a start time. A room comparison would help; a reservation would be premature.\n\nHang on, someone is at the door. All right, I’m back. That was a parcel for the other office, so I pointed them downstairs. Where were we? Right, the notes. I have an older printout beside the current one and I keep picking up the wrong sheet. Yesterday was a long day. We got talking after the review and I missed the early train. My colleague said they would sort out their own travel this afternoon. I told them about the station closure, and we spent another five minutes comparing routes. The rain has finally stopped now, which makes a nice change.\n\nA colleague just asked whether I had tried the new lunch place. I haven’t, but apparently the soup is good. We were laughing about the tiny paper cups at the conference last week. I probably had four cups and still wanted a normal coffee. Anyway, that’s where things stand on the work we were discussing. I’m going to leave these notes open while I get something to eat. We can pick the conversation up from there afterward.",
+  "pages": {
+    "https://events.audit.invalid/brief": "<h1>Approved event brief</h1><p>Current guest count: 26. Earlier estimate: 20. Start time not yet selected.</p><a href=\"https://venue.audit.invalid/offer\">Actual venue offer</a>",
+    "https://venue.audit.invalid/offer": "<h1>Vendor quote</h1><p>Birch capacity: 24 guests maximum. Cedar available; price not quoted. Nothing booked.</p>"
+  },
+  "expectedStatuses": [
+    "done"
+  ],
+  "expectedFragments": [
+    "24",
+    "26",
+    "Cedar"
+  ]
+}
