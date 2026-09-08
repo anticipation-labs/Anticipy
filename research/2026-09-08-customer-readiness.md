@@ -204,6 +204,10 @@ skip review or the tester's participation.
 
 ## Authorized release preparation (2026-09-08)
 
+Subsequent commit, CI, API release and TestFlight observations are recorded in
+the [build 172 release ledger](2026-09-08-release-172.md). Earlier frozen-tree
+statements above describe the pre-release checkpoint, not current release status.
+
 The user asked to proceed after discussing the reviewed branch, CI compile,
 TestFlight upload, matching backend release and controlled iPhone verification.
 The release remains on `cloudflare-backend`; `main` is out of scope. The
