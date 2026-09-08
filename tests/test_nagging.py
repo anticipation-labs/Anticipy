@@ -134,7 +134,12 @@ def test_the_gate_actually_consults_it(monkeypatch):
     original version of this test green because already_raised was answering
     for it."""
     monkeypatch.setattr(W.backend, "get", backend(says(THE_FIVE[:2], days_ago=3))[0])
-    assert W.SPEAK_ONCE("Just confirming tomorrow at 7?", goal=GOAL, kind="clock") is False
+    verdict = W.SPEAK_ONCE("Just confirming tomorrow at 7?", goal=GOAL, kind="clock")
+    assert not verdict, "twice with no answer must refuse a third"
+    # And it refuses AS A DEDUPE. The nag limit is a word-overlap count, so a
+    # card must never be cancelled on its say-so — see
+    # tests/test_dedupe_never_deletes_work.py.
+    assert verdict is W.DEDUPED
 
 
 def test_two_shared_words_is_the_floor_that_protects_other_subjects(monkeypatch):
@@ -185,7 +190,12 @@ def test_a_blocking_question_is_never_nagging(monkeypatch):
 def test_speech_she_started_is_still_limited(monkeypatch):
     """The half that must keep working. All five Cactus messages were clock."""
     monkeypatch.setattr(W.backend, "get", backend(says(THE_FIVE[:2], days_ago=3))[0])
-    assert W.SPEAK_ONCE("Just confirming tomorrow at 7?", goal=GOAL, kind="clock") is False
+    verdict = W.SPEAK_ONCE("Just confirming tomorrow at 7?", goal=GOAL, kind="clock")
+    assert not verdict, "twice with no answer must refuse a third"
+    # And it refuses AS A DEDUPE. The nag limit is a word-overlap count, so a
+    # card must never be cancelled on its say-so — see
+    # tests/test_dedupe_never_deletes_work.py.
+    assert verdict is W.DEDUPED
 
 
 def test_a_fresh_overheard_plan_is_never_nagging(monkeypatch):

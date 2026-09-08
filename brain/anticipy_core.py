@@ -520,6 +520,37 @@ def shard_too_thin(line: str, decision, explicit: bool = False,
     return len(novel) > 2
 
 
+class _Deduped(str):
+    """A refusal that means ONLY "she has already brought this up" — never
+    "this work is not real".
+
+    FALSY on purpose, so every gate that asks "may I speak?" behaves exactly
+    as it did and stays quiet. IDENTIFIABLE on purpose, so the one branch
+    that CANCELS a held card can tell a dedupe GUESS apart from a card he was
+    genuinely never told about.
+
+    The guesses are word-overlap scores (`already_raised`,
+    `raised_and_ignored`). They cannot be right every time — a brand-new
+    dinner plan shares most of its words with last week's — and when one is
+    wrong the errand he just spoke is deleted and he is told nothing. That
+    happened three times live in one day, and each time the repair was to
+    exempt the single kind that had just been bitten: `ask` inside a live
+    sentence, `ambient_act` in quiet hours, `ambient_act` with no budget.
+
+    This is the same rule with the special cases removed: a heuristic may
+    DELAY her, and may never DELETE his work. A card is still cancelled when
+    she truly never told him — that branch is untouched.
+    """
+
+    __slots__ = ()
+
+    def __bool__(self) -> bool:
+        return False
+
+
+DEDUPED = _Deduped("deduped")
+
+
 def goal_tokens(text: str) -> set:
     """The meaningful words of a goal, normalized just enough that trivial
     morphology cannot defeat a match. "Earls" / "Earl's" / "earl" are one
@@ -1466,7 +1497,12 @@ class Anticipy:
             # "defer" is a third verdict and must survive the bool: NOT NOW
             # (quiet hours — the card is real, morning raises it) is not
             # NEVER (a dedupe refusal — the card must not exist).
-            return got if got == "defer" else bool(got)
+            # Every string verdict survives the bool. "defer" is one (NOT NOW
+            # — quiet hours, a sentence still arriving); DEDUPED is the other
+            # (already said, and falsy so no gate speaks on it). Coercing
+            # either to a plain bool throws away the only thing that lets the
+            # cancel branch tell a guess from a genuine never-told card.
+            return got if isinstance(got, str) else bool(got)
         except Exception as e:
             # A broken guard must never silence a genuine message.
             print(f"may_say check failed ({kind}): {e}")
@@ -2718,6 +2754,14 @@ class Anticipy:
             # Twilio call used to leave `handled` truthy, the worker posted
             # it as said, and the speak-once guard then suppressed every
             # retry forever — a silent card wearing a "he was told" sticker.
+            # THE VERDICT IS TAKEN ONCE, BEFORE THE CHAIN, because asking
+            # RESERVES the day's outreach slot — asking twice would spend two.
+            # The guard reproduces exactly the conditions under which the
+            # chain used to ask, so a failed write still costs nothing and a
+            # repeat still never reaches the budget.
+            say_verdict = (self._may_say(may_say, handled, decision.goal, "act")
+                           if (not write_failed and held and not repeat)
+                           else False)
             if write_failed:
                 # NOTHING WAS QUEUED, SO THERE IS NOTHING TRUE TO SAY.
                 #
@@ -2733,8 +2777,7 @@ class Anticipy:
                 print(f"queue write failed for {decision.goal!r} — no card "
                       "exists, so she says nothing rather than claiming it "
                       "is in hand")
-            elif held and not repeat and self._may_say(may_say, handled,
-                                                       decision.goal, "act"):
+            elif held and not repeat and say_verdict:
                 if not self.notify_owner(handled):
                     handled = None
             elif held and repeat:
@@ -2751,6 +2794,20 @@ class Anticipy:
                 # never his to approve". Ten out of ten, silently.
                 print(f"already told him about {decision.goal!r} — keeping the "
                       "card, staying quiet")
+            elif held and not explicit and say_verdict is DEDUPED:
+                # A GUESS MAY DELAY HER; IT MAY NEVER DELETE HIS WORK.
+                #
+                # The cancel below came from a WORD-OVERLAP SCORE deciding
+                # this errand is one she already raised. That score cannot be
+                # right every time — a brand-new dinner plan shares most of
+                # its words with last week's — and when it is wrong the thing
+                # he said seconds ago is destroyed and he is told nothing.
+                #
+                # The card stays. The morning pass and the digest raise it,
+                # and `already_raised` is bounded to 24 hours, so a genuine
+                # duplicate costs one late mention rather than a lost errand.
+                print(f"dedupe says she already raised {decision.goal!r} — "
+                      "keeping the card rather than cancelling on a guess")
             elif held and not explicit:
                 # SILENCE MUST MEAN STILLNESS.
                 #

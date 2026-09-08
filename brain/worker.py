@@ -29,7 +29,7 @@ from . import research
 from . import server_work
 from .connection_dispatch import ConnectionDispatch
 
-from .anticipy_core import (DEVICE_CALENDAR_LANE, RESEARCH_LANE, Anticipy,
+from .anticipy_core import (DEDUPED, DEVICE_CALENDAR_LANE, RESEARCH_LANE, Anticipy,
                             goal_tokens, is_device_lane, needs_no_browser, memory_notes)
 from .hands import LANE_API
 from .evidence import picture_for_done_text
@@ -3886,7 +3886,10 @@ def SPEAK_ONCE(text: str, goal: str = "", kind: str = "", slot: str = "") -> boo
     # from texting twice.
     if kind == "clock" and raised_and_ignored(goal, text):
         print(f"quiet: already put this to him twice with no answer -> {goal[:60]!r}")
-        return False
+        # DEDUPED, not False: falsy, so the clock stays quiet exactly as it
+        # did, but the core can tell this was a word-overlap guess and must
+        # not cancel a card over it.
+        return DEDUPED
     # For an overheard plan the CARD is the dedupe, and it is a better one:
     # a re-mention of a plan she is already holding merges into the pending
     # card inside _queue_job and never reaches this guard at all — only a
@@ -3903,7 +3906,12 @@ def SPEAK_ONCE(text: str, goal: str = "", kind: str = "", slot: str = "") -> boo
         # the digest raises it when there is.
         return True if _hold_uninvited_slot(kind, slot) else "defer"
     if already_raised(goal, text, decision=_KIND_TO_DECISION.get(kind)):
-        return False
+        # DEDUPED, not False. Falsy, so every gate that asks "may I speak?"
+        # behaves exactly as before and she stays quiet. Identifiable, so the
+        # branch that CANCELS a held card knows this refusal was a
+        # word-overlap score and keeps the card instead of deleting an errand
+        # the owner may have spoken seconds ago.
+        return DEDUPED
     if kind == "clock":
         # The budget, last. False here leaves the loop alone: clock_tick
         # queues nothing and stamps nothing, so the next window may try.

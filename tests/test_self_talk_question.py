@@ -109,8 +109,13 @@ def test_direct_question_persists_for_the_outbox_without_sending_inline(monkeypa
 
 def test_a_broken_dedupe_never_silences_a_question():
     """The honesty wall on the thing now doing the work."""
+    # To the END of the function, not a fixed window. The window was 1100
+    # characters and a later comment inside _may_say pushed the honesty wall
+    # past it — the assertion started passing or failing on comment length
+    # rather than on the behaviour it is here to pin.
     i = SRC.index("def _may_say(")
-    body = SRC[i:i + 1100]
+    nxt = SRC.find("\n    def ", i + 1)
+    body = SRC[i:nxt if nxt != -1 else i + 2000]
     assert "except Exception" in body
     assert "return True" in body.split("except Exception")[1][:200], \
         "a failing guard must let the question through, not eat it"

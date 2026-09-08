@@ -469,7 +469,9 @@ def test_a_refusal_before_the_budget_costs_no_row(fake, monkeypatch):
     monkeypatch.setattr(W, "CLOCK_QUIET_END", 0)
     # The nag limit refuses the clock before the budget is consulted.
     monkeypatch.setattr(W, "raised_and_ignored", lambda *a_, **k: True)
-    assert W.SPEAK_ONCE("Just confirming?", "the dinner", "clock") is False
+    dedupe = W.SPEAK_ONCE("Just confirming?", "the dinner", "clock")
+    assert not dedupe, "the dedupe refuses before the budget is touched"
+    assert dedupe is W.DEDUPED, "and it says so, so no card is cancelled on it"
     # A question she already asked is dropped without a slot ever existing.
     monkeypatch.setattr(W, "already_said", lambda *a_, **k: True)
     W.maybe_ask_parked(a)
