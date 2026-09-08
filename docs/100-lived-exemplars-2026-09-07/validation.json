@@ -1,0 +1,17 @@
+{
+  "scope": "Document QA only; fictional exemplars have not been run",
+  "pages": 56,
+  "examples": 100,
+  "categories": 10,
+  "unique_conversations": 100,
+  "min_card_clearance": 33.14,
+  "sha256": "d683e276bc846f02a89360d31efee526433a46b460eb512cdb923e15a202d9db",
+  "rendered_pages": 56,
+  "repository_links_checked": 8,
+  "contains_engineer_work_schedule": false,
+  "contains_points_system": false,
+  "visually_reviewed_pages": 56,
+  "full_page_visual_samples": [
+    5
+  ]
+}

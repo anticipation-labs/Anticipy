@@ -1,5 +1,7 @@
 # Anticipy engineer field handoff
 
+**Use the [replacement conversation guide](../100-lived-exemplars-2026-09-07/README.md) for the customer-experience handoff.** It replaces this brief's timed work order. The 500-case catalogue below remains optional supporting engineering material.
+
 Read the [64-page PDF](../../output/pdf/Anticipy-engineer-field-brief-500-scenarios.pdf), then copy the [500-row result sheet](Anticipy-500-scenario-result-sheet.csv) to a new file for your results.
 
 The assignment is to install Anticipy on your own iPhone, use it in ordinary life, trace failures through the harness, repair causes and prove the shipped experience. The first 14 pages are the working brief and index. The remaining 50 pages contain 500 distinct proposed cases in 25 categories, each with a setup, an action/input and an observable expected result.
