@@ -1,0 +1,20 @@
+{
+  "artifact": "HOLD_FOR_PHYSICAL_RELEASE_TEST_Anticipy_0.9.3_owner2_live_50mA.uf2",
+  "artifact_size_bytes": 528384,
+  "artifact_sha256": "f246fc79ff9925fb427585e8babf4fe106ea1ad1c32a82b2c4351d3cc55ea5d6",
+  "status": "HOLD_FOR_PHYSICAL_APP_AND_HARDWARE_RELEASE_TESTS",
+  "board": "xiao_ble/nrf52840/sense",
+  "application_revision": "0.9.3-wed-live-bh-owner2",
+  "ncs_version": "v2.7.0",
+  "ncs_commit": "5cb85570ca43",
+  "zephyr_commit": "100befc70c74",
+  "zephyr_sdk": "0.16.5",
+  "compiler": "arm-zephyr-eabi-gcc 12.2.0",
+  "base_config": "prj_xiao_ble_sense_devkitv2-adafruit.conf",
+  "extra_config": "candidate_live_button_haptic.conf",
+  "overlay": "overlay/xiao_ble_sense_no_sd.overlay",
+  "clean_builds_compared": [
+    "candidate_live_owner_c",
+    "candidate_live_owner_d"
+  ]
+}
