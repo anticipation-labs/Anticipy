@@ -864,7 +864,10 @@ settings:
     # 172: Restore task controls on the actual Home screen, reopen declined
     #      context access from Settings, and preserve owner-bound input through
     #      interrupted sends. Detect the 0.18.1 browser queue ownership repair.
-    CURRENT_PROJECT_VERSION: "172"
+    # 173: Fence capture permission callbacks after Stop/account exit, isolate
+    #      enrollment samples, and preserve healthy analyzer requests through
+    #      watchdog ticks and phrase finals. Retry analyzer on a new session.
+    CURRENT_PROJECT_VERSION: "173"
     DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: NO
@@ -924,7 +927,7 @@ targets:
         # literal from a Mac one, and two products answering "which build
         # are you holding" with different numbers is the exact disease this
         # gate exists to prevent.
-        CURRENT_PROJECT_VERSION: "172"
+        CURRENT_PROJECT_VERSION: "173"
         DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_ENTITLEMENTS: ../macos/AnticipyMac/AnticipyMac.entitlements

@@ -4,6 +4,12 @@ Date: 2026-09-08. Branch `cloudflare-backend`; starting HEAD and remote tip
 `7f319726fb0c71a38c004fdd3ae0fea2756f2170`. No main merge/switch. Existing
 untracked `.wrangler/`, `desktop/`, and `engine/` are not part of this patch.
 
+Latest follow-up: the tester confirmed iPhone **1.1.1 (172)** installation.
+The [audio-to-agent harness audit](2026-09-08-audio-harness.md) records new
+capture-lifecycle findings and the build-173 candidate. Whole-journey status
+remains UNPROVEN; current brain deployment metadata still declares the older
+`cb201095` source. The historical checks below do not supersede those findings.
+
 ## Acceptance source and evidence boundary
 
 The team replacement brief asks for real iPhone-led customer journeys, not

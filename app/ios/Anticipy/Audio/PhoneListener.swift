@@ -146,7 +146,7 @@ final class PhoneListener: NSObject, ObservableObject {
     var speaker: SpeakerTagger?
     /// True while recording a voice sample for enrollment. Audio still
     /// feeds the voice check; nothing is transcribed, emitted or sent.
-    var enrolling = false
+    private(set) var enrolling = false
 
     private var engine = AVAudioEngine()
     /// True only after this exact engine accepted its input tap. A route
@@ -345,32 +345,37 @@ final class PhoneListener: NSObject, ObservableObject {
     /// the line is simply cut from the running text.
     private let utteranceGap: TimeInterval = 2.6
 
+    /// Permission prompts outlive the tap that requested them. Only the latest
+    /// still-wanted start may change authorization or open the microphone.
+    /// All reads/writes, including permission completions, stay on main.
+    private var listenStartGeneration = 0
+
     func start() {
+        guard !isListening else { return }
+        listenStartGeneration &+= 1
+        let generation = listenStartGeneration
         SFSpeechRecognizer.requestAuthorization { [weak self] auth in
-            guard let self else { return }
-            guard auth == .authorized else {
-                // Say WHY nothing was heard. Without this line, a session that
-                // was never permitted to start and a session that started and
-                // captured nothing read identically afterwards, and permission
-                // is the first suspect a failed manual test has to rule out.
-                ListenJournal.shared.record(.sessionStopped(cause: .authorizationLost))
-                DispatchQueue.main.async { self.authorized = false }
-                return
-            }
-            AVAudioSession.sharedInstance().requestRecordPermission { ok in
-                DispatchQueue.main.async {
-                    guard ok else {
-                        ListenJournal.shared.record(.sessionStopped(cause: .authorizationLost))
-                        self.authorized = false
-                        return
+            DispatchQueue.main.async {
+                guard let self, self.listenStartGeneration == generation else { return }
+                guard auth == .authorized else {
+                    // Only a current refusal explains this session. A late
+                    // answer after Stop/sign-out must not reopen or poison it.
+                    ListenJournal.shared.record(.sessionStopped(cause: .authorizationLost))
+                    self.authorized = false
+                    return
+                }
+                AVAudioSession.sharedInstance().requestRecordPermission { ok in
+                    DispatchQueue.main.async {
+                        guard self.listenStartGeneration == generation else { return }
+                        guard ok else {
+                            ListenJournal.shared.record(.sessionStopped(cause: .authorizationLost))
+                            self.authorized = false
+                            return
+                        }
+                        // A new grant must recover from a previous refusal.
+                        self.authorized = true
+                        self.begin()
                     }
-                    // Set it back to TRUE on the way through. Nothing anywhere
-                    // used to do this, so one "Don't Allow" branded the app
-                    // permanently broken: even after granting access in iOS
-                    // Settings, the refusal message stayed on screen forever
-                    // and the only way out was deleting the app.
-                    self.authorized = true
-                    self.begin()
                 }
             }
         }
@@ -392,6 +397,10 @@ final class PhoneListener: NSObject, ObservableObject {
         // chains = duplicated lines. begin() only ever arrives via
         // DispatchQueue.main.async, so this guard is race-free.
         guard !isListening else { return }
+        // Provisioning failures belong to one listening session, not the
+        // process. A retry/swap never comes through this new-session boundary.
+        analyzerFailures = 0
+        analyzerDisabledForSession = false
         installObserversOnce()
         installCallSenseOnce()
         // OFF BY DEFAULT IN EVERY APP, and until it is on `batteryLevel` is
@@ -632,7 +641,10 @@ final class PhoneListener: NSObject, ObservableObject {
                 // sent. Only its one-word verdict ever leaves the phone.
                 self.speaker?.accept(buffer)
                 self.orphanLock.lock()
-                if self.acceptingAudio {
+                if self.enrolling {
+                    // The voice sample feeds only the speaker above. Do not
+                    // transcribe it or hold it for replay after enrollment.
+                } else if self.acceptingAudio {
                     if self.usingAnalyzer {
                         self.analyzerEngine?.append(buffer)
                     } else if let req = self.request {
@@ -962,6 +974,10 @@ final class PhoneListener: NSObject, ObservableObject {
             .batteryRead(percent: reading.percent, onPower: reading.onPower))
     }
 
+    private var hasActiveRecognition: Bool {
+        usingAnalyzer ? analyzerEngine != nil : task != nil
+    }
+
     private func startWatchdog() {
         watchdog?.invalidate()
         let timer = Timer(timeInterval: 4, repeats: true) { [weak self] _ in
@@ -1000,7 +1016,7 @@ final class PhoneListener: NSObject, ObservableObject {
             // other signal here is a lie.
             let action = ListenWatchdogPolicy.decide(
                 engineRunning: self.engine.isRunning,
-                hasTask: self.task != nil,
+                hasTask: self.hasActiveRecognition,
                 interrupted: self.suspended,
                 lastBufferAt: self.lastBufferAt,
                 lastResultAt: self.lastResultAt,
@@ -1086,6 +1102,7 @@ final class PhoneListener: NSObject, ObservableObject {
     }
 
     private func startRecognition() {
+        guard !enrolling else { return }
         if #available(iOS 26.0, *), ListenEnginePolicy.usesAnalyzerNow,
            !analyzerDisabledForSession {
             // The engine is non-optional on an iOS 26 device; the failure
@@ -1440,7 +1457,24 @@ final class PhoneListener: NSObject, ObservableObject {
                 // words arrive once, from the engine that owns them.
                 guard self.analyzerEngine === engine else { return }
                 self.lastResultAt = Date()
-                self.absorbRecognized(text, isFinal: isFinal)
+                // Analyzer finality settles this phrase, not the request.
+                // Only the legacy recognizer uses finality as its task limit.
+                self.absorbRecognized(text, isFinal: false)
+                if isFinal {
+                    // The .transcription preset emits ordered final phrases,
+                    // not one cumulative task transcript. Preserve the final
+                    // flush timing, then give the NEXT phrase a fresh cursor
+                    // even when its words happen to be identical. A phrase
+                    // boundary is not an audio replay/echo seam.
+                    self.flushTail(reason: .final)
+                    self.cursor.reset()
+                    self.partial = ""
+                    self.pendingSince = nil
+                    self.cutAt = nil
+                    self.lineageBrokeAt = nil
+                    // Keep lastPartialAt, requestBornAt and the failure budget:
+                    // this same engine just heard real speech and is healthy.
+                }
             }
         }
         engine.onError = { [weak self, weak engine] in
@@ -1487,9 +1521,45 @@ final class PhoneListener: NSObject, ObservableObject {
     /// already on so it can be handed back untouched.
     private var wasListeningBeforeEnrollment = false
 
+    /// Enrollment is not an ASR seam: nothing from the sample may replay into
+    /// ambient transcription. Clear request identities before their delayed
+    /// callbacks can arrive, as well as every unsent cursor/buffer fragment.
+    private func discardEnrollmentRecognition() {
+        silenceFlush?.cancel()
+        silenceFlush = nil
+        orphanLock.lock()
+        acceptingAudio = false
+        orphanBuffers.removeAll()
+        orphanLock.unlock()
+        request = nil
+        let retiredTask = task
+        task = nil
+        retiredTask?.cancel()
+        let retiredAnalyzer = analyzerEngine
+        analyzerEngine = nil
+        retiredAnalyzer?.finish()
+        usingAnalyzer = false
+        cursor.reset()
+        partial = ""
+        pendingSince = nil
+        lastPartialAt = nil
+        cutAt = nil
+        lineageBrokeAt = nil
+        lastDelivered = nil
+        everEmittedThisTask = false
+    }
+
     func startForEnrollment() {
+        guard !enrolling else { return }
         wasListeningBeforeEnrollment = isListening
+        // Preserve words already recognized BEFORE the sample. Later results
+        // from this retired request have no safe sample boundary and are not
+        // adopted by the new ambient request.
+        if isListening { flushTail(reason: .final) }
+        orphanLock.lock()
         enrolling = true
+        orphanLock.unlock()
+        discardEnrollmentRecognition()
         // A voice sample is not a continuation of anything. Whatever the clock
         // cut off before this cannot be carried on by the first real sentence
         // after it, and the twelve seconds in between are not a pause in a
@@ -1501,11 +1571,21 @@ final class PhoneListener: NSObject, ObservableObject {
     }
 
     func stopAfterEnrollment() {
-        enrolling = false
+        guard enrolling else { return }
+        // Stop while the delivery guard still knows these are sample words.
         if !wasListeningBeforeEnrollment { stop() }
+        discardEnrollmentRecognition()
+        orphanLock.lock()
+        enrolling = false
+        orphanLock.unlock()
+        if wasListeningBeforeEnrollment, isListening { startRecognition() }
+        wasListeningBeforeEnrollment = false
     }
 
     func stop() {
+        // Also cancels a start still waiting for either system permission.
+        // The pending recognized tail below keeps its ordinary delivery path.
+        listenStartGeneration &+= 1
         // Recorded only when a session was actually running. Sign-out calls
         // stop() unconditionally, and a journal full of stops that ended
         // nothing is a journal that hides the one that ended something.
@@ -1571,6 +1651,13 @@ final class PhoneListener: NSObject, ObservableObject {
         task = nil
         partial = ""
         cursor.reset()
+        // Close the enrollment only AFTER its protected tail was discarded.
+        // An old sheet's delayed cleanup must not mark a new session as still
+        // enrolling, suppress its recognizer, or stop it after a fresh Start.
+        orphanLock.lock()
+        enrolling = false
+        wasListeningBeforeEnrollment = false
+        orphanLock.unlock()
         // Hand the audio session back. Leaving it active kept the recording
         // mode — and everything it suppresses — in force for the rest of the
         // process, so turning Listen OFF never restored normal behavior.

@@ -6,11 +6,11 @@ import Speech
 /// PhoneListener and the pendant's transcription home are exchangeable
 /// without either caller knowing which engine is listening.
 protocol ListenRequestEngine: AnyObject {
-    /// Every revision of the running text, on the main queue — the same role
-    /// SFSpeechRecognizer's per-result callback plays for the cursor. The
-    /// Bool is whether this revision is final; PhoneListener deliberately
-    /// ignores it (the cursor owns revisions, the watchdog owns swaps), the
-    /// pendant home acts on it (a backfill emits finalized phrases only).
+    /// Each phrase's text, on the main queue. The Bool settles that phrase;
+    /// it does not end the analyzer request. PhoneListener flushes and resets
+    /// its phrase cursor on finality without replacing the engine. The pendant
+    /// home likewise emits finalized phrases only. The shipping .transcription
+    /// preset is final-only; this is not a cumulative legacy-task transcript.
     var onResult: ((_ text: String, _ isFinal: Bool) -> Void)? { get set }
 
     /// The engine died mid-request — or could not be provisioned at all. The
