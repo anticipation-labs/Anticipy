@@ -1,137 +1,190 @@
 # Layer audit and live status — 8 September 2026
 
 Written from Tejas's Mac against `cloudflare-backend` at `eac3aba1`. Everything
-below that says VERIFIED was run or read here; everything else says what it is.
+marked VERIFIED was run or read here. Method: eight layers traced by agents,
+then every candidate defect handed to a second agent told to refute it. Of 42
+candidates, **24 survived and 18 were refuted** — so nothing below is an
+unchecked claim, and the 43% refutation rate is why the raw list is not
+published.
 
 ## What this pass could and could not do
 
 **Could not**: use the product. This machine has Command Line Tools and no
-Xcode, no iPhone, no pendant, no TestFlight, and no credentials of any kind —
-no `ANTICIPY_SERVICE_TOKEN`, no `OPENROUTER_API_KEY`, no `ANTICIPY_BACKEND_URL`,
-no SendBlue or Composio. Being the end user requires all of those. Nothing in
-this note is a claim about lived use, and no scenario in the 500-case catalogue
-was executed.
+Xcode, no iPhone, no pendant, no TestFlight, and no credentials — no
+`ANTICIPY_SERVICE_TOKEN`, `OPENROUTER_API_KEY`, `ANTICIPY_BACKEND_URL`,
+SendBlue or Composio. Nothing here is a claim about lived use, and no scenario
+from the 500-case catalogue was executed.
 
-**Could**: verify the live release by its bytes, run the repo's own gates and
-suites, and trace the layers through the source. That is what follows.
+**Could**: verify the live release by its bytes, run every gate and suite, and
+trace the layers through source. That is what follows.
 
-## Live state, verified here
+## Live state, VERIFIED
 
 | Thing | Result |
 |---|---|
-| Repo sync | local `cloudflare-backend` == `origin` == `eac3aba1`, tree clean, 0 ahead / 0 behind |
-| API health | `https://api.anticipy.ai/api/health` → 200, `x-anticipy-revision: d52eaf38` |
-| Mac zip, live | 200, 1,148,615 bytes, `application/zip` |
-| Mac zip sha256 | `c27dd01e3257e2d8df99e2f5ff1a80f943b53eab01a5d9ab8431bed8186e1cbb` |
-| Same as committed + as the handoff expected | yes, byte for byte |
+| Repo sync | local == `origin`, tree clean |
+| API health | 200, `x-anticipy-revision: d52eaf38` |
+| Mac zip live | 200, 1,148,615 bytes, `application/zip` |
+| Mac zip sha256 | `c27dd01e…8186e1cbb` — matches committed build and the handoff's expected hash |
 | Deploy run 34180318042 | completed, success |
-| Extension version | 0.18.0 in source, in the committed zip, and served live — all three agree |
-| Python suite | 3033 passed, 2 skipped, 0 failed |
+| Extension 0.18.0 | source, committed zip, live URL all agree |
+| Python | 3033 passed, 2 skipped |
+| Worker | tsc clean, all suites |
+| Extension | 83 of 83 suites |
+| Mac | 7 suites, 140 checks |
+| iOS | all suites, build 171 |
 
-The previous handoff left the Mac deployment "in progress" and asked the next
-operator to read the bytes back. **That is now done and it matches.** The
-committed notarized Mac 171 and the public API URL are the same artifact.
+The previous handoff asked the next operator to read the Mac bytes back. **Done
+and matching.** The repo is green everywhere.
 
-## Gate results, and what they mean
+Gates: `stranger_gate` 10 of 11 pass; `tejas_gate` 7 pass with leg 6 red by
+design; `tape_gate` 5 pass with leg 2 red by design; `no_vendor_ears` passes.
+`done_gate` legs 3 and 4 and both live-memory gates fail **only for want of
+credentials on this machine** — they are honest refusals to pass an untestable
+leg, not product defects.
 
-```
-stranger_gate    legs 1-10 PASS, leg 11 FAIL      (leg 11 is a real defect, below)
-tejas_gate       7 PASS, leg 6 red by design
-tape_gate        5 PASS, leg 2 red by design      (Law 2's expiry working)
-no_vendor_ears   PASS — no shipped code sends audio to a vendor
-done_gate        legs 3 and 4 fail ONLY for want of credentials on this machine
-are_the_ears_live    UNPROVEN — needs ANTICIPY_SERVICE_TOKEN
-is_memory_durable    UNPROVEN — needs credentials
-```
+## The headline: what the product actually does
 
-`done_gate` leg 3 says in its own words "no model key, so her judgement cannot
-be measured"; leg 4 says "no backend URL is set, so there is nowhere to hand
-the job." Those are honest refusals to pass an untestable leg, **not** product
-defects. Do not read them as either a pass or a failure of the product.
+Traced call chains only, never a README. Condensed from the full inventory.
+
+| Capability | Verdict |
+|---|---|
+| Speech capture, phone | LIVE, proven on production |
+| **Speech capture, pendant** | **ABSENT** |
+| Speaker attribution | UNWIRED — measured 0% across 221 production events |
+| Task creation | LIVE, proven |
+| Native iPhone calendar write | PARTIAL — executor real, not proven live |
+| Calendar read | PARTIAL, native only |
+| SMS outbound / inbound | PARTIAL — wired and credentialled, **never proven live** |
+| Calendar/email/doc write via connected API | **UNWIRED** |
+| Email read | PARTIAL — supervised browser only, owner must watch |
+| Email send | PARTIAL — browser only, no live receipt ever |
+| Browser read / click | PARTIAL — arm alive, receives nothing |
+| Research | PARTIAL — needs Brave/Tavily keys |
+| Proactive surfacing | PARTIAL — notifications only while listening is on |
+| Memory recall | LIVE in process, durability UNPROVEN |
+
+**Omar asked me to use it as a pendant user. The pendant audio path is not
+implemented.** `AnticipyApp.swift:2153` `startPendantTranscription` sets
+`pendant.onOpusFrame = nil` — there is no Opus decoder in the target and pendant
+audio is discarded at the source. No amount of device access would have made
+that journey work.
+
+What a new owner really gets in hour one: speech capture on the phone, a
+transcript feed, model triage, task cards, in-app answers, memory, native
+calendar writes and server-composed text. Everything touching the outside world
+needs a Chrome extension on a computer.
 
 ## Defect 1 — the public download still hands over the old product
 
-`stranger_gate` leg 11, and independently measured here:
+`stranger_gate` leg 11, and measured here: `www.anticipy.ai/download` redirects
+to `Anticipy_1.0.0_aarch64.dmg` and delivers **2,516,712,351 bytes** of the May
+2026 product. The notarized 1.1 MB build 171 is live and correct at
+`api.anticipy.ai`; the website does not point at it.
 
-```
-GET https://www.anticipy.ai/download
-  302 -> /dl/Anticipy_1.0.0_aarch64.dmg
-  -> 2,516,712,351 bytes of application/x-apple-diskimage
-```
-
-A stranger clicking Download gets 2.5 GB of the May 2026 product. The
-notarized 1.1 MB build 171 is live and correct at `api.anticipy.ai`; the
-website simply does not point at it. The gate says it plainly: "Point the
-site's /download at those bytes."
-
-**The fix is already written, reviewed, merged and built.** `aniticipy-web`
-branch `cloudflare` (the branch the live `anticipy-site` Worker is built from)
-carries `src/app/download/route.ts` redirecting GET and HEAD to
-`https://api.anticipy.ai/mac/Anticipy-for-Mac.zip`, and the OpenNext build is
-sitting in that checkout, smoke-tested against `wrangler dev`. It has never
-been deployed. One command finishes it:
+The repair is written, reviewed, merged to `aniticipy-web` branch `cloudflare`
+(the branch the live Worker builds from) and built in that checkout,
+smoke-tested under `wrangler dev`. It has never been deployed:
 
 ```sh
 cd <aniticipy-web checkout>
 CLOUDFLARE_ACCOUNT_ID=114587b715e702461766369b01d42fc7 npx wrangler deploy
 ```
 
-Then re-run `overnight/stranger_gate.py`; leg 11 is the last red leg, so the
-gate goes fully green. Note the site is **not** on Vercel: merging to `main`
-deploys nothing that reaches the domain. See `anticipy-website-hosting` notes.
+This is the last red leg. The site is **not** on Vercel; merging to `main`
+deploys nothing that reaches the domain.
 
-## Defect 2 — the connected-API hand cannot see any connection
+## Defect 2 — the connected-API hand can never fire
 
-Verified four ways here, not inferred:
+Verified four ways here, then re-confirmed independently with the mechanism:
 
-1. `brain/hands.py:1066`, inside `read_connections()`, does
-   `GET {base}/api/collections/connections/records`.
-2. The Worker's records API defines exactly these collections
-   (`migration/workers/src/api/schema.ts`): `agents, events, evidence, jobs,
-   owner_profile, owners, pendants, purges, segments`. There is no
-   `connections`.
-3. `resolveCollection()` (`api/records.ts:206`) is
-   `return COLLECTIONS[name] ?? null` — an unknown name resolves to null.
-4. No bespoke Worker route serves that path; `grep` for
-   `collections/connections` across `migration/workers/src/` returns nothing.
+1. `brain/hands.py:1066` GETs `/api/collections/connections/records`.
+2. `migration/workers/src/api/schema.ts` defines only `agents, events,
+   evidence, jobs, owner_profile, owners, pendants, purges, segments`.
+3. `resolveCollection()` returns `COLLECTIONS[name] ?? null`.
+4. No Worker route serves that path.
 
-So the request can never succeed. `read_connections()` is careful about this —
-its docstring says None means UNKNOWN, "never 'connected nothing'" — so it
-fails safe rather than lying. But `gather_context()` (`brain/hands.py:1182`)
-builds "the facts for one step" with `connections=read_connections(...)`, which
-means **every step the API hand takes believes the owner's connections are
-unknown**, even though the connection genuinely exists in D1 and the iOS
-Settings screen displays it.
+So `read_connections()` always returns None, and — the part that matters —
+**`brain/hands.py:553` reads `if ctx.connections is None: return
+HandVerdict(HAND_BROWSER, …)`, downgrading EVERY api verdict to the browser
+hand before `plan_api_step` is ever reached.** No row can carry `lane="api"`.
+The whole API executor (`run_api_jobs` → `/hands/api/run` → `api_hand.ts`)
+exists and can never receive work.
 
-The real surface is `/me/connections`
-(`migration/workers/src/routes/connections_api.ts:1610`, routed at
-`index.ts:298`). It is **not** a drop-in fix: that route begins with
-`whoIsAsking(request, env)` and answers 401 to anything without a signed-in
-owner session, while the brain holds only a service token.
+Meanwhile first run and Settings sell connections as a working execution route
+(`ConnectOnboardingPolicy.swift:928`) — rated a blocker on its own.
 
-So this needs a decision, not a patch:
+Not patched. `/me/connections` requires a signed-in owner session while the
+brain holds a service token, so this moves an authorization boundary on
+production data where one owner's connections reaching another is a release
+blocker, and it cannot be tested from here. Two options:
 
-- **Option A** — add `connections` to the records API `COLLECTIONS` with the
-  same owner-scoping every other brain read uses. Smallest change, reuses the
-  guard the brain already relies on. Requires care that the list rule scopes to
-  the owner and nothing else.
-- **Option B** — add a service-token route beside `/me/connections` that
-  returns the same rows for an explicitly named owner.
+- **A** — add `connections` to the records API `COLLECTIONS` with the owner
+  scoping every other brain read uses. Smallest change.
+- **B** — add a service-token route beside `/me/connections` for a named owner.
 
-I did not implement either. It changes an authorization boundary on production
-data, one owner's connections leaking to another would be a release blocker,
-and this machine cannot test it live. It wants someone with credentials and a
-live check.
+## Defect 3 — a spoken errand can be silently cancelled
 
-## Everything else
+`brain/worker.py:3293` → `anticipy_core.py:2736,2754,2780`. A **0.6 word-overlap
+dedup** can misfire and cancel a newly spoken errand. Rated blocker, live.
 
-A traced audit of proactivity, the API layer, the browser layer, text-first,
-sync, memory durability, cost and the first-run journey produced 42 candidate
-findings at blocker/high/medium. They are **not** reproduced here, because they
-were produced by tracing agents and had not yet survived adversarial
-verification when this note was written — in a comparable pass roughly half of
-such findings were refuted or downgraded once challenged. Publishing unverified
-findings as defects is the thing this repo's laws exist to prevent.
+This is one of a family. Proactive suppression is decided by word-overlap
+ratios: a 0.34 overlap mutes the clock about a subject for 14 days
+(`worker.py:3404`); the clock sees only the ten oldest open commitments
+(`anticipy_core.py:4363`); `status_report()` can answer "Nothing's open — all
+loops are closed" when loops are open (`anticipy_core.py:3165`).
 
-The two defects above are stated because I verified each of them myself,
-end to end, on this machine.
+Word-overlap ratios deciding what an owner meant is precisely what Law 1
+forbids. This is the most systemic finding in the audit.
+
+## The rest of the confirmed defects
+
+Eight high, eight medium, eight low. The high ones:
+
+| Defect | File |
+|---|---|
+| A correction never reaches the API hand; args planned once at mint | `hands_api.ts:368` |
+| A spoken correction to a running task is answered "Already handled" | `anticipy_core.py:3780` |
+| Recall has a hard cliff at 300 matching episodes — reproduced exactly | `memory.py:1110` |
+| One unanswerable veto rolls back the whole nightly consolidation | `memory.py:1432` |
+| The Worker texts the number the owner replaced | `wiring.ts:696` |
+| An SMS "yes" binds to whatever revision the task holds now | `conversation.py:478` |
+| A failed profile read discards the owner's next text permanently | `worker.py:4361` |
+
+The memory cliff was reproduced by the verifier: 299 later lines containing one
+query word and the fact is recalled; 300 and it is gone. The repo's own
+`proof/memory_scale.py` passes vacuously because its filler shares no
+vocabulary with the query.
+
+## Cost
+
+An idle owner costs approximately zero model spend — verified by driving the
+real loop with a counting stand-in at the transport boundary. The problems are
+elsewhere, and the first one is that **spend is currently unmeasured**:
+`brain/llm.py:882` records nulls for every call on the default transport.
+
+Ranked, with the auditor's estimates:
+
+1. **Turn the instrument on.** Map Gemini's token counts into the keys `_record`
+   reads and give the ledger a durable sink. No saving; every number below is an
+   estimate until it lands.
+2. **Profile-relation judge off the frontier tier, widen the batch** 25 → ~100.
+   120 stored facts cost 345 frontier calls today. 70–90% of nightly memory
+   spend. Gate it on `proof/audit/run_memory_relations.py` at both tiers.
+3. **Bound the briefing window.** 2,000 episodes → 38,011 tokens in one prompt,
+   unbounded in the container shape.
+4. **Split the poll cadence.** 13–14 backend GETs per idle turn, ~650k
+   requests/owner/day; ~80% reduction with no latency change.
+5. Fix an escalation condition that buys frontier calls out of failures,
+   stop re-asking a question already answered, slim the verify prompt.
+
+## What to do next, in order
+
+1. Run the one deploy command above. It clears the last red gate leg.
+2. Decide option A or B for connections, implement, and test live. Until then
+   the API hand is dead and first run is selling it.
+3. Fix the 0.6 word-overlap cancellation before it eats somebody's errand.
+4. Turn on the cost ledger, then take the memory-judge tier and batch.
+5. Prove SMS end to end once, in both directions. It has never been done.
+6. Decide whether the pendant ships. Today the app promises a device whose
+   audio it discards.
