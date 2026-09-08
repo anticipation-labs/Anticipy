@@ -1,0 +1,23 @@
+{
+  "scope": "Document QA only; the new 500 scenarios have not been executed",
+  "pages": 64,
+  "categories": 25,
+  "unique_case_ids": 500,
+  "unique_inputs": 500,
+  "smoke_cases": 50,
+  "reserved_cases": 100,
+  "all_initial_statuses": "NOT RUN",
+  "clickable_repository_references_verified_at_commit": 12,
+  "design_reference_links": 3,
+  "baseline_commit": "9039b83a",
+  "rendered_pages": 64,
+  "visually_reviewed_pages": 64,
+  "full_page_visual_samples": [
+    4,
+    10,
+    22,
+    64
+  ],
+  "minimum_case_bottom_clearance_points": 10.46,
+  "sha256": "567411ea30b41ecaa1c02f93658b7fba8db763696a04751514842d020968bf39"
+}
