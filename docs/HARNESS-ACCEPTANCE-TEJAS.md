@@ -1,8 +1,15 @@
 # Harness acceptance: from local repair to a verified device
 
-This is the remaining acceptance sequence for the September 10 local candidate,
-not a claim that production or the installed phone has these changes. Current
-evidence and limits are in [the release ledger](../research/2026-09-10-harness-release.md).
+This is the remaining acceptance sequence for the September 10 candidate.
+The API and brain are deployed and verified; TestFlight **1.1.1 (174)** is
+available to the approved private pilot. The last confirmed phone installation
+is still 172. Current evidence and limits are in
+[the release ledger](../research/2026-09-10-harness-release.md).
+
+Before a new live session, confirm installation of 174 and resolve or isolate
+the local model credential's HTTP 402 failure. That local result is not evidence
+that the deployed key has the same problem. Do not repeatedly submit messages
+while diagnosing provider failures.
 
 ## 1. Finish the local gate first
 
@@ -24,13 +31,19 @@ These need this Mac's installed SDK path. They do not activate a microphone,
 download speech assets, invoke a model, send a message or inspect an account.
 Do not turn on `ANTICIPY_HANDS_LIVE` to eliminate the intentional model-test skips.
 
-## 2. Compile, then release deliberately
+## 2. Release completed; confirm this phone's access and installation
 
 Full Xcode/iOS SDK is missing on this Mac. Foundation harness builds and the
 actual engine's macOS-framework typecheck are not a full iOS application build.
-The next release gate is the committed simulator build in CI (or full Xcode
-locally). The owner approved committing/pushing the reviewed named files and,
-after CI passes, TestFlight distribution to the existing private pilot group.
+For candidate `7968926e`, the actual committed simulator build passed CI, the
+API and brain deployments passed verification, and the approved TestFlight
+release completed as **1.1.1 (174)**. Do not upload again to diagnose a phone
+still showing 172; first check its Apple account, tester/group access and update
+availability. The existing private pilot's access is not proof of this particular
+phone/account's access. Actual installation remains unconfirmed.
+
+The following trigger rules are for future releases, not instructions to repeat
+this completed release:
 
 A qualifying push to `cloudflare-backend` touching `app/ios/**` or
 `.github/workflows/ios-testflight.yml`, without `[ship]` in its commit subject,
@@ -39,11 +52,10 @@ does not satisfy that workflow's path filter. Do **not** manually dispatch
 `ios-testflight.yml` as a build-only check: dispatch explicitly requests upload.
 Do not push to or merge main. Recheck workflow triggers before any later push.
 
-Only after CI succeeds under that release approval: release the reviewed
-iOS and relevant backend components, verify their identities, and confirm the
-build actually installed on the phone. Source currently names 1.1.1 (174);
-Apple collision handling can change an upload number. The last user-confirmed
-installed build was 172, which does not prove this candidate is installed.
+For a future candidate, require successful exact-commit CI and release approval
+before uploading or deploying. Verify the actual resulting release identity:
+Apple collision handling can change a source build number. Always distinguish
+Apple availability from the version actually installed on the physical phone.
 
 ## 3. One consented, controlled live session
 
@@ -51,6 +63,13 @@ Agree the account, time window, harmless test inputs and permitted external
 effects first. Do not reset an existing account or inject jobs to manufacture
 success. In-app inputs can independently generate SMS, so authorize the send
 before initiating even a greeting on a configured live account.
+
+Do not use `proof/audit/live_reply_probe.py` unchanged as a zero-provider-send
+canary. It temporarily clears its synthetic profile's phone, but answers remain
+in a pending outbox; restoring the phone permits a later delivery sweep to send
+them. Its constant `real_messages_sent=0` is not measurement. A genuinely
+phone-disabled persistent fixture or an explicitly approved SMS session is
+needed; never fabricate delivery state or delete outboxes to force a pass.
 
 | Leg | Controlled test after release approval | Evidence required / failure boundary |
 | --- | --- | --- |
