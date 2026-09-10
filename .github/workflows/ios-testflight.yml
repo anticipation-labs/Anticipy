@@ -240,6 +240,18 @@ jobs:
           python3 app/ios/scripts/app_store_connect.py wait-build \
             --bundle ai.anticipy.app --build "$ANTICIPY_UPLOAD_BUILD"
 
+      # This private tester is enrolled for future releases. Use the exact
+      # build uploaded by this run, and preserve Apple's external-review gate.
+      - name: Deliver the released build to nwalch6 private pilot
+        if: steps.ship.outputs.ship == 'yes' && github.ref == 'refs/heads/cloudflare-backend'
+        env:
+          ASC_KEY_PATH: ${{ runner.temp }}/asc/AuthKey.p8
+          TESTFLIGHT_BUNDLE: ai.anticipy.app
+          TESTFLIGHT_BUILD: ${{ env.ANTICIPY_UPLOAD_BUILD }}
+          TESTFLIGHT_GROUP: nwalch6 private pilot
+          TESTFLIGHT_EMAIL: nwalch6@gmail.com
+        run: python3 proof/audit/testflight_external.py --confirm INVITE_EXTERNAL
+
       - name: Say what this run did
         if: always()
         env:
