@@ -164,11 +164,26 @@ No public App Store submission was performed.
 
 The owner subsequently reported **172** with only an **Open** button. The
 release workflow's dedicated private pilot assignment does not establish this
-owner's tester/build association. That exact association remains unknown:
+owner's tester/build association. That exact association was initially unknown:
 the development Mac has no usable ASC signing key, and the scoped browser
 check reached Apple's sign-in page. The owner was asked to sign in for the
 targeted access check. No new upload, broad tester-directory query, invitation,
 account permission change or device uninstall was performed to force access.
+
+After the owner signed in, the scoped App Store Connect UI check established
+the cause: the owner's existing private external group contained the exact
+intended tester but only builds **169 and 172**. Build 174 was already in
+**Testing** and selectable, but had not been attached to this group.
+
+Under the existing harness/TestFlight release approval, the already-approved
+**1.1.1 (174)** was added to that exact group. Apple's saved-state readback
+showed **one tester, three builds**, including **174 — Testing**. No new tester,
+public link, account role, binary upload or additional app review was created.
+The owner reopened TestFlight and reported **174 visible and updating**. This
+confirms access and an update in progress, not completed installation or a
+passed physical-phone harness test. The release workflow itself
+was not changed: future releases must verify every intended private group,
+not infer this owner's access from a different pilot group's success.
 
 ### Browser distribution — verified; installed execution remains open
 

@@ -2,8 +2,10 @@
 
 This is the remaining acceptance sequence for the September 10 candidate.
 The API and brain are deployed and verified; TestFlight **1.1.1 (174)** is
-available to the approved private pilot. The last confirmed phone installation
-is still 172. Current evidence and limits are in
+available to the approved private pilot and, after correcting its missing build
+assignment, the owner's existing private group. The owner reports 174 visible
+and updating; completed installation is not yet confirmed. Current evidence
+and limits are in
 [the release ledger](../research/2026-09-10-harness-release.md).
 
 Before a new live session, confirm installation of 174 and resolve or isolate
@@ -39,8 +41,11 @@ For candidate `7968926e`, the actual committed simulator build passed CI, the
 API and brain deployments passed verification, and the approved TestFlight
 release completed as **1.1.1 (174)**. Do not upload again to diagnose a phone
 still showing 172; first check its Apple account, tester/group access and update
-availability. The existing private pilot's access is not proof of this particular
-phone/account's access. Actual installation remains unconfirmed.
+availability. The owner's private group initially contained only 169 and 172;
+174 has now been attached and Apple shows it as Testing. The owner reports the
+174 update in progress; completed installation remains unconfirmed. For future
+releases, another pilot group's
+successful assignment is not proof of this particular account's access.
 
 The following trigger rules are for future releases, not instructions to repeat
 this completed release:
