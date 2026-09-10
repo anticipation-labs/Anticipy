@@ -665,6 +665,73 @@ await check("a slug spelled in another case is matched to the catalog, and the C
 //    of four kinds and a landed/not-landed fact the router can act on.
 // ===========================================================================
 
+// Permission is current authority, not a snapshot taken before catalog I/O.
+// Mutations happen inside the recording transport's catalog await, after the
+// real D1 store has supplied the original connected row. No provider account
+// exists and no request leaves this process.
+for (const change of ["writes_off", "expired", "deleted", "replaced", "alias_changed", "ambiguous"] as const) {
+  await check(`connection ${change} during catalog lookup prevents execute`, async () => {
+    let r: Rig;
+    const transport = fakeFetch(call => {
+      if (isCatalog(call)) {
+        if (change === "writes_off") r.db.db.prepare("UPDATE connections SET writes_enabled=0").run();
+        if (change === "expired") r.db.db.prepare("UPDATE connections SET status='needs_reconnect'").run();
+        if (change === "deleted") r.db.db.prepare("DELETE FROM connections").run();
+        if (change === "replaced") r.db.db.prepare("UPDATE connections SET connected_account_id=?").run(ACCOUNT_WORK);
+        if (change === "alias_changed") r.db.db.prepare("UPDATE connections SET alias='work'").run();
+        if (change === "ambiguous") {
+          r.db.db.prepare("INSERT INTO connections (connected_account_id,user_id,toolkit,status,writes_enabled) VALUES (?,?,?,'connected',1)")
+            .run(ACCOUNT_WORK, OWNER, APP);
+        }
+        return { status: 200, body: { items: CATALOG, next_cursor: null } };
+      }
+      return { status: 200, body: { successful: true, data: { fixture: true } } };
+    });
+    r = await rig([row({ writes_enabled: true })], transport);
+    // Expiry/deletion must stop READS too, not only changes to a provider.
+    const s = change === "writes_off" ? step({tool: CREATE_TOOL, effect: "write"}) : step();
+    const result = await runStep(r.env, s, {store: r.store, provider: r.provider, beforeExecute: async () => true});
+    assert.equal(result.outcome, "refused", `${change} was ignored after catalog I/O`);
+    assert.equal(r.calls.filter(isExecute).length, 0, "revoked/stale connection reached the provider");
+  });
+}
+
+await check("the final joint authority check receives the selected connection and tightened effect", async () => {
+  const r = await rig([row({writes_enabled: true})]);
+  const result = await runStep(r.env, step({tool: CREATE_TOOL, effect: "write"}), {
+    store: r.store, provider: r.provider,
+    beforeExecute: async (current, effect) => {
+      assert.equal(current.connected_account_id, ACCOUNT);
+      assert.equal(current.user_id, OWNER);
+      assert.equal(effect, "write");
+      return false; // The route's joint snapshot no longer authorizes both.
+    },
+  });
+  refused(result, "plan_stale");
+  assert.equal(r.calls.filter(isExecute).length, 0);
+});
+
+await check("an unreadable final connection state refuses instead of using the earlier row", async () => {
+  const r = await rig([row()]);
+  const original = r.store.connectionsForOwner;
+  let reads = 0;
+  r.store.connectionsForOwner = async owner => {
+    if (++reads > 1) throw new Error("offline final authority failure");
+    return original(owner);
+  };
+  refused(await run(r, step()), "store_unavailable");
+  assert.equal(r.calls.filter(isExecute).length, 0);
+});
+
+await check("unchanged connection authority executes exactly once after the final check", async () => {
+  const r = await rig([row({writes_enabled: true})]);
+  const result = await runStep(r.env, step({tool: CREATE_TOOL, effect: "write"}), {
+    store: r.store, provider: r.provider, beforeExecute: async () => true,
+  });
+  assert.equal(result.outcome, "ran");
+  assert.equal(r.calls.filter(isExecute).length, 1);
+});
+
 const VENDOR_FAILURES: Array<[string, Reply, { kind: string; status: number; token: string; retryable: boolean; landed: boolean }]> = [
   ["a 500", { status: 500, body: { error: { slug: "Internal" } } }, { kind: "other", status: 500, token: "Internal", retryable: true, landed: true }],
   ["a 502 with an HTML body", { status: 502, body: null }, { kind: "other", status: 502, token: "", retryable: true, landed: true }],
@@ -1054,8 +1121,12 @@ await check("api_hand.ts calls provider.execute EXACTLY ONCE, after tools(), aft
   const writesAt = code.indexOf("writes_enabled");
   assert.ok(toolsAt > -1 && toolsAt < executeAt, "the catalog must be read before execute is reached");
   assert.ok(writesAt > -1 && writesAt < executeAt, "the write opt-in must be read before execute is reached");
-  assert.equal((code.match(/writes_enabled !== true/g) ?? []).length, 2,
-    "the opt-in is checked twice: on the declared effect and again on the tightened one");
+  assert.equal((code.match(/writes_enabled !== true/g) ?? []).length, 3,
+    "the opt-in is checked on the declared effect, the tightened effect and the current connection");
+  const currentRead = code.lastIndexOf("store.connectionsForOwner(owner)");
+  const finalAuthority = code.indexOf("await deps.beforeExecute(current.row, effect)");
+  assert.ok(currentRead > toolsAt && currentRead < finalAuthority && finalAuthority < executeAt,
+    "connection refresh precedes the final joint authority snapshot, which precedes dispatch");
 });
 
 await check("this suite is in package.json's test script, before the end-to-end leg", () => {

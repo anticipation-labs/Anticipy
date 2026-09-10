@@ -323,6 +323,9 @@ export interface ConnectionsStore {
   /** Insert or update. REFUSES a row whose `connected_account_id` already
    *  belongs to a different owner — see `CrossOwnerWrite`. */
   putConnection(row: StoredConnection): Promise<void>;
+  /** Expire only an existing account on this owner/toolkit. Never restore a
+   * deleted/disconnected row or overwrite alias/write permission changes. */
+  expireConnection(user: OwnerId | string, connectedAccountId: string, toolkit: Toolkit): Promise<boolean>;
   /** Update only permissions, atomically, only if every owner/account/toolkit still exists. */
   updateWrites(user: OwnerId | string, rows: readonly StoredConnection[]): Promise<boolean>;
   /**
@@ -1125,6 +1128,19 @@ export function createD1Store(env: StoreEnv): ConnectionsStore {
       }
     },
 
+    async expireConnection(user, connectedAccountId, toolkit) {
+      const owner = checkedOwner(user);
+      const id = checkedAccountId(connectedAccountId);
+      const app = checkedToolkit(toolkit);
+      await requireColumns(env, "connections");
+      const result = await env.DB.prepare(
+        `UPDATE "connections" SET "status" = 'needs_reconnect'
+          WHERE "user_id" = ?1 AND "connected_account_id" = ?2 AND "toolkit" = ?3
+          AND "status" IN ('connected', 'needs_reconnect')`,
+      ).bind(owner, id, app).run();
+      return Number(result.meta?.changes ?? 0) === 1;
+    },
+
     async updateWrites(user, rows) {
       const owner = checkedOwner(user);
       const values = rows.map(checkedConnection);
@@ -1430,6 +1446,17 @@ export function createMemoryStore(): ConnectionsStore {
         throw new CrossOwnerWrite("connections", conn.connected_account_id);
       }
       connections.set(conn.connected_account_id, { ...conn });
+    },
+
+    async expireConnection(user, connectedAccountId, toolkit) {
+      const owner = checkedOwner(user);
+      const id = checkedAccountId(connectedAccountId);
+      const app = checkedToolkit(toolkit);
+      const current = connections.get(id);
+      if (!current || current.user_id !== owner || current.toolkit !== app
+          || current.status === "disconnected") return false;
+      connections.set(id, { ...current, status: "needs_reconnect" });
+      return true;
     },
 
     async updateWrites(user, rows) {

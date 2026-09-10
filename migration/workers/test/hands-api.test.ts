@@ -813,7 +813,7 @@ await check("a connection store that cannot write does not lose the job's outcom
   const r = rig();
   await r.store.putConnection(connection());
   seedJob(r.db);
-  const reconnect = { ...webhookStore(r.env), putConnection: async () => { throw new Error("D1_ERROR: refused"); } };
+  const reconnect = { ...webhookStore(r.env), expireConnection: async () => { throw new Error("D1_ERROR: refused"); } };
   const out = await run(r, { ...scripted(failed("auth")), reconnect });
   assert.equal(out.status, 200, out.text);
   assert.equal(out.body.connection, undefined);
@@ -955,6 +955,70 @@ await check("a correction during the catalog await blocks the pending vendor wri
   assert.equal(readJob(r.db).params, revisedParams);
   assert.equal(readJob(r.db).receipt, "");
 });
+
+for (const change of ["cancel", "revision"] as const) {
+  await check(`a job ${change} during the final connection read prevents vendor execution`, async () => {
+    const r = rig();
+    await r.store.putConnection(connection());
+    seedJob(r.db);
+    const v = vendor(CATALOG);
+    const provider = new ComposioConnections({apiKey: KEY, fetchImpl: v.impl});
+    const read = r.store.connectionsForOwner;
+    let reads = 0;
+    r.store.connectionsForOwner = async owner => {
+      const rows = await read(owner);
+      if (++reads === 2) {
+        if (change === "cancel") r.db.db.prepare("UPDATE jobs SET status='cancelled' WHERE id=?").run(JOB);
+        else {
+          const revised = readJob(r.db).p;
+          revised._workflow.version = 2;
+          revised._workflow.facts = {fixture_revision: "new details"};
+          r.db.db.prepare("UPDATE jobs SET workflow_version=2,params=? WHERE id=?")
+            .run(JSON.stringify(revised), JOB);
+        }
+      }
+      return rows;
+    };
+    await run(r, {store:r.store, provider});
+    assert.equal(v.calls.filter(c => c.method === "POST").length, 0);
+    const held = readJob(r.db);
+    if (change === "cancel") assert.equal(held.status, "cancelled");
+    else {
+      assert.equal(held.p._workflow.version, 2);
+      assert.deepEqual(held.p._workflow.facts, {fixture_revision: "new details"});
+    }
+  });
+}
+
+for (const change of ["writes_off", "expired", "deleted", "alias_changed", "ambiguous", "owner_changed"] as const) {
+  await check(`final joint authority sees ${change} after the connection snapshot`, async () => {
+    const r = rig();
+    await r.store.putConnection(connection());
+    seedJob(r.db, {note:note({effect: change === "writes_off" ? "write" : "read"})});
+    const v = vendor(CATALOG);
+    const provider = new ComposioConnections({apiKey: KEY, fetchImpl: v.impl});
+    const read = r.store.connectionsForOwner;
+    let reads = 0;
+    r.store.connectionsForOwner = async owner => {
+      const rows = await read(owner);
+      if (++reads === 2) {
+        if (change === "writes_off") r.db.db.prepare("UPDATE connections SET writes_enabled=0").run();
+        if (change === "expired") r.db.db.prepare("UPDATE connections SET status='needs_reconnect'").run();
+        if (change === "deleted") r.db.db.prepare("DELETE FROM connections").run();
+        if (change === "alias_changed") r.db.db.prepare("UPDATE connections SET alias='work'").run();
+        if (change === "owner_changed") r.db.db.prepare("UPDATE connections SET user_id=?").run(STRANGER);
+        if (change === "ambiguous") {
+          r.db.db.prepare("INSERT INTO connections (connected_account_id,user_id,toolkit,status,writes_enabled) VALUES (?,?,?,'connected',1)")
+            .run("ca_second_fixture", OWNER, APP);
+        }
+      }
+      return rows;
+    };
+    const out = await run(r,{store:r.store,provider});
+    assert.equal(out.body.reason, "plan_stale");
+    assert.equal(v.calls.filter(c => c.method === "POST").length, 0);
+  });
+}
 
 await check("a replaced lease during the catalog await blocks execution", async () => {
   const r = rig();

@@ -36,6 +36,8 @@ import requests
 from . import backend
 from .source_context import source_records
 from .reply_authority import ReplyAuthority, task_snapshot
+from .reply_diagnostics import (diagnostic, exception_diagnostic,
+                                record_reply_diagnostic, reply_parse_failure)
 
 from .anticipy_core import TEXTING_STYLE, _missing_fact_question, memory_notes
 from .llm import LLM, decision_budget
@@ -350,6 +352,21 @@ class Conversation:
             yield
         finally:
             self._incoming_event = previous
+
+    def invalidate_reply_history(self, event: dict) -> bool:
+        """Rebuild this owner's conversation after out-of-band reply recovery.
+
+        Recovery saves an answer without calling say(). A nonempty thread
+        would otherwise hide those saved words from the next classifier.
+        Phone keys can change, but this Conversation belongs to one owner;
+        discard its caches and let the next input reload durable history.
+        Do not append guessed turns or rebuild under the old input's clock.
+        """
+        owner = str(getattr(self.anticipy, "owner_ref", "") or "")
+        if not owner or event.get("owner_ref") != owner or not event.get("id"):
+            return False
+        self.threads.clear()
+        return True
 
     @contextlib.contextmanager
     def reply_in_app(self):
@@ -1438,17 +1455,29 @@ Reply ONLY with compact JSON: {"verdict": "go"|"detail"|"no"}
                               "reply_context": reply_context,
                               "owner_text": text})
         model = self._judgment_model()
+        model_role = ('none' if model is None else 'strong'
+                      if model is getattr(getattr(self.anticipy, 'brain', None), 'strong', None)
+                      else 'main')
+        failure = diagnostic('reply_classification', 'no_live_model', model_role=model_role)
         if model and model.live:
             try:
                 # _parse returns {} on malformed output WITHOUT raising, so the
                 # except below never fired: an explicit "yes send it" became
                 # intent "chat" with a reassuring "Got it." while the held job
                 # stayed put. Only trust a parse that produced an intent.
-                parsed = self._parse(model.chat(REPLY_SYSTEM, payload).text)
-                if parsed.get("intent") in {"confirm", "decline", "modify", "answer", "new_request", "chat"}:
+                raw = model.chat(REPLY_SYSTEM, payload).text
+                parsed = self._parse(raw)
+                if (isinstance(parsed, dict) and isinstance(parsed.get("intent"), str)
+                        and parsed["intent"] in {"confirm", "decline", "modify", "answer", "new_request", "chat"}):
                     return parsed
-            except Exception:
-                pass
+                failure = diagnostic('reply_classification', reply_parse_failure(raw),
+                                     model_role=model_role)
+            except Exception as error:
+                failure = exception_diagnostic(error, stage='reply_classification')
+                failure['model_role'] = model_role
+        record_reply_diagnostic(getattr(self.anticipy, 'backend_url', ''),
+                                getattr(self.anticipy, 'owner_ref', ''),
+                                self._incoming_event, failure)
         # No model verdict is not consent or refusal. Never interpret a
         # person's words with a fallback word list during an outage.
         return {"intent": "unavailable", "pending_id": None, "reply": ""}

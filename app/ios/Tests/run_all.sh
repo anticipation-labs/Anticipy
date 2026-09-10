@@ -13,6 +13,9 @@ sh "$HERE/run_gap_engine_tests.sh"
 sh "$HERE/run_heard_tests.sh"
 sh "$HERE/run_speaker_work_tests.sh"
 sh "$HERE/run_capture_lifecycle_tests.sh"
+sh "$HERE/run_analyzer_lifecycle_boundary_tests.sh"
+sh "$HERE/run_capture_stop_ownership_tests.sh"
+sh "$HERE/run_capture_callback_generation_tests.sh"
 sh "$HERE/run_flush_policy_tests.sh"
 # WHEN the words started and WHEN the flush produced them — two instants, not
 # one number written into three columns. Placed next to the flush policy
@@ -50,6 +53,7 @@ sh "$HERE/run_owner_mirror_tests.sh"
 # browser-agent state after sign-out/sign-in yields the main actor.
 sh "$HERE/run_refresh_account_race_tests.sh"
 sh "$HERE/run_capture_account_race_tests.sh"
+sh "$HERE/run_transcript_echo_identity_tests.sh"
 sh "$HERE/run_actual_home_recovery_tests.sh"
 # The same question a third time, about a different table. Owner-mirror asks
 # whose device answers this phone holds; the race suite asks whose job feed a

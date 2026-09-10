@@ -872,7 +872,7 @@ forget_phone = body(
     "AnticipySession.forgetThisPhone",
 )
 for pattern, reason in (
-    (r"stopListening\s*\(\s*\)", "listening remains active"),
+    (r"discardListening\s*\(\s*\)", "capture is not discarded at the privacy boundary"),
     (r"clearAllPendingLinesOnDevice\s*\(\s*\)",
      "sealed prior-account or unstamped legacy speech survives"),
     (r"let\s+browserDisconnected\s*=\s*await\s+requestedBackend\s*\.\s*unpairAgent"
@@ -885,6 +885,20 @@ for pattern, reason in (
     (r"return\s+browserDisconnected", "the UI cannot report whether Chrome disconnected"),
 ):
     require("Session local-forget boundary", forget_phone, pattern, reason + ".")
+discard_listening = body(
+    session_source,
+    r"\bprivate\s+func\s+discardListening\s*\(\s*\)\s*\{",
+    "AnticipySession.discardListening",
+)
+for pattern, reason in (
+    (r"captureDeliveryGeneration\s*&\+=\s*1", "queued callbacks are not invalidated"),
+    (r"speakerTagger\s*\.\s*invalidatePendingDeliveries\s*\(\s*\)",
+     "pending speaker deliveries are not invalidated"),
+    (r"keepListening\s*=\s*false", "the standing listening preference remains active"),
+    (r"listener\s*\.\s*discardCapturedAudio\s*\(\s*\)",
+     "capture teardown does not discard pending audio"),
+):
+    require("Session capture discard", discard_listening, pattern, reason + ".")
 device_queue_clear = body(
     session_source,
     r"\bprivate\s+func\s+clearAllPendingLinesOnDevice\s*\(\s*\)\s*->\s*Bool\s*\{",

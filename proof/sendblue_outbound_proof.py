@@ -261,7 +261,9 @@ def main() -> int:
         raised.append(str(exc))
         check("a 200 whose status is ERROR raises SendFailed through say() "
               "instead of returning a record",
-              "status=error" in str(exc) and "4001" in str(exc), str(exc))
+              isinstance(exc, sb.SendblueSendFailed)
+              and exc.diagnostic_category == "provider_response_rejected"
+              and exc.http_status == 200, str(exc))
     else:
         raise AssertionError("NOT PROVEN: a status ERROR reply came back as a record")
     _Sendblue.queue = [(200, {"status": "DECLINED"})]
@@ -269,7 +271,10 @@ def main() -> int:
         arm.text(TO, "this one is declined")
     except va.SendFailed as exc:
         raised.append(str(exc))
-        check("DECLINED is a failure too", "declined" in str(exc), str(exc))
+        check("DECLINED is a failure too",
+              isinstance(exc, sb.SendblueSendFailed)
+              and exc.diagnostic_category == "provider_response_rejected"
+              and exc.http_status == 200, str(exc))
     else:
         raise AssertionError("NOT PROVEN: DECLINED came back as a record")
     _Sendblue.queue = [(200, {"status": "DELIVERED"})]

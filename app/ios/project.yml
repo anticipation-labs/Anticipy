@@ -867,7 +867,7 @@ settings:
     # 173: Fence capture permission callbacks after Stop/account exit, isolate
     #      enrollment samples, and preserve healthy analyzer requests through
     #      watchdog ticks and phrase finals. Retry analyzer on a new session.
-    CURRENT_PROJECT_VERSION: "173"
+    CURRENT_PROJECT_VERSION: "174"
     DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: NO
@@ -927,7 +927,7 @@ targets:
         # literal from a Mac one, and two products answering "which build
         # are you holding" with different numbers is the exact disease this
         # gate exists to prevent.
-        CURRENT_PROJECT_VERSION: "173"
+        CURRENT_PROJECT_VERSION: "174"
         DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_ENTITLEMENTS: ../macos/AnticipyMac/AnticipyMac.entitlements

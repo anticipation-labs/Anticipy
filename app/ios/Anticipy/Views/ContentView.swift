@@ -532,6 +532,8 @@ enum HomeCopy {
         return "Mic interrupted, taking it back… Nothing heard for \(PlainDuration.words(seconds))."
     }
 
+    static let audioFinalizationFailed = "Some captured audio couldn't finish processing. Review what was heard before repeating anything important."
+
     // MARK: The empty state's examples
 
     /// The two fixture strings the day-zero screen draws, and the one sentence
@@ -1157,6 +1159,12 @@ struct HomeView: View {
     /// the thread because they are about the whole screen rather than about
     /// any one thing said, and they keep their own suites' shapes.
     @ViewBuilder private var dashboardNotices: some View {
+        if session.listener.finalizationFailed {
+            Text(HomeCopy.audioFinalizationFailed)
+                .font(.callout)
+                .foregroundStyle(Theme.text2)
+                .fixedSize(horizontal: false, vertical: true)
+        }
         if session.captureStorageFailed {
             Text("I couldn't save or verify pending words on this iPhone. Listening pauses when new speech cannot be saved. Check available storage, then try again.")
                 .font(.callout)

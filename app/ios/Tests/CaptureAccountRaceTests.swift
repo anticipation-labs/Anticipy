@@ -17,7 +17,7 @@ struct ListenJournal {
     static let shared = ListenJournal()
     func record(_ event: JournalEvent) {}
 }
-struct SessionLine { let text: String }
+struct SessionLine { let text: String; var externalEventID: String? = nil }
 struct TranscriptLine {
     let id: String
     let text: String
@@ -91,7 +91,7 @@ struct CaptureBackend {
     let transport = CaptureTransport()
     var backend: CaptureBackend { .init(accountID: accountID, transport: transport) }
     func playCue(_ cue: Cue) {}
-    func stopListening() { stopped = true }
+    func discardListening() { stopped = true }
     func readPendingLines() throws -> [BufferedLine] {
         if diskReadFails { throw CaptureTransport.Failure.offline }
         return unsent
@@ -184,6 +184,7 @@ struct CaptureBackend {
         let pending = Task { await lost.heard("survive restart", from: .typed) }
         while !(await lost.transport.started) { await Task.yield() }
         let stableID = lost.unsent.first!.externalEventID
+        check("session echo carries the exact durable upload identity", stableID != nil && lost.sessionLines.first?.externalEventID == stableID)
         await lost.transport.complete(ok: false)
         await pending.value
         check("lost response+readback retains stable pending identity", lost.unsent.first?.externalEventID == stableID)

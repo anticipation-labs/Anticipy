@@ -203,6 +203,13 @@ check(mixed.contains { if case .pending(_, let n, _) = $0 { return n == 3 }; ret
 check(mixed.contains { if case .working(_, let t, _) = $0 { return t == "Book the table" }; return false },
       "a goaled line is still its task, unchanged by any of this")
 
+for state in ["reply_processing", "reply_error_pending"] {
+    let recovering = P.thread(heard: [P.HeardRow(id: "recovering", text: "test input",
+        at: "2026-09-09T12:00:00Z", decision: state)], said: [], jobs: [])
+    check(recovering.contains { if case .pending(_, let n, _) = $0 { return n == 1 }; return false },
+          "\(state) is pending, not an ignored/finished input")
+}
+
 // 4. TERMINAL LINES LEAVE THE COUNT. A line the brain judged and left alone is
 //    finished; counting it forever would make "3 waiting" a standing lie.
 let judged = P.thread(

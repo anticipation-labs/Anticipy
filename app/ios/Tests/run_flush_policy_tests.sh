@@ -72,7 +72,8 @@ fi
 # word — so a clear that lives inside the `if !tail.isEmpty` branch is exactly
 # the one that never runs when it matters. The indent is part of the pattern:
 # nested one level deeper is back inside that branch.
-if ! awk '/func stop\(\)/,/^    }/' "$listener" | grep -q '^        cutAt = nil$'; then
+if ! awk '/func stop\(\)/,/^    }/' "$listener" | grep -q '^        stopCapture(discardFinishingAudio: true)$' \
+    || ! awk '/private func stopCapture\(/,/^    }/' "$listener" | grep -q '^        cutAt = nil$'; then
     echo "stop() no longer closes an open mid-sentence cut on every path."
     echo "Toggle Listen off just after a ceiling flush and back on, and the new"
     echo "session's first line goes out naming the old session's last line."

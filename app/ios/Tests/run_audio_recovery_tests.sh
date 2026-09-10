@@ -33,9 +33,10 @@ route=$(block 'AVAudioSession.routeChangeNotification' '        }')
 retry=$(block 'private func retryCapture' '    }')
 recover=$(block 'private func recoverAudio' '    }')
 replace=$(block 'private func replaceCaptureEngine' '    }')
-stop=$(block '^[[:space:]]*func stop[(][)][[:space:]]*[{]' '    }')
+stop_entry=$(block '^[[:space:]]*func stop[(][)][[:space:]]*[{]' '    }')
+stop=$(block 'private func stopCapture[(]' '    }')
 
-for named in configure route retry recover replace stop; do
+for named in configure route retry recover replace stop_entry stop; do
     eval "body=\${$named}"
     [ -n "$body" ] || {
         echo "The audio recovery gate can no longer find $named."
@@ -43,6 +44,12 @@ for named in configure route retry recover replace stop; do
         exit 2
     }
 done
+
+case "$stop_entry" in
+    *'stopCapture(discardFinishingAudio: true)'* ) ;;
+    * ) echo "Stop no longer reaches the capture teardown checked below."
+        exit 1 ;;
+esac
 
 case "$route" in
     *scheduleAudioRecovery* ) ;;

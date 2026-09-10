@@ -690,7 +690,7 @@ final class ConnectedAppsModel: ObservableObject {
         static let writesTitle = "Let Anticipy make changes"
 
         static func writesDetail(app: String) -> String {
-            "Off, I only read \(app). On, I can also send, create and change things in it."
+            "Off, I only read \(app). On, you permit supported changes; task approvals still apply. Some actions may need your browser or may not be available yet."
         }
 
         static func writeNotSaved(app: String) -> String {

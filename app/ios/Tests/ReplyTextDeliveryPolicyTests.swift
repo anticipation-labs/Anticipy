@@ -27,6 +27,7 @@ check("unknown attempt cannot fall back to queued", state([row("reply_pending", 
 check("failed text does not erase the app answer", state([row("sms_failed")]) == .failed)
 check("skipped is not sent", state([row("sms_skipped")]) == .notSent)
 check("mock is never delivered", state([row("sms_mock")]) == .notSent)
+check("quarantined recovery outbox truthfully says text not sent", state([row("reply_context_unavailable", kind: "reply_outbox")]) == .notSent)
 check("another owner's delivery cannot attach", state([row("sms_delivered", owner: "owner2")]) == .unknown)
 check("another message's delivery cannot attach", state([row("sms_delivered", message: "reply2")]) == .unknown)
 check("old job notifications cannot masquerade as message delivery", state([row("sms_delivered", key: "job-result:reply1")]) == .unknown)

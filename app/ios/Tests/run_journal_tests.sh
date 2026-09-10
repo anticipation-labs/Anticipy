@@ -151,9 +151,14 @@ if [ -z "$s_line" ] || [ -z "$s_read" ] || [ "$s_read" -lt "$s_line" ]; then
     echo "CHANGE, not at the start, and a short session brackets nothing."
     exit 2
 fi
-stopped=$(printf '%s\n' "$(awk '/^    func stop\(\)/,/watchdog\?\.invalidate\(\)/' "$listener" | sed '/^[[:space:]]*\/\//d')")
+if ! awk '/^    func stop\(\)/,/^    }$/' "$listener" \
+    | grep -q '^        stopCapture(discardFinishingAudio: true)$'; then
+    echo "Stop no longer reaches the capture teardown whose journal is checked."
+    exit 2
+fi
+stopped=$(printf '%s\n' "$(awk '/^    private func stopCapture\(/,/^    }$/' "$listener" | sed '/^[[:space:]]*\/\//d')")
 if [ -z "$stopped" ]; then
-    echo "This gate can no longer find stop()."; exit 2
+    echo "This gate can no longer find stopCapture()."; exit 2
 fi
 e_line=$(printf '%s\n' "$stopped" | grep -n 'sessionStopped(cause: .owner)' | head -1 | cut -d: -f1)
 e_read=$(printf '%s\n' "$stopped" | grep -n 'recordBatteryReading(boundary: true)' | head -1 | cut -d: -f1)

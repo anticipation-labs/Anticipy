@@ -60,7 +60,7 @@ enum ReplyTextDeliveryPolicy {
         case "sms_accepted": return .accepted
         case "sms_unconfirmed", "sms_attempted": return .unconfirmed
         case "sms_failed": return .failed
-        case "sms_skipped", "sms_mock": return .notSent
+        case "sms_skipped", "sms_mock", "reply_context_unavailable": return .notSent
         default: return .unknown
         }
     }

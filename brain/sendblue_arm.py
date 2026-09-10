@@ -61,16 +61,30 @@ SEND_PATH = "/api/send-message"
 # means "dead" on either wire is dead on both. Lowercased: Sendblue answers in
 # capitals and `_result` lowercases before comparing.
 DEAD_STATES = ("error", "declined") + va.DEAD_STATES
-# ONE definition of delivered for both arms, and it lives in voice_arm. A
-# second tuple here would let the two channels disagree about whether a
-# handset saw a message, and the feed would inherit whichever one was wrong.
-DELIVERED_STATES = va.DELIVERED_STATES
+# SendBlue's SENT proves dispatch, not handset delivery (including SMS and an
+# offline iMessage recipient). Its receipts cannot inherit voice-call states.
+# https://docs.sendblue.com/getting-started/sending-messages#status
+DELIVERED_STATES = ("delivered", "read")
 
 TIMEOUT_SECONDS = 15
 
 
 class SendblueNotConfigured(RuntimeError):
     """Sendblue credentials are absent or unusable. Names exactly which."""
+
+
+class SendblueSendFailed(va.SendFailed):
+    """A parsing/HTTP failure with separate, privacy-safe diagnostic fields.
+
+    Existing callers still receive SendFailed. The message is not diagnostic
+    data: delivery serializes only the closed category and bounded HTTP status.
+    Neither field authorizes a retry or proves that nothing was delivered.
+    """
+
+    def __init__(self, message, *, category, http_status=None):
+        super().__init__(message)
+        self.diagnostic_category = category
+        self.http_status = http_status
 
 
 def api_base(env: Optional[Mapping[str, str]] = None) -> str:
@@ -183,40 +197,39 @@ class SendblueArm:
                 "sb-api-secret-key": self._secret}
 
     def _result(self, response, what: str, to: str) -> dict:
+        status_code = response.status_code
+        http_status = (status_code if type(status_code) is int
+                       and 100 <= status_code <= 599 else None)
+
+        def failure(category, summary):
+            # Categories and summaries are closed literals below. A vendor can
+            # echo a credential, a phone or a message in ANY response field;
+            # none of that prose belongs in an exception or its traceback.
+            http = f" (HTTP {http_status})" if http_status is not None else ""
+            key = f" using {self.credential}" if http_status == 401 else ""
+            return SendblueSendFailed(f"Sendblue {summary}{http}{key}",
+                                      category=category, http_status=http_status)
+
         if not response.ok:
-            # A 401 is the credential, and the credential is named by its
-            # tail so the operator knows WHICH key Sendblue rejected without
-            # the log ever holding what it rejected it for.
-            try:
-                failure = response.json()
-            except ValueError:
-                failure = {}
-            if not isinstance(failure, dict):
-                failure = {}
-            # The provider may echo the entire request before its error keys.
-            # Report the error itself, never a truncated customer payload.
-            detail = " ".join(str(failure.get(key) or "") for key in
-                              ("error_code", "error_message", "error")).strip()
-            raise va.SendFailed(self._scrub(
-                f"Sendblue refused the {what} to {str(to)[:6]}… using "
-                f"{self.credential}: HTTP {response.status_code} "
-                f"{detail[:300]}"))
+            # A numeric HTTP outcome is sufficient; do not even read the body.
+            raise failure("provider_http_error", "send response was not successful")
         try:
             out = response.json()
-        except ValueError as exc:
-            raise va.SendFailed(
-                f"Sendblue returned no JSON for the {what}: {exc}") from exc
+        except ValueError:
+            raise failure("provider_response_invalid_json", "returned no JSON") from None
         if not isinstance(out, dict):
-            raise va.SendFailed(
-                f"Sendblue returned a non-object for the {what}: "
-                f"{str(out)[:80]!r}")
-        status = str(out.get("status") or "").lower()
-        handle = str(out.get("message_handle") or "")
-        if not handle or status in DEAD_STATES or out.get("error_code"):
-            raise va.SendFailed(self._scrub(
-                f"{what} to {str(to)[:6]}… did not go out: "
-                f"status={status or 'none'} error={out.get('error_code')} "
-                f"{out.get('error_message') or ''}".strip()))
+            raise failure("provider_response_invalid_shape", "returned an invalid message response")
+        status = out.get("status")
+        if type(status) is not str or not status.strip():
+            raise failure("provider_response_invalid_shape", "returned no usable message status")
+        status = status.lower()
+        handle = out.get("message_handle")
+        if type(handle) is not str or not handle.strip():
+            raise failure("provider_response_missing_handle", "returned no usable message handle")
+        if status in DEAD_STATES:
+            raise failure("provider_response_rejected", "reported a rejected message")
+        if out.get("error_code"):
+            raise failure("provider_response_error", "returned an inconsistent message response")
         # `delivered` exists because "queued" is the honest answer to "did
         # Sendblue take it?" and a dishonest answer to "did he get it?".
         return {"sid": handle, "status": status,
@@ -250,7 +263,7 @@ class SendblueArm:
         if not isinstance(status, str):
             raise va.SendFailed("Sendblue receipt had no status")
         state = status.lower()
-        return {"sid": handle, "status": state, "delivered": state in ("delivered", "read")}
+        return {"sid": handle, "status": state, "delivered": state in DELIVERED_STATES}
 
     def text(self, to: str, body: str, media=None) -> dict:
         """The words, and the picture if this channel can carry one.
@@ -293,10 +306,11 @@ class SendblueArm:
             )
             if "media_url" not in payload or not _nothing_went_out(response):
                 break
-            self._log(f"Sendblue did not take the text to {str(to)[:6]}… with "
-                      f"a picture attached (HTTP {response.status_code}, "
-                      f"status={_status_of(response) or 'none'}); sending the "
-                      "same words again without it.")
+            status_code = response.status_code
+            http = (f" (HTTP {status_code})" if type(status_code) is int
+                    and 100 <= status_code <= 599 else "")
+            self._log("Sendblue did not take the text with a picture attached"
+                      f"{http}; sending the same words again without it.")
             payload.pop("media_url")
         return self._result(response, "text", to)
 
@@ -320,7 +334,8 @@ def _status_of(response) -> str:
         out = response.json()
     except ValueError:
         return ""
-    return str(out.get("status") or "").lower() if isinstance(out, dict) else ""
+    status = out.get("status") if isinstance(out, dict) else None
+    return status.lower() if type(status) is str else ""
 
 
 def _nothing_went_out(response) -> bool:

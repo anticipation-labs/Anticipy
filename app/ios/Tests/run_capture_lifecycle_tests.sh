@@ -26,6 +26,10 @@ signatures = ['func start()', 'private func begin()', 'private func startWatchdo
               'func startForEnrollment()', 'func stopAfterEnrollment()',
               'private func absorbRecognized(', 'private func flushTail(',
               'private func deliver(', 'private func scheduleSilenceFlush()']
+for signature in ('func stopAfterCurrentAudio(', 'private func stopCapture(',
+                  'private func failFinalization(', 'private func completeFinalization(',
+                  'private func discardFinalizations()', 'func discardCapturedAudio()'):
+    if signature in source: signatures.append(signature)
 # Optional only to let the pre-fix source execute and fail behaviorally.
 if 'private var hasActiveRecognition:' in source:
     signatures.append('private var hasActiveRecognition:')
@@ -77,7 +81,8 @@ def body(source, signature):
 for signature in ('func signOut()', 'private func expireSession()'):
     boundary = body(session, signature)
     assert boundary.index('listener.stop()') < boundary.index('clearSignedInSurface()'), signature
-assert 'listener.stop()' in body(session, 'func stopListening()')
+assert any(call in body(session, 'func stopListening(') for call in
+           ('listener.stop()', 'listener.stopAfterCurrentAudio('))
 begin = body(listener, 'private func begin()')
 assert begin.index('guard !isListening') < begin.index('analyzerFailures = 0') < begin.index('startRecognition()')
 for signature in ('private func startRecognition()', 'private func swapRecognition('):
@@ -107,8 +112,10 @@ needle = 'if self.enrolling {'
 assert source.count(needle) == 1, 'enrollment audio fence mutation lost its anchor'
 (out / 'NoEnrollmentAudioFence.swift').write_text(source.replace(needle, 'if false {'))
 needle = '        discardEnrollmentRecognition()'
-assert source.count(needle) == 2, 'enrollment retirement mutation lost its two anchors'
-(out / 'NoEnrollmentRetirement.swift').write_text(source.replace(needle, ''))
+assert source.count(needle) == 3, 'enrollment retirement mutation lost its two enrollment and one explicit discard anchors'
+# The first two declarations extracted above are the enrollment boundaries;
+# leave the distinct explicit forget/storage discard method unchanged.
+(out / 'NoEnrollmentRetirement.swift').write_text(source.replace(needle, '', 2))
 needle = 'self.absorbRecognized(text, isFinal: false)'
 assert source.count(needle) == 1, 'analyzer final mutation lost its anchor'
 (out / 'AnalyzerFinalIsTaskLimit.swift').write_text(source.replace('text, _ in', 'text, isFinal in').replace(needle, 'self.absorbRecognized(text, isFinal: isFinal)'))
@@ -122,8 +129,11 @@ assert source.count(needle) == 1, 'analyzer phrase cursor mutation lost its anch
 needle = '        orphanLock.lock()\n        enrolling = false\n        wasListeningBeforeEnrollment = false\n        orphanLock.unlock()'
 assert source.count(needle) == 1, 'Stop enrollment-close mutation lost its anchor'
 (out / 'StaleEnrollmentAfterStop.swift').write_text(source.replace(needle, ''))
+needle = '        lastDelivered = nil\n        installObserversOnce()'
+assert source.count(needle) == 1, 'new-session replay reset mutation lost its anchor'
+(out / 'StaleReplayAcrossSessions.swift').write_text(source.replace(needle, '        installObserversOnce()'))
 PY
-    for mutation in NoPermissionFence LegacyOnlyWatchdog EarlyEnrollmentExit NoEnrollmentAudioFence NoEnrollmentRetirement AnalyzerFinalIsTaskLimit StickyAnalyzerFailure NoAnalyzerPhraseReset LostAnalyzerSpeechClock StaleEnrollmentAfterStop; do
+    for mutation in NoPermissionFence LegacyOnlyWatchdog EarlyEnrollmentExit NoEnrollmentAudioFence NoEnrollmentRetirement AnalyzerFinalIsTaskLimit StickyAnalyzerFailure NoAnalyzerPhraseReset LostAnalyzerSpeechClock StaleEnrollmentAfterStop StaleReplayAcrossSessions; do
         swiftc -Onone -swift-version 5 -parse-as-library \
             "$here/../Anticipy/Audio/ListenSessionFacts.swift" \
             "$here/../Anticipy/Audio/ListenWatchdogPolicy.swift" \
@@ -146,6 +156,7 @@ PY
             NoAnalyzerPhraseReset) expected='FAIL: two identical finalized phrases are both delivered' ;;
             LostAnalyzerSpeechClock) expected='FAIL: fresh final speech keeps an aged analyzer alive' ;;
             StaleEnrollmentAfterStop) expected='FAIL: old enrollment cleanup cannot stop a new session' ;;
+            StaleReplayAcrossSessions) expected='FAIL: a fresh session preserves a phrase matching the prior session' ;;
         esac
         if ! grep -q "$expected" "$out/$mutation.log"; then
             echo "FAIL: $mutation failed without its required behavioral failure"

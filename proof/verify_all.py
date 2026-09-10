@@ -135,7 +135,7 @@ def check_brain_hears():
     for _ in range(30):
         time.sleep(4)
         got = api(f"/api/collections/events/records/{ev['id']}")
-        if got.get("decision") and got["decision"] != "processing":
+        if got.get("decision") and got["decision"] not in ("processing", "reply_processing", "reply_error_pending"):
             report("the brain hears and decides", True, f"decision: {got['decision']}")
             return got
     report("the brain hears and decides", False, "no real verdict within 60s (still claimed/processing)")

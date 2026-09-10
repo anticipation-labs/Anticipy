@@ -59,8 +59,28 @@ final class UIDevice {
 }
 final class LifecycleSpeaker {
     func tagForLatestUtterance(completion: @escaping (String?) -> Void) { completion(nil) }
+    var pending: [() -> Void] = []
+    var holdDeliveries = false
+    func afterPendingDeliveries(completion: @escaping () -> Void) {
+        if holdDeliveries { pending.append(completion) }
+        else { completion() }
+    }
+    func releaseDeliveries() {
+        let ready = pending
+        pending.removeAll()
+        for delivery in ready { delivery() }
+    }
 }
-final class SpeechAnalyzerRequestEngine {
+protocol ListenRequestEngine: AnyObject {
+    var onResult: ((String, Bool) -> Void)? { get set }
+    var onError: (() -> Void)? { get set }
+    var onFinished: (() -> Void)? { get set }
+    func append(_ buffer: Int)
+    func begin()
+    func finish()
+    func cancel()
+}
+final class SpeechAnalyzerRequestEngine: ListenRequestEngine {
     static var created: [SpeechAnalyzerRequestEngine] = []
     static func make(locale: Locale) -> SpeechAnalyzerRequestEngine {
         let value = SpeechAnalyzerRequestEngine()
@@ -69,12 +89,15 @@ final class SpeechAnalyzerRequestEngine {
     }
     var onResult: ((String, Bool) -> Void)?
     var onError: (() -> Void)?
+    var onFinished: (() -> Void)?
     var began = false
     var finished = false
+    var cancelled = false
     var buffers: [Int] = []
     func append(_ buffer: Int) { buffers.append(buffer) }
     func begin() { began = true }
     func finish() { finished = true }
+    func cancel() { cancelled = true; finished = true }
 }
 final class CaptureEngine {
     var isRunning = true
@@ -96,6 +119,10 @@ final class LifecycleListener {
     var task: SFSpeechRecognitionTask?
     var request: SFSpeechAudioBufferRecognitionRequest?
     var analyzerEngine: SpeechAnalyzerRequestEngine?
+    var finishingAnalyzers: [ObjectIdentifier: (
+        engine: any ListenRequestEngine, timeout: DispatchWorkItem,
+        stoppedAt: Date, result: (String, Bool) -> Void)] = [:]
+    var finalizationFailed = false
     var usingAnalyzer = false
     var analyzerFailures = 0
     var analyzerDisabledForSession = false
@@ -184,6 +211,7 @@ final class LifecycleListener {
         permissionChecks()
         recognitionChecks()
         analyzerPhraseChecks()
+        freshSessionReplayChecks()
         enrollmentChecks()
         print("Capture lifecycle: \(checks) checks, \(failures) failures")
         if failures > 0 { exit(1) }
@@ -487,5 +515,32 @@ final class LifecycleListener {
             check("old enrollment cleanup cannot stop a new session (ambient: \(ambient))", restarted.isListening && !restarted.enrolling && restarted.analyzerEngine === newEngine && newEngine != nil)
             restarted.stop()
         }
+    }
+
+    static func freshSessionReplayChecks() {
+        for analyzer in [true, false] {
+            ListenEnginePolicy.usesAnalyzerNow = analyzer
+            let listener = LifecycleListener()
+            listener.begin()
+            listener.absorbRecognized("repeat from the previous session", isFinal: false)
+            listener.flushTail(reason: .gap)
+            check("replay fixture delivers its original phrase (analyzer: \(analyzer))", listener.delivered == ["repeat from the previous session"])
+
+            // A real request swap in the SAME session retains replay identity.
+            listener.swapRecognition(flushPending: false, cause: .error)
+            listener.absorbRecognized("repeat from the previous session", isFinal: false)
+            listener.flushTail(reason: .gap)
+            check("within-session replay still suppresses the re-decoded phrase (analyzer: \(analyzer))", listener.delivered == ["repeat from the previous session"])
+
+            // Stop discards all captured/orphan audio. This new grant cannot be
+            // a replay of the old session even if its recognized words match.
+            listener.stop()
+            listener.begin()
+            listener.absorbRecognized("repeat from the previous session", isFinal: false)
+            listener.flushTail(reason: .gap)
+            check("a fresh session preserves a phrase matching the prior session (analyzer: \(analyzer))", listener.delivered == ["repeat from the previous session", "repeat from the previous session"])
+            listener.stop()
+        }
+        ListenEnginePolicy.usesAnalyzerNow = true
     }
 }

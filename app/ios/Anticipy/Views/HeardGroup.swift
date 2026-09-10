@@ -100,7 +100,7 @@ struct HeardGroup: Identifiable, Equatable {
     /// ignored — for the five to fifteen seconds she was actually working on
     /// it. Found by the demo-readiness audit, 2026-08-17.
     var pending: [AnticipySession.TranscriptLine] {
-        lines.filter { $0.decision == nil || $0.decision == "processing" }
+        lines.filter { $0.decision == nil || ["processing", "reply_processing", "reply_error_pending"].contains($0.decision ?? "") }
     }
 
     /// Rung 1 — what she understood this to be about. The first goal in speech

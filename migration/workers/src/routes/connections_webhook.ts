@@ -244,7 +244,7 @@ export interface WebhookConnectionStore {
   /** The owner holding this vendor account id, or null if no row does. */
   ownerOfAccount(connectedAccountId: string): Promise<string | null>;
   readConnection(user: string, connectedAccountId: string): Promise<StoredConnection | null>;
-  putConnection(row: StoredConnection): Promise<void>;
+  expireConnection(user: string, connectedAccountId: string, toolkit: string): Promise<boolean>;
   readNudge(user: string, toolkit: string): Promise<StoredNudge | null>;
   putNudge(row: StoredNudge): Promise<void>;
 }
@@ -591,12 +591,17 @@ export async function markNeedsReconnect(
   // app they deliberately took away — the product arguing with a decision.
   if (row.status === "disconnected") return { state: "already-disconnected", owner: holder };
 
-  // ONLY `status` CHANGES. `writes_enabled` especially is passed through: the
+  // ONLY `status` CHANGES. A conditional update preserves CURRENT permissions,
+  // alias and activity instead of upserting their stale pre-await values. A
+  // deletion/disconnect/account replacement that won the race stays final.
+  // The event has no connection-generation marker: an older expiry for a newly
+  // reauthorized SAME account id cannot yet be distinguished from a fresh one.
+  // `writes_enabled` especially survives: the
   // owner's "let Anticipy make changes" opt-in is a decision about an app, not
   // about a credential, and a token dying at the far end is not them changing
   // their mind. The alias rides along for the same reason — the spec's refresh
   // link is "a normal connect link with the same account alias".
-  await store.putConnection({ ...row, status: "needs_reconnect" });
+  if (!await store.expireConnection(holder, event.accountId, row.toolkit)) return { state: "gone" };
 
   // THE ASK'S OWN HISTORY SURVIVES. `level`, `snooze_until`, `trigger`,
   // `sent_at`, `acted_at` and `channel` are read back and written back
@@ -647,7 +652,7 @@ export function webhookStore(env: ConnectionsWebhookEnv): WebhookConnectionStore
       }
     },
     readConnection: (user, id) => store.readConnection(user, id),
-    putConnection: (row) => store.putConnection(row),
+    expireConnection: (user, id, toolkit) => store.expireConnection(user, id, toolkit),
     readNudge: (user, toolkit) => store.readNudge(user, toolkit),
     putNudge: (row) => store.putNudge(row),
   };

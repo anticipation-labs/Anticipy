@@ -34,6 +34,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+import traceback
 import types
 
 import pytest
@@ -131,9 +132,14 @@ def test_a_queued_reply_carries_the_handle_and_does_not_claim_delivery(monkeypat
 
 
 def test_only_a_status_that_means_a_handset_saw_it_reads_as_delivered(monkeypatch):
-    for status, delivered in (("DELIVERED", True), ("READ", True), ("SENT", True),
+    # SendBlue's own status contract distinguishes SENT from DELIVERED:
+    # https://docs.sendblue.com/getting-started/sending-messages#status
+    # SENT may be terminal for SMS or an offline iMessage recipient; it does
+    # not prove the handset saw the message. Do not inherit voice-call states.
+    for status, delivered in (("DELIVERED", True), ("READ", True), ("SENT", False),
                               ("QUEUED", False), ("PENDING", False),
-                              ("ACCEPTED", False), ("REGISTERED", False)):
+                              ("ACCEPTED", False), ("REGISTERED", False),
+                              ("COMPLETED", False), ("RECEIVED", False)):
         arm, _, _ = _arm(monkeypatch, [(200, {"message_handle": HANDLE, "status": status})])
         out = arm.text(US, "hi")
         assert out["delivered"] is delivered, status
@@ -146,13 +152,15 @@ def test_a_200_whose_status_is_error_is_a_failure_not_a_record(monkeypatch):
                                           "error_message": "not reachable"})])
     with pytest.raises(va.SendFailed) as caught:
         arm.text(US, "hi")
-    assert "status=error" in str(caught.value) and "4001" in str(caught.value)
+    assert caught.value.diagnostic_category == "provider_response_rejected"
+    assert caught.value.http_status == 200
+    assert "not reachable" not in str(caught.value)
     # The STATUS alone is the failure. A reply that says ERROR and carries no
     # error_code must not slip through on the code's absence.
     arm, _, _ = _arm(monkeypatch, [(200, {"message_handle": HANDLE, "status": "ERROR"})])
     with pytest.raises(va.SendFailed) as caught:
         arm.text(US, "hi")
-    assert "status=error" in str(caught.value)
+    assert caught.value.diagnostic_category == "provider_response_rejected"
 
 
 def test_declined_and_the_twilio_dead_states_are_failures_too(monkeypatch):
@@ -176,8 +184,10 @@ def test_error_after_large_echoed_request_is_visible_without_echoing_payload(mon
         "error_code": "sender_not_authorized", "error_message": "Sender is not assigned"})])
     with pytest.raises(va.SendFailed) as caught:
         arm.text(US, "private message")
-    assert "sender_not_authorized" in str(caught.value)
-    assert "Sender is not assigned" in str(caught.value)
+    assert caught.value.diagnostic_category == "provider_http_error"
+    assert caught.value.http_status == 403
+    assert "sender_not_authorized" not in str(caught.value)
+    assert "Sender is not assigned" not in str(caught.value)
     assert "private message" not in str(caught.value)
 
 
@@ -407,7 +417,8 @@ def test_the_secret_never_appears_in_any_log_line_or_error(monkeypatch):
         arm.text(US, "hi", media=[PHOTO])
     assert SECRET not in str(caught.value)
     assert all(SECRET not in line for line in lines), lines
-    assert "[secret]" in str(caught.value), "the echo was scrubbed, not dropped"
+    assert caught.value.diagnostic_category == "provider_http_error"
+    assert "unauthorized" not in str(caught.value), "provider prose must be dropped, not copied and scrubbed"
     assert SECRET not in arm.credential and "…9876" in arm.credential
 
 
@@ -582,3 +593,79 @@ def test_receipt_missing_handle_credentials_and_timeout_never_send(monkeypatch):
         arm.message_status(HANDLE)
     assert get.call_count == 1
     assert posts == []
+
+
+@pytest.mark.parametrize('mode', ['http', 'invalid_json', 'non_object', 'rejected', 'response_error'])
+def test_send_result_exception_and_traceback_contain_only_structural_failure_facts(monkeypatch, mode):
+    arm, posts, lines = _arm(monkeypatch)
+    private = 'fixture-private-phone-message-URL'
+    toxic = private + SECRET
+    if mode == 'http':
+        response = _Response({'error_message': toxic, 'error_code': {'nested': toxic}}, 403)
+    elif mode == 'invalid_json':
+        class InvalidJSON:
+            ok, status_code = True, 200
+            def json(self):
+                raise ValueError(toxic)
+        response = InvalidJSON()
+    elif mode == 'non_object':
+        response = _Response([{'private': toxic}])
+    else:
+        response = _Response({'message_handle': HANDLE,
+            'status': 'DECLINED' if mode == 'rejected' else 'QUEUED',
+            'error_code': {'nested': toxic}, 'error_message': toxic})
+    with pytest.raises(sb.SendblueSendFailed) as caught:
+        arm._result(response, toxic, toxic)
+    rendered = ''.join(traceback.format_exception(caught.type, caught.value, caught.tb))
+    assert SECRET not in str(caught.value)
+    assert private not in str(caught.value)
+    assert SECRET not in rendered
+    assert private not in rendered
+    assert posts == [] and lines == []
+
+
+def test_http_failure_does_not_read_provider_body(monkeypatch):
+    arm, _, _ = _arm(monkeypatch)
+    class HTTPFailure:
+        ok, status_code = False, 401
+        def json(self):
+            pytest.fail('An HTTP status is enough; do not read the private error body')
+    with pytest.raises(sb.SendblueSendFailed) as caught:
+        arm._result(HTTPFailure(), 'text', US)
+    assert caught.value.http_status == 401
+
+
+@pytest.mark.parametrize('handle', [None, '', '   ', True, False, 123, 0, {}, {'handle': HANDLE}, [], [HANDLE]])
+def test_send_result_requires_an_actual_nonempty_handle_string(monkeypatch, handle):
+    arm, posts, _ = _arm(monkeypatch)
+    with pytest.raises(sb.SendblueSendFailed) as caught:
+        arm._result(_Response({'message_handle': handle, 'status': 'QUEUED'}), 'text', US)
+    assert caught.value.diagnostic_category == 'provider_response_missing_handle'
+    assert posts == []
+
+
+@pytest.mark.parametrize('status', [None, '', '   ', True, False, 123, 0, {}, {'status': 'DELIVERED'}, [], ['DELIVERED']])
+def test_send_result_requires_an_actual_nonempty_status_string(monkeypatch, status):
+    arm, posts, _ = _arm(monkeypatch)
+    with pytest.raises(sb.SendblueSendFailed) as caught:
+        arm._result(_Response({'message_handle': HANDLE, 'status': status}), 'text', US)
+    assert caught.value.diagnostic_category == 'provider_response_invalid_shape'
+    assert posts == []
+
+
+@pytest.mark.parametrize('handle', [HANDLE, 'opaque:provider/A-B_123', ' opaque receipt identity '])
+def test_valid_opaque_string_handle_keeps_its_exact_identity(monkeypatch, handle):
+    arm, posts, _ = _arm(monkeypatch)
+    assert arm._result(_Response({'message_handle': handle, 'status': 'QUEUED'}), 'text', US) == {
+        'sid': handle, 'status': 'queued', 'delivered': False}
+    assert posts == []
+
+
+def test_media_retry_log_does_not_copy_nested_provider_status(monkeypatch):
+    private = 'fixture-private-provider-status'
+    arm, posts, lines = _arm(monkeypatch, [(400, {
+        'status': {'private': private, 'secret': SECRET}, 'error_message': private})])
+    with pytest.raises(sb.SendblueSendFailed):
+        arm.text(US, 'Fixture words', media=[PHOTO])
+    assert len(posts) == 2, 'the existing single media-drop retry is unchanged'
+    assert all(private not in line and SECRET not in line for line in lines)

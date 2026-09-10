@@ -178,6 +178,14 @@ final class PhoneListener: NSObject, ObservableObject {
     // (cursor, flushes, journal, orphan buffers) is engine-blind on purpose:
     // the recognizer is the one swappable part, not the listening rules.
     private var analyzerEngine: (any ListenRequestEngine)?
+    /// Explicit Stop may finish accepted audio after capture is already off.
+    /// Each retiring request owns its cursor and capture envelope; none may
+    /// mutate the next listening session. Account/enrollment discard clears
+    /// these identities synchronously, including queued delivery callbacks.
+    private var finishingAnalyzers: [ObjectIdentifier: (
+        engine: any ListenRequestEngine, timeout: DispatchWorkItem,
+        stoppedAt: Date, result: (String, Bool) -> Void)] = [:]
+    @Published private(set) var finalizationFailed = false
     private var usingAnalyzer = false
     /// An engine that cannot provision its model is an outage to route
     /// around, not to retry into forever: three failures and this session
@@ -401,6 +409,9 @@ final class PhoneListener: NSObject, ObservableObject {
         // process. A retry/swap never comes through this new-session boundary.
         analyzerFailures = 0
         analyzerDisabledForSession = false
+        // A new listening session cannot replay audio from the one that ended.
+        // Stop discarded its buffers, so its last phrase must not fence new speech.
+        lastDelivered = nil
         installObserversOnce()
         installCallSenseOnce()
         // OFF BY DEFAULT IN EVERY APP, and until it is on `batteryLevel` is
@@ -1455,7 +1466,10 @@ final class PhoneListener: NSObject, ObservableObject {
                 // swap has already happened is deliberately rejected: its
                 // audio was orphan-replayed into the replacement, so the
                 // words arrive once, from the engine that owns them.
-                guard self.analyzerEngine === engine else { return }
+                guard self.analyzerEngine === engine else {
+                    self.finishingAnalyzers[ObjectIdentifier(engine)]?.result(text, isFinal)
+                    return
+                }
                 self.lastResultAt = Date()
                 // Analyzer finality settles this phrase, not the request.
                 // Only the legacy recognizer uses finality as its task limit.
@@ -1480,10 +1494,19 @@ final class PhoneListener: NSObject, ObservableObject {
         engine.onError = { [weak self, weak engine] in
             guard let self, let engine else { return }
             DispatchQueue.main.async {
-                guard self.analyzerEngine === engine else { return }
+                guard self.analyzerEngine === engine else {
+                    self.failFinalization(engine)
+                    return
+                }
                 self.analyzerFailures &+= 1
                 if self.analyzerFailures >= 3 { self.analyzerDisabledForSession = true }
                 self.swapRecognition(flushPending: true, cause: .error)
+            }
+        }
+        engine.onFinished = { [weak self, weak engine] in
+            DispatchQueue.main.async {
+                guard let self, let engine else { return }
+                self.completeFinalization(engine)
             }
         }
         engine.begin()
@@ -1525,6 +1548,7 @@ final class PhoneListener: NSObject, ObservableObject {
     /// ambient transcription. Clear request identities before their delayed
     /// callbacks can arrive, as well as every unsent cursor/buffer fragment.
     private func discardEnrollmentRecognition() {
+        discardFinalizations()
         silenceFlush?.cancel()
         silenceFlush = nil
         orphanLock.lock()
@@ -1537,7 +1561,7 @@ final class PhoneListener: NSObject, ObservableObject {
         retiredTask?.cancel()
         let retiredAnalyzer = analyzerEngine
         analyzerEngine = nil
-        retiredAnalyzer?.finish()
+        retiredAnalyzer?.cancel()
         usingAnalyzer = false
         cursor.reset()
         partial = ""
@@ -1582,7 +1606,117 @@ final class PhoneListener: NSObject, ObservableObject {
         wasListeningBeforeEnrollment = false
     }
 
+    /// Only the interactive Listen-off path calls this. Its lease is captured
+    /// by AnticipySession BEFORE Stop, and checked again immediately before
+    /// delivery. Auth expiry, sign-out, enrollment and deletion use stop().
+    func stopAfterCurrentAudio(shouldDeliver: @escaping () -> Bool) {
+        guard shouldDeliver() else {
+            discardCapturedAudio()
+            return
+        }
+        guard !enrolling, let retiring = analyzerEngine else {
+            stop()
+            return
+        }
+        finalizationFailed = false
+        orphanLock.lock()
+        acceptingAudio = false
+        analyzerEngine = nil
+        orphanLock.unlock()
+        let endedAt = Date()
+        let startedAt = pendingSince ?? requestBornAt
+        flushTail(reason: .final)
+        var retiringCursor = cursor
+        let identity = ObjectIdentifier(retiring)
+        let deliverLine = onLine
+        // There can be a few rapid Stop/Start cycles while Apple's finalizer
+        // drains. Memory and lifetime stay bounded, with a visible failure if
+        // a request cannot finish inside that structural budget.
+        if finishingAnalyzers.count >= 4,
+           let entry = finishingAnalyzers.values.min(by: { $0.stoppedAt < $1.stoppedAt }) {
+            failFinalization(entry.engine)
+        }
+        let timeout = DispatchWorkItem { [weak self, weak retiring] in
+            guard let self, let retiring else { return }
+            self.failFinalization(retiring)
+        }
+        let result: (String, Bool) -> Void = { [weak self, weak retiring] text, isFinal in
+            guard let self, let retiring, shouldDeliver(),
+                  self.finishingAnalyzers[identity]?.engine === retiring else { return }
+            let update = retiringCursor.observe(text)
+            var lines: [String] = []
+            if let banked = update.banked { lines.append(banked) }
+            if isFinal {
+                if let tail = retiringCursor.takePending() { lines.append(tail) }
+                retiringCursor.reset()
+            }
+            for raw in lines {
+                let line = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !line.isEmpty else { continue }
+                let delivery = { [weak self, weak retiring] in
+                    guard let self, let retiring, shouldDeliver(),
+                          self.finishingAnalyzers[identity]?.engine === retiring else { return }
+                    ListenJournal.shared.record(.flushed(reason: .final,
+                        words: line.split(whereSeparator: { $0.isWhitespace }).count))
+                    // A delayed final must not inspect a NEW session's voice
+                    // window. Unknown attribution is honest; FIFO and the
+                    // original account/capture envelope are still preserved.
+                    deliverLine?(line, startedAt, endedAt, false)
+                }
+                if let speaker = self.speaker { speaker.afterPendingDeliveries(completion: delivery) }
+                else { delivery() }
+            }
+        }
+        finishingAnalyzers[identity] = (retiring, timeout, endedAt, result)
+        stopCapture(discardFinishingAudio: false)
+        retiring.finish()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 10, execute: timeout)
+    }
+
+    private func failFinalization(_ engine: any ListenRequestEngine) {
+        let identity = ObjectIdentifier(engine)
+        guard let entry = finishingAnalyzers.removeValue(forKey: identity) else { return }
+        entry.timeout.cancel()
+        entry.engine.cancel()
+        finalizationFailed = true
+        ListenJournal.shared.record(.sessionStopped(cause: .unrecoveredFailure))
+    }
+
+    private func completeFinalization(_ engine: any ListenRequestEngine) {
+        let identity = ObjectIdentifier(engine)
+        let completion = { [weak self, weak engine] in
+            guard let self, let engine,
+                  self.finishingAnalyzers[identity]?.engine === engine else { return }
+            self.finishingAnalyzers.removeValue(forKey: identity)?.timeout.cancel()
+        }
+        // onFinished runs only after the engine's result reader. Waiting on
+        // the same delivery FIFO keeps its identity alive for queued lines.
+        if let speaker { speaker.afterPendingDeliveries(completion: completion) }
+        else { completion() }
+    }
+
+    private func discardFinalizations() {
+        let retired = finishingAnalyzers.values
+        finishingAnalyzers.removeAll()
+        for entry in retired {
+            entry.timeout.cancel()
+            entry.engine.cancel()
+        }
+    }
+
     func stop() {
+        stopCapture(discardFinishingAudio: true)
+    }
+
+    /// Forget/storage failure cannot publish even an already-recognized tail.
+    func discardCapturedAudio() {
+        discardEnrollmentRecognition()
+        stop()
+        finalizationFailed = false
+    }
+
+    private func stopCapture(discardFinishingAudio: Bool) {
+        if discardFinishingAudio { discardFinalizations() }
         // Also cancels a start still waiting for either system permission.
         // The pending recognized tail below keeps its ordinary delivery path.
         listenStartGeneration &+= 1
@@ -1608,11 +1742,15 @@ final class PhoneListener: NSObject, ObservableObject {
         scheduledAudioRecovery = nil
         scheduledAudioRecoveryCause = nil
         silenceFlush?.cancel()
-        // The engine outlives this stop only as a corpse; finishing it is
-        // what delivers the tail it was still holding.
-        analyzerEngine?.finish()
+        // An explicit Stop already transferred its analyzer to a leased
+        // drain. Every other boundary cancels pending asynchronous words.
+        orphanLock.lock()
+        acceptingAudio = false
+        let retiredAnalyzer = analyzerEngine
         analyzerEngine = nil
         usingAnalyzer = false
+        orphanLock.unlock()
+        retiredAnalyzer?.cancel()
         if tapInstalled {
             engine.inputNode.removeTap(onBus: 0)
             tapInstalled = false

@@ -60,7 +60,12 @@ for name in ('func signOut()', 'private func expireSession()'):
     assert 'clearSignedInSurface()' in boundary, name
 normal_stop = body(listener, 'func stop()')
 assert 'invalidatePendingDeliveries' not in normal_stop
-assert 'deliver(tail, reason: .final, wordsAppearedAt: partingStartedAt,' in normal_stop
+assert 'stopCapture(discardFinishingAudio: true)' in normal_stop
+# Stop delegates capture teardown to the same helper used by leased draining.
+# Follow that actual call instead of requiring the tail inline in the wrapper.
+capture_stop = body(listener, 'private func stopCapture(')
+assert 'invalidatePendingDeliveries' not in capture_stop
+assert 'deliver(tail, reason: .final, wordsAppearedAt: partingStartedAt,' in capture_stop
 delivery = body(listener, 'private func deliver(')
 assert delivery.index('speaker.tagForLatestUtterance') < delivery.index('onSpeaker(line, tag, wordsAppearedAt, now, continuesPrevious)')
 for callback in ('listener.onLine =', 'listener.onSpeaker ='):

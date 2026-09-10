@@ -128,6 +128,32 @@ quietly giving the suite production access.
 
 ## Release is deliberate
 
+### September 9 toolchain update
+
+On this Mac the Command Line Tools update changed `MacOSX.sdk` to SDK 27.0,
+whose SwiftUI typecheck requires the missing `SwiftUIMacros` compiler plugin.
+The same unchanged onboarding check, and the complete pre-edit iOS suite,
+passed with the already-installed SDK 26.5 selected for the process:
+
+```sh
+SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk \
+CLOUDFLARE_LOAD_DEV_VARS_FROM_DOT_ENV=false WRANGLER_SEND_METRICS=false \
+npm_config_offline=true \
+/usr/bin/sandbox-exec -p '(version 1)(allow default)(deny network-outbound)(allow network-outbound (remote ip "localhost:*"))' \
+  sh app/ios/Tests/run_all.sh
+```
+
+This does not change `xcode-select`, install a compiler, or provide the missing
+iOS SDK. Full iOS application compilation remains a separate Xcode/CI gate.
+Use the explicit SDK only while that directory exists on this machine; do not
+suppress a new compiler failure or assume this path exists on another Mac.
+
+For the isolated Chrome geometry gate, an existing bundled Playwright runtime
+can be supplied through `ANTICIPY_PLAYWRIGHT_MODULE`. Obtain its path from the
+Codex workspace-dependency tool instead of assuming an old npm cache survives.
+
+### Release boundaries
+
 Keep backend, website, extension and iOS evidence separate. No `deploy.sh`,
 blanket pushes/merges, account resets, or restored production reminder cron
 are part of local setup.
@@ -155,3 +181,7 @@ are part of local setup.
 The acceptance map and remaining gaps are tracked in
 [current readiness](../research/2026-09-08-customer-readiness.md), with linked
 iOS, browser, and service path inventories. Local green is not live verified.
+
+The September 10 follow-up is recorded in [the harness release ledger](../research/2026-09-10-harness-release.md).
+Use [the remaining acceptance sequence](HARNESS-ACCEPTANCE-TEJAS.md) for the
+separate CI, release and consented device/provider gates.

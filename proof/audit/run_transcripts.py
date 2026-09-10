@@ -145,7 +145,7 @@ def run_person(person, label, timeout):
             heard_started = time.monotonic()
             while time.monotonic() - heard_started < timeout:
                 row = request("GET", "/api/collections/events/records/" + transcript["id"])
-                if row.get("decision") not in ("", "hearing", "processing", "claimed"):
+                if row.get("decision") not in ("", "hearing", "processing", "claimed", "reply_processing", "reply_error_pending"):
                     result["transcript"] = row
                     result["state"] = ("model_unavailable" if row.get("decision") == "unavailable"
                                        else "observed_needs_semantic_review")

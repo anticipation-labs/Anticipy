@@ -23,6 +23,7 @@ enum AnticipySession {
         var segmentID: String? = nil
         var created: String = ""
         var source: String? = nil
+        var externalEventID: String? = nil
     }
 }
 
@@ -383,6 +384,10 @@ enum Main {
         Cases.nothingIsEverLost()
         Cases.humanize()
         Cases.whichEar()
+        for state in ["reply_processing", "reply_error_pending"] {
+            let group = HeardGroup(id: "recovery", lines: [line("r", "test input", decision: state)])
+            check("\(state) remains an outstanding line", group.pending.map(\.id) == ["r"])
+        }
 
         print("\n\(checks - failures.count)/\(checks) checks passed")
         if !failures.isEmpty {

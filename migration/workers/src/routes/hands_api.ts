@@ -521,16 +521,28 @@ export async function handsApiRun(
   if (deps.store) handDeps.store = deps.store;
   if (deps.provider) handDeps.provider = deps.provider;
   if (deps.clock) handDeps.clock = deps.clock;
-  // runStep calls this after the catalog await, just before vendor execution.
-  // The initial binding check alone cannot see an intervening correction.
-  handDeps.beforeExecute = async () => {
+  // One final authority snapshot, after runStep's connection refresh. Separate
+  // job/connection awaits cannot establish that BOTH still authorize execution.
+  // Preserve the selected account and alias; never silently switch credentials.
+  handDeps.beforeExecute = async (connection, effect) => {
     const stillCurrent = await env.DB.prepare(
-      `SELECT 1 AS current FROM "jobs" WHERE "id" = ?1 AND "params" = ?2
-        AND "goal" = ?3 AND "lease_token" = ?4 AND "owner_ref" = ?5
-        AND "status" = 'running' AND "claimed_by" = ?6 AND "lane" = ?7
-        AND "workflow_version" = ?8 AND "workflow_id" = ?9`,
+      `SELECT 1 AS current FROM "jobs" j JOIN "connections" c
+        ON c.user_id = j.owner_ref
+        WHERE j.id = ?1 AND j.params = ?2
+        AND j.goal = ?3 AND j.lease_token = ?4 AND j.owner_ref = ?5
+        AND j.status = 'running' AND j.claimed_by = ?6 AND j.lane = ?7
+        AND j.workflow_version = ?8 AND j.workflow_id = ?9
+        AND c.connected_account_id = ?10 AND COALESCE(c.alias, '') = ?11
+        AND c.toolkit = ?12 AND c.status = 'connected'
+        AND (?13 = 'read' OR c.writes_enabled = 1)
+        AND (SELECT COUNT(*) FROM connections candidate
+          WHERE candidate.user_id = j.owner_ref AND candidate.toolkit = c.toolkit
+          AND candidate.status = 'connected'
+          AND (?14 IS NULL OR candidate.alias = ?14)) = 1`,
     ).bind(row.id, row.params, row.goal, row.lease_token, row.owner_ref,
-           API_CLAIMANT, API_LANE, row.workflow_version, row.workflow_id).first();
+           API_CLAIMANT, API_LANE, row.workflow_version, row.workflow_id,
+           connection.connected_account_id, connection.alias ?? "", connection.toolkit,
+           effect, step.alias ?? null).first();
     return stillCurrent !== null;
   };
   const step = stepFromRow(row, note, workflow);

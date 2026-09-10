@@ -113,6 +113,19 @@ final class SpeakerTagger {
 
     // MARK: - the verdict
 
+    /// Order an unattributed late final after already queued voice results,
+    /// without reading or consuming the current (possibly newer) audio ring.
+    func afterPendingDeliveries(completion: @escaping () -> Void) {
+        let generation = deliveryGeneration
+        embeddingQueue.async { [weak self] in
+            guard let self else { return }
+            DispatchQueue.main.async { [weak self] in
+                guard let self, generation == self.deliveryGeneration else { return }
+                completion()
+            }
+        }
+    }
+
     /// Who spoke the line that just finished? nil when the phone cannot say.
     func tagForLatestUtterance(completion: @escaping (String?) -> Void) {
         let generation = deliveryGeneration

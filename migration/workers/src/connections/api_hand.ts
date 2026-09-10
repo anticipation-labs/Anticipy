@@ -213,9 +213,10 @@ export interface ApiHandDeps {
   store?: ConnectionsStore;
   provider?: ComposioConnections;
   clock?: () => number;
-  /** Job callers revalidate authority after catalog awaits, immediately before
-   *  execute. A failed/unknown check refuses without a vendor effect. */
-  beforeExecute?: () => Promise<boolean>;
+  /** Job callers must check job AND connection authority in one final storage
+   * snapshot. Separate awaited reads can lend stale permission to a changed
+   * job, or a current job to a revoked account. No effect follows an unknown. */
+  beforeExecute?: (connection: StoredConnection, effect: SideEffect) => Promise<boolean>;
 }
 
 // ---------------------------------------------------------------------------
@@ -536,16 +537,40 @@ export async function runStep(
     );
   }
 
-  // The job may have changed while the catalog was being read. Check at the
-  // effect boundary, not only when the route originally loaded the arguments.
+  // Catalog reads suspend execution. Permission, account selection, or
+  // connection status may have changed during that await. The earlier row is
+  // not authority to use a revoked
+  // account, nor permission to silently choose a replacement account.
+  let currentRows: StoredConnection[];
+  try {
+    currentRows = await store.connectionsForOwner(owner);
+  } catch (err) {
+    return refuse(who, "store_unavailable", describe(err), effect, true);
+  }
+  const current = pickConnection(currentRows, toolkit, step.alias);
+  if ("reason" in current) return refuse(who, current.reason, current.detail, effect, true);
+  if (current.row.connected_account_id !== row.connected_account_id || current.row.alias !== row.alias) {
+    return refuse(who, "plan_stale", "the selected connection changed before execute", effect, true);
+  }
+  if (effect !== "read" && current.row.writes_enabled !== true) {
+    return refuse(who, "writes_not_enabled", "changes were switched off before execute", effect, true);
+  }
+
+  // A job may also have changed during the connection read. The production
+  // route checks both authorities together in ONE final D1 statement, including
+  // the selected account/effect supplied here. An extra job-only await would
+  // merely move the stale-connection window to after this refresh.
   if (deps.beforeExecute) {
-    let current = false;
-    try { current = await deps.beforeExecute(); } catch { /* Unknown is a refusal. */ }
-    if (!current) {
-      return refuse(who, "plan_stale", "job authority changed before execute", effect, true);
+    let authorized = false;
+    try { authorized = await deps.beforeExecute(current.row, effect); } catch { /* Unknown is a refusal. */ }
+    if (!authorized) {
+      return refuse(who, "plan_stale", "job or connection authority changed before execute", effect, true);
     }
   }
 
+  // No further local await before dispatch. This is a fresh authorization
+  // snapshot, not a distributed transaction: revocation after this read can
+  // still overlap a request already being sent to the provider.
   // -- The one execute. ----------------------------------------------------
   const startedAt = clock();
   const elapsed = (): number => Math.max(0, Math.round(clock() - startedAt));

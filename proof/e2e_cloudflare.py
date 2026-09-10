@@ -218,7 +218,7 @@ def decision_state(row: dict) -> str:
     d = str((row or {}).get("decision") or "").strip()
     if not d:
         return "unheard"
-    if d == "processing":
+    if d in ("processing", "reply_processing", "reply_error_pending"):
         return "processing"
     return "stamped"
 

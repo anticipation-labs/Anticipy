@@ -867,13 +867,27 @@ def ingest_read_vetoes(memory, owner_ref: str = "") -> int:
 
 
 def same_phone(a: str, b: str) -> bool:
-    """E.164 comparison tolerant of formatting. Empty owner phone never
-    matches — an unconfigured owner must not authorize the whole world."""
-    digits = lambda s: "".join(ch for ch in str(s or "") if ch.isdigit())
-    da, db = digits(a), digits(b)
-    if not da or not db or len(db) < 7:
-        return False
-    return da[-10:] == db[-10:]
+    """Compare complete international routes, never a shared local suffix.
+
+    Like the app's phone saver, require an explicit country prefix (+ or 00)
+    and 8–15 digits. Only ordinary display separators may be discarded;
+    missing countries, extensions and arbitrary text cannot acquire authority.
+    """
+    def identity(value):
+        if not isinstance(value, str):
+            return None
+        value = value.strip()
+        if not re.fullmatch(r"(?:\+|00)[0-9 ().-]+", value):
+            return None
+        digits = "".join(ch for ch in value if "0" <= ch <= "9")
+        if value.startswith("00"):
+            digits = digits[2:]
+        if not 8 <= len(digits) <= 15 or digits.startswith("0"):
+            return None
+        return digits
+
+    first, second = identity(a), identity(b)
+    return first is not None and first == second
 
 
 def _clock_state() -> dict:
@@ -4068,6 +4082,9 @@ def fetch_unprocessed(kind: str = "transcript", owner_ref: str = "") -> list[dic
     return items[:BATCH]
 
 
+REPLY_RECOVERY_AFTER_SECONDS = 600  # Transport lease, never sentence meaning.
+
+
 def fetch_direct_inputs(owner_ref: str) -> list[dict]:
     """One account's direct conversation, across app and messaging transports.
 
@@ -4076,8 +4093,12 @@ def fetch_direct_inputs(owner_ref: str) -> list[dict]:
     """
     if not owner_ref:
         return []
+    recovery_before = (datetime.now(timezone.utc) - timedelta(
+        seconds=REPLY_RECOVERY_AFTER_SECONDS)).strftime("%Y-%m-%d %H:%M:%S")
     response = backend.get(f"{PB}/api/collections/events/records", params={
-        "filter": f'owner_ref={json.dumps(owner_ref)} && decision="" && '
+        "filter": f'owner_ref={json.dumps(owner_ref)} && '
+                  '(decision="" || decision="reply_error_pending" || '
+                  f'(decision="reply_processing" && updated<={json.dumps(recovery_before)})) && '
                   '(kind="sms_reply" || kind="app_reply" || '
                   '(kind="transcript" && source="typed"))',
         "perPage": PAGE, "sort": "created",
@@ -4331,6 +4352,37 @@ def _request_connection_command(event_id: str, owner_ref: str, base: str | None 
         return "pending"
 
 
+def recover_inbound_reply(ev: dict, convo, anticipy) -> str:
+    """Recover only a saved answer/outbox, never the input's reasoning/effects.
+
+    A crash can happen after task effects but before answer persistence. The
+    exact-input publisher preserves an existing normal answer, or saves one
+    factual failure notice. Its provider attempt fence prevents duplicate SMS.
+    No model call or task transition belongs in this recovery path.
+    """
+    if (not anticipy.owner_ref or ev.get("owner_ref") != anticipy.owner_ref
+            or not ev.get("id") or not callable(getattr(convo, "reply_delivery", None))):
+        return "unclaimed"
+    in_app = (ev.get("kind") == "app_reply" or
+              (ev.get("kind") == "transcript" and ev.get("source") == "typed"))
+    if not in_app and ev.get("kind") != "sms_reply":
+        return "unclaimed"
+    try:
+        saved = convo.reply_delivery(ev,
+            "Something went wrong on my end just then. Please check the "
+            "latest task status before trying again.", recovery=True)
+        if (not isinstance(saved, dict) or saved.get("via") != "durable-reply"
+                or not saved.get("id")):
+            return "unclaimed"
+        invalidate = getattr(convo, "invalidate_reply_history", None)
+        if callable(invalidate):
+            invalidate(ev)
+        return "error" if mark_processed(ev["id"], "error") else "unclaimed"
+    except Exception as error:
+        print(f"reply recovery awaiting persistence: {type(error).__name__}")
+        return "unclaimed"
+
+
 def handle_inbound(ev: dict, convo, anticipy) -> str:
     """Handle ONE answer from the owner, whichever channel it arrived on.
 
@@ -4344,6 +4396,14 @@ def handle_inbound(ev: dict, convo, anticipy) -> str:
     """
     in_app = (ev.get("kind") == "app_reply" or
               (ev.get("kind") == "transcript" and ev.get("source") == "typed"))
+    if ev.get("decision") in ("reply_error_pending", "reply_processing"):
+        if ev.get("decision") == "reply_processing":
+            updated = _ts(ev.get("updated"))
+            # A fresh/incompletely timestamped in-flight claimant is not a
+            # failed reply. Leave it alone; unknown is not an expired lease.
+            if updated is None or time.time() - updated < REPLY_RECOVERY_AFTER_SECONDS:
+                return "unclaimed"
+        return recover_inbound_reply(ev, convo, anticipy)
     lane = "app in" if in_app else "sms in"
     text = ev.get("text", "").strip()
     # One conversation key for both channels (docs leg 2 "IT WAS ONE
@@ -4397,6 +4457,12 @@ def handle_inbound(ev: dict, convo, anticipy) -> str:
         mark_processed(ev["id"], "" if connection == "pending" else connection)
         return "unclaimed" if connection == "pending" else connection
 
+    durable_reply = callable(getattr(convo, "reply_delivery", None))
+    if durable_reply and not mark_processed(ev["id"], "reply_processing"):
+        # No reasoning/effect starts on an uncertain marker. If the marker
+        # landed but its response was lost, only reply recovery may follow.
+        return "unclaimed"
+
     # An answer typed in the app is answered in the app. This is NOT a ruling on
     # whether SMS is primary or a backstop -- that question stays open -- only
     # that a reply belongs on the channel the answer arrived on.
@@ -4416,6 +4482,13 @@ def handle_inbound(ev: dict, convo, anticipy) -> str:
             out = (convo.on_reply(phone, text, reply_context=reply_context)
                    if reply_context else convo.on_reply(phone, text))
         except Exception as e:
+            if durable_reply:
+                # The original claim remains reply_processing if this mark
+                # fails. The ordinary stranded-claim sweep cannot reset it to
+                # unprocessed and replay task effects after a restart.
+                mark_processed(ev["id"], "reply_error_pending")
+                print(f"{lane}: reply awaiting recovery: {type(e).__name__}")
+                return recover_inbound_reply(ev, convo, anticipy)
             mark_processed(ev["id"], "error")
             print(f"{lane}: {text!r} -> error: {e}")
             # He answered and heard nothing back -- and because the event is
@@ -4442,7 +4515,9 @@ def handle_inbound(ev: dict, convo, anticipy) -> str:
                 print(f"{lane}: could not even apologise: {e2}")
             return "error"
 
-    mark_processed(ev["id"], out["intent"])
+    marked = mark_processed(ev["id"], out["intent"])
+    if durable_reply and not marked:
+        return "unclaimed"  # Reconcile the saved reply; never re-run on_reply.
     # How an in-app reply is DELIVERED: the app reads this row. The SMS lane has
     # already sent by now and records it here too, so both channels leave one
     # history rather than two (docs leg 2).
@@ -5298,12 +5373,12 @@ def main() -> None:
                           "hearing — the rest of the batch waits for the next "
                           "turn so his replies and reports are read first")
                     break
-                # The main composer predates app_reply and writes a typed
-                # transcript. It is still a direct conversation with us, not
-                # ambient speech to triage. Preserve the original event while
-                # sharing the reply path, claim and delivery behavior.
+                # The direct-input pass immediately above owns typed rows.
+                # This ambient list is an older snapshot: dispatching its copy
+                # again could repeat reasoning/task effects after that pass
+                # already saved the reply. Unsettled direct inputs stay in
+                # their own durable queue; never give them a second route.
                 if ev.get("source") == "typed":
-                    handle_inbound(ev, convo, anticipy)
                     continue
                 line = ev.get("text", "").strip()
                 # Mark that this person is mid-conversation, so a question

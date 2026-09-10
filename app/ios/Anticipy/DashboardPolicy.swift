@@ -357,7 +357,7 @@ enum DashboardPolicy {
             // `decision` is a column a MODEL wrote, read back. Nothing here
             // reads the text, and no rule decides what any sentence means.
             let verdict = (row.decision ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-            if verdict.isEmpty || verdict == "processing" {
+            if verdict.isEmpty || ["processing", "reply_processing", "reply_error_pending"].contains(verdict) {
                 pendingCount += 1
                 if row.at >= pendingAt { pendingAt = row.at; pendingID = row.id }
             } else if row.source != "typed" {

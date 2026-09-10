@@ -19,6 +19,10 @@ protocol ListenRequestEngine: AnyObject {
     /// the session on the legacy recognizer instead of spinning forever.
     var onError: (() -> Void)? { get set }
 
+    /// All results already published by the module have reached onResult.
+    /// Finishing the analyzer alone is not proof that its results were read.
+    var onFinished: (() -> Void)? { get set }
+
     /// Start analyzing. Called once, after the callbacks are wired and before
     /// the first append — the engine negotiates formats and provisions assets
     /// here, and buffers appended before it completes are held and replayed
@@ -35,6 +39,9 @@ protocol ListenRequestEngine: AnyObject {
 
     /// End the request: finalize everything held, deliver the tail, stop.
     func finish()
+
+    /// Privacy/account boundaries discard pending words and cancel owned work.
+    func cancel()
 }
 
 /// iOS 26's SpeechTranscriber under the `ListenRequestEngine` contract.
@@ -52,7 +59,8 @@ protocol ListenRequestEngine: AnyObject {
 ///
 /// The one documented trap this class exists to get right: the tail of a
 /// transcript never emits unless `finalizeAndFinishThroughEndOfInput()` runs.
-/// `finish()` does, so the last words of every request reach the cursor.
+/// `finish()` also waits for the results reader. The caller must keep its
+/// identity and delivery lease alive until onFinished to receive that tail.
 ///
 /// THE GAP LAW, IMPLEMENTED HERE AT THE CLOCK: every buffer is stamped with
 /// the stream's running time, and `skipSilence` advances that clock without
@@ -65,6 +73,7 @@ final class SpeechAnalyzerRequestEngine: NSObject, ListenRequestEngine {
 
     var onResult: ((String, Bool) -> Void)?
     var onError: (() -> Void)?
+    var onFinished: (() -> Void)?
 
     private let desiredLocale: Locale
     private var transcriber: SpeechTranscriber?
@@ -76,6 +85,13 @@ final class SpeechAnalyzerRequestEngine: NSObject, ListenRequestEngine {
     private var held: [AVAudioPCMBuffer] = []
     private var clockSeconds: Double = 0
     private var finished = false
+    private var cancelled = false
+    private var failureReported = false
+    private var provisioningTask: Task<Void, Never>?
+    private var startTask: Task<Void, Never>?
+    private var resultsTask: Task<Void, Never>?
+    private var finalizationTask: Task<Void, Never>?
+    private var cancellationTask: Task<Void, Never>?
 
     /// Everything below runs on this queue in order: conversion setup,
     /// buffer conversion, clock advances. The AsyncStream continuation is
@@ -94,43 +110,57 @@ final class SpeechAnalyzerRequestEngine: NSObject, ListenRequestEngine {
 
     func begin() {
         let desired = desiredLocale
-        Task { [weak self] in
-            guard let self else { return }
-            // Device and locale support: an iOS 26 phone without the asset,
-            // or with a locale the model does not cover, reports an error to
-            // the listener rather than listening badly in silence. The
-            // three-strike fallback one level up owns what happens next.
-            guard SpeechTranscriber.isAvailable,
-                  let supported = await SpeechTranscriber.supportedLocale(equivalentTo: desired) else {
-                await MainActor.run { self.onError?() }
-                return
+        queue.async { [weak self] in
+            guard let self, !self.finished, self.provisioningTask == nil else { return }
+            self.provisioningTask = Task { [weak self] in
+                guard let self else { return }
+                do {
+                    try Task.checkCancellation()
+                    // Provisioning failures use the listener's existing
+                    // session-scoped three-strike fallback.
+                    guard SpeechTranscriber.isAvailable,
+                          let supported = await SpeechTranscriber.supportedLocale(equivalentTo: desired) else {
+                        self.reportFailure()
+                        return
+                    }
+                    try Task.checkCancellation()
+                    let transcriber = SpeechTranscriber(locale: supported, preset: .transcription)
+                    let analyzer = SpeechAnalyzer(modules: [transcriber])
+                    // This may download a model, never captured audio.
+                    if let install = try await AssetInventory.assetInstallationRequest(supporting: [transcriber]) {
+                        try Task.checkCancellation()
+                        try await install.downloadAndInstall()
+                    }
+                    try Task.checkCancellation()
+                    let fallback = AVAudioFormat(standardFormatWithSampleRate: 16_000, channels: 1)
+                    let format = await SpeechAnalyzer.bestAvailableAudioFormat(
+                        compatibleWith: [transcriber]) ?? fallback
+                    try Task.checkCancellation()
+                    guard let format else {
+                        self.reportFailure()
+                        return
+                    }
+                    self.warmUp(analyzer: analyzer, transcriber: transcriber,
+                                stream: self.makeStream(), format: format)
+                } catch is CancellationError {
+                    // Only cancellation requested on our owned Task is a
+                    // silent stop. The underlying service can cancel itself
+                    // too; that is an outage the listener must recover from.
+                    if !Task.isCancelled { self.reportFailure() }
+                } catch {
+                    self.reportFailure()
+                }
             }
-            let transcriber = SpeechTranscriber(locale: supported, preset: .transcription)
-            let analyzer = SpeechAnalyzer(modules: [transcriber])
-            // The per-locale model may not be installed yet. First launch on
-            // a fresh device pays one download; every device after that is a
-            // no-op check. Nothing here ships audio — assets only.
-            if let install = try? await AssetInventory.assetInstallationRequest(supporting: [transcriber]) {
-                try? await install.downloadAndInstall()
-            }
-            // Apple publishes no format for the model; ask it. The fallback
-            // is the format the whole app speaks — 16 kHz mono — which the
-            // module's own compatibility check can still reconfigure for.
-            let fallback = AVAudioFormat(standardFormatWithSampleRate: 16_000, channels: 1)
-            let format = await SpeechAnalyzer.bestAvailableAudioFormat(
-                compatibleWith: [transcriber]) ?? fallback
-            guard let format else {
-                await MainActor.run { self.onError?() }
-                return
-            }
-            self.warmUp(analyzer: analyzer, transcriber: transcriber, stream: self.makeStream(), format: format)
         }
     }
 
     private func makeStream() -> AsyncStream<AnalyzerInput> {
         var continuation: AsyncStream<AnalyzerInput>.Continuation!
         let stream = AsyncStream<AnalyzerInput> { continuation = $0 }
-        builder = continuation
+        queue.sync {
+            if finished { continuation.finish() }
+            else { builder = continuation }
+        }
         return stream
     }
 
@@ -144,33 +174,55 @@ final class SpeechAnalyzerRequestEngine: NSObject, ListenRequestEngine {
             let replay = self.held
             self.held = []
             for buffer in replay { self.convertAndYield(buffer) }
-        }
-        Task { [weak self] in
-            do {
-                try await analyzer.start(inputSequence: stream)
-            } catch {
-                let callback = self?.onError
-                await MainActor.run { callback?() }
-            }
-        }
-        Task { [weak self] in
-            do {
-                for try await result in transcriber.results {
-                    let text = String(result.text.characters)
-                    guard !text.isEmpty else { continue }
-                    let isFinal = result.isFinal
-                    let callback = self?.onResult
-                    await MainActor.run { callback?(text, isFinal) }
+            // Installing state and taking ownership of both tasks is atomic
+            // with finish/cancel. A resumed asset await cannot launch work
+            // after the queue has already closed this request.
+            self.startTask = Task { [weak self] in
+                do {
+                    try Task.checkCancellation()
+                    try await analyzer.start(inputSequence: stream)
+                } catch is CancellationError {
+                    if !Task.isCancelled { self?.reportFailure() }
+                } catch {
+                    self?.reportFailure()
                 }
-            } catch is CancellationError {
-            } catch {
-                // The session finished under us (resource limits, a finished
-                // analyzer). The listener's error path is swap-with-flush —
-                // the same recovery the legacy recognizer gets.
-                let callback = self?.onError
-                await MainActor.run { callback?() }
+            }
+            self.resultsTask = Task { [weak self] in
+                do {
+                    for try await result in transcriber.results {
+                        try Task.checkCancellation()
+                        let text = String(result.text.characters)
+                        guard !text.isEmpty else { continue }
+                        let isFinal = result.isFinal
+                        await MainActor.run { [weak self] in
+                            guard let self, !self.queue.sync(execute: { self.cancelled }) else { return }
+                            self.onResult?(text, isFinal)
+                        }
+                    }
+                } catch is CancellationError {
+                    if !Task.isCancelled { self?.reportFailure() }
+                } catch {
+                    self?.reportFailure()
+                }
             }
         }
+    }
+
+    private func reportFailure() {
+        queue.async { [weak self] in
+            guard let self, !self.cancelled, !self.failureReported else { return }
+            self.failureReported = true
+            DispatchQueue.main.async { [weak self] in
+                guard let self, !self.queue.sync(execute: { self.cancelled }) else { return }
+                self.onError?()
+            }
+        }
+    }
+
+    private func canCompleteSuccessfully() -> Bool {
+        // A task may have just enqueued its error report. This serialized
+        // read also joins that report before a success callback is possible.
+        queue.sync { !cancelled && !failureReported }
     }
 
     func append(_ buffer: AVAudioPCMBuffer) {
@@ -179,10 +231,14 @@ final class SpeechAnalyzerRequestEngine: NSObject, ListenRequestEngine {
             if self.targetFormat != nil {
                 self.convertAndYield(buffer)
             } else if self.held.count < 600 {
-                // Warm-up hold, bounded the same way the mic tap's orphan
-                // buffer is: a counter, dropped past the cap, reported by
-                // whoever reads the gap markers.
+                // Keep ordering and the memory bound. The overflow path is
+                // an explicit capture gap plus one recoverable engine error.
                 self.held.append(buffer)
+            } else {
+                DispatchQueue.main.async {
+                    ListenJournal.shared.record(.buffersDropped(count: 1))
+                }
+                self.reportFailure()
             }
         }
     }
@@ -242,18 +298,72 @@ final class SpeechAnalyzerRequestEngine: NSObject, ListenRequestEngine {
         queue.async { [weak self] in
             guard let self, !self.finished else { return }
             self.finished = true
+            self.provisioningTask?.cancel()
             self.builder?.finish()
-            guard let analyzer = self.analyzer else { return }
-            Task {
+            guard let analyzer = self.analyzer else {
+                let dropped = self.held.count
+                self.held.removeAll()
+                DispatchQueue.main.async { [weak self] in
+                    guard let self, !self.queue.sync(execute: { self.cancelled }) else { return }
+                    if dropped > 0 {
+                        ListenJournal.shared.record(.buffersDropped(count: dropped))
+                        self.onError?()
+                    }
+                    self.onFinished?()
+                }
+                return
+            }
+            let startTask = self.startTask
+            let resultsTask = self.resultsTask
+            self.finalizationTask = Task { [weak self] in
+                await startTask?.value
+                guard !Task.isCancelled, self?.canCompleteSuccessfully() == true else { return }
                 // The documented trap, handled: without this call the tail of
                 // the transcript never emits and the last words of every
                 // request die in the model's pipeline.
-                try? await analyzer.finalizeAndFinishThroughEndOfInput()
+                do { try await analyzer.finalizeAndFinishThroughEndOfInput() }
+                catch is CancellationError {
+                    if !Task.isCancelled { self?.reportFailure() }
+                    return
+                }
+                catch { self?.reportFailure(); return }
+                // Apple's finish closes the results stream, but queued
+                // results still have to be iterated before the caller retires
+                // the identity that owns those words.
+                await resultsTask?.value
+                guard !Task.isCancelled, self?.canCompleteSuccessfully() == true else { return }
+                await MainActor.run { [weak self] in
+                    guard let self, self.canCompleteSuccessfully() else { return }
+                    self.onFinished?()
+                }
             }
+        }
+    }
+
+    func cancel() {
+        queue.async { [weak self] in
+            guard let self, !self.cancelled else { return }
+            self.cancelled = true
+            self.finished = true
+            self.provisioningTask?.cancel()
+            self.startTask?.cancel()
+            self.resultsTask?.cancel()
+            self.finalizationTask?.cancel()
+            self.builder?.finish()
+            self.held.removeAll()
+            if let analyzer = self.analyzer {
+                self.cancellationTask = Task { await analyzer.cancelAndFinishNow() }
+            }
+            self.analyzer = nil
+            self.transcriber = nil
         }
     }
 
     deinit {
         builder?.finish()
+        provisioningTask?.cancel()
+        startTask?.cancel()
+        resultsTask?.cancel()
+        finalizationTask?.cancel()
     }
 }

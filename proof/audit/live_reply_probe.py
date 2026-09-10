@@ -106,7 +106,7 @@ def main():
                             break
                     time.sleep(3)
                     continue
-                if replies and current.get("decision") not in (None, "", "processing"):
+                if replies and current.get("decision") not in (None, "", "processing", "reply_processing", "reply_error_pending"):
                     break
                 time.sleep(3)
             evidence["observations"].append({"case": name, "source": text,

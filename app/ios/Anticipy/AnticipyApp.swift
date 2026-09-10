@@ -795,6 +795,9 @@ final class AnticipySession: ObservableObject {
     /// Invalidated by every new refresh and every account boundary. It is not
     /// persisted: this is a lifetime token for in-flight work, not user state.
     private var refreshGeneration = 0
+    /// Cancels queued capture deliveries even when credentials remain unchanged
+    /// during erasure, or an account leaves and returns with the same token.
+    private var captureDeliveryGeneration = 0
     let listener = PhoneListener()
     /// NO PENDANT TRANSCRIBER. `TranscriberClient` was deleted with this
     /// change: it opened a websocket to a speech vendor and streamed the
@@ -1009,8 +1012,10 @@ final class AnticipySession: ObservableObject {
         listener.onLine = { [weak self] line, startedAt, endedAt, continues in
             guard let self, let lease = AccountWriteLeasePolicy.begin(accountID: self.accountID,
                 authToken: self.authToken, isSignedIn: self.isSignedIn) else { return }
+            let deliveryGeneration = self.captureDeliveryGeneration
             Task {
-                guard AccountWriteLeasePolicy.isCurrent(lease, accountID: self.accountID,
+                guard deliveryGeneration == self.captureDeliveryGeneration,
+                    AccountWriteLeasePolicy.isCurrent(lease, accountID: self.accountID,
                     authToken: self.authToken, isSignedIn: self.isSignedIn) else { return }
                 await self.heard(line, from: .phoneMic, at: startedAt,
                                      endedAt: endedAt,
@@ -1024,8 +1029,10 @@ final class AnticipySession: ObservableObject {
         listener.onSpeaker = { [weak self] line, tag, startedAt, endedAt, continues in
             guard let self, let lease = AccountWriteLeasePolicy.begin(accountID: self.accountID,
                 authToken: self.authToken, isSignedIn: self.isSignedIn) else { return }
+            let deliveryGeneration = self.captureDeliveryGeneration
             Task {
-                guard AccountWriteLeasePolicy.isCurrent(lease, accountID: self.accountID,
+                guard deliveryGeneration == self.captureDeliveryGeneration,
+                    AccountWriteLeasePolicy.isCurrent(lease, accountID: self.accountID,
                     authToken: self.authToken, isSignedIn: self.isSignedIn) else { return }
                 await self.heard(line, speaker: tag, from: .phoneMic,
                                      at: startedAt, endedAt: endedAt,
@@ -1133,7 +1140,7 @@ final class AnticipySession: ObservableObject {
             captureStorageFailed = true
             // A recorder with nowhere to preserve its words must not look
             // healthy. Already captured words cannot be claimed as saved.
-            if source != .typed { stopListening() }
+            if source != .typed { discardListening() }
             return false
         }
         // A typed line deserves an instant felt ack. Ambient capture does
@@ -1146,7 +1153,7 @@ final class AnticipySession: ObservableObject {
         // one every twelve seconds: somebody in a meeting produces a line every
         // few seconds and a cue on each one is a woodpecker in their pocket.
         playCue(.heard)
-        sessionLines.append(SessionLine(text: line))
+        sessionLines.append(SessionLine(text: line, externalEventID: externalID))
         // Stamped locally too, not only on the wire: the line is in the feed
         // for the ~3s until the server echoes it, and a badge that appears a
         // poll late looks like a glitch in exactly the moment someone is
@@ -1493,18 +1500,23 @@ final class AnticipySession: ObservableObject {
                                       // unset column must read as "no verdict
                                       // about which microphone", not as a
                                       // fourth kind of ear.
-                                      source: ($0.source?.isEmpty == false) ? $0.source : nil) }
-            // Reconcile one-to-one by CONSUMING matches: saying the same
-            // sentence twice used to mark both local copies received off a
-            // single server row, and inherit the older row's verdict.
-            // Oldest-first so the first utterance claims the first row.
+                                      source: ($0.source?.isEmpty == false) ? $0.source : nil,
+                                      externalEventID: $0.external_event_id) }
+            // Receipt identity is transport metadata, never the wording. An
+            // earlier identical utterance cannot acknowledge a new queued one.
+            // Legacy lines without identity remain unconfirmed rather than
+            // borrowing somebody else's receipt or verdict.
             var unclaimed = serverLines
             for i in sessionLines.indices {
-                guard let hit = unclaimed.firstIndex(where: { $0.text == sessionLines[i].text })
+                guard let identity = sessionLines[i].externalEventID, !identity.isEmpty,
+                      let hit = unclaimed.firstIndex(where: { $0.externalEventID == identity })
                 else { continue }
                 let match = unclaimed.remove(at: hit)
                 sessionLines[i].received = true
-                if let decision = match.decision, sessionLines[i].decision == nil {
+                // A receipt can first be processing and later reach a final
+                // verdict. Follow that same event's nonempty state changes;
+                // an unchanged refresh must not replay its action haptic.
+                if let decision = match.decision, sessionLines[i].decision != decision {
                     sessionLines[i].decision = decision
                     // Being acted on is the one verdict worth feeling.
                     if decision == "act" { Haptics.engage() }
@@ -1512,9 +1524,12 @@ final class AnticipySession: ObservableObject {
             }
             // Never let a just-spoken line vanish: local lines the server
             // hasn't echoed yet stay in the feed, marked as still in flight.
-            let serverTexts = Set(serverLines.map(\.text))
+            let acknowledgedLocalIDs = Set(serverLines.compactMap { line -> String? in
+                guard let identity = line.externalEventID, !identity.isEmpty else { return nil }
+                return "local-\(identity)"
+            })
             serverLines.append(contentsOf: transcript.filter {
-                $0.id.hasPrefix("local-") && !serverTexts.contains($0.text)
+                $0.id.hasPrefix("local-") && !acknowledgedLocalIDs.contains($0.id)
             })
             if transcript != serverLines { transcript = serverLines }
             let said = events.filter { $0.kind == "anticipy_says" || $0.kind == "anticipy_text" }
@@ -2428,6 +2443,10 @@ final class AnticipySession: ObservableObject {
     /// keep listening, display the previous account's words, or leave its
     /// errands on the lock screen.
     private func clearSignedInSurface() {
+        // Covers direct account replacement as well as sign-out/expiry.
+        // No finalizer may publish old audio after this boundary.
+        captureDeliveryGeneration &+= 1
+        listener.discardCapturedAudio()
         speakerTagger.invalidatePendingDeliveries()
         // A network response already on its way back must not repopulate this
         // screen (or its lock-screen notifications) after the account leaves.
@@ -2571,7 +2590,12 @@ final class AnticipySession: ObservableObject {
     @discardableResult
     func clearPendingLines() -> Bool {
         guard !accountID.isEmpty else { return false }
-        return clearPendingLinesOwned(by: accountID)
+        guard clearPendingLinesOwned(by: accountID) else { return false }
+        // Erasure cancels already-queued callbacks and stopped drains, not the
+        // microphone: newly captured speech can still be delivered normally.
+        captureDeliveryGeneration &+= 1
+        speakerTagger.invalidatePendingDeliveries()
+        return true
     }
 
     @discardableResult
@@ -2649,7 +2673,7 @@ final class AnticipySession: ObservableObject {
             accountID: accountID, authToken: authToken, isSignedIn: isSignedIn)
         else { return false }
         let requestedBackend = backend
-        stopListening()
+        discardListening()
         guard clearAllPendingLinesOnDevice() else { return false }
         clearAllPendingAppRepliesOnDevice()
         let oldIdentity = ownerID
@@ -2682,11 +2706,34 @@ final class AnticipySession: ObservableObject {
 
     func stopListening() {
         keepListening = false
-        listener.stop()
+        if let lease = AccountWriteLeasePolicy.begin(
+            accountID: accountID, authToken: authToken, isSignedIn: isSignedIn) {
+            let deliveryGeneration = captureDeliveryGeneration
+            // A final result belongs to the account/token that pressed Stop,
+            // never whichever account happens to be current when it arrives.
+            listener.stopAfterCurrentAudio(shouldDeliver: { [weak self] in
+                guard let self else { return false }
+                return deliveryGeneration == self.captureDeliveryGeneration
+                    && AccountWriteLeasePolicy.isCurrent(
+                    lease, accountID: self.accountID, authToken: self.authToken,
+                    isSignedIn: self.isSignedIn)
+            })
+        } else {
+            listener.stop()
+        }
         // AFTER the stop, and for the mirror of the reason in `startListening`:
         // `listen-close` is tonal, and the engine has to be down before a
         // pitched cue is safe on the speaker route.
         playCue(.listenClose)
+    }
+
+    /// Erasure and an unwritable capture queue must not schedule another tail
+    /// for publication. User Stop is the separate, account-bound drain above.
+    private func discardListening() {
+        captureDeliveryGeneration &+= 1
+        speakerTagger.invalidatePendingDeliveries()
+        keepListening = false
+        listener.discardCapturedAudio()
     }
 
     /// Every sound in the app goes through here.
@@ -3529,6 +3576,8 @@ final class AnticipySession: ObservableObject {
         /// the synthesized memberwise init keeps every existing call site
         /// compiling.
         var source: String? = nil
+        /// Exact transport receipt; repeated wording is not an identity.
+        var externalEventID: String? = nil
     }
 
     /// One line spoken in the current Listen session, tracked locally from
@@ -3536,6 +3585,7 @@ final class AnticipySession: ObservableObject {
     struct SessionLine: Identifiable {
         let id = UUID()
         let text: String
+        var externalEventID: String? = nil
         var received = false
         var decision: String?
     }

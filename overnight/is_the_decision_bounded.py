@@ -107,6 +107,8 @@ def decided_rows(since_s: str) -> list[dict]:
             params={"perPage": PAGE, "page": page, "sort": "created",
                     "filter": (f'kind="transcript" && decision != "" '
                                f'&& decision != "processing" '
+                               f'&& decision != "reply_processing" '
+                               f'&& decision != "reply_error_pending" '
                                f'&& created >= "{since_s}"'),
                     "fields": "id,created,decision,heard_ms,heard_calls"})
         r.raise_for_status()

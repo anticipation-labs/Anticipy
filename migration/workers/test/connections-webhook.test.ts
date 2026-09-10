@@ -700,6 +700,37 @@ await check("the write opt-in and the alias survive the flip", async () => {
   assert.equal(row.user_id, OWNER);
 });
 
+for (const change of ["permissions", "deleted", "disconnected", "owner_changed", "toolkit_changed"] as const) {
+  await check(`expiry cannot overwrite ${change} after its connection read`, async () => {
+    const r = await rig({connections:[conn({writes_enabled:true})]});
+    const read = r.deps.store.readConnection;
+    r.deps.store.readConnection = async (owner, id) => {
+      const observed = await read(owner,id);
+      if (change === "permissions") r.db.db.prepare("UPDATE connections SET writes_enabled=0,alias='personal',last_used_at=123").run();
+      if (change === "deleted") r.db.db.prepare("DELETE FROM connections").run();
+      if (change === "disconnected") r.db.db.prepare("UPDATE connections SET status='disconnected'").run();
+      if (change === "owner_changed") r.db.db.prepare("UPDATE connections SET user_id=?").run(OTHER);
+      if (change === "toolkit_changed") r.db.db.prepare("UPDATE connections SET toolkit=?").run(APP_2);
+      return observed;
+    };
+    const response = await post(r);
+    assert.equal(response.status,200);
+    const rows = r.db.rows<Record<string,unknown>>("SELECT * FROM connections");
+    if (change === "permissions") {
+      assert.equal(rows[0].status,"needs_reconnect");
+      assert.equal(rows[0].writes_enabled,0);
+      assert.equal(rows[0].alias,"personal");
+      assert.equal(rows[0].last_used_at,123);
+    } else {
+      assert.equal(nudgesOf(r).length,0,"stale expiry queued a new connection ask");
+      if (change === "deleted") assert.equal(rows.length,0,"deleted credential was resurrected");
+      if (change === "disconnected") assert.equal(rows[0].status,"disconnected");
+      if (change === "owner_changed") assert.equal(rows[0].user_id,OTHER);
+      if (change === "toolkit_changed") assert.equal(rows[0].toolkit,APP_2);
+    }
+  });
+}
+
 await check("the toolkit comes from the stored row, never from the event", async () => {
   const r = await rig();
   const res = await post(r, {
@@ -831,7 +862,7 @@ await check("a failed nudge write is a 500, so the vendor retries", async () => 
 
 await check("a failed connection write writes no nudge either", async () => {
   const r = await rig();
-  r.db.failOn = (sql) => /INSERT INTO "connections"/.test(sql);
+  r.db.failOn = (sql) => /UPDATE "connections" SET "status"/.test(sql);
   const res = await post(r);
   assert.equal(res.status, 500);
   assert.equal(statusOf(r, OWNER_ACCOUNT), "connected");

@@ -306,7 +306,7 @@ def classify(row: dict, job_ids: set, echo: bool) -> str:
 
     if not decision:
         return "never_processed"
-    if decision == "processing":
+    if decision in ("processing", "reply_processing", "reply_error_pending"):
         return "in_flight"
     if decision == "ignore":
         return "echo_of_her" if echo else "unexplained_silence"

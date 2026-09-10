@@ -11,6 +11,8 @@ import time
 from datetime import datetime, timedelta, timezone
 from . import backend
 from .reply_authority import recipient_digest, task_snapshot
+from .reply_diagnostics import diagnostic, exception_diagnostic
+from .sendblue_arm import SendblueSendFailed
 
 
 class ReplyDelivery:
@@ -40,11 +42,12 @@ class ReplyDelivery:
         response.raise_for_status()
         return response.json()
 
-    def publish(self, event, body, media=None, metadata=None):
+    def publish(self, event, body, media=None, metadata=None, *, recovery=False):
         if not self.owner or event.get('owner_ref') != self.owner or not event.get('id'):
             raise ValueError('A reply requires its canonical owner and input event')
         key = f'reply:{event["id"]}'
         found = self.rows(f'external_event_id={json.dumps(key)}', 1)
+        existing_answer = bool(found)
         if found:
             row = found[0]
         else:
@@ -59,12 +62,20 @@ class ReplyDelivery:
                 if not found:
                     raise
                 row = found[0]
+                existing_answer = True
         key = f'reply-outbox:{row["id"]}'
         pending = self.rows(f'external_event_id={json.dumps(key)}', 1)
         if not pending:
             try:
+                # A previous process may have saved a task question, then died
+                # before saving its version/approval context in the outbox.
+                # Recovery must preserve its words without fabricating an
+                # unconditional SMS. An intact outbox above keeps its original
+                # metadata; a newly-created factual failure notice is safe.
+                state = ('reply_context_unavailable' if recovery and existing_answer
+                         else 'reply_pending')
                 pending = [self.create(kind='reply_outbox', text=json.dumps(metadata) if metadata else '', goal=row['id'],
-                    decision='reply_pending', external_event_id=key)]
+                    decision=state, external_event_id=key)]
             except Exception:
                 pending = self.rows(f'external_event_id={json.dumps(key)}', 1)
                 if not pending:
@@ -127,6 +138,7 @@ class ReplyDelivery:
             return
         state = 'sms_unconfirmed'
         result = None
+        failure = None
         try:
             result = (self.transport.send(phone, message['text'], media=media)
                       if media else self.transport.send(phone, message['text']))
@@ -136,16 +148,23 @@ class ReplyDelivery:
                 state = 'sms_skipped'
             else:
                 state = 'sms_mock'
-        except Exception:
+        except Exception as exc:
             # Do not infer rejection from an exception string: the request may
             # have reached the provider. This is explicitly not "delivered".
-            pass
+            # Diagnosis is structural metadata only, never resend authority.
+            failure = (diagnostic('sms_send', exc.diagnostic_category,
+                                  http_status=exc.http_status)
+                       if isinstance(exc, SendblueSendFailed)
+                       else exception_diagnostic(exc, stage='sms_send'))
         try:
+            metadata = {'state': state, 'provider_id':
+                        (result or {}).get('sid', ''),
+                        'recipient_digest': recipient_digest(phone)}
+            if failure is not None:
+                metadata['diagnostic'] = failure
             response = backend.patch(f'{self.url}/{attempt["id"]}', json={
                 'decision': state,
-                'text': json.dumps({'state': state, 'provider_id':
-                                   (result or {}).get('sid', ''),
-                                   'recipient_digest': recipient_digest(phone)}),
+                'text': json.dumps(metadata),
             })
             response.raise_for_status()
             self.finish(row, state)
