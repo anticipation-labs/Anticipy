@@ -867,7 +867,10 @@ settings:
     # 173: Fence capture permission callbacks after Stop/account exit, isolate
     #      enrollment samples, and preserve healthy analyzer requests through
     #      watchdog ticks and phrase finals. Retry analyzer on a new session.
-    CURRENT_PROJECT_VERSION: "174"
+    # 175: Private-pilot rebuild of the released 174 iOS behavior against the
+    #      current backend release. The experimental legacy cursor repair is
+    #      deliberately excluded; this is not a new audio-behavior fix.
+    CURRENT_PROJECT_VERSION: "175"
     DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: NO
@@ -927,7 +930,7 @@ targets:
         # literal from a Mac one, and two products answering "which build
         # are you holding" with different numbers is the exact disease this
         # gate exists to prevent.
-        CURRENT_PROJECT_VERSION: "174"
+        CURRENT_PROJECT_VERSION: "175"
         DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_ENTITLEMENTS: ../macos/AnticipyMac/AnticipyMac.entitlements

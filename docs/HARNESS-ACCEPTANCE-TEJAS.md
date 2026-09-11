@@ -7,19 +7,24 @@ the full device workflow. The latest [variation assessment and repair plan](../r
 records fresh stress-test failures and the still-unpaired/unconnected account.
 Current diagnostics UI is **Settings → Listening → Listening activity**.
 
-**Local repair update (September 11):** candidate **175** has the pending-speech
-provenance repair and passes the default iOS logic suite, but has not been
-committed, uploaded or installed. Connector deadlines and harness honesty fixes
-are also local. Broad cursor fuzz is still red; real device/connector acceptance
-remains outstanding. The funded key is now verified: 15 server-work cases,
+**Release update (September 11):** connector deadlines and harness honesty fixes
+are pushed at `c05d614a`; the API release was independently verified. The new
+private TestFlight **175** is being prepared with the already-released 174 iOS
+behavior. The experimental pending-speech repair is **excluded** after independent
+review found increased callback cost and unresolved extra-word tradeoffs. Broad
+cursor fuzz is still red; real device/connector acceptance remains outstanding.
+See the [175 release ledger](../research/2026-09-11-testflight-175-release.md) for
+the actual build, CI, Apple and installation status rather than assuming this
+preparation note means it has shipped. The funded key was verified in the capped
+isolated run: 15 server-work cases,
 three complete local task flows, five isolated Chrome tasks and three connector
 intent fixtures passed real-model testing and independent review. This does not
-certify a deployed release or actual OAuth. See the
+certify actual OAuth or all live product paths. See the
 [latest funded-verification report](../research/2026-09-11-funded-variation-verification.md) and
 [approved-fixes checkpoint](../research/2026-09-11-approved-fixes-checkpoint.md).
 The historical release notes below concern build 174, not this new candidate.
 
-This is the remaining acceptance sequence for the September 10 candidate.
+Historical September 10 release context (not the status of build 175):
 The API and brain are deployed and verified; TestFlight **1.1.1 (174)** is
 available to the approved private pilot and, after correcting its missing build
 assignment, the owner's existing private group. The owner reports 174 visible
@@ -27,10 +32,11 @@ and updating; completed installation is not yet confirmed. Current evidence
 and limits are in
 [the release ledger](../research/2026-09-10-harness-release.md).
 
-Before a new live session, confirm installation of 174 and resolve or isolate
-the local model credential's HTTP 402 failure. That local result is not evidence
-that the deployed key has the same problem. Do not repeatedly submit messages
-while diagnosing provider failures.
+Before a new live session, use the latest verified build in the release ledger
+and confirm that number on the phone. The later capped funded-model run
+supersedes the old local HTTP 402 blocker; it does not certify every deployed
+provider or authorize resetting an exhausted test budget. Do not repeatedly
+submit messages while diagnosing provider failures.
 
 ## 1. Finish the local gate first
 
@@ -52,7 +58,11 @@ These need this Mac's installed SDK path. They do not activate a microphone,
 download speech assets, invoke a model, send a message or inspect an account.
 Do not turn on `ANTICIPY_HANDS_LIVE` to eliminate the intentional model-test skips.
 
-## 2. Release completed; confirm this phone's access and installation
+## 2. Verify the latest release, this phone's access and installation
+
+Use the [175 release ledger](../research/2026-09-11-testflight-175-release.md)
+for the new private build. The following paragraph preserves the historical
+174 handoff and the access issue to check for on every later build.
 
 Full Xcode/iOS SDK is missing on this Mac. Foundation harness builds and the
 actual engine's macOS-framework typecheck are not a full iOS application build.
