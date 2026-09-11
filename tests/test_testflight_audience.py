@@ -46,7 +46,7 @@ class Apple:
         if path == "/v1/betaTesters":
             assert params["filter[apps]"] == "app"
         if path == "/v1/betaGroups":
-            assert params == {"filter[app]": "app", "filter[builds]": "b175", "limit": 200}
+            assert params == {"filter[builds]": "b175", "limit": 200}
         reply = self.pages[path]
         if isinstance(reply, Exception):
             raise reply

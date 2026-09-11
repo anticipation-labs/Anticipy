@@ -163,7 +163,10 @@ def inventory(client, *, bundle, build_number):
     build_id = build["id"]
     groups = api.rows(f"/v1/apps/{app_id}/betaGroups", "betaGroups", {"limit": 200})
     testers = api.rows("/v1/betaTesters", "betaTesters", {"filter[apps]": app_id, "limit": 200})
-    linked = api.rows("/v1/betaGroups", "betaGroups", {"filter[app]": app_id, "filter[builds]": build_id, "limit": 200})
+    # The combined app/build query returned HTTP 400 in CI; use the release
+    # helper's build-scoped route. This build was resolved within the app; verify every
+    # returned group belongs to the app below. Never query unfiltered groups.
+    linked = api.rows("/v1/betaGroups", "betaGroups", {"filter[builds]": build_id, "limit": 200})
     direct = api.rows(f"/v1/builds/{build_id}/individualTesters", "betaTesters", {"limit": 200})
     detail = record(api.request("GET", f"/v1/builds/{build_id}/buildBetaDetail").get("data"), "buildBetaDetails")
     group_by_id, tester_by_id = {g["id"]: g for g in groups}, {t["id"]: t for t in testers}
