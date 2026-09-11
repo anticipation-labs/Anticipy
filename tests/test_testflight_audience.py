@@ -227,7 +227,8 @@ def test_forbidden_and_exception_messages_are_sanitized():
     apple.pages["/v1/builds/b175/individualTesters"] = urllib.error.HTTPError(
         "https://secret.invalid", 403, "private@example.invalid", {}, None)
     result = audit(apple)
-    assert result["error"] == {"category": "api_forbidden", "http_status": 403}
+    assert result["error"] == {"category": "api_forbidden", "http_status": 403,
+                               "endpoint": "/v1/builds/b175/individualTesters"}
     assert "private@example.invalid" not in json.dumps(result)
     apple.pages["/v1/builds/b175/individualTesters"] = ValueError("secret-token-do-not-print")
     assert "secret-token" not in json.dumps(audit(apple))
@@ -238,6 +239,17 @@ def test_read_only_adapter_rejects_any_write_before_client():
     with pytest.raises(InventoryError, match="read_only_violation"):
         ReadOnly(apple).request("POST", "/v1/betaTesters", body={})
     assert apple.calls == []
+
+
+def test_http_diagnostic_excludes_pagination_query_and_provider_details():
+    apple = Apple()
+    path = "/v1/betaGroups?cursor=opaque-private-cursor"
+    apple.pages[path] = urllib.error.HTTPError(
+        "https://provider.invalid/private", 400, "private provider details", {}, None)
+    with pytest.raises(InventoryError) as raised:
+        ReadOnly(apple).request("GET", path)
+    assert raised.value.endpoint == "/v1/betaGroups"
+    assert str(raised.value) == "api_http_error"
 
 
 def test_cli_has_distinct_ready_attention_and_incomplete_exits(capsys):

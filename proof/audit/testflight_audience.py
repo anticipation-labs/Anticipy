@@ -29,9 +29,10 @@ BUILD_STATES = {
 
 
 class InventoryError(RuntimeError):
-    def __init__(self, category, http_status=None):
+    def __init__(self, category, http_status=None, endpoint=None):
         super().__init__(category)
         self.category, self.http_status = category, http_status
+        self.endpoint = endpoint
 
 
 def identifier(value):
@@ -79,7 +80,7 @@ class ReadOnly:
             return self.client.request("GET", path, params)
         except urllib.error.HTTPError as exc:
             status = exc.code if type(exc.code) is int and 100 <= exc.code <= 599 else None
-            raise InventoryError("api_forbidden" if status == 403 else "api_http_error", status) from None
+            raise InventoryError("api_forbidden" if status == 403 else "api_http_error", status, path.split("?")[0]) from None
         except Exception:
             # Never render exception messages, provider bodies or credential paths.
             raise InventoryError("api_transport_error") from None
@@ -235,10 +236,13 @@ def inventory(client, *, bundle, build_number):
         "limits": "Sequential API inventory, not an atomic snapshot. Ready means observed API eligibility and acceptance, not selected-build installation or notification delivery."}
 
 
-def incomplete(category, http_status=None):
+def incomplete(category, http_status=None, endpoint=None):
     error = {"category": category}
     if http_status is not None:
         error["http_status"] = http_status
+    if endpoint is not None:
+        # Constructed API route only: no query values or provider response body.
+        error["endpoint"] = endpoint
     return {"inventory_complete": False, "all_existing_testers_covered": None,
             "all_existing_testers_ready": False, "error": error}
 
@@ -247,7 +251,7 @@ def audit_audience(client, *, bundle, build_number):
     try:
         return inventory(client, bundle=bundle, build_number=build_number)
     except InventoryError as exc:
-        return incomplete(exc.category, exc.http_status)
+        return incomplete(exc.category, exc.http_status, exc.endpoint)
     except Exception:
         return incomplete("malformed_response")
 
