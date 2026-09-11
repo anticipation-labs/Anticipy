@@ -3,8 +3,9 @@
  *
  *   node --experimental-strip-types migration/workers/test/connections-provider.test.ts
  *
- * Every test here injects its own transport. There is no network in this file,
- * no API key is needed to run it, and no Composio account exists behind it.
+ * Every test here injects its own transport. The imported liveness suite also
+ * uses native fetch against isolated loopback servers; there is no external
+ * network, API key requirement, or Composio account behind any check.
  *
  * The tests are ordered by what they protect, hardest first. The first block is
  * the one the provider is shaped around: a connection bound to the wrong
@@ -1224,14 +1225,14 @@ await check("a tokenised URL never survives into an error message", async () => 
   const { impl } = fakeFetch(() => ({ throws: { name: "https://connect.vendor.dev/link/abc123?key=x" } }));
   const err = await refusalOf(() => provider(impl).connections(OWNER_A));
   assert.ok(!err.message.includes("abc123"), "a tokenised link reached an error message");
-  assert.match(err.message, /\[redacted-url\]/);
+  assert.equal(err.message, "connections connections failed (HTTP 0): transport_failure");
 });
 
 await check("PORT FIX: a SCHEMELESS tokenised URL is redacted too", async () => {
   const { impl } = fakeFetch(() => ({ throws: { name: "connect.vendor.dev/link/abc123" } }));
   const err = await refusalOf(() => provider(impl).connections(OWNER_A));
   assert.ok(!err.message.includes("abc123"), "a schemeless link rode into an error intact");
-  assert.match(err.message, /\[redacted-url\]/);
+  assert.equal(err.message, "connections connections failed (HTTP 0): transport_failure");
 });
 
 await check("CONTROL: an ordinary vendor error token still reaches the log intact", async () => {
@@ -2235,6 +2236,12 @@ await check("a repeated cursor refuses instead of looping or claiming completene
   const f = fakeFetch(() => ({ body: { items: [], next_cursor: "same" } }));
   await assert.rejects(() => provider(f.impl).connections(OWNER_A), ConnectionsResponseShape);
   assert.equal(f.calls.length, 2);
+});
+
+// Keep the deadline/native-loopback regression suite in the existing CI gate.
+await check("provider liveness regressions", async () => {
+  const { runProviderLivenessTests } = await import("./connections-provider-liveness.test.ts");
+  await runProviderLivenessTests();
 });
 
 if (failures) {

@@ -195,6 +195,23 @@ export const OWNER_ID_SHAPE = /^[a-z0-9]{15}$/;
  *  the cache is an optimisation, and the wrong-person guards are on the wire. */
 export const MAX_CACHED_SESSIONS = 500;
 
+/** Transport ceilings, not retries. A timeout after a write is an UNKNOWN
+ * outcome. Keeping the body and each paginated read inside the same budget
+ * also prevents a responsive stream or fresh cursor from keeping a call alive
+ * forever. Constructor overrides may only LOWER these bounds for local tests. */
+export const CONNECTION_REQUEST_TIMEOUT_MS = 20_000;
+export const CONNECTION_PAGINATION_TIMEOUT_MS = 30_000;
+export const MAX_CONNECTION_PAGES = 10;
+export const MAX_CONNECTION_RESPONSE_BYTES = 4 * 1024 * 1024;
+
+function boundedOption(value: unknown, ceiling: number, name: string): number {
+  if (value === undefined) return ceiling;
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 1 || value > ceiling) {
+    throw new ConnectionsBadArgument("configuration", `${name} must be a positive integer at most ${ceiling}`);
+  }
+  return value;
+}
+
 /** THE SEARCH CAP, and it is a CEILING no caller can raise.
  *
  *  `search()` asks the vendor for at most this many rows and cuts whatever
@@ -1010,6 +1027,12 @@ export interface ComposioConnectionsOptions {
   /** Always injected in tests. Defaults to `globalThis.fetch`, which is why
    *  there is no network anywhere in this suite. */
   fetchImpl?: typeof globalThis.fetch;
+  /** Local/test overrides only; positive integers, no higher than the exported
+   * ceilings. No Worker environment binding can enlarge or disable them. */
+  requestTimeoutMs?: number;
+  paginationTimeoutMs?: number;
+  maxConnectionPages?: number;
+  maxResponseBytes?: number;
 }
 
 /** The one Worker binding this module needs. Declared here rather than imported
@@ -1025,6 +1048,10 @@ export class ComposioConnections implements ConnectionProvider {
   #apiKey: string;
   #baseUrl: string;
   #fetch: typeof globalThis.fetch | undefined;
+  #requestTimeoutMs: number;
+  #paginationTimeoutMs: number;
+  #maxConnectionPages: number;
+  #maxResponseBytes: number;
   /** owner -> session id. */
   #sessions: Map<string, string>;
   /** session id -> the ONE owner it was minted for. This is the reverse index,
@@ -1040,6 +1067,10 @@ export class ComposioConnections implements ConnectionProvider {
   #inFlight: Map<string, Promise<string>>;
 
   constructor(opts: ComposioConnectionsOptions = {}) {
+    this.#requestTimeoutMs = boundedOption(opts.requestTimeoutMs, CONNECTION_REQUEST_TIMEOUT_MS, "requestTimeoutMs");
+    this.#paginationTimeoutMs = boundedOption(opts.paginationTimeoutMs, CONNECTION_PAGINATION_TIMEOUT_MS, "paginationTimeoutMs");
+    this.#maxConnectionPages = boundedOption(opts.maxConnectionPages, MAX_CONNECTION_PAGES, "maxConnectionPages");
+    this.#maxResponseBytes = boundedOption(opts.maxResponseBytes, MAX_CONNECTION_RESPONSE_BYTES, "maxResponseBytes");
     // Trimmed because a key pasted from a dashboard arrives with a newline, and
     // a header value with a newline is rejected by fetch as an invalid HEADER
     // rather than as a bad key — an error nobody reads as "your key has
@@ -1116,6 +1147,7 @@ export class ComposioConnections implements ConnectionProvider {
     method: string,
     path: string,
     body?: unknown,
+    paginationDeadline?: number,
   ): Promise<{ status: number; ok: boolean; json: unknown }> {
     // THE UNBOUND-BINDING GATE. Before the URL is built and before any fetch:
     // with `env.COMPOSIO_API_KEY` unset this Worker issues no request at all,
@@ -1125,9 +1157,35 @@ export class ComposioConnections implements ConnectionProvider {
     if (typeof this.#fetch !== "function") {
       throw new ConnectionsRequestFailed(op, 0, "no fetch implementation available");
     }
-    let res: Response;
-    try {
-      res = await this.#fetch(`${this.#baseUrl}${path}`, {
+    const started = performance.now();
+    const remaining = paginationDeadline === undefined ? this.#requestTimeoutMs
+      : Math.min(this.#requestTimeoutMs, paginationDeadline - started);
+    if (remaining <= 0) throw new ConnectionsRequestFailed(op, 0, "pagination_timeout");
+    const deadline = started + remaining;
+    const controller = new AbortController();
+    const timeoutError = new ConnectionsRequestFailed(op, 0, "request_timeout");
+    const oversizedError = new ConnectionsRequestFailed(op, 0, "response_too_large");
+    let res: Response | undefined;
+    let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let cancelled = false;
+    const cancelBody = (response: Response | undefined) => {
+      // Cancellation itself can reject or never settle in an injected stream.
+      // Do not let cleanup extend the request deadline or mask its outcome.
+      try { void Promise.resolve(reader ? reader.cancel() : response?.body?.cancel()).catch(() => {}); }
+      catch { /* no provider text or cleanup error leaves the adapter */ }
+    };
+    const stopIO = () => {
+      if (cancelled) return;
+      cancelled = true;
+      controller.abort();
+      cancelBody(res);
+    };
+    const checkDeadline = () => {
+      if (controller.signal.aborted || performance.now() >= deadline) throw timeoutError;
+    };
+    const io = async () => {
+      res = await this.#fetch!(`${this.#baseUrl}${path}`, {
         method,
         headers: {
           // The ONLY place the key is written. It is never logged, never put in
@@ -1137,30 +1195,76 @@ export class ComposioConnections implements ConnectionProvider {
           accept: "application/json",
         },
         body: body === undefined ? undefined : JSON.stringify(body),
+        signal: controller.signal,
       });
-    } catch (cause) {
-      // The vendor's name only. A fetch rejection's cause chain can hold the
-      // whole request, key header included.
-      throw new ConnectionsRequestFailed(
-        op,
-        0,
-        this.#safe((cause as Error)?.name ?? "transport failure"),
-      );
-    }
-    const status = Number((res as { status?: unknown })?.status ?? 0);
-    let json: unknown = null;
+      // A non-cooperative injected fetch might resolve AFTER our deadline.
+      // Dispose of that response; it must never populate the session cache.
+      if (controller.signal.aborted) { cancelBody(res); throw timeoutError; }
+      checkDeadline();
+      const status = Number((res as { status?: unknown })?.status ?? 0);
+      const declared = res.headers?.get("content-length");
+      if (declared !== undefined && declared !== null && Number(declared) > this.#maxResponseBytes) {
+        throw oversizedError;
+      }
+      let json: unknown = null;
+      if (res.body) {
+        // Enforce on ACTUAL decoded bytes, not the untrusted Content-Length.
+        // Stream while counting; response.json() would buffer without a cap.
+        reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let bytes = 0;
+        let text = "";
+        try {
+          for (;;) {
+            checkDeadline();
+            const part = await reader.read();
+            checkDeadline();
+            if (part.done) break;
+            bytes += part.value.byteLength;
+            if (bytes > this.#maxResponseBytes) throw oversizedError;
+            text += decoder.decode(part.value, { stream: true });
+          }
+          text += decoder.decode();
+          try { json = JSON.parse(text); } catch { json = null; }
+        } finally {
+          // On failure stopIO can cancel the now-unlocked body. If timeout
+          // already cancelled a pending read, its eventual rejection also
+          // releases this lock; cleanup never keeps the caller waiting.
+          reader.releaseLock();
+          reader = undefined;
+        }
+      } else if (res.body === undefined && typeof res.json === "function") {
+        // Compatibility for this adapter's existing trusted, object-only test
+        // doubles. Native fetch Responses always expose body (possibly null).
+        // The promise still shares the same deadline, even if it ignores abort.
+        try { json = await res.json(); }
+        catch (cause) { if (!(cause instanceof SyntaxError)) throw cause; }
+      }
+      checkDeadline();
+      return { status, ok: status >= 200 && status < 300, json };
+    };
     try {
-      json = typeof (res as { json?: unknown }).json === "function" ? await res.json() : null;
-    } catch {
-      // A body that is not JSON must not cost us the status: a 502 from a load
-      // balancer arrives as HTML and still has to be reported as a 502.
-      json = null;
+      // Abort the actual fetch AND bound an injected implementation that does
+      // not cooperate. Promise.race observes late rejection without rerunning
+      // anything. Headers and every body read share one timer; the byte cap
+      // bounds synchronous JSON parsing, followed by a deadline check.
+      const timeout = new Promise<never>((_, reject) => {
+        timer = setTimeout(() => { stopIO(); reject(timeoutError); }, remaining);
+      });
+      return await Promise.race([io(), timeout]);
+    } catch (cause) {
+      stopIO();
+      if (cause === timeoutError || cause === oversizedError) throw cause;
+      // Never copy arbitrary exception names, messages, causes, or bodies.
+      // Keep the pre-existing TypeError category using the actual type only.
+      throw new ConnectionsRequestFailed(op, 0, cause instanceof TypeError ? "TypeError" : "transport_failure");
+    } finally {
+      if (timer !== undefined) clearTimeout(timer);
     }
-    return { status, ok: status >= 200 && status < 300, json };
   }
 
-  async #callOrThrow(op: string, method: string, path: string, body?: unknown): Promise<unknown> {
-    const { status, ok, json } = await this.#call(op, method, path, body);
+  async #callOrThrow(op: string, method: string, path: string, body?: unknown, paginationDeadline?: number): Promise<unknown> {
+    const { status, ok, json } = await this.#call(op, method, path, body, paginationDeadline);
     if (!ok) throw new ConnectionsRequestFailed(op, status, this.#errorToken(json));
     return json;
   }
@@ -1368,13 +1472,16 @@ export class ComposioConnections implements ConnectionProvider {
     const owner = requireOwner("connections", user);
     const out: Connection[] = [];
     const seenCursors = new Set<string>();
+    const deadline = performance.now() + this.#paginationTimeoutMs;
     let cursor = "";
-    for (;;) {
+    for (let page = 0; page < this.#maxConnectionPages; page++) {
       const json = await this.#callOrThrow(
         "connections",
         "GET",
         `/connected_accounts?user_ids=${encodeURIComponent(owner)}`
           + (cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""),
+        undefined,
+        deadline,
       );
 
       const root = asRecord(json);
@@ -1488,6 +1595,7 @@ export class ComposioConnections implements ConnectionProvider {
       seenCursors.add(next);
       cursor = next;
     }
+    throw new ConnectionsResponseShape("connections", "pagination exceeded the page limit; refusing an incomplete account list");
   }
 
   // -------------------------------------------------------------------------
@@ -1750,6 +1858,7 @@ export class ComposioConnections implements ConnectionProvider {
    */
   async tools(toolkit: Toolkit): Promise<CatalogTool[]> {
     const asked = requireToolkit("tools", toolkit);
+    const deadline = performance.now() + this.#paginationTimeoutMs;
     const out: CatalogTool[] = [];
     let unreadable = 0;
     let seen = 0;
@@ -1758,7 +1867,7 @@ export class ComposioConnections implements ConnectionProvider {
     for (let page = 0; page < MAX_TOOL_PAGES; page++) {
       const path = `/tools?toolkit_slug=${encodeURIComponent(asked)}&limit=${TOOLS_PAGE_LIMIT}`
         + (cursor === null ? "" : `&cursor=${encodeURIComponent(cursor)}`);
-      const json = await this.#callOrThrow("tools", "GET", path);
+      const json = await this.#callOrThrow("tools", "GET", path, undefined, deadline);
       const root = asRecord(json);
       const items = Array.isArray(root?.items) ? (root.items as unknown[]) : null;
       if (items === null) {
