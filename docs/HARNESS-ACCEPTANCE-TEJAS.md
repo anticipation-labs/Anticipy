@@ -9,20 +9,22 @@ Current diagnostics UI is **Settings → Listening → Listening activity**.
 
 **Release update (September 11):** connector deadlines and harness honesty fixes
 are pushed at `c05d614a`; the API release was independently verified. The new
-private TestFlight **175** is being prepared with the already-released 174 iOS
-behavior. The experimental pending-speech repair is **excluded** after independent
+private TestFlight **1.1.1 (175)** is now available to the owner's existing private
+group and the approved pilot, with the already-released 174 iOS behavior. The
+experimental pending-speech repair is **excluded** after independent
 review found increased callback cost and unresolved extra-word tradeoffs. Broad
 cursor fuzz is still red; real device/connector acceptance remains outstanding.
 See the [175 release ledger](../research/2026-09-11-testflight-175-release.md) for
-the actual build, CI, Apple and installation status rather than assuming this
-preparation note means it has shipped. The funded key was verified in the capped
+the exact build, CI and Apple readback. Installation of **175 on the phone is
+still unconfirmed**; update through TestFlight before recording new build-175
+acceptance results. The funded key was verified in the capped
 isolated run: 15 server-work cases,
 three complete local task flows, five isolated Chrome tasks and three connector
 intent fixtures passed real-model testing and independent review. This does not
 certify actual OAuth or all live product paths. See the
 [latest funded-verification report](../research/2026-09-11-funded-variation-verification.md) and
 [approved-fixes checkpoint](../research/2026-09-11-approved-fixes-checkpoint.md).
-The historical release notes below concern build 174, not this new candidate.
+The historical release notes below concern build 174, not the new release.
 
 Historical September 10 release context (not the status of build 175):
 The API and brain are deployed and verified; TestFlight **1.1.1 (174)** is

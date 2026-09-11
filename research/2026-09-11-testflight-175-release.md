@@ -1,6 +1,11 @@
-# Private TestFlight release candidate 175 — September 11, 2026
+# Private TestFlight release 175 — September 11, 2026
 
 ## Scope and current status
+
+**Released: 1.1.1 (175), available to the owner's existing private group and the
+approved pilot.** Apple installation eligibility is verified; installation of
+175 on the owner's phone and new physical stress-test results are not yet
+confirmed. This is a private TestFlight release, not an App Store submission.
 
 The owner explicitly requested a new private testing build now, with further
 stress testing afterward. Existing private-pilot delivery is authorized. This
@@ -86,6 +91,50 @@ with no experimental source or unrelated working files.
 
 ## Release sequence
 
+The independently reviewed five-file release patch has SHA-256
+`eb6111dda7f8dff8fe54510c59a4d4ef57d8c957b5b7ce9eb46a6c583f3bc48f`.
+It was committed and pushed only to `cloudflare-backend` as
+`2aa46746a656481a2df032924532f266f8a2ec64` with no upload marker.
+The exact-commit [build-only CI run 34569707889](https://github.com/anticipation-labs/Anticipy/actions/runs/34569707889)
+**passed**, including the complete iOS logic gate and actual simulator build.
+It skipped every upload/signing/distribution step, as intended. After rechecking
+the remote branch tip, one explicitly authorized
+[shipping run 34570320203](https://github.com/anticipation-labs/Anticipy/actions/runs/34570320203)
+was dispatched. Its verified head SHA is the same `2aa46746`. That shipping run
+**passed** in 13m34s: tests, simulator compilation, signed archive, upload,
+processing and the configured private-pilot handoff all succeeded.
+
+Apple confirmed marketing version **1.1.1**, source/upload build **175**, with no
+number collision or relabeling. Upload reported `UPLOAD SUCCEEDED with no errors`;
+processing became `VALID`. The configured private pilot was read back as
+`IN_BETA_TESTING`, `ready_to_install: true`, private and assigned, with automatic
+notifications enabled. This does not prove a notification reached a handset.
+Its tester-level `INSTALLED` state is not proof of installing 175.
+
+The exact build was then attached to the already-existing owner group using the
+explicitly approved helper in
+[owner-access run 34571363972](https://github.com/anticipation-labs/Anticipy/actions/runs/34571363972),
+also on `2aa46746`. It succeeded. Readback confirmed build **175**, `VALID`,
+`expired=False`, external/internal `IN_BETA_TESTING`, and
+`ready_to_install: true`. The owner's private external group contains the same
+one tester; no new group, App Store role or public link was created. The complete
+build readback lists the existing Internal, owner-private and approved-pilot
+groups, all with public links off. The owner was told to update in TestFlight;
+physical installation of 175 has not been inferred from tester-level metadata.
+
+Final evidence files: `build-only-result.json`, `build-only-ci.log`,
+`shipping-result.json`, `shipping-ci.log`, `owner-access-result.json`, and
+`owner-access-ci.log` under the ignored release-evidence directory. No additional
+binary upload was used to fix group access. No previous build was expired.
+
+Additional selected-source checks completed after that push: analyzer lifecycle
+**169 checks** and **10 compiled behavioral mutations**; capture lifecycle
+**68 checks** and **11 compiled behavioral mutations**. Both runners exited **0**.
+The mutated copies were disposable; none entered the app source. Logs are
+`selected-analyzer-mutations.log` and `selected-capture-mutations.log` in the same
+ignored release-evidence directory. These execute production method bodies with
+controlled OS edges, not real microphone or Apple speech-model sessions.
+
 The reviewed workflow requires a normal push without a ship marker to run the
 actual committed simulator compile first. Only after its exact-SHA verdict may
 one manual shipping dispatch be used. Manual dispatch is never a build-only
@@ -96,3 +145,21 @@ The existing automatic pilot step targets a different private group from the
 owner's. The new exact build must also be attached to the already-existing owner
 group; no public testing link or App Store role change is intended. Keep build
 174 available while the owner tests the new release.
+
+## Local continuation boundary
+
+The shared checkout intentionally retains the three uncommitted experimental
+cursor/test/runner files at their original reviewed hashes. They are not the
+released source. After the 175 metadata commit, the final build-number leg will
+correctly reject that dirty iOS source until a future reviewed source change is
+assigned its own new build number. Use a clean checkout of the release commit
+to reproduce the green release gates; never include the experiment with a
+blanket stage or relabel its results as build-175 behavior. No local work was
+discarded to make the release look clean.
+
+Final independent release review reconfirmed all three exact-SHA CI/Apple runs,
+owner-group eligibility and the unchanged held-source hashes. The disposable
+clean test worktree was removed after validating it contained only this task's
+two metadata edits and no untracked files. Its source remains reproducible from
+Git; all gate/release logs remain in the ignored evidence directory. No local
+test server or workflow watcher from this release is left running.
