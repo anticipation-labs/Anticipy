@@ -77,9 +77,9 @@ jobs:
         env:
           ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
         run: |
-          mkdir -p $RUNNER_TEMP/asc
-          echo -n "$ASC_KEY_P8" | base64 --decode -o $RUNNER_TEMP/asc/AuthKey.p8
-          chmod 600 $RUNNER_TEMP/asc/AuthKey.p8
+          mkdir -p "$RUNNER_TEMP/asc"
+          echo -n "$ASC_KEY_P8" | base64 --decode -o "$RUNNER_TEMP/asc/AuthKey.p8"
+          chmod 600 "$RUNNER_TEMP/asc/AuthKey.p8"
 
       - name: Invite a tester
         if: inputs.confirm == 'INVITE' && inputs.email != ''
@@ -111,3 +111,15 @@ jobs:
         run: |
           python3 app/ios/scripts/app_store_connect.py who-can-install \
             --bundle "${{ inputs.bundle }}" --build "${{ inputs.build }}"
+
+      # The legacy query only sees groups already attached to this build.
+      # Inventory the entire existing app audience as well, including direct
+      # testers and unlinked groups. This helper performs GET requests only.
+      - name: Verify complete existing tester audience
+        env:
+          ASC_KEY_PATH: ${{ runner.temp }}/asc/AuthKey.p8
+          TESTFLIGHT_BUNDLE: ${{ inputs.bundle }}
+          TESTFLIGHT_BUILD: ${{ inputs.build }}
+        run: |
+          python3 proof/audit/testflight_audience.py \
+            --bundle "$TESTFLIGHT_BUNDLE" --build "$TESTFLIGHT_BUILD"
