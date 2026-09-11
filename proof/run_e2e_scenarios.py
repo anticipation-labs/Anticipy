@@ -12,6 +12,10 @@ so we queue that shape while preserving Anticipy's decision, goal and the
 awaiting_confirm hold exactly as she decided them.
 
 Run interactively: press Enter to advance one scenario at a time.
+
+HISTORICAL DRIVER, not a current isolated acceptance harness: it loads a
+legacy environment and can execute browser jobs, including simulated approvals.
+Signature compatibility does not certify its old auth, fixtures, or cleanup.
 """
 import json
 import sys
@@ -46,9 +50,11 @@ class AnticipyE2E(Anticipy):
     """Same brain/memory/gates; jobs are queued in the shape the extension's
     autonomous loop executes (goal=agent_goal, task = the raw line)."""
 
-    def _queue_job(self, goal, params, hold=False, explicit=False):
+    def _queue_job(self, goal, params, hold=False, explicit=False, touches=None, act=None):
+        if touches not in (None, "compute", "read", "world") or act is not None:
+            raise ValueError("legacy harness cannot represent this effect declaration")
         task = params.get("source", goal)
-        status = "awaiting_confirm" if (hold or goal in IRREVERSIBLE) else "queued"
+        status = "awaiting_confirm" if (hold or touches == "world" or goal in IRREVERSIBLE) else "queued"
         r = requests.post(
             f"{self.backend_url}/api/collections/jobs/records",
             json={
@@ -58,6 +64,8 @@ class AnticipyE2E(Anticipy):
                     "start_url": START_URL,
                     "source": params.get("source"),
                     "triaged_goal": goal,
+                    **({"_effect": {"touches": touches, "reason": "declared during task interpretation"}}
+                       if touches is not None else {}),
                 }),
                 "status": status,
                 "device_id": "anticipy-e2e",

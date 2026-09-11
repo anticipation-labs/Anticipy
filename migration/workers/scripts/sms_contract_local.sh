@@ -6,30 +6,37 @@
 #   sh migration/workers/scripts/sms_contract_local.sh -x -vv     # extra pytest args
 #
 # WHAT IT DOES, in order (the shape of llm_contract_local.sh):
-#   1. stages public/ if it is missing (wrangler refuses to start without it);
-#   2. applies migration/d1/schema.sql to the LOCAL D1 (idempotent) and seeds
+#   1. requires the committed public/ assets and installed local tools;
+#   2. applies migration/d1/schema.sql to a fresh scratch LOCAL D1 and seeds
 #      three disposable owners: one whose profile carries OWNER_PHONE, and two
 #      whose profiles both carry AMBIG_PHONE — the shared-number case;
 #   3. starts `wrangler dev --local` CONFIGURED: a random Sendblue webhook
 #      secret, a Sendblue number, a random Twilio auth token, an account SID
-#      and a Twilio number — so both front doors and both allowlists are real;
+#      and a Twilio number — signed requests must still get the retired 410;
 #   4. starts a SECOND `wrangler dev --local` with NO Sendblue secret at all,
 #      on its own port and its own persist dir, for the one leg that needs an
 #      unconfigured Worker: "unset secret is a 503, not a 403";
 #   5. runs migration/spec/contract_tests.py, the Sendblue and Twilio inbound
 #      tests only, with the variables that unlock the write and D1 assertions
 #      (ANTICIPY_ALLOW_DESTRUCTIVE=1 is set because the rows written are in
-#      .wrangler/state and nowhere else);
-#   6. tears everything down, deletes the seeded rows, exits with pytest's status.
+#      a unique temporary state directory and nowhere else);
+#   6. stops its two processes, removes only its temporary state, retains its
+#      log, and exits with pytest's status.
 #
 # NOTHING HERE TOUCHES A DEPLOYED WORKER, A CARRIER OR A REAL PHONE. The
-# secrets are random, the numbers are 555s, and the database is .wrangler/state/.
+# secrets are random, the numbers are 555s. Existing local state is untouched.
+# dotenv AND .dev.vars loading are disabled; no provider credentials are used.
 #
 # EXIT
 #   0  every selected test passed
 #   1  at least one failed
 #   2  could not run (a port in use, wrangler never came up, missing tool)
 set -u
+umask 077
+export CLOUDFLARE_LOAD_DEV_VARS_FROM_DOT_ENV=false
+export CLOUDFLARE_INCLUDE_PROCESS_ENV=false
+export WRANGLER_SEND_METRICS=false
+export npm_config_offline=true
 
 HERE=$(cd "$(dirname "$0")/.." && pwd)          # migration/workers
 cd "$HERE" || exit 2
@@ -38,8 +45,6 @@ PORT="${SMS_TEST_PORT:-8792}"
 BARE_PORT="${SMS_TEST_BARE_PORT:-8793}"
 INSPECTOR="${SMS_TEST_INSPECTOR_PORT:-9391}"
 BARE_INSPECTOR="${SMS_TEST_BARE_INSPECTOR_PORT:-9392}"
-BARE_STATE="$HERE/.wrangler/state-sms-bare"
-LOG="${TMPDIR:-/tmp}/sms_contract_local.$$.log"
 
 for tool in node npx python3 curl; do
   command -v "$tool" >/dev/null 2>&1 || { echo "sms-wire: $tool not found" >&2; exit 2; }
@@ -51,7 +56,29 @@ for p in "$PORT" "$BARE_PORT"; do
   fi
 done
 
-[ -d public ] || npm run -s stage:assets
+[ -d public ] || { echo "sms-wire: committed public/ assets are missing" >&2; exit 2; }
+
+SCRATCH=$(mktemp -d "${TMPDIR:-/tmp}/anticipy-sms-wire.XXXXXXXX") || exit 2
+PRIMARY_STATE="$SCRATCH/configured-state"
+BARE_STATE="$SCRATCH/bare-state"
+LOG="$SCRATCH/workerd.log"
+DEV_PID=""
+BARE_PID=""
+cleanup() {
+  for pid in "$DEV_PID" "$BARE_PID"; do
+    if [ -n "$pid" ]; then
+      pkill -P "$pid" >/dev/null 2>&1 || :
+      kill "$pid" >/dev/null 2>&1 || :
+      wait "$pid" 2>/dev/null || :
+    fi
+  done
+  # These exact paths belong to this mktemp invocation, never .wrangler/state.
+  rm -rf "$PRIMARY_STATE" "$BARE_STATE"
+  echo "sms-wire: disposable state removed; log retained at $LOG"
+}
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 NONCE=$(python3 -c 'import secrets; print(secrets.token_hex(6))')
 SHORT=$(echo "$NONCE" | cut -c1-7)
@@ -67,7 +94,7 @@ AMBIG_A="smsambga$SHORT"
 AMBIG_B="smsambgb$SHORT"
 NOW=$(python3 -c 'import datetime; print(datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S.000Z"))')
 
-d1() { CI=1 npx --no-install wrangler d1 execute DB --local --config "$CONFIG" "$@"; }
+d1() { CI=1 npx --no-install wrangler d1 execute DB --local --config "$CONFIG" --persist-to "$PRIMARY_STATE" "$@"; }
 
 echo "sms-wire: schema → local D1"
 d1 --file ../d1/schema.sql >/dev/null 2>&1 || { echo "sms-wire: schema.sql failed" >&2; exit 2; }
@@ -86,16 +113,10 @@ seed_owner "$OWNER_ID" "sms-contract-$NONCE@anticipy-test.invalid" \
   && seed_profile "smsprofb$SHORT" "$AMBIG_B" "$AMBIG_PHONE" \
   || { echo "sms-wire: seeding failed" >&2; exit 2; }
 
-# ANTICIPY_TWILIO_WEBHOOK_URL IS PINNED HERE, AND IT IS NOT OPTIONAL. Under
-# `wrangler dev --local` the Worker sees request.url under the ROUTE's custom
-# domain — http://api.anticipy.ai/sms/inbound — not the 127.0.0.1:PORT the
-# suite actually posted to, so an HMAC over request.url never matches what the
-# suite signed (measured 2026-09-05: every signed leg 403 "signature mismatch",
-# the log naming the rewritten URL). On the deployed custom domain request.url
-# IS the URL Twilio called, so the pin is a rig concern; the suite signs for
-# BASE_URL + /sms/inbound, which is what this pins.
+# The explicit empty env file also suppresses .dev.vars loading in Wrangler.
+# Twilio-shaped credentials prove that configuration cannot revive retirement.
 CI=1 npx --no-install wrangler dev --config "$CONFIG" --local --ip 127.0.0.1 --port "$PORT" \
-  --inspector-port "$INSPECTOR" \
+  --inspector-port "$INSPECTOR" --persist-to "$PRIMARY_STATE" --env-file /dev/null \
   --var "SENDBLUE_WEBHOOK_SECRET:$SENDBLUE_SECRET" \
   --var "SENDBLUE_FROM_NUMBER:$SENDBLUE_NUMBER" \
   --var "TWILIO_AUTH_TOKEN:$TWILIO_TOKEN" \
@@ -109,22 +130,10 @@ DEV_PID=$!
 # The bare Worker: no Sendblue secret, no Twilio token. Its own persist dir so
 # it never opens the seeded database; the only leg it serves is the 503.
 CI=1 npx --no-install wrangler dev --config "$CONFIG" --local --ip 127.0.0.1 --port "$BARE_PORT" \
-  --inspector-port "$BARE_INSPECTOR" --persist-to "$BARE_STATE" \
+  --inspector-port "$BARE_INSPECTOR" --persist-to "$BARE_STATE" --env-file /dev/null \
   --var "ANTICIPY_ENV:test" \
   >>"$LOG" 2>&1 &
 BARE_PID=$!
-
-cleanup() {
-  pkill -P "$DEV_PID" >/dev/null 2>&1
-  pkill -P "$BARE_PID" >/dev/null 2>&1
-  kill "$DEV_PID" "$BARE_PID" >/dev/null 2>&1
-  wait "$DEV_PID" "$BARE_PID" 2>/dev/null
-  d1 --command "DELETE FROM events WHERE owner_ref IN ('$OWNER_ID', '$AMBIG_A', '$AMBIG_B')" >/dev/null 2>&1
-  d1 --command "DELETE FROM owner_profile WHERE owner_ref IN ('$OWNER_ID', '$AMBIG_A', '$AMBIG_B')" >/dev/null 2>&1
-  d1 --command "DELETE FROM owners WHERE id IN ('$OWNER_ID', '$AMBIG_A', '$AMBIG_B')" >/dev/null 2>&1
-  rm -rf "$BARE_STATE"
-}
-trap cleanup EXIT INT TERM
 
 i=0
 until curl -sf "http://127.0.0.1:$PORT/api/health" >/dev/null 2>&1 \
@@ -150,6 +159,7 @@ ANTICIPY_TEST_TWILIO_AUTH_TOKEN="$TWILIO_TOKEN" \
 ANTICIPY_TEST_TWILIO_ACCOUNT_SID="$TWILIO_SID" \
 ANTICIPY_TEST_TWILIO_NUMBER="$TWILIO_NUMBER" \
 ANTICIPY_LOCAL_WRANGLER_CONFIG="$CONFIG" \
+ANTICIPY_LOCAL_WRANGLER_PERSIST_TO="$PRIMARY_STATE" \
 ANTICIPY_ALLOW_DESTRUCTIVE=1 \
 python3 -m pytest ../spec/contract_tests.py -p no:cacheprovider -v \
   -k "Sendblue or SmsInbound" "$@"

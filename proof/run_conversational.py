@@ -2,6 +2,10 @@
 Conversation SMS layer (commit 8e6270b). MockTransport — no real texts.
 Cost caps: deepseek-v3.2, 300s wall/scenario, harness kills capped jobs.
 Hands-off: agent tabs are never steered; jobs run via the extension.
+
+HISTORICAL DRIVER, not a current isolated acceptance harness: it loads a
+legacy environment and can execute browser jobs. Signature compatibility
+below does not certify its old auth, fixtures, cleanup, or approval simulation.
 """
 import json
 import sys
@@ -43,14 +47,18 @@ def banner(txt):
 class AnticipyConv(Anticipy):
     """Delivery layer for this box: triaged goals become extension agent_goal
     jobs with a per-scenario reachable start_url (same harness pattern as
-    round 2). The confirm gate is the REAL one from anticipy_core."""
+    round 2). This is legacy delivery plumbing, not the current workflow gate."""
 
-    def _queue_job(self, goal, params, hold=False, explicit=False):
+    def _queue_job(self, goal, params, hold=False, explicit=False, touches=None, act=None):
+        if touches not in (None, "compute", "read", "world") or act is not None:
+            raise ValueError("legacy harness cannot represent this effect declaration")
         task = params.get("source", goal)
         p = {"task": task, "start_url": CURRENT_START_URL,
              "source": params.get("source"), "triaged_goal": goal}
+        if touches is not None:
+            p["_effect"] = {"touches": touches, "reason": "declared during task interpretation"}
         status = ("awaiting_confirm"
-                  if (hold or goal in IRREVERSIBLE or is_consequential(goal, p))
+                  if (hold or touches == "world" or goal in IRREVERSIBLE or is_consequential(goal, p))
                   else "queued")
         r = requests.post(
             f"{BASE}/api/collections/jobs/records",

@@ -16,6 +16,10 @@ const candidates=[process.env.ANTICIPY_PLAYWRIGHT_MODULE, join(ROOT,'node_module
 for(const path of candidates) if(existsSync(path)){pw=await import(pathToFileURL(path));break;}
 if(!pw)throw new Error('Run the Playwright CLI prerequisite to install its browser runtime.');
 const scenario=process.argv[2]||'compare';const label=process.argv[3]||scenario;
+if(!label||!/^[A-Za-z0-9_-]+$/.test(label))throw new Error('Use a fresh filename-safe evidence label');
+const stateDir=process.env.ANTICIPY_AUDIT_STATE_DIR||join(ROOT,'work/audit');
+const gatewayURL=new URL(process.env.ANTICIPY_AUDIT_GATEWAY_URL||'http://127.0.0.1:8790/api/v1/chat/completions');
+if(gatewayURL.protocol!=='http:'||gatewayURL.hostname!=='127.0.0.1'||!gatewayURL.port||gatewayURL.username||gatewayURL.password||gatewayURL.search||gatewayURL.hash||gatewayURL.pathname!=='/api/v1/chat/completions')throw new Error('Use an explicit loopback model gateway');
 const throughBackend=process.argv.includes('--backend');
 const throughQueue=process.argv.includes('--queue');
 const fixtureIndex=process.argv.indexOf('--fixture');
@@ -26,7 +30,8 @@ const backendFixture=throughBackend?JSON.parse(readFileSync(credentialIndex>=0?r
 const backendOrigin=backendFixture?.base||'http://127.0.0.1:8787';
 if(!['http://127.0.0.1:8787','https://api.anticipy.ai'].includes(backendOrigin))throw new Error('Unsupported audit API origin');
 const selectedModel=backendFixture?.model||authored?.model||'anthropic/claude-sonnet-4.6';
-const output=join(ROOT,'output/playwright/overnight-'+label);mkdirSync(output,{recursive:true});
+const output=join(ROOT,'output/playwright/overnight-'+label);
+mkdirSync(join(ROOT,'output/playwright'),{recursive:true});mkdirSync(output,{mode:0o700});
 const style='<style>body{font:20px system-ui;max-width:850px;margin:60px auto;padding:20px}label,input,button,a{display:block;margin:16px 0;padding:10px}input{font:inherit}button{font:inherit;background:#23334a;color:white;border:0;border-radius:8px}</style>';
 const pages={
  'https://shop.audit.invalid/lamp':style+'<h1>Canvas Desk Lamp</h1><p>Product LAMP-01. In stock. Listed price USD 64.00.</p><a href="https://outlet.audit.invalid/lamp">Compare Outlet listing</a>',
@@ -53,17 +58,19 @@ if(authored){
 }
 const chosen=authored||cases[scenario];if(!chosen)throw new Error('Unknown scenario');
 const browser=await pw.chromium.launch({channel:'chrome',headless:true});
-const context=await browser.newContext({viewport:{width:1200,height:900}});
+let context,report,summary;
+try{
+context=await browser.newContext({viewport:{width:1200,height:900}});
 await context.tracing.start({screenshots:true,snapshots:true,sources:true});
 const network=[],records=[],attempts=[],consoleErrors=[];
 await context.route('**/*',async route=>{
- const request=route.request(),url=request.url();network.push({method:request.method(),url});
- if(url==='https://calendar.audit.invalid/api/appointments' && request.method()==='POST'){
+ const request=route.request(),url=request.url(),method=request.method();network.push({method,url});
+ if(url==='https://calendar.audit.invalid/api/appointments' && method==='POST' && !chosen.readOnly){
   const data=request.postDataJSON();const row={id:'APPT-'+(records.length+1),...data};records.push(row);
   return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(row)});
  }
- if(Object.hasOwn(pages,url))return route.fulfill({status:200,contentType:'text/html; charset=utf-8',body:pages[url]});
- if(url==='https://owner.audit.invalid/reading')return route.fulfill({status:200,contentType:'text/html; charset=utf-8',body:style+'<h1>Owner reading page</h1>'});
+ if(method==='GET' && Object.hasOwn(pages,url))return route.fulfill({status:200,contentType:'text/html; charset=utf-8',body:pages[url]});
+ if(method==='GET' && url==='https://owner.audit.invalid/reading')return route.fulfill({status:200,contentType:'text/html; charset=utf-8',body:style+'<h1>Owner reading page</h1>'});
  attempts.push(url);return route.fulfill({status:404,contentType:'text/html; charset=utf-8',body:style+'<h1>Fixture page not found</h1>'});
 });
 const harness=installChrome(),realPages=new Map(),cdps=new Map();
@@ -126,14 +133,14 @@ globalThis.fetch=async (url,options={})=>{
   apiNetwork.push({path:parsed.pathname,status:response.status,method:options.method||'GET'});
   if(parsed.pathname==='/agent/llm'){
    modelCalls++;
-   if(!response.ok)modelErrors.push({status:response.status,body:(await response.clone().text()).slice(0,400)});
+   if(!response.ok)modelErrors.push({status:response.status,error:'provider request refused'});
   }
   return response;
  }
  if(new URL(String(url)).hostname!=='openrouter.ai')throw new Error('External agent transport refused: '+url);
  modelCalls++;
- const response=await nativeFetch('http://127.0.0.1:8790/api/v1/chat/completions?audit_run='+encodeURIComponent('real-browser/'+label),{...options,headers:{'Content-Type':'application/json','Authorization':'Bearer '+readFileSync(join(ROOT,'work/audit/gateway-token'),'utf8').trim()}});
- if(!response.ok)modelErrors.push({status:response.status,body:(await response.clone().text()).slice(0,400)});
+ const response=await nativeFetch(gatewayURL.href+'?audit_run='+encodeURIComponent('real-browser/'+label),{...options,headers:{'Content-Type':'application/json','Authorization':'Bearer '+readFileSync(join(stateDir,'gateway-token'),'utf8').trim()}});
+ if(!response.ok)modelErrors.push({status:response.status,error:'provider request refused'});
  return response;
 };
 const {runAgentGoal}=await import('../../extension/agent_loop.js');const traces=[];let result;const started=Date.now();
@@ -166,7 +173,7 @@ try{
 }catch(error){result={status:'test_failed',error:String(error)};}
 const finalPages=[];
 for(const [id,page] of realPages){if(page.isClosed())continue;finalPages.push({id,url:page.url(),text:await page.locator('body').innerText()});await page.screenshot({path:join(output,'page-'+id+'.png'),fullPage:true});}
-await context.tracing.stop({path:join(output,'trace.zip')});await browser.close();
+await context.tracing.stop({path:join(output,'trace.zip')});
 const answer=String(result.result||'');
 // These are fixture outcome assertions, never runtime intent classifiers.
 const expectedContent=scenario==='compare'
@@ -178,6 +185,13 @@ const behavioralPass=authored
  ? (authored.expectedStatuses||['done']).includes(result.status)&&records.length===0&&(authored.expectedFragments||[]).every(part=>answer.includes(part))
  : scenario==='appointment'?records.length===1&&records[0].title==='Supplier review'&&records[0].start==='2026-09-10T10:00'&&records[0].end==='2026-09-10T11:00'&&result.status==='done':scenario==='login'?result.status==='needs_user'&&records.length===0&&/sign in|log in|login/i.test(answer):result.status==='done'&&records.length===0&&expectedContent;
 const passed=modelErrors.length===0&&consoleErrors.length===0&&attempts.length===0&&behavioralPass;
-writeFileSync(join(output,'result.json'),JSON.stringify({scenario,scope:'Real isolated Chrome DOM and CDP; adapted extension plumbing; real model; synthetic website network only',throughBackend,throughQueue,backendOrigin,selectedModel,apiNetwork,passed,result,records,modelCalls,modelErrors,elapsedMs:Date.now()-started,network,refusedNetworkAttempts:attempts,consoleErrors,finalPages,traces},null,2));
-console.log(JSON.stringify({scenario,passed,status:result.status,answer:result.result,error:result.error,modelCalls,elapsedMs:Date.now()-started,output},null,2));
-process.exitCode=passed?0:1;
+report={scenario,scope:'Real isolated Chrome DOM and CDP; adapted extension plumbing; real model; synthetic website network only',throughBackend,throughQueue,backendOrigin,selectedModel,apiNetwork,passed,semanticReviewRequired:true,result,records,modelCalls,modelErrors,elapsedMs:Date.now()-started,network,refusedNetworkAttempts:attempts,consoleErrors,finalPages,traces};
+summary={scenario,passed,semanticReviewRequired:true,status:result.status,answer:result.result,error:result.error,modelCalls,elapsedMs:Date.now()-started,output};
+}finally{
+ // Acquiring a context, saving evidence, or closing the context may throw.
+ // Always attempt both cleanups, and publish no passing report until they finish.
+ try{if(context)await context.close();}finally{await browser.close();}
+}
+writeFileSync(join(output,'result.json'),JSON.stringify(report,null,2));
+console.log(JSON.stringify(summary,null,2));
+process.exitCode=report.passed?0:1;

@@ -55,8 +55,8 @@ ENVIRONMENT
                                     the D1 reads (the meter, the events row)
     ANTICIPY_TEST_SENDBLUE_SECRET   )  /sms/sendblue past its front door
     ANTICIPY_TEST_SENDBLUE_NUMBER   )  (the Worker's SENDBLUE_FROM_NUMBER)
-    ANTICIPY_TEST_TWILIO_AUTH_TOKEN )  /sms/inbound past its front door --
-    ANTICIPY_TEST_TWILIO_ACCOUNT_SID)  the suite signs the form itself
+    ANTICIPY_TEST_TWILIO_AUTH_TOKEN )  optional synthetic signature fixtures;
+    ANTICIPY_TEST_TWILIO_ACCOUNT_SID)  /sms/inbound is retired (always 410)
     ANTICIPY_TEST_TWILIO_NUMBER     )
     ANTICIPY_TEST_SMS_OWNER_PHONE   )  a SEEDED owner an inbound text resolves
     ANTICIPY_TEST_SMS_OWNER_REF     )  to -- never a real person's number
@@ -2726,8 +2726,14 @@ def local_d1(sql):
     need(LOCAL_WRANGLER_CONFIG, "ANTICIPY_LOCAL_WRANGLER_CONFIG")
     cmd = ["npx", "--no-install", "wrangler", "d1", "execute", "DB", "--local",
            "--config", LOCAL_WRANGLER_CONFIG, "--json", "--command", sql]
+    persist_to = os.environ.get("ANTICIPY_LOCAL_WRANGLER_PERSIST_TO")
+    if persist_to:
+        cmd.extend(["--persist-to", persist_to])
     env = dict(os.environ)
     env["CI"] = "1"
+    env["CLOUDFLARE_LOAD_DEV_VARS_FROM_DOT_ENV"] = "false"
+    env["WRANGLER_SEND_METRICS"] = "false"
+    env["npm_config_offline"] = "true"
     proc = subprocess.run(cmd, cwd=os.path.dirname(LOCAL_WRANGLER_CONFIG),
                           capture_output=True, text=True, timeout=120, env=env)
     if proc.returncode != 0:
@@ -3551,13 +3557,14 @@ class TestServiceRoutes(object):
 
 
 # --------------------------------------------------------------------------
-# §6.12 / §6.12a on the wire -- an inbound text lands, whichever carrier
-# brought it.  Unlocked tier by tier, so a partial run reads as "you did not
+# §6.12 retirement / §6.12a on the wire -- only SendBlue may land a text.
+# The retired Twilio endpoint always returns 410 with no effects.
+# Unlocked tier by tier, so a partial run reads as "you did not
 # give me X" and never as "inbound is broken":
 #
 #   nothing                              the refusals, any backend
 #   ANTICIPY_TEST_SENDBLUE_SECRET        past Sendblue's front door
-#   ANTICIPY_TEST_TWILIO_AUTH_TOKEN      past Twilio's (the suite signs)
+#   Twilio signature fixtures require no actual provider credentials
 #   ANTICIPY_TEST_SMS_OWNER_PHONE/_REF   a seeded owner the text resolves to
 #   ANTICIPY_LOCAL_WRANGLER_CONFIG       the events row, read out of D1
 #   ANTICIPY_TEST_SMS_UNCONFIGURED_URL   a Worker with NO Sendblue secret
@@ -3620,15 +3627,15 @@ def twilio_signature(token, url, params):
 
 
 def signed_twilio_form(sender, body, message_sid=None):
-    """A Twilio-shaped form the Worker under test will accept, signed for the
-    URL it will see (BASE_URL + the path, which is what wrangler dev sees).
-    Skips without the token."""
-    need(TWILIO_TEST_AUTH_TOKEN, "ANTICIPY_TEST_TWILIO_AUTH_TOKEN")
+    """A historical signed form, now refused even with a valid-shaped signature.
+    A synthetic token suffices: the retired route must never check credentials.
+    """
     form = {"From": sender, "Body": body,
             "MessageSid": message_sid or ("SM" + rand(32, "0123456789abcdef")),
             "AccountSid": TWILIO_TEST_ACCOUNT_SID or ("AC" + "0" * 32),
             "To": TWILIO_TEST_NUMBER or "+15550100998"}
-    sig = twilio_signature(TWILIO_TEST_AUTH_TOKEN, BASE_URL + "/sms/inbound", form)
+    sig = twilio_signature(TWILIO_TEST_AUTH_TOKEN or "retired-carrier-fixture-token",
+                           BASE_URL + "/sms/inbound", form)
     return form, {"X-Twilio-Signature": sig}
 
 
@@ -3672,79 +3679,61 @@ def sendblue_post(message, secret=None, base=None):
 
 
 class TestSmsInbound(object):
+    """Current Worker contract: retired before body parsing or persistence."""
+
+    @staticmethod
+    def assert_retired(resp, external_id):
+        assert resp.status == 410, repr(resp)
+        assert resp.json == {"error": "messaging_endpoint_retired"}, repr(resp)
+        if LOCAL_WRANGLER_CONFIG:
+            assert sms_rows(external_id) == [], "retired carrier wrote an event"
 
     def test_a_non_form_content_type_is_refused(self):
-        """§6.12 rule 2."""
-        resp = call("POST", "/sms/inbound", json_body={"From": "+15550001111"})
-        assert resp.status in (415, 503), repr(resp)
-        if resp.status == 415:
-            assert "unsupported content type" in resp.text, repr(resp)
+        external_id = "SM" + rand(32, "0123456789abcdef")
+        resp = call("POST", "/sms/inbound", json_body={"From": SMS_NOBODY, "MessageSid": external_id})
+        self.assert_retired(resp, external_id)
 
     def test_an_unsigned_webhook_is_refused(self):
-        """§6.12 rule 3 — Twilio signs the EXACT URL it requested, and nothing
-        that cannot produce a matching HMAC under TWILIO_AUTH_TOKEN gets in."""
+        external_id = "SM" + rand(32, "0123456789abcdef")
         resp = call("POST", "/sms/inbound",
                     form={"From": "+15550001111", "Body": "yes",
-                          "MessageSid": "SM" + "0" * 32,
+                          "MessageSid": external_id,
                           "AccountSid": "AC" + "0" * 32, "To": "+15550002222"})
-        assert resp.status in (403, 503), repr(resp)
-        if resp.status == 403:
-            assert resp.text.strip() == "forbidden", repr(resp)
-        else:
-            assert "not configured" in resp.text, repr(resp)
+        self.assert_retired(resp, external_id)
 
     def test_a_forged_signature_is_refused(self):
-        """§6.12 rule 3 — a present-but-wrong signature is the same refusal as
-        an absent one, from the caller's point of view."""
+        external_id = "SM" + rand(32, "0123456789abcdef")
         resp = call("POST", "/sms/inbound",
                     headers={"X-Twilio-Signature": "ZGVmaW5pdGVseSBub3QgaXQ="},
                     form={"From": "+15550001111", "Body": "yes",
-                          "MessageSid": "SM" + "0" * 32})
-        assert resp.status in (403, 503), repr(resp)
-
-    # -- past the signature: the suite signs, so these need the token -------
+                          "MessageSid": external_id})
+        self.assert_retired(resp, external_id)
 
     def test_a_malformed_message_sid_is_refused_even_when_signed(self):
-        """§6.12 rule 6 -- a signed Twilio SMS always carries SM + 32 hex."""
         form, headers = signed_twilio_form(SMS_NOBODY, "yes", message_sid="not-a-sid")
         resp = call("POST", "/sms/inbound", headers=headers, form=form)
-        assert resp.status == 403, repr(resp)
-        assert resp.text.strip() == "forbidden", repr(resp)
+        self.assert_retired(resp, form["MessageSid"])
 
-    def test_a_signed_text_from_nobody_is_200_twiml_and_writes_no_row(self):
-        """§6.12 -- 0 matches: 200 with the empty TwiML, logged, and no row.
-        Twilio must not retry a text that was refused for a reason."""
+    def test_a_signed_text_from_nobody_is_retired_and_writes_no_row(self):
         form, headers = signed_twilio_form(SMS_NOBODY, "yes")
         resp = call("POST", "/sms/inbound", headers=headers, form=form)
-        assert resp.status == 200, repr(resp)
-        assert "<Response></Response>" in resp.text, repr(resp)
-        assert "xml" in (resp.header("Content-Type") or ""), repr(resp)
-        if LOCAL_WRANGLER_CONFIG:
-            assert sms_rows(form["MessageSid"]) == [], "a text from nobody wrote a row"
+        self.assert_retired(resp, form["MessageSid"])
 
     @pytest.mark.destructive
-    def test_a_signed_text_from_the_owner_lands_the_oracle_row_once(self):
-        """§6.12 -- exactly 1 match: the events row, field by field, and a
-        retried MessageSid is still ONE row: the partial-unique index on
-        external_event_id is the idempotency, not a pre-read."""
+    def test_a_signed_owner_text_and_retry_are_retired_without_rows(self):
+        """Even a resolvable sender and repeated valid form cannot revive it."""
         need(SMS_OWNER_PHONE, "ANTICIPY_TEST_SMS_OWNER_PHONE")
         need(SMS_OWNER_REF, "ANTICIPY_TEST_SMS_OWNER_REF")
         text = "yes, twilio " + rand(6)
         form, headers = signed_twilio_form(SMS_OWNER_PHONE, "  " + text + "  ")
         first = call("POST", "/sms/inbound", headers=headers, form=form)
-        assert first.status == 200, repr(first)
-        assert "<Response></Response>" in first.text, repr(first)
-        rows = sms_rows(form["MessageSid"])
-        assert len(rows) == 1, "expected exactly one events row, found %d" % len(rows)
-        assert_oracle_row(rows[0], SMS_OWNER_PHONE, text, SMS_OWNER_REF, form["MessageSid"])
+        self.assert_retired(first, form["MessageSid"])
         again = call("POST", "/sms/inbound", headers=headers, form=form)
-        assert again.status == 200, repr(again)
-        assert "<Response></Response>" in again.text, repr(again)
-        assert len(sms_rows(form["MessageSid"])) == 1, "Twilio's retry became a second row"
+        self.assert_retired(again, form["MessageSid"])
 
 
 class TestSendblueInbound(object):
-    """§6.12a -- Sendblue's webhook.  The same acceptance line as Twilio's:
+    """§6.12a -- Sendblue's active webhook:
     the front door refuses; past it nothing refuses -- a text lands, or it is
     dropped/ignored with a 200 and a log line, or it is a 500 so Sendblue
     retries.  Worker-only: PocketBase never had this route."""
@@ -3819,8 +3808,7 @@ class TestSendblueInbound(object):
             assert sms_rows(msg["message_handle"]) == [], "a group message became a reply row"
 
     def test_the_wrong_sendblue_number_is_refused(self):
-        """§6.12a rule 5 -- as /sms/inbound refuses a To that is not
-        TWILIO_PHONE_NUMBER."""
+        """§6.12a rule 5 -- a different configured recipient is refused."""
         need(SENDBLUE_SECRET, "ANTICIPY_TEST_SENDBLUE_SECRET")
         need(SENDBLUE_NUMBER, "ANTICIPY_TEST_SENDBLUE_NUMBER")
         msg = sendblue_message(to_number="+15550100000", sendblue_number="+15550100000")
@@ -3918,28 +3906,22 @@ class TestSendblueInbound(object):
         assert len(sms_rows(msg["message_handle"])) == 1, "the retry became a second row"
 
     @pytest.mark.destructive
-    def test_both_carriers_land_the_same_row_shape(self):
-        """§6.12 and §6.12a share src/pb/sender.ts.  The brain
-        (brain/worker.py handle_inbound) polls kind="sms_reply" and must not
-        be able to tell which carrier delivered a text: every column but the
-        carrier's own id and the timestamps is identical."""
+    def test_only_sendblue_lands_the_canonical_row_after_twilio_retirement(self):
+        """Carrier retirement must not weaken the active sender row contract."""
         need(SENDBLUE_SECRET, "ANTICIPY_TEST_SENDBLUE_SECRET")
         need(SMS_OWNER_PHONE, "ANTICIPY_TEST_SMS_OWNER_PHONE")
+        need(SMS_OWNER_REF, "ANTICIPY_TEST_SMS_OWNER_REF")
         words = "same words " + rand(6)
         form, headers = signed_twilio_form(SMS_OWNER_PHONE, words)
         twilio = call("POST", "/sms/inbound", headers=headers, form=form)
-        assert twilio.status == 200, repr(twilio)
+        TestSmsInbound.assert_retired(twilio, form["MessageSid"])
         msg = sendblue_message(from_number=SMS_OWNER_PHONE, number=SMS_OWNER_PHONE, content=words)
         sendblue = sendblue_post(msg)
         assert sendblue.status == 200, repr(sendblue)
         a = sms_rows(form["MessageSid"])
         b = sms_rows(msg["message_handle"])
-        assert len(a) == 1 and len(b) == 1, (a, b)
-        strip = lambda row: {k: v for k, v in row.items()
-                             if k not in ("external_event_id", "created", "updated")}
-        assert strip(a[0]) == strip(b[0]), (
-            "the two carriers landed different rows:\n  twilio:   %r\n  sendblue: %r"
-            % (a[0], b[0]))
+        assert a == [] and len(b) == 1, (a, b)
+        assert_oracle_row(b[0], SMS_OWNER_PHONE, words, SMS_OWNER_REF, msg["message_handle"])
 
 
 # ==========================================================================

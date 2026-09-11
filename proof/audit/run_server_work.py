@@ -5,10 +5,9 @@ search-provider run, private-account read or external effect. Model calls use
 the existing metered gateway and preserve its budget and all previous evidence.
 """
 import argparse
-from concurrent.futures import ThreadPoolExecutor
 import json
 from pathlib import Path
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 
 from brain import llm, server_work
 from proof.audit.model_gateway import atomic_json
@@ -53,15 +52,29 @@ REVIEWS = [
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--label", required=True)
+    p.add_argument("--state-dir", type=Path, default=ROOT / "work/audit")
+    p.add_argument("--gateway-url", default="http://127.0.0.1:8790/api/v1/chat/completions")
     args = p.parse_args()
-    assert Path(args.label).name == args.label and args.label not in (".", "..")
-    output = ROOT / "work/audit" / (args.label + ".json")
+    if not CASES or not REVIEWS:
+        p.error("Both execution and review cases must be nonempty")
+    if Path(args.label).name != args.label or args.label in (".", "..") or not args.label:
+        p.error("Use a nonempty filename label")
+    parsed = urlsplit(args.gateway_url)
+    if (parsed.scheme != "http" or parsed.hostname != "127.0.0.1" or not parsed.port
+            or parsed.username or parsed.password or parsed.query or parsed.fragment
+            or parsed.path != "/api/v1/chat/completions"):
+        p.error("Use an explicit loopback model gateway")
+    output = args.state_dir / (args.label + ".json")
     if output.exists():
         raise RuntimeError("Preserve previous evidence")
-    llm.OPENROUTER_URL = "http://127.0.0.1:8790/api/v1/chat/completions?audit_run=" + quote(args.label)
-    token = (ROOT / "work/audit/gateway-token").read_text().strip()
+    token = (args.state_dir / "gateway-token").read_text().strip()
+    if not token or len(token) > 4096 or any(not 33 <= ord(char) <= 126 for char in token):
+        p.error("Local gateway token must be a bounded single-line HTTP credential")
+    llm.OPENROUTER_URL = args.gateway_url + "?audit_run=" + quote(args.label)
     def model():
-        return llm.LLM(api_key=token, model="google/gemini-3.1-pro-preview", owner_zone="America/Vancouver")
+        result = llm.LLM(api_key=token, model="google/gemini-3.1-pro-preview", owner_zone="America/Vancouver")
+        result.gemini_api_key = None  # Never bypass the budgeted gateway via an inherited key.
+        return result
     def execute(case):
         searches = []
         def read(goal, params):
@@ -79,18 +92,27 @@ def main():
         name, goal, candidate, sources, want = case
         result = server_work.verify(model(), {"current_task": goal, "task_record": {"source": goal}}, candidate, sources)
         return {"id": name, "expected": want, "passed": result["verdict"] == want, "result": result}
-    evidence = {"scope": __doc__, "execution_cases": [], "review_cases": []}
-    with ThreadPoolExecutor(max_workers=2) as pool:
-        for result in pool.map(execute, CASES):
-            evidence["execution_cases"].append(result)
-            atomic_json(output, evidence)
-            print(json.dumps({k: result[k] for k in ("id", "expected", "passed")}), flush=True)
-        for result in pool.map(review, REVIEWS):
-            evidence["review_cases"].append(result)
+    evidence = {"scope": __doc__, "selected": len(CASES) + len(REVIEWS), "attempted": 0,
+                "execution_cases": [], "review_cases": []}
+    # One outstanding entire-context reservation fits the small audit ceiling.
+    atomic_json(output, evidence)
+    for collection, cases, operation in (("execution_cases", CASES, execute), ("review_cases", REVIEWS, review)):
+        for case in cases:
+            evidence["attempted"] += 1
+            try:
+                result = operation(case)
+            except Exception:
+                result = {"id": case["id"] if isinstance(case, dict) else case[0],
+                          "expected": case["want"] if isinstance(case, dict) else case[-1],
+                          "passed": False, "error": "evaluation_case_unavailable"}
+            evidence[collection].append(result)
             atomic_json(output, evidence)
             print(json.dumps({k: result[k] for k in ("id", "expected", "passed")}), flush=True)
     all_cases = evidence["execution_cases"] + evidence["review_cases"]
-    evidence["passed"] = all(c["passed"] for c in all_cases)
+    evidence["completed"] = len(all_cases)
+    evidence["passed_count"] = sum(c["passed"] for c in all_cases)
+    evidence["failed_count"] = len(all_cases) - evidence["passed_count"]
+    evidence["passed"] = bool(all_cases) and len(all_cases) == evidence["selected"] and all(c["passed"] for c in all_cases)
     atomic_json(output, evidence)
     if not evidence["passed"]:
         raise SystemExit(1)

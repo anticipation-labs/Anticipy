@@ -7,9 +7,10 @@ import argparse
 import json
 import os
 from pathlib import Path
+import re
 import secrets
 from types import SimpleNamespace
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 
 from brain import llm
 from brain.anticipy_core import Anticipy
@@ -45,16 +46,64 @@ class AuditLLM(llm.LLM):
   try: return super().chat(*args, **kwargs)
   except Exception as error:
    response=getattr(error,'response',None)
-   print('MODEL UNAVAILABLE',type(error).__name__,getattr(response,'status_code',None),getattr(response,'text','')[:200],flush=True)
-   raise
+   status=getattr(response,'status_code',None)
+   status=status if type(status) is int and 100 <= status <= 599 else None
+   print(json.dumps({'category':'model_unavailable','http_status':status}),flush=True)
+   raise RuntimeError('model_unavailable') from None
+
+def select_cases(raw):
+ """An omitted selector means all; an explicit selector must name real cases."""
+ known={case[0]:case for case in CASES}
+ names=list(known) if raw is None else [name.strip() for name in raw.split(',')]
+ if not names or any(not name or name not in known for name in names):
+  raise ValueError('Every selected case must be a nonempty known case name')
+ if len(names)!=len(set(names)):
+  raise ValueError('Duplicate case names are not allowed')
+ return [known[name] for name in names]
+
+def summarize_results(selected, results):
+ names=[case[0] for case in selected]
+ completed=[result.get('case') for result in results]
+ passed_count=sum(result.get('passed') is True for result in results)
+ return {'selected_cases':names,'completed_cases':completed,
+         'selected_count':len(names),'completed_count':len(results),
+         'passed_count':passed_count,'failed_count':len(results)-passed_count,
+         'passed':bool(names) and completed==names and len(set(names))==len(names)
+                  and passed_count==len(names)}
 
 def main():
- parser=argparse.ArgumentParser();parser.add_argument('--label',required=True);parser.add_argument('--cases');parser.add_argument('--parallel',type=int,default=1);args=parser.parse_args()
- out=STATE/(args.label+'.json')
+ parser=argparse.ArgumentParser()
+ parser.add_argument('--label',required=True)
+ parser.add_argument('--cases')
+ parser.add_argument('--parallel',type=int,default=1)
+ parser.add_argument('--state-dir',type=Path,default=STATE)
+ parser.add_argument('--gateway-url',default='http://127.0.0.1:8790/api/v1/chat/completions')
+ args=parser.parse_args()
+ try:
+  selected=select_cases(args.cases)
+  if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_-]{0,79}',args.label):
+   raise ValueError('Label must be a simple filename of at most 80 characters')
+  if not 1 <= args.parallel <= len(selected):
+   raise ValueError('Parallelism must be between 1 and the selected case count')
+  gateway=urlsplit(args.gateway_url)
+  if (gateway.scheme!='http' or gateway.hostname not in ('127.0.0.1','localhost','::1')
+      or gateway.username is not None or gateway.password is not None
+      or gateway.query or gateway.fragment or gateway.path!='/api/v1/chat/completions'
+      or gateway.port is None):
+   raise ValueError('Gateway must be an explicit loopback HTTP chat-completions URL without credentials or query')
+ except ValueError as error:
+  parser.error(str(error))
+ out=args.state_dir/(args.label+'.json')
  if out.exists():raise SystemExit('Use a fresh evidence label')
+ try:
+  key=(args.state_dir/'gateway-token').read_text().strip()
+ except (OSError, UnicodeError):
+  parser.error('The selected state directory must contain a readable gateway-token')
+ if not key:parser.error('The selected gateway-token is empty')
+ if len(key)>4096 or not re.fullmatch(r'[\x21-\x7e]+',key):
+  parser.error('The selected gateway-token is not a valid single-line HTTP credential')
  os.environ['ANTICIPY_SERVICE_TOKEN']=SERVICE['X-Anticipy-Token']
- llm.OPENROUTER_URL='http://127.0.0.1:8790/api/v1/chat/completions?audit_run='+quote(args.label,safe='')
- key=(STATE/'gateway-token').read_text().strip()
+ llm.OPENROUTER_URL=args.gateway_url+'?audit_run='+quote(args.label,safe='')
  def run(case):
   name,text,tasks,last_reply,expected,*shape=case
   email='reply-'+secrets.token_hex(10)+'@anticipy-test.invalid';password=secrets.token_urlsafe(24)
@@ -102,9 +151,10 @@ def main():
   finally:
    status,result,_=request(BASE,'POST','/me/delete',{'confirm':'delete'},token)
    assert status==200 and result.get('account_deleted'),(name,'cleanup',status)
- selected=[case for case in CASES if not args.cases or case[0] in args.cases.split(",")]
  with ThreadPoolExecutor(max_workers=args.parallel) as pool:results=list(pool.map(run,selected))
- atomic_json(out,{'scope':'real model and Conversation with local Worker records; no effect runner; all synthetic accounts deleted','results':results})
- raise SystemExit(0 if all(r['passed'] for r in results) else 1)
+ summary=summarize_results(selected,results)
+ atomic_json(out,{'scope':'real model and Conversation with local Worker records; no effect runner; all synthetic accounts deleted','summary':summary,'results':results})
+ print(json.dumps(summary),flush=True)
+ raise SystemExit(0 if summary['passed'] else 1)
 
 if __name__=='__main__':main()

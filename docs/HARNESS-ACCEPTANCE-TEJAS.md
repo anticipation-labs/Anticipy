@@ -1,5 +1,24 @@
 # Harness acceptance: from local repair to a verified device
 
+**Latest evidence (September 10–11):** the tester confirmed one real SendBlue
+reply on the iPhone, and microphone-tagged build-174 inputs reached the backend.
+These supersede the older SMS/install-pending notes below, but do not certify
+the full device workflow. The latest [variation assessment and repair plan](../research/2026-09-11-e2e-variation-plan.md)
+records fresh stress-test failures and the still-unpaired/unconnected account.
+Current diagnostics UI is **Settings → Listening → Listening activity**.
+
+**Local repair update (September 11):** candidate **175** has the pending-speech
+provenance repair and passes the default iOS logic suite, but has not been
+committed, uploaded or installed. Connector deadlines and harness honesty fixes
+are also local. Broad cursor fuzz is still red; real device/connector acceptance
+remains outstanding. The funded key is now verified: 15 server-work cases,
+three complete local task flows, five isolated Chrome tasks and three connector
+intent fixtures passed real-model testing and independent review. This does not
+certify a deployed release or actual OAuth. See the
+[latest funded-verification report](../research/2026-09-11-funded-variation-verification.md) and
+[approved-fixes checkpoint](../research/2026-09-11-approved-fixes-checkpoint.md).
+The historical release notes below concern build 174, not this new candidate.
+
 This is the remaining acceptance sequence for the September 10 candidate.
 The API and brain are deployed and verified; TestFlight **1.1.1 (174)** is
 available to the approved private pilot and, after correcting its missing build
