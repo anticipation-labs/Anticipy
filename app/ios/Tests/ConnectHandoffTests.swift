@@ -144,7 +144,8 @@ private final class FakeOpener: ConnectOpener {
     private(set) var signInURLs: [URL] = []
     private(set) var signInSchemes: [String] = []
     private(set) var browserURLs: [URL] = []
-    private var waiting: (@MainActor (ConnectCallback) -> Void)?
+    private var completions: [@MainActor (ConnectCallback) -> Void] = []
+    private var waiting: Int?
 
     var opens: Int { signInURLs.count + browserURLs.count }
 
@@ -153,7 +154,8 @@ private final class FakeOpener: ConnectOpener {
                          whenDone: @escaping @MainActor (ConnectCallback) -> Void) {
         signInURLs.append(url)
         signInSchemes.append(callbackScheme)
-        waiting = whenDone
+        completions.append(whenDone)
+        waiting = completions.count - 1
     }
 
     func openSystemBrowser(url: URL) { browserURLs.append(url) }
@@ -162,7 +164,14 @@ private final class FakeOpener: ConnectOpener {
     func answer(_ back: ConnectCallback) {
         let pending = waiting
         waiting = nil
-        pending?(back)
+        if let pending { completions[pending](back) }
+    }
+
+    /// Retain every framework completion independently: an older sign-in
+    /// session can answer after a replacement has opened, or answer twice.
+    func answer(_ back: ConnectCallback, opening index: Int) {
+        guard completions.indices.contains(index) else { return }
+        completions[index](back)
     }
 }
 
@@ -1273,6 +1282,69 @@ private enum ConnectHandoffSuite {
             check("and the standing consent",
                   session.ownerTapped(second.consent, signedInOwner: OWNER)
                   == .refused(.disclosureNotShown))
+        }
+
+        // Framework callbacks carry no state on cancellation/failure. They
+        // must be fenced by the opening that registered them, not adopted by
+        // whatever attempt happens to stand when a delayed callback arrives.
+        for back in [ConnectCallback.dismissed, .failed("synthetic_failure"),
+                     .returned(u("anticipy://connected/\(TOOLKIT)?state=mint-1&status=cancelled"))] {
+            for secondOpened in [false, true] {
+                let (session, opener, clock, _) = newSession()
+                guard let first = connected(session, clock) else {
+                    check("superseded completion first fixture", false); return
+                }
+                _ = session.ownerTapped(first.consent, signedInOwner: OWNER)
+                guard let second = connected(session, clock) else {
+                    check("superseded completion second fixture", false); return
+                }
+                if secondOpened {
+                    _ = session.ownerTapped(second.consent, signedInOwner: OWNER)
+                    session.appMovedToBackground()
+                }
+                let priorPrompt = session.prompt
+                let priorRefusal = session.lastRefusal
+                opener.answer(back, opening: 0)
+                check("old completion cannot publish into replacement (opened=\(secondOpened), \(back))",
+                      session.outcome == nil)
+                check("old completion preserves replacement disclosure and diagnostics",
+                      session.prompt == priorPrompt && session.lastRefusal == priorRefusal)
+                if !secondOpened {
+                    check("replacement still opens after old completion",
+                          session.ownerTapped(second.consent, signedInOwner: OWNER)
+                            == .openedInSignInSession)
+                }
+                opener.answer(.returned(u("anticipy://connected/\(TOOLKIT)?state=\(second.attemptID)"
+                                           + "&status=connected&connected_account_id=ca_current")), opening: 1)
+                check("replacement still finishes after delayed predecessor",
+                      session.outcome == .connected(toolkit: TOOLKIT, accountId: "ca_current"))
+            }
+        }
+
+        for back in [ConnectCallback.dismissed, .failed("synthetic_failure")] {
+            let (session, opener, clock, _) = newSession()
+            guard let first = connected(session, clock) else {
+                check("owner change completion fixture", false); return
+            }
+            _ = session.ownerTapped(first.consent, signedInOwner: OWNER)
+            session.ownerChanged()
+            opener.answer(back, opening: 0)
+            check("abandoned owner's framework completion stays silent: \(back)",
+                  session.outcome == nil && session.prompt == nil && session.lastRefusal == nil)
+        }
+
+        do {
+            let (session, opener, clock, _) = newSession()
+            guard let first = connected(session, clock) else {
+                check("duplicate completion fixture", false); return
+            }
+            _ = session.ownerTapped(first.consent, signedInOwner: OWNER)
+            opener.answer(.returned(u("anticipy://connected/\(TOOLKIT)?state=\(first.attemptID)"
+                                       + "&status=connected&connected_account_id=ca_first")), opening: 0)
+            opener.answer(.dismissed, opening: 0)
+            opener.answer(.failed("duplicate_failure"), opening: 0)
+            check("duplicate completion cannot overwrite a finished success",
+                  session.outcome == .connected(toolkit: TOOLKIT, accountId: "ca_first"))
         }
 
         // =================================================================

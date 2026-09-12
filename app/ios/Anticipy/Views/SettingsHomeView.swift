@@ -12,6 +12,7 @@ struct SettingsHomeView: View {
     /// second one, or an attempt begun here would be finished by nobody.
     @EnvironmentObject var connect: ConnectSession
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
 
     @State private var route: Route?
     /// The app being connected right now, and how far it has got. Nil is the
@@ -173,6 +174,9 @@ struct SettingsHomeView: View {
             .sheet(item: $connecting) { flow in
                 connectSheet(flow)
             }
+            .onChange(of: scenePhase) { phase in
+                if phase != .active { connectMovedToBackground() }
+            }
             // The hint, turned into the one thing it licenses: go and ask.
             .onChange(of: connect.outcome) { outcome in
                 guard case .connected = outcome else { return }
@@ -217,32 +221,38 @@ struct SettingsHomeView: View {
     /// on it, refuses a tap that arrives before the link, and spends the
     /// acknowledgement as the browser opens.
     private func startConnect(_ app: ToolkitMeta) {
-        guard let owner = OwnerId(session.accountID) else { return }
-        connecting = ConnectFlow(app: app, stage: .settingUp)
-        Task { await runConnect(app, owner: owner) }
+        guard let owner = OwnerId(session.accountID),
+              let lease = AccountWriteLeasePolicy.begin(accountID: session.accountID,
+                authToken: session.backend.authToken, isSignedIn: session.isSignedIn) else { return }
+        let flow = ConnectFlow(app: app, stage: .settingUp, lease: lease)
+        connecting = flow
+        Task { await runConnect(app, owner: owner, flow: flow) }
     }
 
     /// The two server calls the handoff needs, in the order it needs them.
     ///
-    /// Every step re-checks that the sheet on screen is still THIS app's: a
-    /// second tap on a second app starts a second flow, and an answer for the
-    /// first one landing afterwards must not be adopted under it. A failure at
-    /// any point says so plainly and nothing is opened.
-    private func runConnect(_ app: ToolkitMeta, owner: OwnerId) async {
+    /// Every step belongs to this exact tap and account session, including a
+    /// retry of the SAME app. An older response must not adopt a link, clear a
+    /// newer prompt, or report its failure as the newer attempt's failure.
+    private func runConnect(_ app: ToolkitMeta, owner: OwnerId, flow: ConnectFlow) async {
+        guard connectFlowIsCurrent(flow) else { return }
         let client = connectedAppsClient()
+        var attemptID: String?
         do {
             let sentences = try await client.permissionSentences(toolkit: app.slug,
                                                                  owner: owner)
-            guard connecting?.app.slug == app.slug else { return }
+            guard connectFlowIsCurrent(flow) else { return }
             guard let prompt = connect.begin(owner: owner.raw, toolkit: app.slug,
                                              sentences: sentences) else {
                 connecting?.stage = .trouble
                 return
             }
+            attemptID = prompt.attemptID
             connecting?.stage = .asking
             let link = try await client.connectLink(toolkit: app.slug, owner: owner,
                                                     attemptID: prompt.attemptID)
-            guard connecting?.app.slug == app.slug else { return }
+            guard connectFlowIsCurrent(flow),
+                  connect.prompt?.attemptID == prompt.attemptID else { return }
             // A link the handoff will not adopt is a link nothing may open. The
             // attempt goes with it: an attempt left in flight is an attempt
             // whose callback would be believed later.
@@ -252,10 +262,25 @@ struct SettingsHomeView: View {
                 return
             }
         } catch {
-            guard connecting?.app.slug == app.slug else { return }
-            connect.ownerChanged()
+            guard connectFlowIsCurrent(flow) else { return }
+            if let attemptID {
+                guard connect.prompt?.attemptID == attemptID else { return }
+                connect.ownerChanged()
+            }
             connecting?.stage = .trouble
         }
+    }
+
+    private func connectFlowIsCurrent(_ flow: ConnectFlow) -> Bool {
+        connecting?.id == flow.id && AccountWriteLeasePolicy.isCurrent(flow.lease,
+            accountID: session.accountID, authToken: session.backend.authToken,
+            isSignedIn: session.isSignedIn)
+    }
+
+    private func connectMovedToBackground() {
+        // The browser already opened with connecting == nil. Only pending
+        // disclosure work is discarded; the handed-over session remains live.
+        connecting = nil
     }
 
     /// THE DISCLOSURE SHEET. Google's Workspace policy asks for the owner to be
@@ -332,8 +357,7 @@ struct SettingsHomeView: View {
 ///
 /// The app is carried rather than looked up so the sheet can name and picture
 /// it in every state, including the two where `ConnectSession` holds nothing
-/// yet. `Identifiable` by slug: a second connect on a second app is a second
-/// sheet, and starting one while another is up replaces it.
+/// yet. Each tap has a distinct identity, even when it retries the same app.
 struct ConnectFlow: Equatable, Identifiable {
     enum Stage: Equatable {
         /// The sentences and the link are being fetched. Nothing has been asked
@@ -347,8 +371,8 @@ struct ConnectFlow: Equatable, Identifiable {
 
     let app: ToolkitMeta
     var stage: Stage
-
-    var id: String { app.slug }
+    let lease: AccountWriteLeasePolicy.Lease
+    let id = UUID()
 }
 
 /// Screen 5: the info popover, as a sheet.

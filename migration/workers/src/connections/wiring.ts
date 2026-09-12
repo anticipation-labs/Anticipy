@@ -47,6 +47,7 @@ import {
 import { createD1Store, ownerId, type ConnectionsStore, type StoredConnection }
   from "./store.ts";
 import { connectionsFromEnv, type ConnectionsEnv } from "./provider.ts";
+import { createRecoveryStore } from "./recovery.ts";
 import { createD1ConnectCodeStore, type ConnectAuthDeps } from "../routes/connect_auth.ts";
 import { makePermissionWords, MAX_SENTENCE_CHARS, SENTENCE_COUNT, type SentenceWriter }
   from "./words.ts";
@@ -83,6 +84,9 @@ export interface ConnectWiringEnv extends ConnectEnv, ConnectionsEnv, LlmEnv {}
  *  model's reasoning counts against the cap and its verdicts came back cut off
  *  mid-word at 64), and `boundMaxTokens` would raise anything smaller anyway. */
 export const SENTENCE_MAX_TOKENS = 512;
+
+/** Optional SMS display metadata must not consume the full vendor deadline. */
+export const CONNECT_CODE_NAME_TIMEOUT_MS = 1000;
 
 // ---------------------------------------------------------------------------
 // THE SENTENCE WRITER
@@ -478,6 +482,7 @@ export function connectDeps(env: ConnectWiringEnv): ConnectDeps | null {
     provider: connectionsFromEnv(env),
     words: makePermissionWords(makeSentenceWriter(env)),
     onConnected: writeConnection(store),
+    recovery: createRecoveryStore(env),
   };
 }
 
@@ -505,7 +510,7 @@ export const connectAuthWiring = (env: ConnectWiringEnv): ConnectAuthDeps | null
     // letting it stop somebody signing in.
     async toolkitName(slug: string): Promise<string | null> {
       try {
-        return (await deps.provider.toolkit(slug))?.name ?? null;
+        return (await deps.provider.toolkit(slug, AbortSignal.timeout(CONNECT_CODE_NAME_TIMEOUT_MS)))?.name ?? null;
       } catch {
         return null;
       }

@@ -58,8 +58,9 @@ strip() { grep -vE '^[[:space:]]*(//|///)' "$1"; }
 # longer be run at the instant that matters.
 imports=$(grep -E '^[[:space:]]*import[[:space:]]' "$client" \
     | sed -E 's/^[[:space:]]*import[[:space:]]+//' | sort -u | tr '\n' ' ')
-if [ "$imports" != "Foundation " ]; then
-    echo "ConnectedAppsClient imports more than Foundation: ${imports:-nothing}"
+if [ "$imports" != "CoreFoundation Foundation " ]; then
+    echo "ConnectedAppsClient must use only Foundation and CoreFoundation: ${imports:-nothing}"
+    echo "CoreFoundation checks JSON boolean identity; it grants no network or UI capability."
     echo "The network is behind ConnectedAppsTransport for exactly this reason."
     exit 2
 fi

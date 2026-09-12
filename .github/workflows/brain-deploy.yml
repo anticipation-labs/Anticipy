@@ -143,6 +143,30 @@ jobs:
       - name: Apply the connection command retry fence
         working-directory: migration/workers
         run: npx --no-install wrangler d1 execute anticipy-backend --remote --config wrangler.jsonc --file ../d1/2026-09-07-connection-command-runs.sql
+      # THE TWO 2026-09-11 MIGRATIONS ADD COLUMNS, AND THEY GO BEFORE THE DEPLOY.
+      #
+      # The two steps above are pure `CREATE ... IF NOT EXISTS`, so re-running
+      # them on every deploy costs nothing. These two are not: `ALTER TABLE ADD
+      # COLUMN` fails with "duplicate column name" on a second pass, and
+      # `CREATE TABLE IF NOT EXISTS` does not add a column to a table that
+      # already exists — so `--file` would turn the next deploy red and, worse,
+      # would stop before creating the triggers, leaving a database that
+      # readiness used to call fine. proof/audit/d1_additive.py applies only the
+      # statements that are actually missing and verifies the columns afterwards;
+      # tests/test_d1_additive.py is what holds it to that.
+      #
+      # ORDER IS THE WHOLE POINT. Ship the Worker first and every connect-code
+      # send writes `delivery_state` to a table without it — handleSend swallows
+      # the D1 error and hands back the ordinary "enter the code we texted you"
+      # page, so 100% of phone codes stop working and look exactly like a slow
+      # text. Connect itself dies the same way: connectPageGo calls
+      # recovery.ready() before it redeems anything.
+      - name: Add the connect-code delivery columns (repeat-safe; must precede the deploy)
+        run: python3 -m proof.audit.d1_additive migration/d1/2026-09-11-connect-code-delivery.sql --apply
+      - name: Add the OAuth recovery columns, index and cancellation triggers (repeat-safe)
+        run: python3 -m proof.audit.d1_additive migration/d1/2026-09-11-oauth-recovery.sql --apply
+      - name: Refuse the deploy unless the deployed database can actually carry it
+        run: python3 -m proof.audit.d1_connector_readiness
       - name: Deploy the API while preserving separately configured provider variables
         working-directory: migration/workers
         run: npx --no-install wrangler deploy --config wrangler.jsonc --keep-vars --tag "$GITHUB_SHA"

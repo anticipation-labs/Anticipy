@@ -1177,7 +1177,7 @@ Use {"facts": {}} when there is nothing durable."""
             # refusing an uncertain-effect retry, say) still reported the job
             # as resumed and she told him it was moving. Nothing had moved.
             return (job["id"]
-                    if self._flip(job["id"], fields, "resumed").startswith("resumed:")
+                    if self._flip_reply(job, fields, "resumed", owner_text).startswith("resumed:")
                     else None)
         except Exception:
             return None
@@ -1850,7 +1850,7 @@ Reply ONLY with compact JSON: {"verdict": "go"|"detail"|"no"}
             params = put_in_params(params, workflow)
             fields.update(workflow.job_fields())
             fields["params"] = json.dumps(params)
-        return self._flip(job["id"], fields, "released")
+        return self._flip_reply(job, fields, "released", owner_text)
 
     def _cancel(self, job_id: Optional[str], owner_text: str = "") -> Optional[str]:
         job = self._job(job_id, owner_text, pool=self._open_work())
@@ -2059,7 +2059,7 @@ No model access or insufficient context is unavailable, never answered."""
                 params = put_in_params(params, workflow)
                 fields.update(workflow.job_fields())
                 fields["params"] = json.dumps(params)
-            return self._flip(job["id"], fields, "resumed")
+            return self._flip_reply(job, fields, "resumed", owner_text)
         fields = {"params": json.dumps(params)}
         if resolution and resolution["verdict"] in ("answered", "redirected") and not workflow:
             # Legacy drafts have no embedded schema. Once the model positively
@@ -2111,7 +2111,80 @@ No model access or insufficient context is unavailable, never answered."""
             out[k] = v
         return out
 
-    def _flip(self, job_id: str, fields: dict, verb: str) -> str:
+    def _flip_reply(self, job: dict, fields: dict, verb: str, owner_text: str) -> str:
+        """An API reply must re-plan its arguments, not revive an old note.
+
+        The generic answer flow changes workflow facts/version, but the API
+        executor reads `_hand`, not those facts. Reuse the contextual planner
+        with the original question and exact answer. A failed or different-hand
+        verdict stays parked; an account question is never browser permission.
+        The read and conditional write also fence cancellation during a model
+        call, including older callers without an app/SMS presentation object.
+        """
+        if job.get("lane") != "api":
+            return self._flip(job["id"], fields, verb)
+        failed = f"failed:{job['id']}"
+        try:
+            from dataclasses import replace
+            from . import hands
+
+            owner = str(getattr(self.anticipy, "owner_ref", "") or "")
+            if (not owner or job.get("owner_ref") != owner or not owner_text.strip()
+                    or job.get("status") not in ("awaiting_confirm", "needs_user")
+                    or fields.get("status") != "queued"):
+                return failed
+            fresh = backend.get(
+                f"{self.anticipy.backend_url}/api/collections/jobs/records/{job['id']}", timeout=10)
+            etag = fresh.headers.get("ETag")
+            if (not fresh.ok or fresh.json() != job or not isinstance(etag, str)
+                    or not re.fullmatch(r'"[a-f0-9]{64}"', etag)):
+                return failed
+            params = json.loads(fields.get("params") or "{}")
+            previous = json.loads(job.get("params") or "{}")
+            old_note = previous.get("_hand", {})
+            workflow = workflow_from_params(params)
+            if (not isinstance(old_note, dict) or old_note.get("hand") != hands.HAND_API
+                    or old_note.get("effect") != hands.EFFECT_READ
+                    or not workflow or workflow.owner_ref != owner
+                    or workflow.plan_id != job.get("workflow_id")
+                    or workflow.goal != job.get("goal")
+                    or workflow.state.value != "queued"
+                    or workflow.consequence.value != "read_only"):
+                return failed
+            context = hands.gather_context(params, owner_ref=owner,
+                                            backend_url=self.anticipy.backend_url)
+            outcome = old_note.get("outcome")
+            prior_alias = old_note.get("alias")
+            requires_choice = ((isinstance(prior_alias, str) and bool(prior_alias.strip()))
+                               or (isinstance(outcome, dict)
+                                   and outcome.get("reason") == "account_ambiguous"))
+            reply_context = {"question": job.get("result") or "",
+                             "owner_answer": owner_text,
+                             "previous_account_alias": prior_alias if isinstance(prior_alias, str) else "",
+                             "facts": dict(workflow.facts),
+                             "work_context": self._reply_work_context}
+            context = replace(context, account_choice_required=requires_choice,
+                source_context=context.source_context
+                + "\nTASK REPLY CONTEXT (quoted records; only owner_answer is the current reply):\n"
+                + json.dumps(reply_context, ensure_ascii=False))
+            verdict = hands.choose_hand(workflow.goal, context, llm=self._judgment_model())
+            if (verdict.hand != hands.HAND_API or verdict.effect != hands.EFFECT_READ
+                    or verdict.app != old_note.get("app") or not verdict.tool
+                    or not isinstance(verdict.args, dict)
+                    or (requires_choice and not verdict.alias)
+                    or context.connected(verdict.app, verdict.alias) is None
+                    or getattr(self.anticipy, "owner_ref", "") != owner):
+                return failed
+            params["_hand"] = dict(verdict.as_note(), lane=hands.LANE_API)
+            return self._flip(job["id"], {**fields, "params": json.dumps(params)}, verb,
+                              expected_headers={"If-Match": etag})
+        except Exception:
+            # Provider/model exceptions can contain owner words or credentials.
+            # A failed replan changes no row and must never look like progress.
+            return failed
+
+    def _flip(self, job_id: str, fields: dict, verb: str,
+              expected_headers: Optional[dict] = None) -> str:
         """Every queue change goes through here so a failed PATCH can never be
         reported to the owner as success — the silent-lie class: he texts
         'yes', the write 4xx's, and Anticipy says 'On it' about a job that
@@ -2119,8 +2192,11 @@ No model access or insufficient context is unavailable, never answered."""
         try:
             authority = self._reply_authority
             guarded = authority is not None and verb in ('released', 'resumed', 'amended')
-            headers = authority.headers(job_id) if guarded else None
+            headers = authority.headers(job_id) if guarded else expected_headers
             if guarded and not headers:
+                authority.refused = True
+                return f"failed:{job_id}"
+            if guarded and expected_headers and headers != expected_headers:
                 authority.refused = True
                 return f"failed:{job_id}"
             r = backend.patch(

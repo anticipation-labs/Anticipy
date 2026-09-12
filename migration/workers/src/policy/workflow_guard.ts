@@ -280,6 +280,14 @@ export const workflowGuard: Policy = async (ctx: Ctx): Promise<Response | null> 
   ctx.storedRow = old;
 
   const oldWorkflow = String(old?.workflow_id ?? "");
+  // Legacy compatibility belongs only to rows that never had a workflow.
+  // Reject erasing/retyping an existing id BEFORE the early return below;
+  // otherwise `workflow_id: ""` skips every lease, approval and receipt rule.
+  // Compare the raw incoming value: null/arrays/numbers are not identifiers.
+  if (oldWorkflow && Object.prototype.hasOwnProperty.call(body, "workflow_id")
+      && body.workflow_id !== oldWorkflow) {
+    return reject("workflow id is immutable");
+  }
   const workflow = String(body.workflow_id ?? oldWorkflow ?? "");
 
   // :24 — THE LEGACY ESCAPE HATCH. Fail-open, deliberately. CONTRACT.md §1.2.
@@ -298,6 +306,32 @@ export const workflowGuard: Policy = async (ctx: Ctx): Promise<Response | null> 
   const nextVersion = Number(body.workflow_version ?? oldVersion);
   const oldState = String(old?.workflow_state ?? "");
   const nextState = String(body.workflow_state ?? oldState ?? "");
+
+  // CANCELLATION REVOKES AUTHORITY, AND THE SERVER DOES THE REVOKING.
+  // The phone nulls `approval` when it cancels (AnticipyApp.swift
+  // cancellationFields) and so does the brain (brain/workflow.py cancel); the
+  // extension does not, because rule 5 below forbids an executor touching
+  // approval and its own at-cap cancel was a guaranteed 409 for it (live,
+  // 2026-08-15). Three clients, two answers to "does a cancelled plan still
+  // carry an approval" — and the answer that matters is the row's, which is
+  // what any later reader (a retry, a re-queue, a human) takes as the owner's
+  // standing word. So on every transition INTO `cancelled` the Worker writes
+  // the revocation itself, whatever the body carried: the row's `approval`
+  // becomes "", the embedded copy's `approval` becomes null (the redundancy
+  // check below then holds them equal), and rule 5 does not count this as the
+  // executor's change, because it is not. A body that sent no params at all
+  // is given the row's, revoked. `ctx.body` is the object records.ts writes
+  // from (index.ts builds the RecordsRequest around it), so this is the write.
+  if (old && nextStatus === "cancelled") {
+    body.approval = "";
+    let parsed: Record<string, unknown> | null = null;
+    try { parsed = JSON.parse(String(body.params ?? old.params ?? "{}") || "{}"); } catch { parsed = null; }
+    const plan = parsed && typeof parsed === "object" ? parsed._workflow : null;
+    if (plan && typeof plan === "object") {
+      (plan as Record<string, unknown>).approval = null;
+      body.params = JSON.stringify(parsed);
+    }
+  }
   const consequence = String(body.consequence ?? old?.consequence ?? "");
   // workflow_guard.pb.js:37 -- the incoming value wins, else the row's. In D1 a
   // bool is INTEGER 0/1, so the row side needs Number(), not a truthiness test
@@ -404,7 +438,9 @@ export const workflowGuard: Policy = async (ctx: Ctx): Promise<Response | null> 
       || !sameJSON(embedded.undo_of, oldEmbedded.undo_of)
       || Number(embedded.lineage_seq ?? 0) !== Number(oldEmbedded.lineage_seq ?? 0));
 
-    const changesApproval = body.approval != null
+    // A cancel's cleared approval is the server's revocation (above), never
+    // the executor's edit — so it is not counted here.
+    const changesApproval = nextStatus !== "cancelled" && body.approval != null
       && String(body.approval ?? "") !== String(old.approval ?? "");
 
     // :178-182 — AN EXECUTOR CANNOT REWRITE OR APPROVE ITS PLAN.
@@ -574,15 +610,28 @@ export const workflowGuard: Policy = async (ctx: Ctx): Promise<Response | null> 
   // THIS effect_key -- proof of some other effect is not proof of this one --
   // and must cite at least one piece of evidence.
   if (nextStatus === "done") {
-    let receipt: Record<string, unknown>;
+    let receipt: unknown;
     try {
-      receipt = JSON.parse(String(rowValue("receipt", "") ?? "")) as Record<string, unknown>;
+      receipt = JSON.parse(String(rowValue("receipt", "") ?? ""));
     } catch { return reject("done needs a parseable receipt"); }
     const effect = String(rowValue("effect_key", "") ?? "");
-    if (!receipt.verified
+    // Parsing JSON does not prove its shape. `null` must refuse, not throw;
+    // truthy values such as "false" and 1 must never buy verification. Every
+    // evidence entry must survive the phone's string/blank filtering, or a
+    // server-accepted completion arrives with no proof a person can inspect.
+    // Tags are deliberately not allowlisted: all hands and future dialects
+    // keep their opaque references, order and duplicates unchanged.
+    if (!plainObject(receipt)
+        || receipt.verified !== true
         || receipt.effect_key !== effect
         || !Array.isArray(receipt.evidence)
-        || receipt.evidence.length === 0) {
+        || receipt.evidence.length === 0
+        || !receipt.evidence.every((entry: unknown) =>
+          // The 27-scalar wire-blank set is shared with iOS JobReceipt.swift.
+          // Swift and JS disagree on NEL, ZWSP and BOM; do not use trim().
+          // This validates a transport field; it does not interpret prose.
+          typeof entry === "string"
+            && !/^[\u0009-\u000D\u0020\u0085\u00A0\u1680\u2000-\u200B\u2028\u2029\u202F\u205F\u3000\uFEFF]*$/u.test(entry))) {
       return reject("done needs verified evidence for this exact effect");
     }
   }

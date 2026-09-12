@@ -500,6 +500,30 @@ check("a lapsed connection is not toggled",
       ConnectionsPolicy.writesTransition(rows: [connection(status: .needsReconnect)],
                                          toolkit: SLUG_A, to: true, for: ME).applied == false)
 
+let retainedChoices = [
+    connection(account: "ca_healthy", writes: false),
+    connection(account: "ca_lapsed", status: .needsReconnect, writes: true),
+    connection(account: "ca_history", status: .disconnected, writes: true),
+    connection(owner: SOMEONE_ELSE, account: "ca_foreign", writes: true),
+]
+let clearedChoices = ConnectionsPolicy.writesTransition(rows: retainedChoices,
+    toolkit: SLUG_A, to: false, for: ME)
+check("clearing reaches all saved owner choices without a healthy connection",
+      Set(clearedChoices.rowsToWrite.map(\.connectedAccountID))
+        == Set(["ca_healthy", "ca_lapsed", "ca_history"]))
+check("clearing is false-only and cannot grant anything",
+      clearedChoices.applied && !clearedChoices.enabled
+        && clearedChoices.rowsToWrite.allSatisfy { !$0.writesEnabled && $0.userID == ME.raw })
+check("clearing preserves account status and identity",
+      clearedChoices.rowsToWrite.first(where: { $0.connectedAccountID == "ca_lapsed" })?.status == .needsReconnect
+        && clearedChoices.rowsToWrite.first(where: { $0.connectedAccountID == "ca_history" })?.status == .disconnected)
+let enabledChoices = ConnectionsPolicy.writesTransition(rows: retainedChoices,
+    toolkit: SLUG_A, to: true, for: ME)
+check("enabling still never grants consent to a lapsed or disconnected account",
+      enabledChoices.rowsToWrite.map(\.connectedAccountID) == ["ca_healthy"])
+check("a lapsed saved opt-in never changes the connected-account AND floor",
+      !ConnectionsPolicy.mayUse(rows: retainedChoices, toolkit: SLUG_A, access: .write, for: ME))
+
 // CONSENT IS TO A CONNECTION, NOT TO AN APP NAME. A disconnected row keeps its
 // place as history and loses its opt-in, so a fresh connection months later
 // cannot inherit a permission nobody granted it.
@@ -569,8 +593,10 @@ check("it names the app from the catalog", asked.headline.contains("Aurora"))
 check("it says WHY, so the ask is never out of nowhere", !asked.why.isEmpty)
 check("and it says, in one sentence, that this is optional",
       asked.optionalLine.contains("Entirely up to you"))
-check("and the sentence says why it is optional: the browser does it either way",
-      asked.optionalLine.contains("browser"))
+check("the browser is a conditional alternative, not a promised capability",
+      asked.optionalLine.contains("some tasks may")
+          && asked.optionalLine.contains("when it is connected and available")
+          && !asked.optionalLine.contains("either way"))
 
 // An ask with no moment behind it is an ask out of nowhere. An `asked` row with
 // no sent time cannot tell ten minutes ago from March. Both are unreadable, and
@@ -614,8 +640,13 @@ let stale = rendered[.needsReconnect]!
 check("a lapsed connection raises a card", stale.visible)
 check("it offers reconnect, not connect", stale.primary == .reconnect)
 check("it names the app", stale.headline.contains("Aurora"))
-check("and it is STILL optional, because the browser still does the same work",
+check("reconnecting is still the owner's choice",
       stale.optionalLine.contains("Entirely up to you"))
+check("a lapsed connection does not claim the whole app stopped working",
+      stale.headline == "Aurora needs connecting again.")
+check("connection status alone cannot claim browser work happened",
+      stale.why == "The connection needs renewing; reconnect it before I try to use it again."
+          && !stale.why.contains("I've been doing"))
 
 // THE RULE WITH NO EXCEPTIONS: every visible card carries the optional line.
 let everyRender: [NudgeCard] = NudgeState.allCases.flatMap { state -> [NudgeCard] in
@@ -825,17 +856,22 @@ check("no two statuses share a line, so the card cannot show one state as anothe
       Set(ConnectionStatus.allCases.map { ConnectionsPolicy.statusLine($0) }).count
         == ConnectionStatus.allCases.count)
 
-check("the write opt-in ON says Anticipy can act",
-      ConnectionsPolicy.writesLine(true) == "I can make changes")
-check("the write opt-in OFF says it only reads",
-      ConnectionsPolicy.writesLine(false) == "Reading only")
+check("the ON line is a choice, not a currently available capability",
+      ConnectionsPolicy.writesLine(true) == "Changes selected · unavailable right now")
+check("the OFF line preserves read-only intent and states the same availability limit",
+      ConnectionsPolicy.writesLine(false) == "Reading only · changes unavailable")
 check("the two write lines are not the same sentence",
       ConnectionsPolicy.writesLine(true) != ConnectionsPolicy.writesLine(false))
-// The direction, stated once more in the form a swap actually breaks: only the
-// ON line may promise a change, and the OFF line must not.
-check("only the ON line mentions changing anything",
-      ConnectionsPolicy.writesLine(true).lowercased().contains("change")
-        && !ConnectionsPolicy.writesLine(false).lowercased().contains("change"))
+// The option describes a choice; the current release cannot write through the
+// connected-app hand in either position. Copy is not execution authority.
+for on in [true, false] {
+    check("neither switch position promises an available write: \(on)",
+          ConnectionsPolicy.writesLine(on).contains("unavailable")
+              && !ConnectionsPolicy.writesLine(on).contains("I can make changes"))
+}
+check("only the ON line says changes were selected",
+      ConnectionsPolicy.writesLine(true).contains("selected")
+        && !ConnectionsPolicy.writesLine(false).contains("selected"))
 check("and only the OFF line says reading",
       ConnectionsPolicy.writesLine(false).lowercased().contains("read")
         && !ConnectionsPolicy.writesLine(true).lowercased().contains("read"))

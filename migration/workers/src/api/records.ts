@@ -202,6 +202,7 @@ export interface RecordsRequest {
 // Text columns defining job authority. The token is opaque to clients; the SQL
 // comparison uses the original values, so two concurrent approvals cannot win.
 const JOB_AUTHORITY = ["id", "owner_ref", "owner", "status", "goal", "params", "result",
+  "lane", "claimed_by", "claimed_at",
   "workflow_id", "workflow_version", "workflow_state", "scope_digest", "effect_key",
   "approval", "receipt", "lease_token", "lease_until", "effect_uncertain", "consequence", "updated"] as const;
 

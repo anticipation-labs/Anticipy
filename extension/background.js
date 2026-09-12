@@ -5,7 +5,7 @@
 // (or the phone app) to confirm.
 
 import {
-  PAGE_READ_TIMEOUT_MS, createBackgroundTab, modelFetch, readPageForRecovery,
+  PAGE_READ_TIMEOUT_MS, RUN_WALL_CEILING_MS, createBackgroundTab, modelFetch, readPageForRecovery,
   reconcileJudge, runAgentGoal, withTimeout,
 } from "./agent_loop.js";
 import {
@@ -29,7 +29,7 @@ import {
 // imported module alone can leave Chrome running a cached worker graph for an
 // unpacked extension; changing this entry file forces a fresh registration,
 // and the same marker is written into every job trace as runtime proof.
-const ENGINE_BUILD = "0.18.1";
+const ENGINE_BUILD = "0.18.2";
 
 const BACKEND_LLM = "backend-proxy";
 // Job traffic authenticates as THIS ONE AGENT and nothing more. An earlier
@@ -333,6 +333,15 @@ async function ensureLLMKey(force = false) {
 async function heartbeat() {
   const reg = await ensureRegistered();
   if (!reg) return null;
+  // THE BEAT FIRST, THE RENEWALS AFTER. last_seen is the phone's whole idea
+  // of "Chrome ready", and it used to be stamped only after every active
+  // job's lease renewal had been awaited — each one chained behind in-flight
+  // step writes and carrying the 20 s request deadline. One 15 s renewal was
+  // measured to stretch the stamp gap from 30 s to 45 s, so a running errand
+  // showed "Chrome asleep" on the phone with Chrome open and working. The
+  // stamp is a fact about this worker being alive; it does not wait on the
+  // job rows. The renewals still run, unconditionally, below.
+  const rec = await stampLastSeen(reg);
   for (const [id, active] of activeJobs) {
     // A run that outlives the cycle ceiling is hung, and renewing its lease
     // is how a hung run becomes IMMORTAL: the stale-job sweep only recovers
@@ -357,6 +366,13 @@ async function heartbeat() {
       console.warn(`Anticipy: could not renew lease for ${id}: ${String(e).slice(0, 160)}`);
     }
   }
+  return rec;
+}
+
+// The agents-row PATCH on its own: this worker's build and the moment it was
+// alive. Null when the row could not be written; the storage mirror of
+// owner/pairing is refreshed from what the row answered.
+async function stampLastSeen(reg) {
   const r = await fetch(`${await backendBase()}/api/collections/agents/records/${reg.recordId}`, {
     method: "PATCH",
     headers: await writeHeaders(),
@@ -1265,8 +1281,16 @@ async function runJob(job) {
       throw e;
     }
   } finally {
-    activeJobs.delete(job.id);
-    jobWriteChains.delete(job.id);
+    // LEASE-SCOPED, NOT JOB-SCOPED. When the same worker re-claims a row the
+    // sweep handed back (attempt 2), this entry belongs to attempt 2; attempt
+    // 1's teardown deleting it by job id left the live attempt with nobody
+    // renewing its lease (0 renewals measured) and the popup mirror reading
+    // "stopped — another window picked it up" while this window ran it.
+    const mine = activeJobs.get(job.id);
+    if (!mine || mine.leaseToken === (job.lease_token || "")) {
+      activeJobs.delete(job.id);
+      jobWriteChains.delete(job.id);
+    }
   }
 }
 
@@ -1908,9 +1932,16 @@ async function runJobInner(job, params) {
 // the same "Chrome says connected but nothing happens" the owner watched
 // live. A cycle older than the ceiling is a dead cycle: take the lock.
 let pollStartedAt = 0;
-// Comfortably longer than the slowest healthy run (certification p100 was
-// ~90s over 313 cases) and shorter than a person's patience.
-const POLL_CYCLE_CEILING_MS = 12 * 60 * 1000;
+// ONE OWNER OF THE NUMBER. agent_loop.js declares the loop's own worst case
+// (RUN_WALL_CEILING_MS, ~16.3 min) and has said since it landed that this
+// file imports it "rather than keeping a number of its own" — while this file
+// kept 12 minutes of its own. Between the two, a run still legitimately inside
+// its budget had its lease dropped by the beat at 12:00, its row handed back
+// by the sweep at ~14:00, and re-claimed as attempt 2 by the SAME worker while
+// attempt 1 was still inside a step (measured 2026-09-12, offline, real
+// modules). The executor and the thing that judges the executor cannot
+// disagree if only one of them decides.
+const POLL_CYCLE_CEILING_MS = RUN_WALL_CEILING_MS;
 async function poll() {
   const now = Date.now();
   if (pollStartedAt && now - pollStartedAt < POLL_CYCLE_CEILING_MS) return;

@@ -28,6 +28,10 @@ extension AgentJob {
         switch CalendarHandPolicy.normalizedLane(lane) {
         case "research": return "Hand 2 · Research service"
         case CalendarHandPolicy.lane: return "This iPhone · Calendar"
+        // The API hand: the same `api` lane `stageTitle` calls "Connected app
+        // is working". Until 2026-09-12 it fell through to the browser label,
+        // so one card named two hands (integration map, disagreement 8).
+        case "api": return "Hand 3 · Connected app"
         default: return "Hand 1 · Browser"
         }
     }
@@ -3146,12 +3150,10 @@ struct DoneCard: View {
     /// receipt carries five to nine entries, but `ReceiptProof` keeps them
     /// behind a disclosure — staggering that array would be animating something
     /// nobody can see. What is visible on arrival is the seal line, the photo
-    /// note when there is one, and the button that opens the rest. Those are
+    /// note when there is one, reference notes, and the disclosure button. Those are
     /// the beats.
     private var proofRows: Int {
-        guard let card = doneCard, card.proof != nil else { return 0 }
-        // seal line + optional photo note + the disclosure button
-        return 2 + (card.proof?.photographed == true ? 1 : 0)
+        doneCard?.proof?.revealRowCount ?? 0
     }
 
     /// The card's rendered content, computed once. `body` was calling this
@@ -3471,23 +3473,6 @@ private struct ReceiptProof: View {
         return index < revealed
     }
 
-    /// The site, not the URL. A confirmation URL is a 300-character query
-    /// string; the host is the part that answers "where did this happen".
-    /// The whole URL is still one tap away in the list below.
-    private var host: String? {
-        guard let url = proof.url, let parsed = URL(string: url),
-              let host = parsed.host else { return nil }
-        return host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
-    }
-
-    /// Where the claim was checked, in the receipt's own words. Never
-    /// composed from anything but what the row holds.
-    private var checkedOn: String? {
-        let where_ = proof.title ?? host
-        guard let where_ else { return nil }
-        return "Checked on \(where_)"
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
@@ -3495,7 +3480,7 @@ private struct ReceiptProof: View {
                     .font(.caption)
                     .foregroundStyle(Theme.accent)
                     .accessibilityHidden(true)
-                Text(checkedOn ?? "Checked before I called it done")
+                Text(proof.checked ?? "Recorded evidence")
                     .font(.caption)
                     .foregroundStyle(Theme.text2)
                     .fixedSize(horizontal: false, vertical: true)
@@ -3513,6 +3498,13 @@ private struct ReceiptProof: View {
                     .foregroundStyle(Theme.muted)
                     .opacity(landed(1) ? 1 : 0)
             }
+            ForEach(Array(proof.notes.enumerated()), id: \.offset) { index, note in
+                Text(note)
+                    .font(.caption2)
+                    .foregroundStyle(Theme.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .opacity(landed(proof.notesStartIndex + index) ? 1 : 0)
+            }
             Button {
                 Haptics.tap()
                 withAnimation(.easeInOut(duration: 0.2)) { showing.toggle() }
@@ -3521,10 +3513,10 @@ private struct ReceiptProof: View {
                       systemImage: showing ? "chevron.up" : "chevron.down")
             }
             .buttonStyle(.ghost)
-            .opacity(landed(proof.photographed ? 2 : 1) ? 1 : 0)
+            .opacity(landed(proof.disclosureRowIndex) ? 1 : 0)
             if showing {
                 VStack(alignment: .leading, spacing: 4) {
-                    ForEach(proof.items, id: \.self) { item in
+                    ForEach(Array(proof.items.enumerated()), id: \.offset) { _, item in
                         Text(item)
                             .font(.caption2.monospaced())
                             .foregroundStyle(Theme.muted)

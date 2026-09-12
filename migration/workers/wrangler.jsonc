@@ -236,9 +236,20 @@
   // to the team, sent all at once, for events that are days old.
   //
   // THAT IS THE OWNER'S CALL AND NOT A DEPLOY'S SIDE EFFECT. Restoring it is
-  // one line and no code change:
+  // one line and no code change — but the line is ADDITIVE, and the array below
+  // is no longer the one this comment was written beside. Copying the old
+  // two-entry example verbatim would start the HQ text backlog AND silently
+  // delete the hourly evidence leg and the minute OAuth recovery trigger, with
+  // no code change to show for it. If the owner ever says yes, the whole array
+  // is:
   //
-  //     "crons": ["*/5 * * * *", "17 4 * * *"]
+  //     "crons": ["17 4 * * *", "23 * * * *", "* * * * *", "*/5 * * * *"]
+  //
+  // `* * * * *` is the durable OAuth recovery trigger (cron.ts routes it to
+  // recoverOAuthAttempts and returns; it cannot reach the sweep) and has
+  // nothing to do with the HQ decision. The 2026-09-06 reading above is a
+  // MEASUREMENT OF THAT DAY, not of today: re-read the live schedules before
+  // acting on it.
   //
   // The connect-ask half of the trigger (`connectAsks`) is bounded by its own
   // policy and would send nothing today — `app_usage_signals` is empty in
@@ -247,7 +258,8 @@
   // starts.
   // ==========================================================================
   "triggers": {
-    "crons": ["17 4 * * *", "23 * * * *"]
+    // Dedicated, bounded pending-OAuth recovery only. Never runs HQ reminders.
+    "crons": ["17 4 * * *", "23 * * * *", "* * * * *"]
   },
 
   // --------------------------------------------------------------------------

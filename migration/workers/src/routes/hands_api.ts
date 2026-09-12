@@ -34,6 +34,9 @@
  *
  * WHAT THE OUTCOME BECOMES. `runStep` answers one of three shapes and this file
  * branches on the CLOSED ENUMS it carries — never on prose:
+ * An explicitly selected account is an identity boundary: every generic
+ * browser handback below parks on the API lane instead when step.alias is
+ * bound. Chrome's session is not evidence of that selected account.
  *
  *   ran, read                    -> queued on research. The actual data is
  *                                   retained as _api_evidence; the server
@@ -104,7 +107,8 @@ import {
   type MarkOutcome,
   type WebhookConnectionStore,
 } from "./connections_webhook.ts";
-import { json, pbNow } from "../api/wire.ts";
+import { json, pbNow, pbTime } from "../api/wire.ts";
+import { releasesCommitment, resolveCollection } from "../api/records.ts";
 
 // ---------------------------------------------------------------------------
 // THE CONSTANTS THE BRAIN SHARES. Each is pinned to its Python twin by test.
@@ -187,8 +191,21 @@ function renderData(data: unknown): string {
  * The branch table in the header, as code. `attempts` is the row's count
  * AFTER the brain's claim, so a first run arrives here at 1.
  */
-export function dispose(outcome: ApiHandOutcome, attempts: number): Disposition {
+export function dispose(outcome: ApiHandOutcome, attempts: number,
+                        selectedAlias: ApiHandStep["alias"] = null): Disposition {
   const handback = (reason: string, result: string): Disposition => {
+    if (typeof selectedAlias === "string" && selectedAlias.trim()) {
+      // A refusal/error does not authorize substituting Chrome's account for
+      // the one this exact API plan selected. Keep the alias on the row and
+      // ask for recovery; reconnect marking below still uses credential facts.
+      return {
+        state: "needs_user", lane: API_LANE, reason,
+        result: "I couldn't finish this step with the selected connected account "
+          + `(${reason}). I haven't moved it to your browser. `
+          + "Please review the connection or choose another account.",
+        effectUncertain: false, reconnect: false, evidence: [],
+      };
+    }
     if (attempts >= MAX_ATTEMPTS) {
       return {
         state: "failed", lane: API_LANE, reason: `stopped after ${attempts} attempts`,
@@ -228,6 +245,14 @@ export function dispose(outcome: ApiHandOutcome, attempts: number): Disposition 
   }
 
   if (outcome.outcome === "refused") {
+    if (outcome.reason === "api_writes_unavailable") {
+      return {
+        state: "needs_user", lane: API_LANE, reason: outcome.reason,
+        result: "Changes through connected apps are not available yet. Nothing was sent, "
+          + "and I haven't moved this task to your browser. Your connection can still be used for reads.",
+        effectUncertain: false, reconnect: false, evidence: [],
+      };
+    }
     if (outcome.reason === "plan_stale") {
       return handback(outcome.reason,
         "The task changed after this step was planned. I'll use its current details in your browser.");
@@ -247,6 +272,25 @@ export function dispose(outcome: ApiHandOutcome, attempts: number): Disposition 
         effectUncertain: false, reconnect: false, evidence: [],
       };
     }
+    if (outcome.reason === "account_ambiguous") {
+      // TWO ACCOUNTS AND NO WORD FROM THE OWNER IS A QUESTION FOR THE OWNER,
+      // not work for the browser. Handing it back used to put a private read
+      // on the browser lane — which runs in whatever account Chrome is signed
+      // into — and, with Chrome closed, bounced it api→browser→api until the
+      // attempt cap failed it, six model calls later, with the owner never
+      // asked (measured 2026-09-12). The row parks on the api lane naming the
+      // owner's own labels; the labels are their rows, not this file's words.
+      const labels = (outcome.aliases ?? []).map((a) => a.trim()).filter(Boolean);
+      const distinct = new Set(labels.map((a) => a.toLowerCase()));
+      const ask = distinct.size === (outcome.aliases ?? []).length && labels.length >= 2
+        ? `Which account should I use for this — ${labels.slice(0, -1).join(", ")} or ${labels.at(-1)}?`
+        : "You have more than one account connected for this app and they are not labelled, "
+          + "so I can't tell which one you mean. Label them in Settings, then I'll carry on.";
+      return {
+        state: "needs_user", lane: API_LANE, reason: outcome.reason, result: ask,
+        effectUncertain: false, reconnect: false, evidence: [],
+      };
+    }
     return handback(
       `api hand refused: ${outcome.reason}`,
       `The API hand did not take this (${outcome.reason}); it goes to the browser instead.`,
@@ -258,12 +302,24 @@ export function dispose(outcome: ApiHandOutcome, attempts: number): Disposition 
   const where = `${outcome.toolkit}/${outcome.tool}`;
   const said = `${err.kind} HTTP ${err.status}${err.token ? ` ${err.token}` : ""}`;
   if (err.kind === "auth") {
-    const back = handback(
+    // ONLY A DEAD CREDENTIAL FLIPS THE ROW. The hand read the vendor's account
+    // status after the refusal (api_hand.ts credentialStatus); `dead` is the
+    // vendor's own enum or no-account token. `alive` and `unknown` leave the
+    // connection exactly as it is and name the tool the app refused, so a
+    // scope the grant does not cover costs one browser handback, not a
+    // reconnect nudge and a dropped inventory (reports 3 and 4).
+    if (outcome.credential === "dead") {
+      const back = handback(
+        `api hand failed: ${said}`,
+        `The connected account for ${outcome.toolkit} no longer works (${said}); it needs `
+          + "reconnecting, and this goes to the browser instead.",
+      );
+      return { ...back, reconnect: true };
+    }
+    return handback(
       `api hand failed: ${said}`,
-      `The connected account for ${outcome.toolkit} no longer works (${said}); it needs `
-        + "reconnecting, and this goes to the browser instead.",
+      `The app refused ${where} (${said}); the account is still connected, so this goes to the browser instead.`,
     );
-    return { ...back, reconnect: true };
   }
   if (outcome.mayHaveLanded && outcome.effect !== "read") {
     return {
@@ -311,6 +367,7 @@ interface JobRow {
   effect_key: string;
   attempts: number;
   lease_token: string;
+  lease_until: string;
 }
 
 const isPlainObject = (v: unknown): v is Record<string, unknown> =>
@@ -479,7 +536,7 @@ export async function handsApiRun(
   try {
     row = await env.DB.prepare(
       `SELECT "id","owner_ref","goal","status","lane","claimed_by","params","workflow_id","workflow_version",
-              "workflow_state","effect_key","attempts","lease_token"
+              "workflow_state","effect_key","attempts","lease_token","lease_until"
          FROM "jobs" WHERE "id" = ?1 LIMIT 1`,
     ).bind(jobId).first<JobRow>();
   } catch (err) {
@@ -514,6 +571,17 @@ export async function handsApiRun(
     });
   }
   const workflow = isPlainObject(params._workflow) ? params._workflow : null;
+  const now = deps.now ?? (() => new Date());
+  // D1 checks expiry at statement execution, not against a timestamp captured
+  // before its awaited I/O. Only the local test clock supplies a fixed instant.
+  const sqlNow = () => deps.now ? deps.now().toISOString() : "now";
+  // Possessing an old token is not current execution authority. The same
+  // fail-closed date parser as the records guard accepts both wire dialects.
+  // The existing stranded-claim recovery owns an expired row; this request
+  // must not dispatch, fabricate a receipt, or requeue an uncertain effect.
+  if (!row.lease_token || !(pbTime(row.lease_until) > now().getTime())) {
+    return refuseWith(409, "the API execution lease is missing or expired");
+  }
 
   // -- The hand. -------------------------------------------------------------
   const hand = deps.hand ?? runStep;
@@ -521,10 +589,16 @@ export async function handsApiRun(
   if (deps.store) handDeps.store = deps.store;
   if (deps.provider) handDeps.provider = deps.provider;
   if (deps.clock) handDeps.clock = deps.clock;
+  // brain/hands.py currently has NO_LEDGER_RUNG = 0. Connection opt-in and
+  // an approval are not a replacement for that missing authority. Enforce the
+  // floor at the last executor too, including catalog drift from read to write.
+  // There is deliberately no request/env override to turn API writes on.
+  handDeps.authorizeEffect = effect => effect === "read" ? null : "api_writes_unavailable";
   // One final authority snapshot, after runStep's connection refresh. Separate
   // job/connection awaits cannot establish that BOTH still authorize execution.
   // Preserve the selected account and alias; never silently switch credentials.
   handDeps.beforeExecute = async (connection, effect) => {
+    if (!(pbTime(row.lease_until) > now().getTime())) return false;
     const stillCurrent = await env.DB.prepare(
       `SELECT 1 AS current FROM "jobs" j JOIN "connections" c
         ON c.user_id = j.owner_ref
@@ -538,12 +612,13 @@ export async function handsApiRun(
         AND (SELECT COUNT(*) FROM connections candidate
           WHERE candidate.user_id = j.owner_ref AND candidate.toolkit = c.toolkit
           AND candidate.status = 'connected'
-          AND (?14 IS NULL OR candidate.alias = ?14)) = 1`,
+          AND (?14 IS NULL OR candidate.alias = ?14)) = 1
+        AND julianday(j.lease_until) > julianday(?15)`,
     ).bind(row.id, row.params, row.goal, row.lease_token, row.owner_ref,
            API_CLAIMANT, API_LANE, row.workflow_version, row.workflow_id,
            connection.connected_account_id, connection.alias ?? "", connection.toolkit,
-           effect, step.alias ?? null).first();
-    return stillCurrent !== null;
+           effect, step.alias ?? null, sqlNow()).first();
+    return stillCurrent !== null && pbTime(row.lease_until) > now().getTime();
   };
   const step = stepFromRow(row, note, workflow);
   const outcome: ApiHandOutcome = planInputsMatch(row, note, params, workflow)
@@ -552,7 +627,10 @@ export async function handsApiRun(
         detail: "the stored arguments do not belong to this workflow revision",
         effect: null, catalogRead: false };
   const attempts = Number(row.attempts ?? 0) || 0;
-  const d = dispose(outcome, attempts);
+  const d = dispose(outcome, attempts, step.alias);
+  if (!(pbTime(row.lease_until) > now().getTime())) {
+    return refuseWith(409, "the API execution lease expired; its outcome needs recovery");
+  }
 
   // -- The connection, on an auth failure: the webhook's own write. ----------
   let marked: MarkOutcome | null = null;
@@ -569,13 +647,15 @@ export async function handsApiRun(
   }
 
   // -- The row, written once, columns and embedded plan together. -----------
-  const at = (deps.now ?? (() => new Date()))().toISOString();
+  const at = now().toISOString();
   const stamp = pbNow(new Date(at));
   const status = STATUS_FOR_STATE[d.state];
   const nextNote: Record<string, unknown> = {
     ...note,
     ...(outcome.outcome === "refused" && outcome.reason === "plan_stale"
-      ? { hand: "browser", tool: "", args: null, plan_input: null }
+      // Clear stale execution arguments without contradicting the selected-
+      // account hold. The owner's next answer must still replan an API read.
+      ? { hand: d.lane === API_LANE ? "api" : "browser", tool: "", args: null, plan_input: null }
       : {}),
     lane: d.lane,
     outcome: {
@@ -583,7 +663,7 @@ export async function handsApiRun(
       ...(outcome.outcome === "refused" ? { reason: outcome.reason } : {}),
       ...(outcome.outcome === "failed"
         ? { kind: outcome.error.kind, status: outcome.error.status, token: outcome.error.token,
-            may_have_landed: outcome.mayHaveLanded }
+            may_have_landed: outcome.mayHaveLanded, credential: outcome.credential }
         : {}),
       ...(outcome.outcome !== "refused" ? { tool: outcome.tool, effect: outcome.effect, ms: outcome.ms } : {}),
       ...(marked ? { connection: marked.state } : {}),
@@ -608,14 +688,20 @@ export async function handsApiRun(
     const res = await env.DB.prepare(
       `UPDATE "jobs" SET "status" = ?1, "lane" = ?2, "result" = ?3, "params" = ?4,
               "claimed_by" = ?5, "claimed_at" = ?6, "lease_token" = '', "lease_until" = '',
-              "workflow_state" = ?7, "receipt" = ?8, "effect_uncertain" = ?9, "updated" = ?10
+              "workflow_state" = ?7, "receipt" = ?8, "effect_uncertain" = ?9, "updated" = ?10,
+              "commitment_key" = CASE WHEN ?16 THEN '' ELSE "commitment_key" END
         WHERE "id" = ?11 AND "status" = 'running' AND "claimed_by" = ?12
-          AND "params" = ?13 AND "lease_token" = ?14 AND "goal" = ?15`,
+          AND "params" = ?13 AND "lease_token" = ?14 AND "goal" = ?15
+          AND julianday("lease_until") > julianday(?17)
+          AND "owner_ref" = ?18 AND "lane" = ?19
+          AND "workflow_id" = ?20 AND "workflow_version" = ?21`,
     ).bind(
       status, d.lane, d.result.slice(0, RESULT_MAX), JSON.stringify(nextParams),
       resting ? "" : API_CLAIMANT, resting ? "" : stamp,
       workflowState, receipt, d.effectUncertain ? 1 : 0, stamp,
       row.id, API_CLAIMANT, row.params, row.lease_token, row.goal,
+      releasesCommitment(resolveCollection("jobs")!, { status }) ? 1 : 0, sqlNow(),
+      row.owner_ref, API_LANE, row.workflow_id, row.workflow_version,
     ).run();
     written = Number(res.meta?.changes ?? 0);
   } catch (err) {

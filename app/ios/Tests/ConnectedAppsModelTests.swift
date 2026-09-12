@@ -117,6 +117,18 @@ private final class FakeStore: ConnectedAppsStore {
         writeCalls.append((owner.raw, rows))
         await enter(owner)
         if writeThrows { throw Refused() }
+        // Match the production store's update-only semantics. A subsequent
+        // refresh must observe the accepted choice, not the initial fixture.
+        for updated in rows {
+            self.rows = self.rows.map {
+                $0.userID == owner.raw && $0.connectedAccountID == updated.connectedAccountID
+                    && $0.toolkit == updated.toolkit
+                    ? Connection(userID: $0.userID, toolkit: $0.toolkit,
+                                 connectedAccountID: $0.connectedAccountID, alias: $0.alias,
+                                 status: $0.status, writesEnabled: updated.writesEnabled,
+                                 lastUsedAt: $0.lastUsedAt) : $0
+            }
+        }
     }
 
     func disconnect(owner: OwnerId, connectedAccountID: String) async throws -> DisconnectResult {
@@ -347,17 +359,20 @@ private enum ConnectedAppsModelTests {
         check("the write opt-in is off until somebody turns it on",
               toggling.rows(for: ownerA)[0].writesEnabled == false)
         check("the switch says what it does in both positions",
-              toggling.rows(for: ownerA)[0].writesDetail.contains("only read")
+              toggling.rows(for: ownerA)[0].writesDetail.contains("limited to reads")
                   && toggling.rows(for: ownerA)[0].writesDetail.contains("Fernwood Notes"))
 
         // Optimistic: the row reads ON while the write is still in the air.
         var sawOptimistic = false
+        var noPrematureSavedClaim = false
         toggleStore.beforeReturn = { [weak toggling] in
             toggleStore.beforeReturn = nil
             sawOptimistic = toggling?.rows(for: ownerA).first?.writesEnabled == true
+            noPrematureSavedClaim = toggling?.rows(for: ownerA).first?.hasSavedWriteChoices == false
         }
         var outcome = await toggling.setWrites(true, toolkit: "fernwood", owner: ownerA)
         check("the switch moves before the write lands", sawOptimistic)
+        check("an optimistic enable is not described as a saved choice", noPrematureSavedClaim)
         check("a write that lands leaves the switch on and says nothing",
               outcome == .saved && toggling.rows(for: ownerA)[0].writesEnabled
                   && toggling.notice == nil)
@@ -377,13 +392,16 @@ private enum ConnectedAppsModelTests {
         if case .reverted(let said) = outcome {
             check("a write that fails tells the person, by name",
                   said.contains("Fernwood Notes") && said == toggling.notice)
-            check("the sentence says the switch went back and nothing changed",
-                  said.contains("gone back") && said.contains("nothing about it changed"))
+            check("a lost save response does not claim nothing changed",
+                  said.contains("could not confirm") && !said.contains("nothing about it changed"))
         } else {
             check("a write that fails tells the person, by name", false, "\(outcome)")
         }
 
         toggleStore.writeThrows = false
+        check("an unconfirmed save requires fresh state before another mutation",
+              await toggling.setWrites(false, toolkit: "fernwood", owner: ownerA) == .refused)
+        await toggling.load()
         outcome = await toggling.setWrites(false, toolkit: "fernwood", owner: ownerA)
         check("the switch still works after a failure",
               outcome == .saved && toggling.rows(for: ownerA)[0].writesEnabled == false)
@@ -457,6 +475,9 @@ private enum ConnectedAppsModelTests {
                         check("and the sentence beside it says the same thing: \(where_)",
                               screen.rows(for: ownerA).first?.writesWords
                                   == ConnectionsPolicy.writesLine(licensed))
+                        check("saved choices stay separately visible: \(where_)",
+                              screen.rows(for: ownerA).first?.hasSavedWriteChoices
+                                  == (firstWrites || secondWrites))
                     }
                 }
             }
@@ -502,6 +523,91 @@ private enum ConnectedAppsModelTests {
               outcome == .refused && switching.notice == nil)
         check("and it leaves the new account's screen empty",
               switching.rows(for: ownerB).isEmpty)
+
+        // A saved choice is not the same thing as the AND capability floor.
+        // Clearing must reach reconnect rows even when the visible switch is OFF.
+        let (revoking, revokeStore) = await loadedModel(rows: [
+            connection(owner: ownerA, toolkit: "harbour", account: "ca_saved",
+                       status: .needsReconnect, writes: true),
+            connection(owner: ownerA, toolkit: "harbour", account: "ca_read", writes: false),
+            connection(owner: ownerB, toolkit: "harbour", account: "ca_foreign", writes: true),
+            connection(owner: ownerA, toolkit: "fernwood", account: "ca_other", writes: true),
+        ])
+        check("an OFF mixed/reconnect row exposes a separate saved-choice clear control",
+              revoking.rows(for: ownerA).first(where: { $0.id == "harbour" })?.writesEnabled == false
+                && revoking.rows(for: ownerA).first(where: { $0.id == "harbour" })?.hasSavedWriteChoices == true)
+        check("clearing an OFF mixed/reconnect app saves a false-only batch",
+              await revoking.setWrites(false, toolkit: "harbour", owner: ownerA) == .saved
+                && revokeStore.writeCalls.count == 1
+                && Set(revokeStore.writeCalls.first?.rows.map(\.connectedAccountID) ?? [])
+                    == Set(["ca_saved", "ca_read"])
+                && revokeStore.writeCalls.first?.rows.allSatisfy { !$0.writesEnabled } == true)
+        check("the clear control goes away only after all scoped choices are false",
+              revoking.rows(for: ownerA).first(where: { $0.id == "harbour" })?.hasSavedWriteChoices == false
+                && revoking.rows(for: ownerA).first(where: { $0.id == "fernwood" })?.hasSavedWriteChoices == true)
+        let (reconnectOnly, reconnectStore) = await loadedModel(rows: [
+            connection(owner: ownerA, toolkit: "harbour", account: "ca_only",
+                       status: .needsReconnect, writes: true),
+        ])
+        check("a reconnect-only saved choice can be cleared without connecting again",
+              await reconnectOnly.setWrites(false, toolkit: "harbour", owner: ownerA) == .saved
+                && reconnectStore.writeCalls.count == 1)
+
+        let (serial, serialStore) = await loadedModel(rows: [
+            connection(owner: ownerA, toolkit: "harbour", account: "ca_serial", writes: true),
+        ])
+        var overlapped: Model.WriteOutcome?
+        var busy = false
+        var retainedUntilConfirmed = false
+        var refreshCalls = 0
+        serialStore.beforeReturn = { [weak serial] in
+            serialStore.beforeReturn = nil
+            busy = serial?.rows(for: ownerA).first?.choicesBusy == true
+            retainedUntilConfirmed = serial?.rows(for: ownerA).first?.hasSavedWriteChoices == true
+            let before = serialStore.connectionsCalls
+            await serial?.load()
+            refreshCalls = serialStore.connectionsCalls - before
+            overlapped = await serial?.setWrites(true, toolkit: "harbour", owner: ownerA)
+            serial?.askToDisconnect("harbour", owner: ownerA)
+        }
+        _ = await serial.setWrites(false, toolkit: "harbour", owner: ownerA)
+        check("a second consent request cannot overtake the first in flight",
+              overlapped == .refused && serialStore.writeCalls.count == 1)
+        check("refresh and disconnect cannot overwrite an in-flight consent mutation",
+              busy && refreshCalls == 0 && serial.pendingDisconnect == nil
+                && serial.rows(for: ownerA).first?.choicesBusy == false)
+        check("saved choice remains visible until the clear receives confirmation",
+              retainedUntilConfirmed && serial.rows(for: ownerA).first?.hasSavedWriteChoices == false)
+
+        let (failedClear, failedClearStore) = await loadedModel(rows: [
+            connection(owner: ownerA, toolkit: "harbour", account: "ca_failed_clear",
+                       status: .needsReconnect, writes: true),
+        ])
+        failedClearStore.writeThrows = true
+        let failedClearOutcome = await failedClear.setWrites(false, toolkit: "harbour", owner: ownerA)
+        if case .reverted = failedClearOutcome {
+            check("a failed clear retains the last confirmed saved choice",
+                  failedClear.rows(for: ownerA).first?.hasSavedWriteChoices == true)
+        } else { check("a failed clear retains the last confirmed saved choice", false) }
+        check("a failed clear cannot be mistaken for a cleared card",
+              failedClear.screen(for: ownerA) == .trouble(Model.Copy.trouble))
+
+        let (sameOwner, sameStore) = await loadedModel(rows: [
+            connection(owner: ownerA, toolkit: "harbour", account: "ca_session", writes: false),
+        ])
+        sameStore.writeThrows = true
+        sameStore.beforeReturn = { [weak sameOwner] in
+            sameStore.beforeReturn = nil
+            sameOwner?.signOut()
+            sameOwner?.signIn(ownerA)
+            sameStore.rows = [connection(owner: ownerA, toolkit: "harbour",
+                                        account: "ca_session", writes: true)]
+            await sameOwner?.load()
+        }
+        let lateOutcome = await sameOwner.setWrites(true, toolkit: "harbour", owner: ownerA)
+        check("a late failure cannot roll back a new session for the SAME owner",
+              lateOutcome == .refused && sameOwner.notice == nil
+                && sameOwner.rows(for: ownerA).first?.writesEnabled == true)
 
         // ================================================== 4. THE DISCONNECT
         let (asking, askStore) = await loadedModel(rows: [
@@ -876,7 +982,26 @@ private enum ConnectedAppsModelTests {
         check("the whole census goes through the gate in one call",
               ConnectionsPolicy.firstForbidden(in: sentences) == nil)
         check("the switch is worded as the product words it",
-              Model.Copy.writesTitle == "Let Anticipy make changes")
+              Model.Copy.writesTitle == "Allow changes when supported")
+        check("the invitation offers reads without promising every direct action",
+              Model.Copy.invitation == "Nothing is connected yet. Connect an app for supported reads, and disconnect it here whenever you like.")
+        check("the browser alternative depends on its actual availability",
+              Model.Copy.optional == "Entirely up to you — some tasks may use your browser when it is connected and available.")
+        check("a catalog result is a connection option, not proof that a task will work",
+              Model.Copy.searchPrompt == "Type an app name to look for a connection option. An app in this list may not support every task.")
+        for on in [true, false] {
+            let (screen, _) = await loadedModel(rows: [
+                connection(owner: ownerA, toolkit: "quokka", account: "ca_copy", writes: on),
+            ])
+            let row = screen.rows(for: ownerA)[0]
+            check("capability copy does not erase the stored choice: \(on)", row.writesEnabled == on)
+            check("both choices disclose that connected-app changes are unavailable: \(on)",
+                  row.writesWords.contains("unavailable")
+                    && row.writesDetail.contains("limited to reads")
+                    && row.writesDetail.contains("records your choice")
+                    && row.writesDetail.contains("does not make them available or approve a task")
+                    && !row.writesWords.contains("I can make changes"))
+        }
         check("the vendor is never named",
               sentences.allSatisfy { !$0.lowercased().contains("composio") })
 
