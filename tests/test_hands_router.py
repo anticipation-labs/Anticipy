@@ -1234,7 +1234,7 @@ def test_gather_context_carries_the_backend_for_the_catalog(monkeypatch):
     # The note carries one explicit planning-input binding on every shape.
     assert set(HandVerdict(HAND_RESEARCH, "r").as_note()) == {
         "hand", "reason", "app", "effect", "asked", "tool", "args",
-        "tool_verdict", "tool_asked", "plan_input"}
+        "tool_verdict", "tool_asked", "plan_input", "alias", "account_asked"}
 
 
 @pytest.mark.parametrize("version,want", [(2, 2), (1, 1), (None, 0), ("2", 0), (True, 0), (0, 0)])
@@ -1377,3 +1377,100 @@ def test_external_effect_never_accepts_two_research_verdicts(offline):
     model = ScriptedLLM(says(HAND_RESEARCH), says(HAND_RESEARCH))
     verdict = choose_hand("An unfamiliar task", HandContext(effect_channel="world"), llm=model)
     assert verdict.hand == HAND_UNANSWERED
+
+
+# ------------------------------------------------- which account (2026-09-12)
+# An owner with a work and a personal account on one app. Until 2026-09-12
+# HandContext.connected() returned the FIRST usable row, so the api hand was
+# licensed against whichever row came back first; the Worker (rightly) refused
+# the ambiguity, the row bounced to the browser, and the owner was never asked.
+# Now the account is ONE question asked on its own — never a fifth key in the
+# hand reply — with four states, compared BY IDENTITY against the owner's rows.
+
+def _two_accounts(**over):
+    rows = (ConnectedApp("fixture_notes", alias="personal", status="connected", writes_enabled=False),
+            ConnectedApp("fixture_notes", alias="work", status="connected", writes_enabled=True))
+    fields = dict(connections=rows, browser_online=False, source="Please read my notes.",
+                  owner_ref="fixtureowner001",
+                  catalogs={"fixture_notes": [{"slug": "FIXTURE_NOTES_READ", "tags": ["readOnlyHint"],
+                                               "input_parameters": {"type": "object", "properties": {"query": {"type": "string"}},
+                                                                    "required": ["query"]}}]})
+    fields.update(over)
+    return HandContext(**fields)
+
+
+def _tool():
+    return json.dumps({"verdict": "tool", "tool": "FIXTURE_NOTES_READ", "args": {"query": "notes"},
+                       "effect": "read", "reason": "reads the notes"})
+
+
+def test_two_accounts_and_nothing_said_is_a_question_for_the_owner_not_the_first_row(monkeypatch):
+    llm = ScriptedLLM(says(HAND_API, "fixture_notes"), json.dumps({"account": None, "reason": "nothing said"}), _tool())
+    v = choose_hand("Read my notes", _two_accounts(), llm=llm)
+    assert v.hand == HAND_API and v.tool == "FIXTURE_NOTES_READ"
+    assert v.alias == "" and v.account_asked == 1, v
+    system, user, _ = llm.asked[1]
+    assert system == hands.ACCOUNT_SYSTEM
+    assert "personal" in user and "work" in user and "Read my notes" in user
+    assert v.as_note()["alias"] == "", "an empty alias with two rows is the Worker's cue to ask the owner"
+
+
+def test_a_named_account_is_matched_by_identity_and_carried(monkeypatch):
+    llm = ScriptedLLM(says(HAND_API, "fixture_notes"), json.dumps({"account": "Work", "reason": "a work matter"}), _tool())
+    v = choose_hand("Read my work notes", _two_accounts(), llm=llm)
+    assert v.hand == HAND_API and v.alias == "work" and v.account_asked == 1
+    assert v.as_note()["alias"] == "work"
+
+
+def test_a_label_that_is_not_the_owners_is_no_answer(monkeypatch):
+    llm = ScriptedLLM(says(HAND_API, "fixture_notes"), json.dumps({"account": "home", "reason": "guessed"}), _tool())
+    v = choose_hand("Read my notes", _two_accounts(), llm=llm)
+    assert v.hand == HAND_API and v.alias == "" and v.account_asked == 1
+
+
+def test_an_unreadable_or_failed_account_reply_asks_the_owner(monkeypatch):
+    for reply in ("not json at all", RuntimeError("gateway down")):
+        llm = ScriptedLLM(says(HAND_API, "fixture_notes"), reply, _tool())
+        v = choose_hand("Read my notes", _two_accounts(), llm=llm)
+        assert v.hand == HAND_API and v.alias == "" and v.account_asked == 1
+
+
+def test_one_account_asks_no_account_question():
+    ctx = HandContext(connections=(ConnectedApp("fixture_notes", status="connected"),),
+                      browser_online=False, source="s", owner_ref="fixtureowner001",
+                      catalogs={"fixture_notes": [{"slug": "FIXTURE_NOTES_READ", "tags": ["readOnlyHint"],
+                                                   "input_parameters": {"type": "object", "properties": {}, "required": []}}]})
+    llm = ScriptedLLM(says(HAND_API, "fixture_notes"), _tool())
+    v = choose_hand("Read my notes", ctx, llm=llm)
+    assert v.hand == HAND_API and v.alias == "" and v.account_asked == 0
+    assert [system for system, _, _ in llm.asked] == [hands.HANDS_SYSTEM, hands.TOOLS_SYSTEM]
+
+
+def test_two_unlabelled_accounts_cannot_be_asked_about():
+    rows = (ConnectedApp("fixture_notes", alias="", status="connected"),
+            ConnectedApp("fixture_notes", alias="", status="connected"))
+    ctx = _two_accounts(connections=rows)
+    llm = ScriptedLLM(says(HAND_API, "fixture_notes"), _tool())
+    v = choose_hand("Read my notes", ctx, llm=llm)
+    assert v.hand == HAND_API and v.alias == "" and v.account_asked == 0, "no label could settle it; no model call is spent"
+
+
+def test_connected_never_picks_a_first_row_and_matches_a_label_by_identity():
+    ctx = _two_accounts()
+    assert ctx.connected("fixture_notes") is None
+    assert ctx.connected("fixture_notes", "WORK").alias == "work"
+    assert ctx.connected("fixture_notes", "home") is None
+    assert len(ctx.usable("fixture_notes")) == 2
+    one = HandContext(connections=(ConnectedApp("fixture_notes", status="connected"),))
+    assert one.connected("fixture_notes") is not None
+
+
+def test_a_write_over_two_accounts_is_licensed_only_when_every_row_allows_it():
+    # personal has writes off, work has them on: a first-row flag must never
+    # decide. The write floor reads every row.
+    v = hands._floors(HAND_API, "fixture_notes", "write", "r", _two_accounts(rung=3), 1)
+    assert v.hand == HAND_BROWSER and "writes are off" in v.reason
+    both_on = (ConnectedApp("fixture_notes", alias="personal", status="connected", writes_enabled=True),
+               ConnectedApp("fixture_notes", alias="work", status="connected", writes_enabled=True))
+    v = hands._floors(HAND_API, "fixture_notes", "write", "r", _two_accounts(connections=both_on, rung=3), 1)
+    assert v.hand == HAND_API

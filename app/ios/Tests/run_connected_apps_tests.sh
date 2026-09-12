@@ -278,17 +278,28 @@ if ! strip "$view" | grep -q 'model.questionStillStands'; then
     echo "question carries the owner it was posed for."
     exit 2
 fi
-if ! strip "$view" | grep -qE 'task\(id: session.accountID\)'; then
-    echo "The screen no longer reacts to the account changing."
+if ! strip "$view" | grep -qE 'task\(id: sessionIdentity\)'; then
+    echo "The screen no longer reacts to the exact credential changing."
     exit 2
 fi
-if ! awk '/task\(id: session.accountID\)/,/^        \}$/' "$view" \
+if ! awk '/task\(id: sessionIdentity\)/,/^        \}$/' "$view" \
      | grep -q 'confirming = nil'; then
     echo "The account boundary does not drop the held question."
     echo "The model clears its own state on signIn/signOut; the view's copy of"
     echo "the question is not the model's to clear, so it is cleared here."
     exit 2
 fi
+if ! awk '/task\(id: sessionIdentity\)/,/^        \}$/' "$view" | grep -q 'model.signOut()'; then
+    echo "A replacement session must discard the old model state even for the same owner."
+    exit 2
+fi
+for required in 'row.hasSavedWriteChoices' 'ConnectedAppsModel.Copy.clearSavedChoices' \
+                'model.setWrites(false' '.disabled(row.choicesBusy)'; do
+    if ! strip "$view" | grep -qF "$required"; then
+        echo "The saved-choice clear or in-flight control boundary is missing: $required"
+        exit 2
+    fi
+done
 
 # ------------------------------------------------------- THE SCREEN IS REACHED
 # This screen, its model and its whole suite existed for a day with NOTHING in

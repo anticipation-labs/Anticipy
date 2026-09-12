@@ -29,8 +29,8 @@
  * MIRRORED, NOT INVENTED. routes/password_reset.ts already does codes properly
  * and this file copies its discipline line for line: SHA-256 at rest and never
  * the code, a ten-minute life, five guesses, one live code at a time, a minimum
- * gap between texts, an hourly ceiling, SEND BEFORE INSERT so a code that never
- * left the building is never live in the table, and a text that EXPLAINS why it
+ * gap between texts, an hourly ceiling, atomic reservation BEFORE sending but
+ * publication only AFTER provider acceptance, and a text that EXPLAINS why it
  * arrived. That last one is not politeness — a bare code teaches people to act
  * on unexplained codes, which is the behaviour every account-takeover call
  * relies on (password_reset.ts, audit F39).
@@ -280,6 +280,13 @@ export interface ConnectCodeStore {
    *  judge, so the boundary is decided in one place. */
   newest(tokenHandle: string): Promise<StoredConnectCode | null>;
   window(tokenHandle: string, user: OwnerId, since: number): Promise<CodeWindow>;
+  /** Atomically reserve the rate-limit slot before any provider call. A pending
+   * row is spent/non-redeemable, including to the previous Worker version. */
+  reserve(row: StoredConnectCode): Promise<boolean>;
+  /** Publish only this accepted send; supersede older live codes atomically. */
+  activate(id: string, at: number): Promise<boolean>;
+  /** Retain a failed reservation for throttling, never for authentication. */
+  fail(id: string): Promise<void>;
   /**
    * ONE CODE AT A TIME, as a database fact rather than a query convention: this
    * spends every unspent code for the link and inserts the new one, in ONE
@@ -301,34 +308,10 @@ export interface ConnectCodeStore {
   spend(id: string, at: number): Promise<boolean>;
 }
 
-/**
- * The `connect_codes` table.
- *
- * IT IS DECLARED HERE AND IT DOES NOT BELONG HERE. migration/d1/schema.sql owns
- * the schema and section 5 of it already holds the other four connections
- * tables; this constant exists because this file could be written and this
- * table could not be added in the same change, and shipping a store whose SQL
- * had never met a real SQLite would have been the worse half.
- *
- * WHAT IS OWED, and it is one paste: this statement and its two indexes go into
- * migration/d1/schema.sql section 5.5, `wrangler d1 execute anticipy-backend
- * --remote --file=migration/d1/schema.sql` applies it, and
- * `connectCodesTableReady()` below is the check that says it landed. On the day
- * that happens THIS CONSTANT IS DELETED and the suite loads the DDL from
- * schema.sql like every other table's tests do. Until then the store is real
- * and tested against these exact bytes, and the feature is repo-green and NOT
- * Law-3 done.
- *
- * IT IS NOT TAPE, and the distinction is deliberate rather than convenient.
- * HARNESS-LAWS law 2 is about a string-level PATCH that decides behaviour and
- * needs an expiry the tape_gate registry can hold. This is a schema statement
- * that has not reached the file which owns schemas, in a change that was not
- * allowed to edit it. Giving it a `TAPE:` comment pointing at a gate leg that
- * tracks something else is audit item #21 exactly — a comment that reads as
- * compliant and enforces nothing. `connectCodesTableReady()` is the honest
- * instrument instead: it asks the LIVE database, which is the only thing law 3
- * counts.
- */
+/** Test-fixture DDL mirroring migration/d1/schema.sql. Existing deployments
+ * need the additive 2026-09-11-connect-code-delivery.sql migration; CREATE TABLE
+ * IF NOT EXISTS does not upgrade their columns. Readiness checks the required
+ * columns without reading code values. Tests pin legacy-row compatibility. */
 export const CONNECT_CODES_DDL = `
 CREATE TABLE IF NOT EXISTS "connect_codes" (
   "id"           TEXT PRIMARY KEY NOT NULL,
@@ -347,7 +330,9 @@ CREATE TABLE IF NOT EXISTS "connect_codes" (
       -- NULL = live. The single-use gate, and the reason it is NULL and not 0:
       --   UPDATE "connect_codes" SET "used_at" = ?1
       --    WHERE "id" = ?2 AND "used_at" IS NULL
-  "created_at"   REAL NOT NULL
+  "created_at"   REAL NOT NULL,
+  "delivery_state" TEXT NOT NULL DEFAULT 'accepted'
+      CHECK ("delivery_state" IN ('pending', 'accepted', 'failed'))
 );
 CREATE INDEX IF NOT EXISTS "idx_connect_codes_link"
   ON "connect_codes" ("token_handle", "created_at");
@@ -365,10 +350,11 @@ CREATE INDEX IF NOT EXISTS "idx_connect_codes_owner"
  */
 export async function connectCodesTableReady(env: { DB: D1Database }): Promise<boolean> {
   try {
-    const row = await env.DB.prepare(
-      `SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'connect_codes' LIMIT 1`,
-    ).first<{ name: string }>();
-    return !!row;
+    // Compile required columns without reading any code rows. A legacy table
+    // without the delivery migration cannot safely reserve sends.
+    await env.DB.prepare(`SELECT id, token_handle, user_id, code_hash, expires_at,
+      attempts, used_at, created_at, delivery_state FROM connect_codes LIMIT 0`).all();
+    return true;
   } catch {
     return false;
   }
@@ -414,6 +400,47 @@ export function createD1ConnectCodeStore(env: { DB: D1Database }): ConnectCodeSt
         forOwner: Number(row?.for_owner ?? 0),
         newestForLink: newest === null || newest === undefined ? null : Number(newest),
       };
+    },
+
+    async reserve(row: StoredConnectCode): Promise<boolean> {
+      const result = await db.prepare(
+        `INSERT INTO "connect_codes"
+          ("id","token_handle","user_id","code_hash","expires_at","attempts","used_at","created_at","delivery_state")
+         SELECT ?1,?2,?3,?4,?5,0,?6,?6,'pending'
+         WHERE NOT EXISTS (SELECT 1 FROM "connect_codes"
+                 WHERE "token_handle" = ?2 AND "created_at" > ?7)
+           AND (SELECT COUNT(*) FROM "connect_codes" WHERE "token_handle" = ?2) < ?8
+           AND (SELECT COUNT(*) FROM "connect_codes"
+                 WHERE "user_id" = ?3 AND "created_at" >= ?9) < ?10`,
+      ).bind(row.id, row.token_handle, row.user_id, row.code_hash, row.expires_at,
+        row.created_at, row.created_at - MIN_GAP_MS, MAX_CODES_PER_LINK,
+        row.created_at - OWNER_WINDOW_MS, MAX_CODES_PER_OWNER).run();
+      return (result.meta?.changes ?? 0) === 1;
+    },
+
+    async activate(id: string, at: number): Promise<boolean> {
+      // Delayed acceptance must not revive an older code after a later send.
+      // Recheck eligibility inside both statements of the transaction.
+      const eligible = `SELECT pending.id FROM connect_codes AS pending
+        WHERE pending.id = ?1 AND pending.delivery_state = 'pending' AND pending.expires_at > ?2
+          AND NOT EXISTS (SELECT 1 FROM connect_codes AS newer
+            WHERE newer.token_handle = pending.token_handle AND newer.created_at > pending.created_at)`;
+      const result = await db.batch([
+        db.prepare(`UPDATE "connect_codes" SET "used_at" = ?2
+          WHERE "used_at" IS NULL AND "token_handle" = (
+            SELECT "token_handle" FROM "connect_codes"
+             WHERE "id" IN (${eligible}))`)
+          .bind(id, at),
+        db.prepare(`UPDATE "connect_codes" SET "used_at" = NULL, "delivery_state" = 'accepted'
+          WHERE "id" IN (${eligible})`)
+          .bind(id, at),
+      ]);
+      return (result[1]?.meta?.changes ?? 0) === 1;
+    },
+
+    async fail(id: string): Promise<void> {
+      await db.prepare(`UPDATE "connect_codes" SET "delivery_state" = 'failed'
+        WHERE "id" = ?1 AND "delivery_state" = 'pending'`).bind(id).run();
     },
 
     async insert(row: StoredConnectCode): Promise<void> {
@@ -462,6 +489,7 @@ export function createMemoryConnectCodeStore(): ConnectCodeStore & {
   rows: Map<string, StoredConnectCode>;
 } {
   const rows = new Map<string, StoredConnectCode>();
+  const pending = new Set<string>();
   return {
     rows,
     async newest(tokenHandle: string): Promise<StoredConnectCode | null> {
@@ -483,6 +511,30 @@ export function createMemoryConnectCodeStore(): ConnectCodeStore & {
       }
       return { forLink, forOwner, newestForLink };
     },
+    async reserve(row: StoredConnectCode): Promise<boolean> {
+      const all = [...rows.values()];
+      if (all.some((r) => r.token_handle === row.token_handle && r.created_at > row.created_at - MIN_GAP_MS)
+          || all.filter((r) => r.token_handle === row.token_handle).length >= MAX_CODES_PER_LINK
+          || all.filter((r) => r.user_id === row.user_id && r.created_at >= row.created_at - OWNER_WINDOW_MS).length >= MAX_CODES_PER_OWNER) return false;
+      if (rows.has(row.id)) throw new Error("duplicate code reservation");
+      rows.set(row.id, { ...row, used_at: row.created_at });
+      pending.add(row.id);
+      return true;
+    },
+    async activate(id: string, at: number): Promise<boolean> {
+      const row = rows.get(id);
+      if (!row || !pending.has(id) || at >= row.expires_at) return false;
+      if ([...rows.values()].some((newer) => newer.token_handle === row.token_handle && newer.created_at > row.created_at)) return false;
+      for (const [key, old] of rows) {
+        if (old.token_handle === row.token_handle && old.used_at === null) {
+          rows.set(key, { ...old, used_at: at });
+        }
+      }
+      rows.set(id, { ...row, used_at: null });
+      pending.delete(id);
+      return true;
+    },
+    async fail(id: string): Promise<void> { pending.delete(id); },
     async insert(row: StoredConnectCode): Promise<void> {
       for (const [k, r] of rows) {
         if (r.token_handle === row.token_handle && r.used_at === null) {
@@ -902,7 +954,7 @@ ${state ? `  <input type="hidden" name="state" value="${esc(state)}">\n` : ""}  
          maxlength="6" minlength="6" pattern="[0-9]{6}" placeholder="000000" required>
   <button type="submit">${esc(SENT_BUTTON)}</button>
 </form>
-<p class="fine">Didn't get one? <a href="${esc(codePath(token, state))}">Ask for another</a>. ${esc(OPTIONAL_LINE)}</p>
+<p class="fine">Didn't get one? Wait at least a minute before you <a href="${esc(codePath(token, state))}">ask for another</a>. ${esc(OPTIONAL_LINE)}</p>
 </body>`);
 }
 
@@ -1079,10 +1131,22 @@ async function handleSend(
     await mintAndSend(env, deps, token, now);
   } catch (err) {
     // Swallowed on purpose, and logged where an operator sees it. A thrown
-    // catalog, a missing `connect_codes` table or a refused D1 must not be
-    // readable off the reply — but they must not be invisible either, which is
-    // what `connectCodesTableReady` is for.
+    // catalog, a missing `connect_codes` column or a refused D1 must not be
+    // readable off the reply — but they must not be invisible either.
     console.log(`connect code: send path failed — ${(err as Error)?.message ?? "unknown"}`);
+    // AND THE ONE CAUSE THAT IS NOT A BLIP, NAMED. Until 2026-09-11 this
+    // instrument had no caller anywhere in the Worker, which made the state it
+    // exists to detect — the delivery migration not applied, so `reserve()`
+    // writes a column the database does not have — indistinguishable in the
+    // log from a vendor hiccup, while 100% of phone codes failed and every
+    // owner saw "enter the code we texted you". The deploy refuses this state
+    // up front (proof/audit/d1_connector_readiness.py); this is the second
+    // book, for a database that changed under a Worker already running.
+    if (!await connectCodesTableReady(env)) {
+      console.log("connect code: connect_codes is missing the delivery columns — "
+        + "migration/d1/2026-09-11-connect-code-delivery.sql has not been applied to "
+        + "this database, and NO phone code can be sent until it is");
+    }
   }
   return enterCodePage(token, false, state);
 }
@@ -1115,36 +1179,29 @@ async function mintAndSend(
   if (w.forLink >= MAX_CODES_PER_LINK) return;
   if (w.forOwner >= MAX_CODES_PER_OWNER) return;
 
-  // The catalog is asked for a NAME and nothing else, and a failure costs the
-  // name rather than the code.
-  let app: string | null = null;
-  try {
-    app = await deps.toolkitName(row.toolkit);
-  } catch {
-    app = null;
-  }
-
   const code = sixDigits();
-  // SEND FIRST, exactly as password_reset.ts does it: if the text cannot leave
-  // the building, do not leave a live code in the database pretending it did.
+  const id = deps.newId ? deps.newId() : newId();
+  // A single SQL insert checks the ceilings and reserves the send. The row is
+  // not redeemable until provider acceptance; old live codes remain usable if
+  // this send fails. No per-isolate lock can enforce this across Worker requests.
+  if (!(await deps.codes.reserve({
+    id, token_handle: handle, user_id: row.user_id, code_hash: await sha256Hex(code),
+    expires_at: now + CODE_TTL_MS, attempts: 0, used_at: now, created_at: now,
+  }))) return;
+  // Only the winning reservation asks for display metadata. Production bounds
+  // this optional lookup to one second and aborts the actual upstream request.
+  let app: string | null = null;
+  try { app = await deps.toolkitName(row.toolkit); } catch { /* name is optional */ }
   // `sendText` never throws — a hung or refused provider is `ok: false`.
   const sent = await sendText(env, phone, connectCodeText(code, app), { tag: "connect code" });
   if (!sent.ok) {
-    console.log(`connect code: ${fingerprint(handle)} not sent (${sent.provider}/${sent.error})`);
+    await deps.codes.fail(id);
+    // Provider error prose may echo the phone or code. Only typed status here.
+    console.log(`connect code: ${fingerprint(handle)} not accepted (${sent.provider}/${sent.status})`);
     return;
   }
-
-  await deps.codes.insert({
-    id: deps.newId ? deps.newId() : newId(),
-    token_handle: handle,
-    user_id: row.user_id,
-    code_hash: await sha256Hex(code),
-    expires_at: now + CODE_TTL_MS,
-    attempts: 0,
-    used_at: null,
-    created_at: now,
-  });
-  console.log(`connect code: ${fingerprint(handle)} texted`);
+  const accepted = await deps.codes.activate(id, deps.now ? deps.now() : Date.now());
+  console.log(`connect code: ${fingerprint(handle)} accepted; code ${accepted ? "ready" : "unavailable"}`);
 }
 
 /**

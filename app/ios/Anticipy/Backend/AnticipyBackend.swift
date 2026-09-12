@@ -12,6 +12,27 @@ enum OwnerProfileCanonical {
 /// Pure pagination/verdict seams for browser unaffiliation. Twenty-one rows
 /// must mean two pages, and one refused PATCH must make the whole operation a
 /// failure even if every other browser was released.
+/// WHEN THE PHONE MAY CALL THE BROWSER READY. The extension stamps
+/// `agents.last_seen` on a chrome.alarms beat whose period is Chrome's own
+/// floor — 30 seconds — so a 30-second window here leaves zero margin: every
+/// beat has a tail (upload latency, this phone's read, alarm jitter, laptop
+/// versus phone clock skew) during which the row reads older than 30 s and
+/// the app said "Chrome asleep" with Chrome open and beating, and during a
+/// running errand the beat could land 15 s late behind lease renewals. The
+/// brain judges the same row fresh for 90 s (`AGENT_FRESH_SECONDS`); one
+/// window, three times the beat, so two surfaces stop disagreeing about one
+/// row. A timing constant on the transport, pinned by OwnerMirrorTests.
+enum AgentOnlinePolicy {
+    /// The extension's wake period, in seconds (background.js WAKE_PERIOD_MINUTES).
+    static let heartbeatSeconds = 30
+    /// The brain's freshness window (brain/hands.py AGENT_FRESH_SECONDS).
+    static let onlineWindowSeconds = 90
+
+    static func online(lastSeenSecondsAgo secs: Int) -> Bool {
+        secs < onlineWindowSeconds
+    }
+}
+
 enum AgentUnpairPolicy {
     static func pages(totalPages: Int) -> [Int] {
         guard totalPages > 0 else { return [] }

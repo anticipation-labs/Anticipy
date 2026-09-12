@@ -113,7 +113,8 @@ export const researchLane: Policy = async (ctx: Ctx): Promise<Response | null> =
     && object(object(rec?.params)?._effect)?.touches === 'world'
     && object(object(b.params)?._effect)?.touches === 'world'
     && object(object(b.params)?._hand)?.hand === 'browser';
-  const handback = updates && (repairedHand || isResearchHandback(ctx, rec, b, rowLane, bodyLane));
+  const handback = updates && (repairedHand || isResearchHandback(ctx, rec, b, rowLane, bodyLane)
+    || isReadOnlyConnectionRecovery(ctx, rec, b, rowLane, bodyLane));
   if (updates && bodyLane !== null && bodyLane !== rowLane && !handback) {
     return refuse(403,
       "a job's lane is decided when it is minted, never rewritten",
@@ -216,6 +217,46 @@ const parsedObject = (raw: unknown): Record<string, unknown> | null => {
   return v && typeof v === "object" && !Array.isArray(v)
     ? (v as Record<string, unknown>) : null;
 };
+
+/** Replan idle reads after an app becomes available. This grants no approval
+ * and cannot claim/execute a task. records.update enforces the fresh ETag in
+ * the same SQL UPDATE, including lane and both claim fields. Only the hand
+ * note changes; the exact original workflow and owner authority must survive.
+ * The API hand independently rereads vendor authorization/catalog/effect.
+ */
+function isReadOnlyConnectionRecovery(
+  ctx: Ctx, rec: Record<string, unknown> | null, body: Record<string, unknown>,
+  oldLane: string, newLane: string | null,
+): boolean {
+  if (!rec || ctx.principal.kind !== 'service' || !ctx.worker.fromWorker
+      || ctx.request.headers.has('X-Anticipy-Agent-ID')
+      || !/^"[a-f0-9]{64}"$/.test(ctx.request.headers.get('If-Match') ?? '')
+      || !['', 'browser'].includes(oldLane) || newLane !== API_LANE
+      || Object.keys(body).some(key => !['lane', 'params'].includes(key))
+      || rec.status !== 'queued' || rec.consequence !== 'read_only'
+      || rec.workflow_state !== 'queued' || !rec.owner_ref || !rec.workflow_id
+      || rec.claimed_by || rec.claimed_at || rec.lease_token || rec.lease_until
+      || rec.approval || rec.receipt || Number(rec.effect_uncertain ?? 0) !== 0) return false;
+  const before = parsedObject(rec.params), after = parsedObject(body.params);
+  const workflow = parsedObject(before?._workflow);
+  const hand = parsedObject(after?._hand), input = parsedObject(hand?.plan_input);
+  if (!before || !after || !workflow || !hand || !input
+      || before.source === 'browser' || object(before._effect)?.touches !== 'read'
+      || workflow.state !== 'queued' || workflow.consequence !== 'read_only'
+      || workflow.owner_ref !== rec.owner_ref || workflow.plan_id !== rec.workflow_id
+      || workflow.goal !== rec.goal || workflow.version !== rec.workflow_version
+      || !Number.isInteger(workflow.version) || Number(workflow.version) < 1
+      || workflow.approval || workflow.lease || workflow.receipt || workflow.act
+      || hand.hand !== 'api' || hand.lane !== API_LANE || hand.effect !== 'read'
+      || typeof hand.app !== 'string' || !hand.app.trim()
+      || typeof hand.tool !== 'string' || !hand.tool.trim() || !parsedObject(hand.args)
+      || input.owner_ref !== rec.owner_ref || input.goal !== rec.goal
+      || input.source !== String(before.source ?? '') || input.workflow_version !== workflow.version) return false;
+  const withoutHand = (params: Record<string, unknown>) => {
+    const copy = {...params}; delete copy._hand; return copy;
+  };
+  return sameJSON(withoutHand(before), withoutHand(after));
+}
 
 /**
  * research_lane.pb.js:509-543 — the ONE legitimate lane change, and it is

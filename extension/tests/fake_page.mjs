@@ -64,6 +64,11 @@ export class FakeNode {
   get required() { return this.hasAttribute("required"); }
   get readOnly() { return this.hasAttribute("readonly"); }
   get disabled() { return this.hasAttribute("disabled"); }
+  // A fake node is always attached (there is no detach), and a laid-out node
+  // has exactly one client rect — the two questions __anticipyCenter asks
+  // before it will hand out a point.
+  get isConnected() { return true; }
+  getClientRects() { const r = this.getBoundingClientRect(); return r.width > 0 && r.height > 0 ? [r] : []; }
   get hidden() { return this.hasAttribute("hidden"); }
   get isContentEditable() { return this.attrs.contenteditable === "true"; }
   get form() { return this.parentElement ? this.parentElement.closest("form") : null; }

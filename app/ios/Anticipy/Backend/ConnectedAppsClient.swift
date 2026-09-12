@@ -1,4 +1,5 @@
 import Foundation
+import CoreFoundation
 
 /// SETTINGS → CONNECTED APPS, TALKING TO THE SERVER.
 ///
@@ -47,7 +48,7 @@ import Foundation
 ///   GET  me/connections                     -> { "items": [connection row, …] }
 ///   GET  me/connections/catalog?q=…         -> { "items": [toolkit row, …] }
 ///   GET  me/connections/catalog?slugs=a,b   -> { "items": [toolkit row, …] }
-///   POST me/connections/writes              -> 2xx
+///   POST me/connections/writes              -> { "ok": true, "updated": N }
 ///        { "rows": [ { "toolkit", "connected_account_id", "writes_enabled" } ] }
 ///   POST me/connections/disconnect          -> { "revoked", "deleted",
 ///        { "connected_account_id": … }         "revoke_unavailable", "app_name" }
@@ -242,7 +243,7 @@ final class ConnectedAppsClient: ConnectedAppsStore {
     /// what happened would be this file deciding what somebody's words mean.
     func signals(owner: OwnerId) async throws -> AppSignalsAnswer {
         let who = try mine(owner)
-        let answer = try await probe(wire(Route.signals, query: [], as: who))
+        let answer = try await probe(wire(Route.signals, query: [], as: who), as: who)
         guard (200..<300).contains(answer.status) else {
             // A refusal is still allowed to say WHICH refusal it is.
             if ConnectionsPolicy.text(answer.body?["state"]) == State.catalogUnreadable {
@@ -305,7 +306,16 @@ final class ConnectedAppsClient: ConnectedAppsStore {
                 ] as [String: Any]
             },
         ]
-        _ = try await post(Route.writes, payload: payload, as: who)
+        let answer = try await post(Route.writes, payload: payload, as: who)
+        // HTTP success alone is not evidence every saved choice was changed.
+        // Foundation casts numbers to Bool, so verify the JSON types first.
+        guard let ok = answer?["ok"] as? NSNumber,
+              CFGetTypeID(ok) == CFBooleanGetTypeID(), ok.boolValue,
+              let updated = answer?["updated"] as? NSNumber,
+              CFGetTypeID(updated) != CFBooleanGetTypeID(),
+              updated.doubleValue == Double(rows.count) else {
+            throw ConnectedAppsRefusal(.unreadableAnswer)
+        }
     }
 
     // ------------------------------------------------------------ disconnect
@@ -518,7 +528,7 @@ final class ConnectedAppsClient: ConnectedAppsStore {
 
     private func get(_ path: String, query: [URLQueryItem],
                      as who: ConnectedAppsCredential) async throws -> [String: Any]? {
-        try await send(wire(path, query: query, as: who))
+        try await send(wire(path, query: query, as: who), as: who)
     }
 
     /// The GET this client would make, BUILT AND NOT YET SENT.
@@ -547,7 +557,7 @@ final class ConnectedAppsClient: ConnectedAppsStore {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         authorize(&request, who)
         request.httpBody = try? JSONSerialization.data(withJSONObject: payload)
-        return try await send(request)
+        return try await send(request, as: who)
     }
 
     /// The session token, in the header the data API already uses. It is never
@@ -562,8 +572,8 @@ final class ConnectedAppsClient: ConnectedAppsStore {
     /// refusal handed back as data is a refusal every caller swallows, and the
     /// app then paints a confident empty state over somebody's four connected
     /// apps and invites them to connect what they already have.
-    private func send(_ request: URLRequest) async throws -> [String: Any]? {
-        let answer = try await probe(request)
+    private func send(_ request: URLRequest, as who: ConnectedAppsCredential) async throws -> [String: Any]? {
+        let answer = try await probe(request, as: who)
         guard (200..<300).contains(answer.status) else {
             throw ConnectedAppsRefusal(.serverRefused, status: answer.status)
         }
@@ -574,9 +584,20 @@ final class ConnectedAppsClient: ConnectedAppsStore {
     /// throw, so there is no second reading of a status code and no call that
     /// can quietly skip it: a caller reaching for `probe` is choosing to look
     /// at a refusal, in the open, and there is exactly one of those.
-    private func probe(_ request: URLRequest) async throws
+    private func probe(_ request: URLRequest, as who: ConnectedAppsCredential) async throws
         -> (status: Int, body: [String: Any]?) {
-        let (data, response) = try await transport.send(request)
+        guard credential() == who else { throw ConnectedAppsRefusal(.sessionChanged) }
+        let result: (Data, HTTPURLResponse)
+        do {
+            result = try await transport.send(request)
+        } catch {
+            guard credential() == who else { throw ConnectedAppsRefusal(.sessionChanged) }
+            throw error
+        }
+        // Same owner does not mean same session. Never publish a response
+        // made under a replaced token or backend, including a successful save.
+        guard credential() == who else { throw ConnectedAppsRefusal(.sessionChanged) }
+        let (data, response) = result
         guard !data.isEmpty else { return (response.statusCode, nil) }
         return (response.statusCode,
                 (try? JSONSerialization.jsonObject(with: data)) as? [String: Any])
@@ -780,7 +801,7 @@ struct SkipAcknowledgement: Equatable {
 /// and every later comparison in that call is against the same three fields,
 /// so a sign-out landing mid-flight cannot make a request half belong to two
 /// people.
-struct ConnectedAppsCredential: Equatable {
+struct ConnectedAppsCredential: Hashable {
     /// The server this build talks to. Injected, never a literal here — the app
     /// already knows its own base from configuration, and a host written into
     /// this file is a host nobody can point at a preview.
@@ -833,6 +854,8 @@ struct ConnectedAppsRefusal: Error, Equatable {
         /// The caller named an owner who is not the one signed in. Nothing was
         /// sent.
         case anotherOwner = "another_owner"
+        /// The request's exact session was replaced while it was in flight.
+        case sessionChanged = "session_changed"
         /// A write batch carried a row belonging to somebody else.
         case foreignRow = "foreign_row"
         /// The server answered, and said no. `status` carries which.

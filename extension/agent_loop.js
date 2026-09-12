@@ -2215,6 +2215,9 @@ async function applyFormCorrections(tabId, corrections) {
       if (protectedInput(meta)) continue;
       const center = await elementCenter(tabId, correction.index);
       if (!center) continue;
+      // A point the page says is covered or inert is not clicked: a
+      // correction typed into whatever is on top would land in a stranger.
+      if (center.coveredBy || center.inert) continue;
       if (center.inFrameOnly) await frameClick(tabId, correction.index);
       else await trustedClick(tabId, center.x, center.y);
       await new Promise((resolve) => setTimeout(resolve, 150));
@@ -3812,7 +3815,18 @@ async function neutralizeSpawners(tabId) {
 // indexes (main frame = 0..999, first subframe = 1000.., …) and actions are
 // routed back to the frame that owns the index.
 let frameSlots = [0];
-let frameOffsets = {};              // frameId -> {x, y} in top-page coords, when known
+// frameId -> { parent, src }: the <iframe> in `parent` whose src the frame's
+// location matched, written only when exactly one matched AND the parent's
+// own chain resolves to frame 0. WHAT IS NOT KEPT, on purpose: a top-page
+// offset measured at map time. That number was stale the moment
+// __anticipyCenter scrolled the parent to centre the control — real Chrome
+// propagates a child frame's scrollIntoView to its ancestors — and a trusted
+// click was dispatched at (fresh in-frame centre) + (map-time iframe
+// position), off the control by exactly the parent's scroll delta and often
+// off the viewport (measured 2026-09-12: dispatched y=1654 in a 700px
+// viewport, live button at y 326–375, zero clicks received). The offset is
+// re-measured at click time instead, hop by hop; see elementCenter.
+let frameChain = {};
 let frameUrls = {};                 // frameId -> the frame's own location, per mapPage
 const frameOf = (idx) => frameSlots[Math.floor(idx / 1000)] ?? 0;
 // WHICH FRAME DOES THIS ACTION TOUCH. Audit #71's seatbelt: an index that
@@ -3983,7 +3997,7 @@ async function readFrames(tabId, _retry = 0) {
   const main = frames.find((f) => f.frameId === 0)?.result;
   if (!main) throw new Error("main frame not scriptable");
   frameSlots = [0];
-  frameOffsets = {};
+  frameChain = {};
   frameUrls = {};
   // Which subframes matter: visible, real size, and actually holding controls.
   const subs = frames
@@ -3996,6 +4010,38 @@ async function readFrames(tabId, _retry = 0) {
   // still work — their clicks fall back to in-frame element handlers.
   const iframeRects = frames.flatMap((f) =>
     (f.result?.iframes || []).map((r) => ({ ...r, parent: f.frameId })));
+  // THE CHAIN COVERS EVERY FRAME THAT ANSWERED, NOT ONLY THE ONES WITH
+  // CONTROLS. A wrapper shell that holds nothing but the next <iframe> —
+  // the two-hop shape consent managers, chat launchers and some booking
+  // embeds build — is not in `subs` (it has no elements to map), and until
+  // 2026-09-12 the chain was written inside the `subs` loop below, so the
+  // widget inside it could never reach the top page: its parent hop was
+  // simply never recorded, and every click in it took the in-frame path.
+  // Measured in real Chrome (proof/audit/check_browser_frame_clicks.mjs,
+  // "two-hop"): the right control, but never a trusted dispatch. Parents are
+  // resolved to a fixpoint rather than in id order, because a frame id says
+  // nothing about depth.
+  // A MISSING MEASUREMENT IS UNKNOWN, NOT ZERO. This used to read
+  // `frameOffsets[parent] || {x:0,y:0}`: a widget matched inside a src-less
+  // wrapper frame (a srcdoc/about:blank shell) was given its rect INSIDE THE
+  // WRAPPER as if it were a top-page position — a confidently wrong number,
+  // off by the wrapper's own place on the page (measured: dispatched
+  // (294,292), live button at (430,390)). An unknown ancestor leaves the
+  // chain unwritten, and elementCenter then answers inFrameOnly so the click
+  // takes the in-frame path instead of a coordinate it cannot vouch for.
+  const linkable = frames.filter((f) => f.frameId !== 0 && f.result && f.result.url);
+  for (let pass = 0, progress = true; progress && pass < 8; pass++) {
+    progress = false;
+    for (const f of linkable) {
+      if (frameChain[f.frameId]) continue;
+      const url = f.result.url;
+      const hit = iframeRects.filter((r) => r.src && (r.src === url || url.startsWith(r.src.split("#")[0])));
+      if (hit.length === 1 && (hit[0].parent === 0 || frameChain[hit[0].parent])) {
+        frameChain[f.frameId] = { parent: hit[0].parent, src: hit[0].src };
+        progress = true;
+      }
+    }
+  }
   // Audit #72: suggestions are no longer spliced into the element text here.
   // page_map hands back { lists } — structure, no headings — and the step
   // loop heads and renders them AFTER the attachment verdict, in one place.
@@ -4033,11 +4079,6 @@ async function readFrames(tabId, _retry = 0) {
     frameSlots.push(f.frameId);
     const url = f.result.url || "";
     frameUrls[f.frameId] = url;
-    const hit = iframeRects.filter((r) => r.src && url && (r.src === url || url.startsWith(r.src.split("#")[0])));
-    if (hit.length === 1) {
-      const base = frameOffsets[hit[0].parent] || { x: 0, y: 0 };
-      frameOffsets[f.frameId] = { x: base.x + hit[0].x, y: base.y + hit[0].y };
-    }
     elements += `\n--- EMBEDDED WIDGET (${url.slice(0, 100)}) — these controls work like any other ---\n`
       + remapIndexes(f.result.elements, slot * 1000);
     suggLists.push(...listsOf(f.result, slot * 1000));
@@ -4059,15 +4100,56 @@ async function readFrames(tabId, _retry = 0) {
            suggLists: suggLists.slice(0, 14) };
 }
 
-async function elementCenter(tabId, index) {
+// WHERE ONE <iframe> IS ON ITS PARENT'S PAGE, RIGHT NOW. Matched by the
+// resolved `src` the parent reported at map time — the same key readFrame
+// used — and refused (null) when the parent shows anything but exactly one
+// such frame, or a frame with no box. Bounded on its own: the two callers
+// that do not wrap elementCenter (form corrections, the option picker) must
+// not inherit an unbounded wait from a frame mid-navigation.
+async function freshIframeBox(tabId, parentFrameId, src) {
+  const target = parentFrameId ? { tabId, frameIds: [parentFrameId] } : { tabId };
+  const out = await withTimeout(chrome.scripting.executeScript({
+    target,
+    func: (wanted) => {
+      const frames = [...document.querySelectorAll("iframe")].filter((f) => f.src === wanted);
+      if (frames.length !== 1) return null;
+      const r = frames[0].getBoundingClientRect();
+      if (!(r.width > 0 && r.height > 0)) return null;
+      return { x: Math.round(r.x), y: Math.round(r.y) };
+    },
+    args: [src],
+  }), ELEMENT_TIMEOUT_MS, "iframe box");
+  const box = out?.[0]?.result;
+  return box && Number.isFinite(box.x) && Number.isFinite(box.y) ? box : null;
+}
+
+// Exported for the offline geometry suite; nothing else imports it.
+export async function elementCenter(tabId, index) {
   const result = await inFrame(tabId, index, (i) => window.__anticipyCenter(i));
   if (!result) return result;
   const frameId = frameOf(index);
   if (!frameId) return result;
-  const off = frameOffsets[frameId];
-  if (off) return { x: off.x + result.x, y: off.y + result.y };
-  // No top-page coordinates for this frame: the caller must click in-frame.
-  return { x: result.x, y: result.y, inFrameOnly: true };
+  // THE CHAIN IS WALKED AFTER THE IN-FRAME CENTRE, NEVER BEFORE. The call
+  // above may have scrolled every ancestor to centre the control; only a box
+  // read now is the box the click will meet. Child → parent → … → 0, summing
+  // fresh boxes; ANY hop that cannot be measured makes the whole answer
+  // inFrameOnly — never a partial sum, which would be a wrong coordinate
+  // wearing the confidence of a right one. `...result` keeps whatever
+  // __anticipyCenter said about the point (covered, inert) on the way out.
+  let x = result.x, y = result.y;
+  let id = frameId;
+  for (let hop = 0; hop < 8; hop++) {
+    const link = frameChain[id];
+    if (!link) return { ...result, x: result.x, y: result.y, inFrameOnly: true };
+    let box = null;
+    try { box = await freshIframeBox(tabId, link.parent, link.src); }
+    catch (_) { box = null; }
+    if (!box) return { ...result, x: result.x, y: result.y, inFrameOnly: true };
+    x += box.x; y += box.y;
+    if (link.parent === 0) return { ...result, x, y };
+    id = link.parent;
+  }
+  return { ...result, x: result.x, y: result.y, inFrameOnly: true };
 }
 
 // Scroll the document (or its largest real scroll container) directly.
@@ -5436,7 +5518,8 @@ export function sideTripDeps(apiKey, model) {
         const index = Number(named[1]);
         if (!offered.has(index)) return false;       // a row we never offered
         const centre = await elementCenter(tabId, index);
-        if (!centre) return false;
+        if (!centre || centre.coveredBy || centre.inert) return false;
+        if (centre.inFrameOnly) { await frameClick(tabId, index); return true; }
         await trustedClick(tabId, centre.x, centre.y);
         return true;
       } catch (_) { return false; }
@@ -8236,6 +8319,12 @@ export async function runAgentGoal(goal, opts) {
           if (!external) {
             const center = await withTimeout(
               elementCenter(tab.id, decision.index), ELEMENT_TIMEOUT_MS, "select-as-click elementCenter");
+            if (center && (center.coveredBy || center.inert)) {
+              delete actionCounts[sig];
+              stuckStreak++;
+              history.push(`step ${step}: REFUSED — element ${decision.index}'s point is ${center.inert ? center.inert + " now" : "covered by " + center.coveredBy}; nothing was clicked. Deal with what is in front of it (close it, or use its own controls) or choose another element.`);
+              continue;
+            }
             if (center) {
               if (center.inFrameOnly) await frameClick(tab.id, decision.index);
               else await trustedClick(tab.id, center.x, center.y);
@@ -8631,6 +8720,18 @@ export async function runAgentGoal(goal, opts) {
         try { c = await withTimeout(elementCenter(tab.id, decision.index), ELEMENT_TIMEOUT_MS, "elementCenter"); }
         catch (e) { history.push(`step ${step}: element lookup failed (${String(e).slice(0, 100)})`); continue; }
         if (!c) { stuckStreak++; history.push(`step ${step}: element ${decision.index} not found`); continue; }
+        // THE POINT IS REFUSED, NOT THE ELEMENT. It may be clickable next step
+        // (the overlay closes, the menu reopens), so it is not deadIdx'd; the
+        // repeat counter is unwound so a second identical decision is a real
+        // second attempt, not the el.click() fallback firing THROUGH the
+        // overlay — which is what the shipped loop did (measured: fixture
+        // received ["target"] while both trusted clicks hit div#interstitial).
+        if (c.coveredBy || c.inert) {
+          delete actionCounts[sig];
+          stuckStreak++;
+          history.push(`step ${step}: REFUSED — element ${decision.index}'s point is ${c.inert ? c.inert + " now" : "covered by " + c.coveredBy}; nothing was clicked. Deal with what is in front of it (close it, or use its own controls) or choose another element.`);
+          continue;
+        }
         let externalClick = false;
         if (decision.action === "click") {
           externalClick = await commitControl(tab.id, decision.index);
@@ -8798,6 +8899,12 @@ export async function runAgentGoal(goal, opts) {
               }
               c = await withTimeout(elementCenter(tab.id, decision.index), ELEMENT_TIMEOUT_MS,
                                     "post-clear elementCenter");
+              if (c && (c.coveredBy || c.inert)) {
+                delete actionCounts[sig];
+                stuckStreak++;
+                history.push(`step ${step}: PRE-SUBMIT BLOCK — after clearing unapproved defaults, element ${decision.index}'s point is ${c.inert ? c.inert + " now" : "covered by " + c.coveredBy}; nothing was pressed. Deal with what is in front of it or choose another element.`);
+                continue;
+              }
               const refreshedContext = await controlContext(tab.id, decision.index);
               Object.assign(controlState, stateForControl(state, refreshedContext, decision.index));
               // Judged again on the refreshed form: an unchanged box is a

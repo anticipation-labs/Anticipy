@@ -38,6 +38,8 @@ import json
 import os
 import sys
 
+import threading
+
 import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -162,7 +164,10 @@ def _rig(monkeypatch, transport: Transport, queue: bool = True):
     monkeypatch.setattr(llm, "AUX_MODEL", "")
     monkeypatch.setattr(llm, "_post_json", transport)
     monkeypatch.setattr(llm, "_clock", lambda: transport.clock["t"])
-    monkeypatch.setattr(llm, "_LAST_SPENT", None)
+    # "no decision has closed on this thread yet". It is a threading.local
+    # rather than a process global so a background replan cannot write its
+    # spend onto the owner's row; see brain/llm.py.
+    monkeypatch.setattr(llm, "_SPENT", threading.local())
     monkeypatch.setattr(core.backend, "get", _refuse)
     monkeypatch.setattr(core.backend, "post", _refuse)
     monkeypatch.setattr(core.backend, "patch", _refuse)
@@ -696,3 +701,37 @@ def test_the_ceiling_reopens_the_duplicate_card_residual(monkeypatch):
     b.hear(LINE)
     assert "same_plan" in t2.asked
     assert [p for p in posted2 if p.get("goal")] == []
+
+
+def test_a_background_thread_cannot_overwrite_the_owner_thread_s_spend():
+    """`heard_calls` is a measurement, and another thread must not write it.
+
+    brain/worker.py's connector recovery closes its own `decision_budget` on a
+    pool thread. While the last-spend was one process global, whatever that
+    thread spent landed on the owner's decision row as `heard_calls` — the
+    number overnight/is_the_decision_bounded.py reads to answer whether her
+    thinking is bounded. The owner's row would then carry a background replan's
+    arithmetic, and nothing would say so.
+
+    The ORDER is what makes this an oracle: the owner's budget closes FIRST, the
+    background one closes after it, and only then is the owner's number read. A
+    process global has been overwritten by that point; a per-thread one has not.
+    """
+    with llm.decision_budget() as owner:
+        owner.spent = 7
+    assert llm.budget_spent_last() == 7
+
+    seen = {}
+
+    def background():
+        with llm.decision_budget() as other:
+            other.spent = 99
+        seen["thread"] = llm.budget_spent_last()
+
+    worker = threading.Thread(target=background)
+    worker.start()
+    worker.join(10)
+    assert not worker.is_alive()
+
+    assert seen["thread"] == 99, "the background thread could not read its own spend"
+    assert llm.budget_spent_last() == 7, "a background thread overwrote the owner's measurement"

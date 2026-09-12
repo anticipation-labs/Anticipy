@@ -172,16 +172,23 @@ function fakeFetch(handler: (call: Recorded, n: number) => Reply) {
 
 const isCatalog = (c: Recorded) => c.method === "GET" && c.path.startsWith("/tools?");
 const isExecute = (c: Recorded) => c.method === "POST" && c.path.startsWith("/tools/execute/");
+const isAccounts = (c: Recorded) => c.method === "GET" && c.path.startsWith("/connected_accounts?user_ids=");
 
 /** The vendor as it was measured: the catalog answers for our toolkit, execute
- *  answers success in the documented shape. Overrides per check. */
-function vendor(over: Partial<{ catalog: Reply; execute: Reply | ((c: Recorded) => Reply) }> = {}) {
+ *  answers success in the documented shape, and — read only after an auth
+ *  failure — the owner's account list says the account is ACTIVE. Overrides
+ *  per check. */
+function vendor(over: Partial<{ catalog: Reply; execute: Reply | ((c: Recorded) => Reply); accounts: Reply }> = {}) {
   return fakeFetch((call) => {
     if (isCatalog(call)) return over.catalog ?? { status: 200, body: { items: CATALOG, next_cursor: null } };
     if (isExecute(call)) {
       const e = over.execute;
       if (typeof e === "function") return e(call);
       return e ?? { status: 200, body: { data: { ok: 1 }, error: null, successful: true, log_id: "log_1" } };
+    }
+    if (isAccounts(call)) {
+      return over.accounts ?? { status: 200, body: { items: [
+        { id: ACCOUNT, user_id: OWNER, toolkit: { slug: APP }, status: "ACTIVE" }] } };
     }
     return { status: 500, body: { error: { slug: "unexpected_route" } } };
   });
@@ -760,6 +767,55 @@ for (const [what, reply, want] of VENDOR_FAILURES) {
     assert.equal(r.calls.filter(isExecute).length, 1, "the hand retried — it must never");
   });
 }
+
+// WHETHER THE CREDENTIAL IS DEAD is the vendor's word, read after the refusal:
+// its no-account token, or its account-status enum for THIS account. A 403
+// with the account still ACTIVE (a tool the grant's scopes do not cover) is
+// `alive`; EXPIRED is `dead`; a list read that fails or omits the account is
+// `unknown`. Nothing else in the failure is read. (2026-09-12: a scope 403 used
+// to flip the whole connection to needs_reconnect.)
+await check("an auth failure reads the vendor's account status: ACTIVE is a live credential", async () => {
+  const r = await rig([row()], vendor({ execute: { status: 403, body: { error: { code: "forbidden", message: "Request had insufficient authentication scopes." } } } }));
+  const out = await run(r, step()) as Extract<ApiHandOutcome, { outcome: "failed" }>;
+  assert.equal(out.outcome, "failed");
+  assert.equal(out.error.kind, "auth");
+  assert.equal(out.credential, "alive");
+  assert.equal(r.calls.filter(isAccounts).length, 1, "the account list is read exactly once, after the refusal");
+  assert.equal(r.calls.filter(isExecute).length, 1);
+});
+await check("…and EXPIRED is a dead one", async () => {
+  const r = await rig([row()], vendor({
+    execute: { status: 401, body: { error: { slug: "Unauthorized" } } },
+    accounts: { status: 200, body: { items: [{ id: ACCOUNT, user_id: OWNER, toolkit: { slug: APP }, status: "EXPIRED" }] } },
+  }));
+  const out = await run(r, step()) as Extract<ApiHandOutcome, { outcome: "failed" }>;
+  assert.equal(out.credential, "dead");
+});
+await check("…the vendor's no-account token is dead without a second read", async () => {
+  const r = await rig([row()], vendor({ execute: { status: 404, body: { error: { slug: EXECUTE_NO_ACCOUNT_TOKEN, code: 1810, status: 404 } } } }));
+  const out = await run(r, step()) as Extract<ApiHandOutcome, { outcome: "failed" }>;
+  assert.equal(out.error.kind, "auth");
+  assert.equal(out.credential, "dead");
+  assert.equal(r.calls.filter(isAccounts).length, 0, "the token is the vendor's own answer; no list read");
+});
+await check("…a status read that fails, or omits the account, is unknown — never dead", async () => {
+  const failing = await rig([row()], vendor({
+    execute: { status: 403, body: { error: { code: "forbidden" } } },
+    accounts: { status: 503, body: { error: { slug: "unavailable" } } },
+  }));
+  assert.equal(((await run(failing, step())) as Extract<ApiHandOutcome, { outcome: "failed" }>).credential, "unknown");
+  const missing = await rig([row()], vendor({
+    execute: { status: 403, body: { error: { code: "forbidden" } } },
+    accounts: { status: 200, body: { items: [] } },
+  }));
+  assert.equal(((await run(missing, step())) as Extract<ApiHandOutcome, { outcome: "failed" }>).credential, "unknown");
+});
+await check("a non-auth failure asks the vendor nothing about the credential", async () => {
+  const r = await rig([row()], vendor({ execute: { status: 429, body: { error: { slug: "RateLimited" } } } }));
+  const out = await run(r, step()) as Extract<ApiHandOutcome, { outcome: "failed" }>;
+  assert.equal(out.credential, "unknown");
+  assert.equal(r.calls.filter(isAccounts).length, 0);
+});
 
 await check("a transport failure on execute -> failed other, status 0, may have landed, no retry", async () => {
   const r = await rig([row()], vendor({ execute: { throws: new TypeError("fetch failed") } }));

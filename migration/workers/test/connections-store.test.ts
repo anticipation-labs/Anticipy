@@ -213,9 +213,11 @@ const DEVIATIONS: Record<string, { drop?: string[]; add?: string[]; why: string 
   Connection: { why: "none — this table is exactly the contract" },
   ConnectNudge: { why: "none — this table is exactly the contract" },
   ConnectLink: {
-    drop: ["token"], add: ["token_handle", "completed_at"],
+    drop: ["token"], add: ["token_handle", "completed_at", "recovery_account_id", "recovery_deadline",
+      "recovery_next_check", "recovery_attempts", "recovery_lease"],
     why: "token_handle replaces token because a raw single-use bearer token at rest means "
-      + "one database read is a live connect link for every owner holding one; completed_at "
+      + "one database read is a live connect link for every owner holding one; durable recovery fields "
+      + "bind the exact vendor account to a bounded, leased retry without raw tokens; completed_at "
       + "is the exactly-once gate for the callback, without which a refresh of the done page "
       + "records the same connection twice",
   },
@@ -929,6 +931,12 @@ await check("simultaneous evidence for one app does not lose a signal", async ()
 await check("a live table missing a SAFETY column makes the store refuse BY NAME, not 1101 on every write", async () => {
   const t = openTestD1();
   // The live table is an older revision: no exactly-once gate.
+  // Model a genuinely pre-recovery legacy table: new index/trigger predicates
+  // reference completed_at, so remove only those dependencies before dropping
+  // the safety column. The missing-column refusal below is unchanged.
+  t.exec(`DROP INDEX IF EXISTS idx_connect_links_recovery`);
+  for (const name of ["cancel_oauth_recovery_deleted_connection", "cancel_oauth_recovery_disconnected_connection",
+    "cancel_oauth_recovery_decline_insert", "cancel_oauth_recovery_decline_update"]) t.exec(`DROP TRIGGER IF EXISTS "${name}"`);
   t.exec(`ALTER TABLE "connect_links" DROP COLUMN "completed_at"`);
   const store = createD1Store({ DB: t.db });
   const err = await store.put(link()).then(() => null, (e: Error) => e);

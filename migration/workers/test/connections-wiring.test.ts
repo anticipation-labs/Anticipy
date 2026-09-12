@@ -1193,6 +1193,30 @@ await check("connectAuthWiring's app name comes from the catalog, and a blip cos
     s.restore();
   });
 
+await check("a stalled catalog name does not hold up a phone code and cancels its request", async () => {
+  const s = socket();
+  const normal = globalThis.fetch;
+  let observedSignal: AbortSignal | undefined;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (String(input).includes("/toolkits/")) {
+      observedSignal = init?.signal ?? undefined;
+      // Noncooperative upstream: the real provider adapter must enforce and
+      // cancel its deadline, not rely on this fixture rejecting on abort.
+      return await new Promise<Response>(() => {});
+    }
+    return await normal(input, init);
+  }) as typeof fetch;
+  resetConnectionsProvider();
+  try {
+    const r = await rig();
+    const deps = connectAuthWiring(r.env)!;
+    const began = performance.now();
+    assert.equal(await deps.toolkitName(APP.slug), null);
+    assert.ok(performance.now() - began < 1800, "optional display-name lookup held up phone authentication");
+    assert.equal(observedSignal?.aborted, true, "catalog request was left running after fallback");
+  } finally { s.restore(); resetConnectionsProvider(); }
+});
+
 await check("connectAuthWiring refuses without the vendor secret, and the CONTROL is the same rig with it",
   async () => {
     const s = socket();

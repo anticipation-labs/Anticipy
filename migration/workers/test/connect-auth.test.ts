@@ -63,6 +63,7 @@
  */
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { FakeD1, asD1 } from "./fake-d1.ts";
 import { issueToken, verifyToken } from "../src/api/auth.ts";
 import {
@@ -492,13 +493,27 @@ await check("a provider that refuses leaves NO live code and the same answer", a
   sendFails = false;
   assert.equal((res as Response).status, 200);
   await bodyOf(res as Response, "POST /code provider refused");
-  const rows = r.db.rows(`SELECT * FROM connect_codes`);
+  const rows = r.db.rows(`SELECT * FROM connect_codes WHERE used_at IS NULL`);
   assert.equal(rows.length, 0, "a code nobody received was left live in the table");
+  assert.equal(r.db.rows(`SELECT id FROM connect_codes WHERE delivery_state = 'failed'`).length, 1,
+    "failed provider attempts must retain their rate-limit reservation");
 });
 
 // ===========================================================================
 // THE TEXT
 // ===========================================================================
+
+await check("overlapping sends reserve the minimum gap before contacting the provider", async () => {
+  SENT.length = 0;
+  let catalogCalls = 0;
+  const r = await rig({ toolkitName: async () => { catalogCalls++; return "Zellibrix"; } });
+  const responses = await Promise.all(Array.from({ length: 8 }, () =>
+    connectAuthRoute(postReq(`/c/${r.token}/code`), r.env, r.deps)));
+  assert.ok(responses.every((response) => response?.status === 200));
+  assert.equal(SENT.length, 1, "concurrent requests sent competing codes and bypassed the gap");
+  assert.equal(catalogCalls, 1, "losing send requests still wasted catalog requests");
+  assert.equal(r.db.rows(`SELECT id FROM connect_codes WHERE used_at IS NULL`).length, 1);
+});
 
 await check("the text names the app, the life and the phishing tell", async () => {
   SENT.length = 0;
@@ -1122,6 +1137,147 @@ await check("a wrong code comes back to a box that still holds the state", async
 // THE STORE ITSELF
 // ===========================================================================
 
+for (const backend of ["D1", "memory"] as const) {
+  await check(`${backend}: reservation is non-redeemable and only acceptance supersedes the old code`, async () => {
+    const db = new FakeD1();
+    const codes = backend === "D1" ? createD1ConnectCodeStore({ DB: asD1(db) }) : createMemoryConnectCodeStore();
+    const row = { id: "accepted", token_handle: "a".repeat(64), user_id: OWNER,
+      code_hash: "b".repeat(64), expires_at: NOW + CODE_TTL_MS, attempts: 0, used_at: null, created_at: NOW };
+    await codes.insert(row);
+    assert.equal(await codes.reserve({ ...row, id: "failed", created_at: NOW + MIN_GAP_MS }), true);
+    assert.equal((await codes.newest(row.token_handle))?.id, "accepted");
+    assert.equal(await codes.charge("failed", 0, 1), false);
+    assert.equal(await codes.spend("failed", NOW + MIN_GAP_MS), false);
+    await codes.fail("failed");
+    assert.equal(await codes.activate("failed", NOW + MIN_GAP_MS), false);
+    assert.equal((await codes.newest(row.token_handle))?.id, "accepted");
+    assert.equal(await codes.reserve({ ...row, id: "replacement", created_at: NOW + MIN_GAP_MS * 2 }), true);
+    assert.equal(await codes.activate("replacement", NOW + MIN_GAP_MS * 2), true);
+    assert.equal((await codes.newest(row.token_handle))?.id, "replacement");
+    assert.equal(await codes.activate("replacement", NOW + MIN_GAP_MS * 2), false);
+    assert.equal(await codes.spend("accepted", NOW + MIN_GAP_MS * 2), false);
+    db.db.close();
+  });
+
+  await check(`${backend}: a delayed older send cannot supersede a newer reservation`, async () => {
+    const db = new FakeD1();
+    const codes = backend === "D1" ? createD1ConnectCodeStore({ DB: asD1(db) }) : createMemoryConnectCodeStore();
+    const row = { id: "slow", token_handle: "a".repeat(64), user_id: OWNER,
+      code_hash: "b".repeat(64), expires_at: NOW + CODE_TTL_MS, attempts: 0, used_at: null, created_at: NOW };
+    assert.equal(await codes.reserve(row), true);
+    assert.equal(await codes.reserve({ ...row, id: "newer", created_at: NOW + MIN_GAP_MS }), true);
+    assert.equal(await codes.activate("newer", NOW + MIN_GAP_MS), true);
+    assert.equal(await codes.activate("slow", NOW + MIN_GAP_MS + 1), false);
+    assert.equal((await codes.newest(row.token_handle))?.id, "newer");
+    db.db.close();
+  });
+
+  await check(`${backend}: every caller reads before any caller writes, and one code still wins`, async () => {
+    // THE ONE THAT ACTUALLY TESTS CONCURRENCY, AND WHY THE OBVIOUS ONE DOES NOT.
+    //
+    // `Promise.all` over eight route calls does not interleave these stores
+    // where it matters: measured on 2026-09-11, moving the whole sixty-second
+    // gap out of the atomic statement into a JavaScript read-decide-write left
+    // all 71 checks in this file green. A suite that cannot see the bug it was
+    // written for is a suite that will not see it come back.
+    //
+    // So the interleave is FORCED rather than hoped for. Every statement is
+    // deferred by a macrotask, so the eight callers' first statements all run
+    // before any caller's second one — which is exactly the ordering a
+    // read-decide-write needs to lose, and exactly the one a single
+    // INSERT … SELECT … WHERE NOT EXISTS is immune to.
+    //
+    // Against the real code: one row, because one statement cannot be split.
+    // Against a JavaScript gap: every caller sees an empty table and the link
+    // ceiling is what ends up deciding, so the table holds MAX_CODES_PER_LINK
+    // rows and the owner is sent that many competing codes.
+    const db = new FakeD1();
+    const deferred = new Proxy(asD1(db) as object, {
+      get(target, key) {
+        const value = Reflect.get(target, key);
+        if (key !== "prepare") return typeof value === "function" ? value.bind(target) : value;
+        return (sql: string) => {
+          const statement = (value as (s: string) => Record<string, unknown>).call(target, sql);
+          const slow = (name: string) => async (...args: unknown[]) => {
+            await new Promise((resolve) => setTimeout(resolve, 0));
+            return (statement[name] as (...a: unknown[]) => unknown)(...args);
+          };
+          return new Proxy(statement, {
+            get(inner, method) {
+              if (method === "bind") {
+                return (...args: unknown[]) => {
+                  const bound = (inner.bind as (...a: unknown[]) => Record<string, unknown>)(...args);
+                  return new Proxy(bound, { get(b, m) {
+                    return ["first", "all", "run"].includes(String(m)) ? slowOn(b, String(m))
+                      : Reflect.get(b, m);
+                  } });
+                };
+              }
+              return ["first", "all", "run"].includes(String(method)) ? slow(String(method))
+                : Reflect.get(inner, method);
+            },
+          });
+        };
+      },
+    }) as D1Database;
+    function slowOn(owner: Record<string, unknown>, name: string) {
+      return async (...args: unknown[]) => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        return (owner[name] as (...a: unknown[]) => unknown).call(owner, ...args);
+      };
+    }
+    const codes = backend === "D1" ? createD1ConnectCodeStore({ DB: deferred }) : createMemoryConnectCodeStore();
+    const row = { id: "x", token_handle: "e".repeat(64), user_id: OWNER,
+      code_hash: "b".repeat(64), expires_at: NOW + CODE_TTL_MS, attempts: 0, used_at: null, created_at: NOW };
+    const outcomes = await Promise.all(Array.from({ length: 8 }, (_, index) =>
+      codes.reserve({ ...row, id: `racer-${index}` })));
+    assert.equal(outcomes.filter(Boolean).length, 1,
+      "the sixty-second gap was decided outside the statement that writes the row");
+    assert.equal(db.rows(`SELECT id FROM connect_codes`).length, backend === "D1" ? 1 : 0,
+      "more than one competing code was written for one link");
+    db.db.close();
+  });
+
+  await check(`${backend}: concurrent different links cannot exceed the owner ceiling`, async () => {
+    const db = new FakeD1();
+    const codes = backend === "D1" ? createD1ConnectCodeStore({ DB: asD1(db) }) : createMemoryConnectCodeStore();
+    const outcomes = await Promise.all(Array.from({ length: 12 }, (_, index) => codes.reserve({
+      id: `candidate-${index}`, token_handle: index.toString(16).padStart(64, "0"), user_id: OWNER,
+      code_hash: "b".repeat(64), expires_at: NOW + CODE_TTL_MS, attempts: 0, used_at: null, created_at: NOW,
+    })));
+    assert.equal(outcomes.filter(Boolean).length, MAX_CODES_PER_OWNER);
+    db.db.close();
+  });
+
+  await check(`${backend}: expired acceptance leaves the previous code untouched`, async () => {
+    const db = new FakeD1();
+    const codes = backend === "D1" ? createD1ConnectCodeStore({ DB: asD1(db) }) : createMemoryConnectCodeStore();
+    const row = { id: "old", token_handle: "a".repeat(64), user_id: OWNER,
+      code_hash: "b".repeat(64), expires_at: NOW + CODE_TTL_MS, attempts: 0, used_at: null, created_at: NOW };
+    await codes.insert(row);
+    await codes.reserve({ ...row, id: "expired", created_at: NOW + MIN_GAP_MS });
+    assert.equal(await codes.activate("expired", NOW + CODE_TTL_MS), false);
+    assert.equal((await codes.newest(row.token_handle))?.id, "old");
+    db.db.close();
+  });
+}
+
+await check("delivery migration preserves existing accepted codes and readiness detects the old schema", async () => {
+  const db = new FakeD1({ schema: false });
+  const legacyDDL = CONNECT_CODES_DDL.replace(/,\n  "delivery_state"[\s\S]*?\n\);/, "\n);");
+  db.db.exec(legacyDDL);
+  const codes = createD1ConnectCodeStore({ DB: asD1(db) });
+  await codes.insert({ id: "legacy", token_handle: "a".repeat(64), user_id: OWNER,
+    code_hash: "b".repeat(64), expires_at: NOW + CODE_TTL_MS, attempts: 2, used_at: null, created_at: NOW });
+  assert.equal(await connectCodesTableReady({ DB: asD1(db) }), false,
+    "table existence alone incorrectly advertised atomic sending as ready");
+  db.db.exec(readFileSync(new URL("../../d1/2026-09-11-connect-code-delivery.sql", import.meta.url), "utf8"));
+  assert.equal(await connectCodesTableReady({ DB: asD1(db) }), true);
+  assert.equal((await codes.newest("a".repeat(64)))?.id, "legacy");
+  assert.equal(db.rows(`SELECT delivery_state FROM connect_codes WHERE id='legacy'`)[0]?.delivery_state, "accepted");
+  db.db.close();
+});
+
 await check("connectCodesTableReady tells the truth both ways", async () => {
   const withIt = new FakeD1();
   withIt.db.exec(CONNECT_CODES_DDL);
@@ -1166,10 +1322,28 @@ await check("a missing connect_codes table is a dead feature, not a 500 and not 
       links, codes: createD1ConnectCodeStore({ DB: asD1(db) }),
       toolkitName: async () => "Zellibrix", now: () => NOW,
     };
-    const res = await connectAuthRoute(postReq(`/c/${token}/code`), env, deps);
-    assert.equal((res as Response).status, 200, "a missing table 500ed the page");
-    await bodyOf(res as Response, "POST /code with no table");
+    const logged: string[] = [];
+    const realLog = console.log;
+    console.log = (...parts: unknown[]) => { logged.push(parts.join(" ")); };
+    let res: Response | null;
+    try {
+      res = await connectAuthRoute(postReq(`/c/${token}/code`), env, deps) as Response;
+    } finally {
+      console.log = realLog;
+    }
+    assert.equal(res?.status, 200, "a missing table 500ed the page");
+    const body = await bodyOf(res as Response, "POST /code with no table");
     assert.equal(await connectCodesTableReady({ DB: asD1(db) }), false);
+    // AND THE OPERATOR IS TOLD WHICH FAILURE THIS IS. Until 2026-09-11
+    // `connectCodesTableReady` had NO caller in the Worker, so the one state it
+    // exists to detect — the delivery migration unapplied, every phone code
+    // failing, every owner shown "enter the code we texted you" — was one more
+    // generic line in a log full of vendor blips. The page must still tell the
+    // person nothing; the log must name the cause.
+    assert.ok(logged.some(line => line.includes("2026-09-11-connect-code-delivery.sql")),
+      "the send path swallowed an unapplied migration without naming it:\n" + logged.join("\n"));
+    assert.ok(!body.includes("migration") && !body.includes("delivery_state"),
+      "the diagnosis leaked into what the person reads");
   });
 
 await check("charge is a compare-and-set: a concurrent pair increments once", async () => {

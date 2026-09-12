@@ -68,6 +68,36 @@ export async function runProviderLivenessTests() {
     catch (error) { failures.push(name); console.error(`FAIL liveness ${name}: ${String(error)}`); }
   }
 
+  await check("already-cancelled metadata makes zero requests", async () => {
+    let calls = 0; const controller = new AbortController(); controller.abort();
+    const p = provider((async () => { calls++; return reply({ slug: "fixture", name: "Fixture" }); }) as typeof fetch);
+    await failure(p.toolkit("fixture", controller.signal), "request_cancelled");
+    assert.equal(calls, 0);
+  });
+  await check("metadata caller cancellation aborts uncooperative headers without waiting for request timeout", async () => {
+    const controller = new AbortController(); let signal: AbortSignal | undefined;
+    const p = provider((async (_url, init) => {
+      signal = init?.signal as AbortSignal; queueMicrotask(() => controller.abort());
+      return await new Promise<Response>(() => {});
+    }) as typeof fetch, { requestTimeoutMs: 500 });
+    await failure(bounded(p.toolkit("fixture", controller.signal), 200), "request_cancelled");
+    assert.equal(signal?.aborted, true);
+  });
+  await check("native metadata body cancellation closes actual socket", async () => {
+    const controller = new AbortController(); let closed = false;
+    const server = createServer((_req, res) => {
+      res.writeHead(200, { "content-type": "application/json" }); res.write('{"name":');
+      res.on("close", () => { closed = true; }); setTimeout(() => controller.abort(), 10);
+    });
+    const url = await listening(server);
+    try {
+      const p = provider(fetch, { baseUrl: url, requestTimeoutMs: 500 });
+      await failure(p.toolkit("fixture", controller.signal), "request_cancelled");
+      for (let i = 0; i < 20 && !closed; i++) await sleep(5);
+      assert.equal(closed, true);
+    } finally { await close(server); }
+  });
+
   await check("uncooperative headers settle and receive an aborted signal", async () => {
     let signal: AbortSignal | undefined;
     let calls = 0;

@@ -62,17 +62,40 @@ async function body(req: Request): Promise<Record<string, unknown>> {
   catch { return {}; }
 }
 
-/** agent_id + a >=40-char token that resolves to ONE paired row, or nothing. */
-async function paired(env: AgentEnv, agentId: string, token: string) {
+/** agent_id + a >=40-char token that resolves to ONE paired row, or nothing.
+ *
+ *  THREE NON-ANSWERS, NOT TWO. A lookup that THREW used to come back as
+ *  `unpaired`, and every caller turned that into the same 403 "not a paired
+ *  agent" a genuinely unpaired browser gets. The shipped extension reads a 403
+ *  from /agent/llm as a credential VERDICT: it wipes its key bundle and parks
+ *  the errand needs_user "my model key was rejected (403)" without a retry —
+ *  while the heartbeat, a different path whose throw is a 5xx, keeps the phone
+ *  reading "Chrome ready". A transient D1 error mid-errand therefore ended the
+ *  errand and demanded a tap (reports 1 and 3, 2026-09-12). The register route
+ *  already answers a thrown lookup 503; this makes the paired routes agree.
+ *  Still a floor: `unavailable` refuses, it just says why. */
+type PairingRefusal = "credentials" | "unpaired" | "unavailable";
+type PairedLookup =
+  | { row: Record<string, unknown>; bad?: undefined }
+  | { bad: PairingRefusal; row?: undefined };
+async function paired(env: AgentEnv, agentId: string, token: string): Promise<PairedLookup> {
   if (!agentId || token.length < 40) return { bad: "credentials" as const };
   try {
     const row = await env.DB.prepare(
       `SELECT * FROM agents WHERE agent_id = ? AND agent_token = ? AND paired = 1 LIMIT 1`)
       .bind(agentId, token).first<Record<string, unknown>>();
     return row ? { row } : { bad: "unpaired" as const };
-  } catch {
-    return { bad: "unpaired" as const };   // a failed lookup is not a pass
+  } catch (err) {
+    console.log("agent lookup unavailable:", String((err as Error)?.message ?? err).slice(0, 160));
+    return { bad: "unavailable" as const };   // could not look — not "not paired"
   }
+}
+
+/** The one answer for a paired() non-answer, so the three routes cannot drift. */
+function refusePairing(bad: PairingRefusal): Response {
+  if (bad === "credentials") return json(400, { error: "agent credentials required" });
+  if (bad === "unavailable") return json(503, { error: "agent lookup unavailable" });
+  return json(403, { error: "not a paired agent" });
 }
 
 export async function agentRegister(req: Request, env: AgentEnv): Promise<Response> {
@@ -140,11 +163,7 @@ export async function agentKey(req: Request, env: AgentEnv): Promise<Response> {
   const agentId = url.searchParams.get("agent_id") || "";
   const token = (req.headers.get("X-Anticipy-Agent-Token") || "").trim();
   const p = await paired(env, agentId, token);
-  if ("bad" in p) {
-    return p.bad === "credentials"
-      ? json(400, { error: "agent credentials required" })
-      : json(403, { error: "not a paired agent" });
-  }
+  if (p.bad !== undefined) return refusePairing(p.bad);
   const ownerRef = String(p.row.owner_ref ?? "");
   if (!ownerRef) {
     return json(409, {
@@ -240,11 +259,7 @@ export async function agentLlm(req: Request, env: AgentEnv): Promise<Response> {
   const agentId = (req.headers.get("X-Anticipy-Agent-ID") || "").trim();
   const token = (req.headers.get("X-Anticipy-Agent-Token") || "").trim();
   const p = await paired(env, agentId, token);
-  if ("bad" in p) {
-    return p.bad === "credentials"
-      ? json(400, { error: "agent credentials required" })
-      : json(403, { error: "not a paired agent" });
-  }
+  if (p.bad !== undefined) return refusePairing(p.bad);
   return llmProxy(req, env, p.row, startedAt);
 }
 
@@ -253,11 +268,7 @@ export async function agentCaptcha(req: Request, env: AgentEnv): Promise<Respons
   const agentId = (req.headers.get("X-Anticipy-Agent-ID") || "").trim();
   const token = (req.headers.get("X-Anticipy-Agent-Token") || "").trim();
   const p = await paired(env, agentId, token);
-  if ("bad" in p) {
-    return p.bad === "credentials"
-      ? json(400, { error: "agent credentials required" })
-      : json(403, { error: "not a paired agent" });
-  }
+  if (p.bad !== undefined) return refusePairing(p.bad);
   if (!env.CAPSOLVER_API_KEY) return json(503, { error: "captcha solving is not configured" });
   return json(503, { error: "captcha solving not yet ported" });
 }

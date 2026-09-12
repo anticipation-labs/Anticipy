@@ -11,6 +11,7 @@ inject explicit fixture models at the transport boundary.
 from __future__ import annotations
 
 import contextvars
+import threading
 import json
 import os
 import random
@@ -258,7 +259,16 @@ _BUDGET: contextvars.ContextVar = contextvars.ContextVar(
 # What the most recently CLOSED decision spent, for the worker to stamp on the
 # row beside how long it took. Written in decision_budget()'s `finally`, so it
 # is set whether the decision returned or raised.
-_LAST_SPENT: Optional[int] = None
+#
+# PER THREAD, AND THAT IS NOT A DETAIL. It used to be one process global, which
+# was harmless while one thread made every decision. brain/worker.py's connector
+# recovery now closes its own budget on a pool thread, and a process global
+# would let that thread's spend land on the owner's row as `heard_calls` —
+# the number overnight/is_the_decision_bounded.py reads to say whether her
+# thinking is bounded. A measurement another thread can overwrite is not a
+# measurement. The ContextVar beside it is already per-context for the same
+# reason; this is the other half of that.
+_SPENT = threading.local()
 
 
 @contextmanager
@@ -275,7 +285,6 @@ def decision_budget():
     next line's extraction, research, the digests, the clock, the apology in
     handle_inbound) would raise instantly: every line held, DEAF_STREAK at
     three, one text, and she is mute until redeploy."""
-    global _LAST_SPENT
     active = _BUDGET.get()
     if active is not None:
         yield active
@@ -287,7 +296,7 @@ def decision_budget():
         yield budget
     finally:
         _BUDGET.reset(token)
-        _LAST_SPENT = budget.spent
+        _SPENT.last = budget.spent
 
 
 def _spend() -> None:
@@ -313,9 +322,9 @@ def _spend() -> None:
 
 
 def budget_spent_last() -> Optional[int]:
-    """How many calls the most recently closed decision made, or None when no
-    decision has closed in this process yet."""
-    return _LAST_SPENT
+    """How many calls the most recently closed decision made ON THIS THREAD, or
+    None when none has closed here yet. Never another thread's."""
+    return getattr(_SPENT, "last", None)
 
 
 def _attempt_timeout() -> float:

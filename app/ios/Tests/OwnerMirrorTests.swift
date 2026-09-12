@@ -794,6 +794,24 @@ for problem in OwnerMirrorContract.problems(inSettingsProfile: settingsSource) {
     FileHandle.standardError.write(Data(("FAIL (SettingsProfileView.swift): " + problem + "\n").utf8))
 }
 
+// WHEN THE PHONE MAY CALL THE BROWSER READY. The extension stamps last_seen on
+// a 30-second alarm (Chrome's floor); a 30-second window here left zero margin
+// and the phone flipped to "Chrome asleep" in the tail of every beat with
+// Chrome open and beating (measured 2026-09-12). The window is the brain's
+// (AGENT_FRESH_SECONDS = 90), pinned equal by extension/tests/
+// test_heartbeat_window_contract.mjs, and here it is pinned ABOVE the beat.
+check("the online window clears the beat period with room for a late stamp",
+      AgentOnlinePolicy.onlineWindowSeconds >= 2 * AgentOnlinePolicy.heartbeatSeconds + 20,
+      "window \(AgentOnlinePolicy.onlineWindowSeconds)s vs beat \(AgentOnlinePolicy.heartbeatSeconds)s")
+check("a row stamped inside the window is online", AgentOnlinePolicy.online(lastSeenSecondsAgo: 0)
+      && AgentOnlinePolicy.online(lastSeenSecondsAgo: AgentOnlinePolicy.heartbeatSeconds + 5)
+      && AgentOnlinePolicy.online(lastSeenSecondsAgo: AgentOnlinePolicy.onlineWindowSeconds - 1))
+check("a row older than the window is not", !AgentOnlinePolicy.online(lastSeenSecondsAgo: AgentOnlinePolicy.onlineWindowSeconds)
+      && !AgentOnlinePolicy.online(lastSeenSecondsAgo: 3600))
+check("the app reads the window from the policy, not a literal",
+      !sessionSource.contains("agentOnline = secs < 30") && sessionSource.contains("AgentOnlinePolicy.online(lastSeenSecondsAgo:"),
+      "AnticipyApp.swift still compares against a literal")
+
 if failures > 0 {
     FileHandle.standardError.write(Data("\(failures) owner-mirror check(s) failed\n".utf8))
     exit(1)

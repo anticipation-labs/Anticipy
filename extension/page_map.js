@@ -573,7 +573,26 @@
     try { hit = document.elementFromPoint(cx, cy); } catch (_) { return true; }
     if (!hit) return true;
     if (hit === n || n.contains(hit) || hit.contains(n)) return true;
+    // A <label> laid over its own control is the page's declared activation
+    // path, not a stranger: clicking the label IS clicking the input.
+    if (hit.control === n || n.control === hit) return true;
+    const owning = typeof hit.closest === "function" ? hit.closest("label") : null;
+    if (owning && owning.control === n) return true;
     return composedAncestors(n).includes(hit) || composedAncestors(hit).includes(n);
+  }
+
+  // WHO IS AT THE POINT A CLICK WOULD GO TO. A short descriptor of the page's
+  // own hit-test answer — tag, id, role — for the history line, so the model
+  // can decide what to do about what is in front of the control. Never the
+  // element's words: what an overlay SAYS is the model's to read off the map.
+  function hitDescriptor(cx, cy) {
+    let hit = null;
+    try { hit = document.elementFromPoint(cx, cy); } catch (_) { hit = null; }
+    if (!hit) return "unknown";
+    const tag = String(hit.tagName || "").toLowerCase() || "node";
+    const id = hit.id ? "#" + String(hit.id).slice(0, 60) : "";
+    const role = hit.getAttribute && hit.getAttribute("role") ? "[" + String(hit.getAttribute("role")).slice(0, 30) + "]" : "";
+    return tag + id + role;
   }
 
   // The list an option belongs to. The semantic containers first, so a
@@ -705,6 +724,28 @@
     // the point, including nested/horizontal scrolling containers.
     el.scrollIntoView({ block: "center", inline: "center", behavior: "instant" });
     const r = el.getBoundingClientRect();
-    return { x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2) };
+    const x = Math.round(r.x + r.width / 2), y = Math.round(r.y + r.height / 2);
+    // THE POINT IS HANDED OUT WITH WHAT THE PAGE SAYS ABOUT IT. Until
+    // 2026-09-12 this refused only a disconnected or rect-less node, and a
+    // trusted click was then dispatched at the point whatever was there: a
+    // newsletter interstitial with no dialog role, a menu that went
+    // visibility:hidden while the model was thinking (its box still laid out,
+    // so getClientRects() was non-empty), a pointer-events:none control the
+    // map itself had printed as [UNAVAILABLE]. Measured in real Chrome: the
+    // interstitial took the click and the run said done; the control UNDER
+    // the hidden menu was pressed — a wrong action — and history recorded
+    // "click 1". Two structural facts, both the page's own and neither a
+    // reading of anybody's words: is this node paintable and pointer-reachable
+    // (computed style, the native disabled flag), and is the topmost element
+    // at the point this node or its own chain. `inert` and `coveredBy` ride on
+    // the answer; the caller refuses to dispatch and says why. A null
+    // elementFromPoint (off-screen, nothing laid out) is UNKNOWN and keeps the
+    // point — the same polarity uncoveredAt already has.
+    let cs = null;
+    try { cs = getComputedStyle(el); } catch (_) { cs = null; }
+    if (cs && cs.visibility === "hidden") return { x, y, inert: "hidden" };
+    if ((cs && cs.pointerEvents === "none") || el.disabled === true) return { x, y, inert: "inert" };
+    if (!uncoveredAt(el, x, y)) return { x, y, coveredBy: hitDescriptor(x, y) };
+    return { x, y };
   };
 })();
