@@ -12,6 +12,7 @@ import pytest
 
 from proof.audit import d1_additive as additive
 from proof.audit import d1_connector_readiness as readiness
+from d1_schema_fixture import schema_for_column_rewind
 
 ROOT = Path(__file__).resolve().parents[1]
 D1 = ROOT / "migration/d1"
@@ -29,7 +30,7 @@ def observe(db: sqlite3.Connection):
 @pytest.fixture
 def fresh():
     db = sqlite3.connect(":memory:")
-    db.executescript((D1 / "schema.sql").read_text())
+    db.executescript(schema_for_column_rewind((D1 / "schema.sql").read_text()))
     yield db
     db.close()
 

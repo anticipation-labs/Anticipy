@@ -76,9 +76,10 @@ installs are reused. No live customer data or paid model call is used.
 | Exact archive source bytes and alias equality | Exit 0 |
 | Brain Worker fleet/lifecycle/erasure tests and types | Both exit 0 |
 | Full API Worker suite and types | Both exit 0 |
-| Full Python suite | 3,710 passed, 2 explicit live-model skips, exit 0 |
+| Full Python suite after CI fixture portability repair | 3,715 passed, 2 explicit live-model skips, exit 0 |
 | Full extension suite | 88/88 suites, exit 0 |
-| Actual iOS simulator compile in full Xcode | Pending build-only CI |
+| Actual iOS simulator compile in full Xcode | Passed on `1ea300617b2d988f51feccd8f34226226953a8fa`; native source unchanged by fixture follow-up |
+| Actual unsigned universal Mac app build in full Xcode | Passed on the same native source |
 | Installed extension, phone, selected live connector and real-model journeys | Not verified by these local checks |
 
 The first local Chrome attempt stopped before launch because the default module
@@ -88,6 +89,23 @@ The Python run reports one pre-existing invalid-escape deprecation warning in
 `test_research_query_is_not_a_verb_list.py`. Neither that warning nor the two
 explicit live-model skips was suppressed. The 249 captured Worker/extension
 source, test and schema hashes remained unchanged through their final runs.
+
+The first [System invariants run](https://github.com/anticipation-labs/Anticipy/actions/runs/34711778391)
+passed its Worker and actual Mac build jobs but failed five Python fixture
+rewinds. This was reproduced on SQLite 3.51.0: an older engine bug mishandles a
+comma inside a retained comment when `DROP COLUMN` removes the final column.
+The fixture-only follow-up strips lexical comments before constructing its
+temporary database while preserving quoted SQL byte-for-byte. No production
+schema or migration was changed. Existing migration/replay/refusal assertions
+remain, with added whole-schema, default, CHECK, foreign-key, index and trigger
+parity checks. All **33 focused checks passed independently on SQLite 3.51.0 and
+3.53.4**, followed by the full local Python result above. The follow-up still
+requires its own CI result; consult the PR's current checks, not the earlier red
+run, for that receipt.
+
+The [actual iOS build-only run](https://github.com/anticipation-labs/Anticipy/actions/runs/34711778293)
+passed both full native logic and simulator compilation. It did not sign,
+upload or distribute a build.
 
 ## Build and rollout boundaries
 

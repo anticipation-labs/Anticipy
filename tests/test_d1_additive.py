@@ -18,6 +18,7 @@ from pathlib import Path
 import pytest
 
 from proof.audit import d1_additive as additive
+from d1_schema_fixture import schema_for_column_rewind
 
 ROOT = Path(__file__).resolve().parents[1]
 D1 = ROOT / "migration/d1"
@@ -57,7 +58,7 @@ def objects_created(sql: str) -> list[tuple[str, str]]:
 @pytest.fixture
 def fresh() -> sqlite3.Connection:
     db = sqlite3.connect(":memory:")
-    db.executescript((D1 / "schema.sql").read_text())
+    db.executescript(schema_for_column_rewind((D1 / "schema.sql").read_text()))
     yield db
     db.close()
 
@@ -81,6 +82,113 @@ def apply_plan(db: sqlite3.Connection, sql: str) -> tuple[int, int]:
         db.executescript(statement)
     db.commit()
     return len(to_run), len(skipped)
+
+
+@pytest.mark.parametrize("comment", ["-- The comment has, a comma.", "/* A block comment has, one too. */"])
+def test_fixture_comments_do_not_break_a_last_column_rewind(comment):
+    """SQLite before the 2025-12-02 fix mistakes the comment's comma for SQL.
+
+    This is the minimal shape behind connect_links.recovery_lease in Linux CI;
+    it must work without suppressing ALTER errors or skipping older engines.
+    """
+    with sqlite3.connect(":memory:") as db:
+        db.executescript(schema_for_column_rewind(f"""
+            CREATE TABLE example(a INTEGER, b TEXT DEFAULT 'keep',
+                {comment}
+                c TEXT);
+            INSERT INTO example(a) VALUES (7);
+        """))
+        db.execute("ALTER TABLE example DROP COLUMN c")
+        assert columns_of(db, "example") == {"a", "b"}
+        assert db.execute("SELECT a, b FROM example").fetchall() == [(7, "keep")]
+        assert db.execute("PRAGMA integrity_check").fetchone() == ("ok",)
+
+
+def test_fixture_comment_removal_preserves_literals_identifiers_and_constraints():
+    sql = """
+        -- Real comment, removed only outside quoted SQL tokens.
+        PRAGMA foreign_keys=ON;
+        CREATE TABLE parent(id INTEGER PRIMARY KEY);
+        CREATE TABLE "quoted""--table" (
+            id INTEGER PRIMARY KEY,
+            parent_id INTEGER REFERENCES parent(id),
+            value TEXT NOT NULL DEFAULT '--literal, /*not a comment*/ ''quoted'''
+                CHECK(length(value)>0),
+            `tick``--name` TEXT,
+            [bracket/*name*/] TEXT
+        );
+        /* Actual multiline, comment
+           with ' " ` [ quote markers inside it. */
+        CREATE TABLE audit(value TEXT);
+        CREATE TRIGGER record_value AFTER INSERT ON "quoted""--table"
+        BEGIN
+            INSERT INTO audit VALUES (NEW.value || ' /*literal*/ --literal');
+        END;
+    """
+    prepared = schema_for_column_rewind(sql)
+    for literal in ("'--literal, /*not a comment*/ ''quoted'''", '"quoted""--table"',
+                    '`tick``--name`', '[bracket/*name*/]', "' /*literal*/ --literal'"):
+        assert literal in prepared
+    assert "Real comment" not in prepared and "Actual multiline" not in prepared
+    snapshots = []
+    for declaration in (sql, prepared):
+        with sqlite3.connect(":memory:") as db:
+            db.executescript(declaration)
+            db.execute("INSERT INTO parent VALUES (1)")
+            db.execute('INSERT INTO "quoted""--table" (id,parent_id) VALUES (1,1)')
+            snapshots.append((
+                db.execute('PRAGMA table_info("quoted""--table")').fetchall(),
+                db.execute('PRAGMA foreign_key_list("quoted""--table")').fetchall(),
+                db.execute('SELECT * FROM "quoted""--table"').fetchall(),
+                db.execute("SELECT * FROM audit").fetchall(),
+            ))
+            with pytest.raises(sqlite3.IntegrityError, match="CHECK"):
+                db.execute('INSERT INTO "quoted""--table" (id,value) VALUES (2,\'\')')
+            with pytest.raises(sqlite3.IntegrityError, match="FOREIGN KEY"):
+                db.execute('INSERT INTO "quoted""--table" (id,parent_id) VALUES (3,99)')
+    assert snapshots[0] == snapshots[1]
+
+
+def schema_signature(db: sqlite3.Connection):
+    """Ask SQLite about the real schema, including indexes and trigger bodies."""
+    signature = []
+    for kind, name, sql in db.execute(
+            "SELECT type,name,sql FROM sqlite_master ORDER BY type,name").fetchall():
+        quoted = '"' + name.replace('"', '""') + '"'
+        if kind == "table":
+            details = tuple(db.execute(f"PRAGMA {pragma}({quoted})").fetchall()
+                            for pragma in ("table_info", "foreign_key_list", "index_list"))
+        elif kind == "index":
+            details = db.execute(f"PRAGMA index_xinfo({quoted})").fetchall()
+        else:
+            details = additive.normalize_sql(sql or "")
+        signature.append((kind, name, details))
+    return signature
+
+
+def test_prepared_fixture_matches_the_entire_real_schema(fresh):
+    with sqlite3.connect(":memory:") as original:
+        original.executescript((D1 / "schema.sql").read_text())
+        assert schema_signature(fresh) == schema_signature(original)
+        assert fresh.execute("PRAGMA integrity_check").fetchone() == ("ok",)
+
+
+def test_recovery_reapply_preserves_real_schema_and_column_constraints(fresh):
+    before = schema_signature(fresh)
+    sql = (D1 / "2026-09-11-oauth-recovery.sql").read_text()
+    wind_back(fresh, sql)
+    apply_plan(fresh, sql)
+    assert schema_signature(fresh) == before
+    insert = """INSERT INTO connect_links
+        (token_handle,user_id,toolkit,expires_at,recovery_attempts) VALUES (?,?,?,?,?)"""
+    for attempts in (-1, 17):
+        with pytest.raises(sqlite3.IntegrityError, match="CHECK"):
+            fresh.execute(insert, ("a" * 64, "fixtureowner001", "fixture_notes", 1, attempts))
+    fresh.execute("""INSERT INTO connect_links (token_handle,user_id,toolkit,expires_at)
+        VALUES (?,?,?,?)""", ("a" * 64, "fixtureowner001", "fixture_notes", 1))
+    assert fresh.execute("""SELECT recovery_account_id,recovery_deadline,recovery_next_check,
+        recovery_attempts,recovery_lease FROM connect_links""").fetchone() == (None, None, None, 0, None)
+    assert fresh.execute("PRAGMA integrity_check").fetchone() == ("ok",)
 
 
 @pytest.mark.parametrize("path", REPEATABLE, ids=lambda p: p.name)
