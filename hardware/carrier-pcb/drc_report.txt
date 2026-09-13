@@ -1,0 +1,10 @@
+** Drc report for /home/ubuntu/repos/Anticipy/hardware/carrier-pcb/anticipy_carrier.kicad_pcb **
+** Created on 2026-08-27 19:15:11 **
+
+** Found 0 DRC violations **
+
+** Found 0 unconnected pads **
+
+** Found 0 Footprint errors **
+
+** End of Report **
