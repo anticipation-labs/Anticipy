@@ -49,6 +49,17 @@ count(CASE WHEN status NOT IN ('done','failed','cancelled') AND effect_uncertain
 count(CASE WHEN status IN ('done','failed','cancelled') AND effect_uncertain!=0 THEN 1 END) AS uncertain_terminal,
 (SELECT count(*) FROM connection_command_runs WHERE state IS NULL OR state!='completed') AS connector_pending,
 (SELECT count(*) FROM purges WHERE memory_purged=0) AS pending_purges,
+(SELECT count(*) FROM jobs j
+ WHERE j.status='queued' AND j.workflow_state='queued'
+   AND typeof(j.workflow_id)='text' AND j.workflow_id!=''
+   AND typeof(j.owner_ref)='text' AND j.owner_ref!=''
+   AND typeof(j.lease_token)='text' AND j.lease_token!=''
+   AND j.lane IS NULL AND typeof(j.attempts) IN ('integer','real') AND j.attempts=0
+   AND j.claimed_by IS NULL AND j.lease_until IS NULL AND j.owner IS NULL
+   AND (j.effect_uncertain IS NULL OR (typeof(j.effect_uncertain)='integer' AND j.effect_uncertain=0))
+   AND NOT EXISTS (SELECT 1 FROM owners o WHERE o.id=j.owner_ref OR o.legacy_uuid=j.owner_ref)
+   AND NOT EXISTS (SELECT 1 FROM purges p WHERE p.owner_ref=j.owner_ref)
+) AS inactive_unowned_unroutable_invalid,
 count(CASE WHEN
   typeof(status)!='text' OR status NOT IN ('awaiting_confirm','queued','running','needs_user','done','failed','cancelled')
   OR typeof(workflow_id)!='text' OR typeof(workflow_state)!='text'
@@ -86,6 +97,12 @@ FROM (
 # guard's ?? '' / ?? 0 contract; COALESCE preserves every non-NULL value/type.
 # Status and purge completion have no safe empty/false fallback. In particular,
 # a retained token with NULL expiry/claimant remains an invalid lease pair.
+# The separate inactive category NEVER removes rows from that global count.
+# It identifies only unowned, unrouteable legacy rows excluded by the actual
+# owner-scoped executor selectors (including legacy aliases), with zero
+# recorded attempts and no active execution, explicit uncertainty or purge
+# indicated. This is not proof about historical effects. They remain unresolved; the
+# release observation is not authorization to adopt, cancel or delete them.
 
 
 class Refused(Exception):
@@ -109,9 +126,11 @@ def check_risk(risk):
     require(isinstance(risk, dict), "risk_metadata_missing")
     fields = ("running", "claimed", "live_leases", "uncertain_active",
               "connector_pending", "pending_purges")
-    require(all(count(risk.get(key)) for key in (*fields, "uncertain_terminal", "invalid_metadata")),
+    inactive = "inactive_unowned_unroutable_invalid"
+    require(all(count(risk.get(key)) for key in (*fields, "uncertain_terminal", "invalid_metadata", inactive)),
             "risk_metadata_invalid")
-    require(risk["invalid_metadata"] == 0, "invalid_work_metadata")
+    require(risk[inactive] <= risk["invalid_metadata"], "risk_metadata_invalid")
+    require(risk["invalid_metadata"] - risk[inactive] == 0, "invalid_work_metadata")
     require(all(risk[key] == 0 for key in fields), "active_or_uncertain_work")
 
 
@@ -159,6 +178,10 @@ def verify(*, now, cap, configured_cap, live_cap, eligible, fleet, version,
     return {"ready": True, "scope": "point_in_time_metadata_not_a_drain_lock",
             "covered_owners": len(eligible), "capacity": cap,
             "historical_uncertain_effects": risk["uncertain_terminal"],
+            "unresolved_metadata": {
+                "invalid_metadata": risk["invalid_metadata"],
+                "inactive_unowned_unroutable_invalid": risk["inactive_unowned_unroutable_invalid"],
+            },
             "observed_at": datetime.fromtimestamp(now, timezone.utc).isoformat()}
 
 

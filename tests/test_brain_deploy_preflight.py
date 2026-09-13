@@ -35,7 +35,8 @@ def evidence():
         "snapshots": {owner: {"size": 4096, "modified_at": now - 3} for owner in owners},
         "risk": {"running": 0, "claimed": 0, "live_leases": 0,
                  "uncertain_active": 0, "uncertain_terminal": 3,
-                 "connector_pending": 0, "pending_purges": 0, "invalid_metadata": 0},
+                 "connector_pending": 0, "pending_purges": 0, "invalid_metadata": 0,
+                 "inactive_unowned_unroutable_invalid": 0},
     }
 
 
@@ -87,7 +88,7 @@ def test_inflight_or_uncertain_work_refuses_without_mutation(field):
 
 
 @pytest.mark.parametrize("value", [None, False, -1, "0", float("nan")])
-@pytest.mark.parametrize("field", ["running", "invalid_metadata"])
+@pytest.mark.parametrize("field", ["running", "invalid_metadata", "inactive_unowned_unroutable_invalid"])
 def test_missing_or_coerced_risk_counts_never_mean_zero(value, field):
     sample = evidence()
     sample["risk"][field] = value
@@ -471,9 +472,11 @@ def nullable_legacy_schema():
     database.executescript("""
         CREATE TABLE jobs (status TEXT, workflow_id TEXT, workflow_state TEXT,
                            lease_token TEXT, lease_until TEXT, claimed_by TEXT,
-                           effect_uncertain INTEGER);
+                           effect_uncertain INTEGER, owner_ref TEXT, owner TEXT,
+                           lane TEXT, attempts);
+        CREATE TABLE owners (id TEXT, legacy_uuid TEXT);
         CREATE TABLE connection_command_runs (state TEXT);
-        CREATE TABLE purges (memory_purged INTEGER);
+        CREATE TABLE purges (memory_purged INTEGER, owner_ref TEXT);
     """)
     yield database
     database.close()
@@ -547,4 +550,54 @@ def test_null_purge_completion_is_still_unproven(nullable_legacy_schema):
     risk = dict(nullable_legacy_schema.execute(gate().RISK_SQL).fetchone())
     assert risk["invalid_metadata"] == 1
     with pytest.raises(gate().Refused, match="invalid_work_metadata"):
+        gate().check_risk(risk)
+
+
+def inactive_fixture(**fields):
+    return {"status": "queued", "workflow_state": "queued", "workflow_id": "fixture-workflow",
+            "owner_ref": "unowned-fixture", "owner": None, "lane": None, "attempts": 0,
+            "lease_token": "unresolved-token", "lease_until": None, "claimed_by": None,
+            "effect_uncertain": None, **fields}
+
+
+@pytest.mark.parametrize("attempts", [0, 0.0])
+@pytest.mark.parametrize("effect", [None, 0])
+def test_exact_unowned_unroutable_category_is_explicitly_unresolved(nullable_legacy_schema, attempts, effect):
+    risk = nullable_risk(nullable_legacy_schema, inactive_fixture(attempts=attempts, effect_uncertain=effect))
+    assert risk["invalid_metadata"] == 1
+    assert risk["inactive_unowned_unroutable_invalid"] == 1
+    sample = evidence()
+    sample["risk"] = risk
+    result = gate().verify(**sample)
+    assert result["unresolved_metadata"] == {
+        "invalid_metadata": 1, "inactive_unowned_unroutable_invalid": 1}
+    assert "unowned-fixture" not in json.dumps(result)
+
+
+def test_unowned_category_does_not_mask_other_invalid_rows(nullable_legacy_schema):
+    nullable_risk(nullable_legacy_schema, inactive_fixture())
+    risk = nullable_risk(nullable_legacy_schema, {"status": "unknown_state"})
+    assert risk["invalid_metadata"] == 2
+    assert risk["inactive_unowned_unroutable_invalid"] == 1
+    with pytest.raises(gate().Refused, match="invalid_work_metadata"):
+        gate().check_risk(risk)
+
+
+@pytest.mark.parametrize("field", ["running", "claimed", "live_leases", "uncertain_active",
+                                   "connector_pending", "pending_purges"])
+def test_unowned_category_cannot_waive_any_active_counter(field):
+    risk = evidence()["risk"]
+    risk.update(invalid_metadata=2, inactive_unowned_unroutable_invalid=2)
+    risk[field] = 1
+    with pytest.raises(gate().Refused, match="active_or_uncertain_work"):
+        gate().check_risk(risk)
+
+
+def test_unowned_category_measurement_is_required_and_cannot_exceed_global_count():
+    risk = evidence()["risk"]
+    del risk["inactive_unowned_unroutable_invalid"]
+    with pytest.raises(gate().Refused, match="risk_metadata_invalid"):
+        gate().check_risk(risk)
+    risk["inactive_unowned_unroutable_invalid"] = 1
+    with pytest.raises(gate().Refused, match="risk_metadata_invalid"):
         gate().check_risk(risk)
