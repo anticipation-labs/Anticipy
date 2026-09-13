@@ -51,7 +51,7 @@ count(CASE WHEN status IN ('done','failed','cancelled') AND effect_uncertain!=0 
 (SELECT count(*) FROM purges WHERE memory_purged=0) AS pending_purges,
 count(CASE WHEN
   typeof(status)!='text' OR status NOT IN ('awaiting_confirm','queued','running','needs_user','done','failed','cancelled')
-  OR typeof(workflow_state)!='text'
+  OR typeof(workflow_id)!='text' OR typeof(workflow_state)!='text'
   OR (workflow_state='' AND workflow_id!='')
   OR (workflow_state!='' AND NOT (
        (status='awaiting_confirm' AND workflow_state IN ('draft','awaiting_approval'))
@@ -69,10 +69,23 @@ count(CASE WHEN
   THEN 1 END)
   + (SELECT count(*) FROM purges WHERE typeof(memory_purged)!='integer' OR memory_purged NOT IN (0,1))
   AS invalid_metadata
-FROM jobs"""
+FROM (
+  SELECT status, COALESCE(workflow_id,'') AS workflow_id,
+    COALESCE(workflow_state,'') AS workflow_state,
+    COALESCE(lease_token,'') AS lease_token,
+    COALESCE(lease_until,'') AS lease_until,
+    COALESCE(claimed_by,'') AS claimed_by,
+    COALESCE(effect_uncertain,0) AS effect_uncertain
+  FROM jobs
+)"""
 # State pairs above mirror workflow_guard.ts STATE_FOR_STATUS / workflow.py
 # LEGACY_STATUS. A blank state is admitted only for a genuinely legacy row
 # without workflow_id. Unknown structural metadata is not evidence of rest.
+# Existing D1 tables can retain nullable legacy columns despite the newer
+# CREATE TABLE defaults. Normalize only NULL optional values, matching the
+# guard's ?? '' / ?? 0 contract; COALESCE preserves every non-NULL value/type.
+# Status and purge completion have no safe empty/false fallback. In particular,
+# a retained token with NULL expiry/claimant remains an invalid lease pair.
 
 
 class Refused(Exception):

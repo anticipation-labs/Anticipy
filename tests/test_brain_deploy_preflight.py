@@ -457,3 +457,94 @@ def test_gate_state_pairs_follow_actual_brain_workflow_enum(actual_schema):
     assert risk["running"] == 1
     with pytest.raises(gate().Refused, match="active_or_uncertain_work"):
         gate().check_risk(risk)
+
+
+@pytest.fixture
+def nullable_legacy_schema():
+    """Observed legacy D1 column contract, not the newer NOT NULL CREATE schema.
+
+    Only fields consumed by RISK_SQL are modeled. CREATE TABLE IF NOT EXISTS
+    in schema.sql cannot retrofit defaults/constraints onto existing tables.
+    """
+    database = sqlite3.connect(":memory:")
+    database.row_factory = sqlite3.Row
+    database.executescript("""
+        CREATE TABLE jobs (status TEXT, workflow_id TEXT, workflow_state TEXT,
+                           lease_token TEXT, lease_until TEXT, claimed_by TEXT,
+                           effect_uncertain INTEGER);
+        CREATE TABLE connection_command_runs (state TEXT);
+        CREATE TABLE purges (memory_purged INTEGER);
+    """)
+    yield database
+    database.close()
+
+
+def nullable_risk(database, fields):
+    database.execute("INSERT INTO jobs (" + ",".join(fields) + ") VALUES ("
+                     + ",".join("?" for _ in fields) + ")", list(fields.values()))
+    return dict(database.execute(gate().RISK_SQL).fetchone())
+
+
+@pytest.mark.parametrize("fields", [
+    {"status": "queued"},
+    {"status": "awaiting_confirm"},
+    {"status": "needs_user"},
+    {"status": "done"},
+    {"status": "failed"},
+    {"status": "cancelled"},
+    {"status": "queued", "workflow_id": "fixture-workflow", "workflow_state": "queued",
+     "lease_token": ""},
+    {"status": "done", "workflow_id": "fixture-workflow", "workflow_state": "succeeded",
+     "lease_token": "", "lease_until": ""},
+    {"status": "failed", "workflow_state": "failed", "claimed_by": "historical-executor"},
+])
+def test_nullable_legacy_defaults_match_runtime_empty_text_and_false(nullable_legacy_schema, fields):
+    risk = nullable_risk(nullable_legacy_schema, fields)
+    gate().check_risk(risk)
+    assert risk["invalid_metadata"] == 0
+
+
+def test_nullable_five_queued_workflow_leases_remain_blocked(nullable_legacy_schema):
+    for _ in range(5):
+        risk = nullable_risk(nullable_legacy_schema, {
+            "status": "queued", "workflow_state": "queued", "workflow_id": "fixture-workflow",
+            "lease_token": "unresolved-token", "lease_until": None, "claimed_by": None,
+            "effect_uncertain": None,
+        })
+    assert risk["invalid_metadata"] == 5
+    with pytest.raises(gate().Refused, match="invalid_work_metadata"):
+        gate().check_risk(risk)
+
+
+@pytest.mark.parametrize("fields", [
+    {"status": None}, {"status": "external_pending"},
+    {"workflow_id": "fixture-workflow", "workflow_state": None},
+    {"workflow_state": "unknown_state"}, {"workflow_state": "succeeded"},
+    {"lease_token": "unresolved-token"},
+    {"lease_until": "2099-01-01 00:00:00.000Z"},
+    {"lease_until": "not-a-date"},
+    {"effect_uncertain": 2}, {"effect_uncertain": "unknown"}, {"effect_uncertain": 0.5},
+    *[{field: b"unexpected-type"} for field in
+      ("status", "workflow_id", "workflow_state", "lease_token", "lease_until", "claimed_by")],
+])
+def test_null_normalization_never_coerces_unknown_values_or_incomplete_leases(nullable_legacy_schema, fields):
+    risk = nullable_risk(nullable_legacy_schema, {"status": "queued", **fields})
+    assert risk["invalid_metadata"] == 1
+    with pytest.raises(gate().Refused, match="invalid_work_metadata"):
+        gate().check_risk(risk)
+
+
+def test_null_normalization_does_not_hide_uncertain_effects(nullable_legacy_schema):
+    risk = nullable_risk(nullable_legacy_schema, {"status": "queued", "effect_uncertain": 1})
+    assert risk["invalid_metadata"] == 0
+    assert risk["uncertain_active"] == 1
+    with pytest.raises(gate().Refused, match="active_or_uncertain_work"):
+        gate().check_risk(risk)
+
+
+def test_null_purge_completion_is_still_unproven(nullable_legacy_schema):
+    nullable_legacy_schema.execute("INSERT INTO purges(memory_purged) VALUES(NULL)")
+    risk = dict(nullable_legacy_schema.execute(gate().RISK_SQL).fetchone())
+    assert risk["invalid_metadata"] == 1
+    with pytest.raises(gate().Refused, match="invalid_work_metadata"):
+        gate().check_risk(risk)
