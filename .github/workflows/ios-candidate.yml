@@ -1,0 +1,41 @@
+name: iOS candidate (build only)
+
+# Topic branches need an actual Xcode compile before integration. The separate
+# TestFlight workflow retains the release path; this job has no signing key
+# and never talks to Apple distribution services.
+on:
+  pull_request:
+    branches: [cloudflare-backend]
+    paths: ['app/ios/**', '.github/workflows/ios-candidate.yml', 'tests/test_ios_candidate_workflow.py']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-candidate-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  compile:
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The build-number gate needs the real version-change history.
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Use Xcode 26
+        run: |
+          X26=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
+          test -n "$X26" || { echo "::error::no Xcode 26 on this runner"; exit 1; }
+          sudo xcode-select -s "$X26"
+          xcodebuild -version
+      - name: Prove iOS logic and build identity
+        run: sh app/ios/Tests/run_all.sh
+      - name: Compile the committed app for the simulator
+        run: |
+          xcodebuild -project app/ios/Anticipy.xcodeproj -scheme Anticipy \
+            -configuration Debug -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$RUNNER_TEMP/Anticipy-Candidate-Simulator" \
+            build CODE_SIGNING_ALLOWED=NO

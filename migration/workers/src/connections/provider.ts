@@ -1148,6 +1148,7 @@ export class ComposioConnections implements ConnectionProvider {
     path: string,
     body?: unknown,
     paginationDeadline?: number,
+    callerSignal?: AbortSignal,
   ): Promise<{ status: number; ok: boolean; json: unknown }> {
     // THE UNBOUND-BINDING GATE. Before the URL is built and before any fetch:
     // with `env.COMPOSIO_API_KEY` unset this Worker issues no request at all,
@@ -1164,11 +1165,14 @@ export class ComposioConnections implements ConnectionProvider {
     const deadline = started + remaining;
     const controller = new AbortController();
     const timeoutError = new ConnectionsRequestFailed(op, 0, "request_timeout");
+    const callerAbortError = new ConnectionsRequestFailed(op, 0, "request_cancelled");
+    if (callerSignal?.aborted) throw callerAbortError;
     const oversizedError = new ConnectionsRequestFailed(op, 0, "response_too_large");
     let res: Response | undefined;
     let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let cancelled = false;
+    let rejectCallerAbort: ((error: Error) => void) | undefined;
     const cancelBody = (response: Response | undefined) => {
       // Cancellation itself can reject or never settle in an injected stream.
       // Do not let cleanup extend the request deadline or mask its outcome.
@@ -1181,6 +1185,7 @@ export class ComposioConnections implements ConnectionProvider {
       controller.abort();
       cancelBody(res);
     };
+    const onCallerAbort = () => { stopIO(); rejectCallerAbort?.(callerAbortError); };
     const checkDeadline = () => {
       if (controller.signal.aborted || performance.now() >= deadline) throw timeoutError;
     };
@@ -1251,20 +1256,24 @@ export class ComposioConnections implements ConnectionProvider {
       const timeout = new Promise<never>((_, reject) => {
         timer = setTimeout(() => { stopIO(); reject(timeoutError); }, remaining);
       });
-      return await Promise.race([io(), timeout]);
+      const callerAbort = new Promise<never>((_, reject) => { rejectCallerAbort = reject; });
+      callerSignal?.addEventListener("abort", onCallerAbort, { once: true });
+      if (callerSignal?.aborted) { onCallerAbort(); throw callerAbortError; }
+      return await Promise.race([io(), timeout, callerAbort]);
     } catch (cause) {
       stopIO();
-      if (cause === timeoutError || cause === oversizedError) throw cause;
+      if (cause === timeoutError || cause === oversizedError || cause === callerAbortError) throw cause;
       // Never copy arbitrary exception names, messages, causes, or bodies.
       // Keep the pre-existing TypeError category using the actual type only.
       throw new ConnectionsRequestFailed(op, 0, cause instanceof TypeError ? "TypeError" : "transport_failure");
     } finally {
       if (timer !== undefined) clearTimeout(timer);
+      callerSignal?.removeEventListener("abort", onCallerAbort);
     }
   }
 
-  async #callOrThrow(op: string, method: string, path: string, body?: unknown, paginationDeadline?: number): Promise<unknown> {
-    const { status, ok, json } = await this.#call(op, method, path, body, paginationDeadline);
+  async #callOrThrow(op: string, method: string, path: string, body?: unknown, paginationDeadline?: number, callerSignal?: AbortSignal): Promise<unknown> {
+    const { status, ok, json } = await this.#call(op, method, path, body, paginationDeadline, callerSignal);
     if (!ok) throw new ConnectionsRequestFailed(op, status, this.#errorToken(json));
     return json;
   }
@@ -1410,7 +1419,7 @@ export class ComposioConnections implements ConnectionProvider {
     user: OwnerId,
     toolkit: Toolkit,
     opts: { callbackUrl: string; alias?: AccountAlias | null },
-  ): Promise<{ redirectUrl: string }> {
+  ): Promise<{ redirectUrl: string; connectedAccountId?: string }> {
     const owner = requireOwner("authorize", user);
     const slug = requireToolkit("authorize", toolkit);
     const callbackUrl = requireCallbackUrl("authorize", opts?.callbackUrl);
@@ -1461,7 +1470,11 @@ export class ComposioConnections implements ConnectionProvider {
         // the field we must never write down.
         throw new ConnectionsResponseShape("authorize", "no redirect_url in the response");
       }
-      return { redirectUrl: url };
+      // This opaque ID binds recovery to THIS authorization attempt. Missing
+      // IDs remain compatible with older provider versions, but production
+      // connectPageGo refuses to redirect without a durable exact target.
+      const accountId = asString(asRecord(json)?.connected_account_id);
+      return { redirectUrl: url, ...(accountId ? { connectedAccountId: accountId } : {}) };
     }
   }
 
@@ -1688,7 +1701,7 @@ export class ComposioConnections implements ConnectionProvider {
    *  NO APP IS HARDCODED anywhere in this product: a new toolkit in
    *  the catalog is a new app in Anticipy with zero code, and the only way that
    *  is true is if the page is built from this. */
-  async toolkit(slug: Toolkit): Promise<CatalogToolkit> {
+  async toolkit(slug: Toolkit, signal?: AbortSignal): Promise<CatalogToolkit> {
     const asked = requireToolkit("toolkit", slug);
     // NOT among the endpoints measured on 2026-09-05. Every field below is read
     // defensively for that reason, and a missing name refuses rather than
@@ -1697,6 +1710,7 @@ export class ComposioConnections implements ConnectionProvider {
       "toolkit",
       "GET",
       `/toolkits/${encodeURIComponent(asked)}`,
+      undefined, undefined, signal,
     );
     const root = asRecord(json);
     if (!root) throw new ConnectionsResponseShape("toolkit", "response was not an object");

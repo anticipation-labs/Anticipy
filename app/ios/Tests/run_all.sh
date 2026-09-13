@@ -144,6 +144,7 @@ sh "$HERE/run_connect_onboarding_tests.sh"
 # attached.
 sh "$HERE/run_connect_onboarding_step_tests.sh"
 sh "$HERE/run_job_receipt_tests.sh"
+sh "$HERE/run_execution_surface_label_tests.sh"
 # The same card from the other end. That one asks what the server proved
 # before it says "done"; this asks which section a job reaches at all — and
 # whether a job the owner STOPPED reaches one. `cancelled` matched none of

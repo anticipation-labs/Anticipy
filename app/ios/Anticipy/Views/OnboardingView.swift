@@ -123,6 +123,8 @@ struct OnboardingView: View {
     /// wrong order.
     @State private var connecting: ConnectFlow?
     @State private var connectQueue: [ToolkitMeta] = []
+    @State private var connectSelectionID: UUID?
+    @Environment(\.scenePhase) private var scenePhase
     /// Raised when the catalog could name none of the ticked apps, so nothing
     /// could be asked for. It says the true and useful half — nothing happened,
     /// try again — and it never says why, because every reason is a word this
@@ -188,6 +190,9 @@ struct OnboardingView: View {
         // inside `connectStep` so it survives the page turn that ends the beat.
         .sheet(item: $connecting) { flow in connectSheet(flow) }
         .sheet(isPresented: $connectTrouble) { connectTroubleSheet }
+        .onChange(of: scenePhase) { phase in
+            if phase != .active { connectMovedToBackground() }
+        }
         .onChange(of: connect.outcome) { outcome in
             guard outcome != nil else { return }
             // A HINT, NOT A RECORD — the same reading Settings takes. All it
@@ -538,14 +543,21 @@ struct OnboardingView: View {
         guard !keys.isEmpty else { return }
         // No owner row id means nothing can be connected TO anybody, and a
         // button that quietly does nothing is worse than one that says so.
-        guard let owner = OwnerId(session.accountID) else {
+        guard let owner = OwnerId(session.accountID),
+              let lease = AccountWriteLeasePolicy.begin(accountID: session.accountID,
+                authToken: session.backend.authToken, isSignedIn: session.isSignedIn) else {
             connectTrouble = true
             return
         }
+        let selectionID = UUID()
+        connectSelectionID = selectionID
         Task {
             let slugs = keys.map { $0.toolkit }
             let named = (try? await connectedAppsClient().describe(toolkits: slugs,
                                                                   owner: owner)) ?? []
+            guard connectSelectionID == selectionID, step == Step.connect,
+                  AccountWriteLeasePolicy.isCurrent(lease, accountID: session.accountID,
+                    authToken: session.backend.authToken, isSignedIn: session.isSignedIn) else { return }
             let queue = slugs.compactMap { slug in named.first { $0.slug == slug } }
             // NOT A SILENT ADVANCE. If the catalog could name none of them —
             // the connection died between the search and the tap — then nothing
@@ -586,8 +598,11 @@ struct OnboardingView: View {
         // is no second pass to come back to, and leaving apps on it would put
         // the person through the browser again for cards the page already drew.
         connectQueue = []
-        connecting = ConnectFlow(app: first, stage: .settingUp)
-        Task { await runConnect(page) }
+        guard let lease = AccountWriteLeasePolicy.begin(accountID: session.accountID,
+            authToken: session.backend.authToken, isSignedIn: session.isSignedIn) else { return }
+        let flow = ConnectFlow(app: first, stage: .settingUp, lease: lease)
+        connecting = flow
+        Task { await runConnect(page, flow: flow) }
     }
 
     /// The two server calls the handoff needs, in the order it needs them: the
@@ -606,23 +621,26 @@ struct OnboardingView: View {
     /// Dropping it and connecting the other three would hand over a link that
     /// binds an app we could not put a sentence to.
     @MainActor
-    private func runConnect(_ page: [ToolkitMeta]) async {
-        guard let owner = OwnerId(session.accountID) else { return }
+    private func runConnect(_ page: [ToolkitMeta], flow: ConnectFlow) async {
+        guard connectFlowIsCurrent(flow), let owner = OwnerId(flow.lease.accountID) else { return }
         guard let first = page.first else { return }
         let client = connectedAppsClient()
+        var attemptID: String?
         do {
             let sentences = try await Self.sentences(for: page, owner: owner, from: client)
-            guard connecting?.app.slug == first.slug else { return }
+            guard connectFlowIsCurrent(flow) else { return }
             guard let prompt = connect.begin(owner: owner.raw, toolkit: first.slug,
                                              sentences: sentences) else {
                 connecting?.stage = .trouble
                 return
             }
+            attemptID = prompt.attemptID
             connecting?.stage = .asking
             let link = try await client.connectLink(toolkits: page.map { $0.slug },
                                                     owner: owner,
                                                     attemptID: prompt.attemptID)
-            guard connecting?.app.slug == first.slug else { return }
+            guard connectFlowIsCurrent(flow),
+                  connect.prompt?.attemptID == prompt.attemptID else { return }
             // A link the handoff will not adopt is a link nothing may open, and
             // the attempt goes with it: one left in flight is one whose callback
             // would be believed later.
@@ -632,10 +650,24 @@ struct OnboardingView: View {
                 return
             }
         } catch {
-            guard connecting?.app.slug == first.slug else { return }
-            connect.ownerChanged()
+            guard connectFlowIsCurrent(flow) else { return }
+            if let attemptID {
+                guard connect.prompt?.attemptID == attemptID else { return }
+                connect.ownerChanged()
+            }
             connecting?.stage = .trouble
         }
+    }
+
+    private func connectFlowIsCurrent(_ flow: ConnectFlow) -> Bool {
+        step == Step.connect && connecting?.id == flow.id
+            && AccountWriteLeasePolicy.isCurrent(flow.lease, accountID: session.accountID,
+                authToken: session.backend.authToken, isSignedIn: session.isSignedIn)
+    }
+
+    private func connectMovedToBackground() {
+        connectSelectionID = nil
+        connecting = nil
     }
 
     /// Every app's three sentences, in the page's own order, fetched at once.

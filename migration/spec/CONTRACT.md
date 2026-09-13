@@ -166,6 +166,17 @@ if (!workflow) return e.next();          // :24
 unreachable for such a row. `research_lane.pb.js:371-376` closes this for the
 device lane specifically, and nothing closes it anywhere else.
 
+**Current Worker hardening, 2026-09-12 (local source; deployment not implied):**
+the escape hatch remains only for genuinely legacy rows. If the stored row has
+a nonempty `workflow_id`, an explicitly supplied value must be the identical
+string; blank, null, retyped and changed IDs return 409 `workflow id is immutable`
+**before** the legacy return. The Worker previously used `??` here, so an explicit
+empty string erased the linkage and skipped lease/approval/receipt checks. The
+paired-agent regression runs the actual `guard → researchLane → workflowGuard`
+chain. Do not restore that bypass for oracle parity. Historical PocketBase text
+above is retained as an oracle description, not authority to erase an existing
+workflow. See `migration/workers/test/workflow-guard-empties.test.ts`.
+
 ### 1.3 Refusal shape
 
 Every refusal is exactly:
@@ -298,6 +309,16 @@ failure is the one reported:
    * `old.lease_token` empty, or `X-Anticipy-Lease` header ≠ it →
      `reject("running update came from the wrong lease")`.
      Cancel is exempt: **a running job can always be cancelled without the lease.**
+   * **Cancellation revokes approval, and the Worker does it** (2026-09-12).
+     On every update whose `nextStatus` is `cancelled`, the guard writes
+     `approval: ""` onto the body and `_workflow.approval: null` into its
+     params (rebuilding params from the stored row when the body sent none),
+     whatever the caller carried — and rule 5 does not count that as the
+     executor touching approval, because it is the server's change. The phone
+     and the brain already cleared it themselves; the extension never could
+     (rule 5 made its own cancel a 409, live 2026-08-15), so a Chrome-cancelled
+     plan kept the owner's standing word on the row. Pinned in
+     `test/workflow-guard-empties.test.ts`, "CANCELLATION REVOKES APPROVAL".
    * `expired` = `!old.lease_until || Date.parse(lease_until) <= now`.
      Note: `new Date("garbage").getTime()` is `NaN` and `NaN <= now` is **false**,
      so an *unparseable* `lease_until` reads as **not expired** — the opposite of
@@ -512,6 +533,22 @@ this gate runs.
 **"This exact effect" is the whole rule**: a receipt honestly describing a
 *different* effect is refused, which is what stops a retry's receipt marking the
 original attempt complete.
+
+**Current Worker hardening, 2026-09-12 (local source; deployment not implied):**
+the historical truthiness predicate above is not the current receipt contract.
+Parsed receipts must be non-null, non-array objects with `verified === true`,
+the exact effect key, and a nonempty array in which **every** member is a
+nonblank string. No string/number coercion or filtering of a partially invalid
+array may turn it into proof. Unknown wire tags, order, duplicates and original
+evidence strings are retained; these structural checks do not independently
+verify the cited artifact or prove delivery.
+
+The Worker and `app/ios/Anticipy/Backend/JobReceipt.swift` share an explicit
+27-scalar blank set: U+0009–000D, 0020, 0085, 00A0, 1680, 2000–200B, 2028,
+2029, 202F, 205F, 3000 and FEFF. Platform-native trim functions disagree on
+NEL, zero-width space and BOM. A string composed solely of these scalars is
+blank; nonblank padded evidence remains evidence, with its raw bytes preserved.
+Any future change to this wire rule must update and test both consumers.
 
 ### 1.16 The complete refusal inventory
 
@@ -1417,7 +1454,8 @@ one, else a new 64-char token).
 | condition | response |
 |---|---|
 | `agent_id` blank or token shorter than 40 | `400 {"error":"agent credentials required"}` |
-| lookup `agent_id && agent_token && paired = true` throws or misses | `403 {"error":"not a paired agent"}` |
+| lookup `agent_id && agent_token && paired = true` misses | `403 {"error":"not a paired agent"}` |
+| that lookup throws | `503 {"error":"agent lookup unavailable"}` — could not look is not "not paired"; the extension retries a 5xx and treats a 403 as a dead credential (2026-09-12) |
 | the resolved row has a blank `owner_ref` | `409 {"error":"paired agent has no canonical owner; pair it again from the signed-in app"}` |
 | neither `GEMINI_API_KEY` nor `OPENROUTER_API_KEY` is set | `503 {"error":"backend has no model configured"}` |
 | success | `200 {...}` (below) |
@@ -1445,7 +1483,8 @@ four things every time) and it is a fact a port must not accidentally widen.
 | # | condition | response |
 |---|---|---|
 | 1 | `agent_id` blank or token < 40 | `400 {"error":"agent credentials required"}` |
-| 2 | paired-agent lookup throws or misses | `403 {"error":"not a paired agent"}` |
+| 2 | paired-agent lookup misses | `403 {"error":"not a paired agent"}` |
+| 2a | paired-agent lookup throws | `503 {"error":"agent lookup unavailable"}` |
 | 3 | resolved row's `owner_ref` blank after trim | `403 {"error":"this agent is not attached to an account"}` |
 | 4 | hourly meter ≥ 400 | `429 {"error":"too many model calls in the last hour","detail":"this browser hit its hourly limit; it resumes at the top of the hour"}` |
 | 5 | no `GEMINI_API_KEY` and no `OPENROUTER_API_KEY` | `503 {"error":"backend has no model configured"}` |
@@ -1535,7 +1574,8 @@ polling).
 |---|---|
 | `CAPSOLVER_API_KEY` unset | `501 {"error":"solving is not configured"}` |
 | `agent_id` blank, or token blank, or token shorter than **20** | `400 {"error":"agent credentials required"}` |
-| paired lookup throws or misses | `403 {"error":"not a paired agent"}` |
+| paired lookup misses | `403 {"error":"not a paired agent"}` |
+| paired lookup throws | `503 {"error":"agent lookup unavailable"}` |
 | `owner_ref` blank after trim | `403 {"error":"this agent is not attached to an account"}` |
 | body unreadable | `400 {"error":"unreadable request"}` |
 | `websiteURL` or `websiteKey` blank | `400 {"error":"websiteURL and websiteKey are required"}` |
@@ -1575,7 +1615,8 @@ so a refused task does not spend the budget. Counted on the agent row as
 |---|---|
 | `CAPSOLVER_API_KEY` unset | `501 {"error":"solving is not configured"}` |
 | credentials missing/short | `400 {"error":"agent credentials required"}` |
-| lookup misses or throws | `403 {"error":"not a paired agent"}` |
+| lookup misses | `403 {"error":"not a paired agent"}` |
+| lookup throws | `503 {"error":"agent lookup unavailable"}` |
 | body unreadable | `400 {"error":"unreadable request"}` |
 | `taskId` blank | `400 {"error":"taskId is required"}` |
 | the solver could not be reached | `502 {"error":"could not reach the solver"}` |

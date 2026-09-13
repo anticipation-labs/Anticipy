@@ -26,6 +26,7 @@
 # refuses to sign anyone in, or a deep link could mark an app connected for a
 # person who never tapped anything.
 set -eu
+case "${1:-}" in ''|--check-mutations) ;; *) echo 'unknown option'; exit 2;; esac
 here=$(cd "$(dirname "$0")" && pwd)
 app="$here/../Anticipy"
 repo=$(cd "$here/../../.." && pwd)
@@ -385,3 +386,50 @@ fi
 # open a URL and fails if an embedded web view is named in any of them.
 swiftc -O -parse-as-library "$policy" "$presenter" "$suite" -o "$out/connecthandofftests"
 "$out/connecthandofftests" "$app"
+
+# Execute the actual phone-only class body with fake framework boundaries.
+# This is state-machine evidence, not an Apple SDK/runtime pass. The separate
+# real-SDK check above retains that distinction.
+awk '/^final class SystemConnectOpener:/ { print "import Foundation\n@MainActor"; inside=1 }
+     inside && /^#else/ { exit }
+     inside { print }' "$presenter" > "$out/SystemConnectOpener.swift"
+grep -q '^final class SystemConnectOpener:' "$out/SystemConnectOpener.swift" || {
+    echo 'could not extract actual SystemConnectOpener class'; exit 2;
+}
+swiftc -O -parse-as-library "$policy" "$presenter" "$out/SystemConnectOpener.swift" \
+    "$here/SystemConnectOpenerTests.swift" -o "$out/systemconnectopenertests"
+"$out/systemconnectopenertests"
+
+if [ "${1:-}" = --check-mutations ]; then
+    python3 - "$presenter" "$out" <<'PY'
+from pathlib import Path
+import sys
+source = Path(sys.argv[1]).read_text()
+mutations = {
+    'attempt_completion': ('guard let self, let current = self.attempt,\n                      current.sameAttempt(as: started) else { return }', 'guard let self else { return }'),
+    'opening_completion': ('guard let self, self.liveID == openingID else { return }', 'guard let self else { return }'),
+    'opening_once': ('                self.liveID = nil\n', ''),
+}
+for name, (old, new) in mutations.items():
+    if source.count(old) != 1: raise AssertionError('mutation site changed: ' + name)
+    Path(sys.argv[2], name + '.swift').write_text(source.replace(old, new))
+PY
+    for mutation in attempt_completion opening_completion opening_once; do
+        mutant="$out/$mutation.swift"
+        if [ "$mutation" = attempt_completion ]; then
+            swiftc -O -parse-as-library "$policy" "$mutant" "$suite" -o "$out/mutant"
+        else
+            awk '/^final class SystemConnectOpener:/ { print "import Foundation\n@MainActor"; inside=1 }
+                 inside && /^#else/ { exit }
+                 inside { print }' "$mutant" > "$out/MutantOpener.swift"
+            swiftc -O -parse-as-library "$policy" "$mutant" "$out/MutantOpener.swift" \
+                "$here/SystemConnectOpenerTests.swift" -o "$out/mutant"
+        fi
+        if "$out/mutant" "$app" > "$out/$mutation.log" 2>&1; then
+            echo "SURVIVED: $mutation"; exit 1
+        fi
+        grep -q '^FAIL:' "$out/$mutation.log" || { echo "mutation did not fail behaviorally: $mutation"; exit 2; }
+        echo "KILLED: $mutation"
+    done
+fi
+sh "$here/run_connect_flow_lifecycle_tests.sh" "$@"

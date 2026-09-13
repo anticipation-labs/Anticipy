@@ -1,11 +1,12 @@
 import Foundation
+import CoreFoundation
 
 /// THE PROOF THE SERVER ITSELF DEMANDED, read back on the phone.
 ///
 /// `migration/workers/src/policy/workflow_guard.ts` refuses to move ANY job to `done`
 /// unless the row's `receipt` column parses and carries `verified: true`, an
-/// `effect_key` matching the job's, and a NON-EMPTY `evidence` array. So every
-/// done row in the product is, by construction, backed by something checked.
+/// `effect_key` matching the job's, and a NON-EMPTY `evidence` array. Recheck
+/// that contract here: historical rows or alternate writers can violate it.
 ///
 /// The app decoded none of it. `AgentJob` stopped at `lane`, and the done card
 /// was fed `result` — free text the browser composed about itself — so the one
@@ -32,6 +33,14 @@ import Foundation
 /// same rule.
 struct JobReceipt: Equatable {
 
+    /// Explicit wire-format blank set, shared with workflow_guard.ts. Platform
+    /// defaults disagree on NEL, zero-width space and BOM; do not let a receipt
+    /// accepted by one side become empty or unreadable on the other.
+    private static let evidenceWhitespace = CharacterSet(charactersIn:
+        "\u{0009}\u{000A}\u{000B}\u{000C}\u{000D}\u{0020}\u{0085}\u{00A0}\u{1680}"
+        + "\u{2000}\u{2001}\u{2002}\u{2003}\u{2004}\u{2005}\u{2006}\u{2007}\u{2008}\u{2009}\u{200A}\u{200B}"
+        + "\u{2028}\u{2029}\u{202F}\u{205F}\u{3000}\u{FEFF}")
+
     /// One entry of the proof index, as the row holds it.
     struct Item: Equatable {
         /// The tag the entry was written under. Raw values ARE the wire tags,
@@ -51,28 +60,45 @@ struct JobReceipt: Equatable {
             case facts
             case proof
             case journal
+            /// `text-sha256:<hex>` — the research hand's fingerprint of the
+            /// answer it verified before sending it (brain/server_work.py,
+            /// `text-sha256:`). The sources it read follow as bare URLs.
+            case textSha256 = "text-sha256"
+            /// `vendor-log:<id>` — the connector provider's execution reference,
+            /// not evidence that we retrieved the connected app's own audit log
+            /// (migration/workers/src/routes/hands_api.ts, `vendor-log:`).
+            case vendorLog = "vendor-log"
+            /// `vendor-run:<tool>@<account>` — an opaque tool/account reference
+            /// when the connector returned no log id (same file, `vendor-run:`).
+            case vendorRun = "vendor-run"
             /// Any tag this build does not know, including an entry with no
             /// tag at all. Shown verbatim rather than hidden.
             case other
         }
 
         let kind: Kind
-        /// Everything after the tag. Verbatim, never rewritten.
+        /// Everything after the tag in the decoding-normalized entry. `raw`
+        /// separately preserves all original text, including wire padding.
         let value: String
         /// The entry exactly as the row holds it, tag included.
         let raw: String
+        /// Only wire padding removed, for typed labels such as bare source URLs.
+        /// Kept separate so explaining an entry never rewrites its raw evidence.
+        let decoded: String
 
         init(raw: String) {
             self.raw = raw
+            let tagged = raw.trimmingCharacters(in: JobReceipt.evidenceWhitespace)
+            self.decoded = tagged
             // FIRST colon only: a `url:` entry is full of them.
-            guard let cut = raw.firstIndex(of: ":") else {
+            guard let cut = tagged.firstIndex(of: ":") else {
                 self.kind = .other
-                self.value = raw
+                self.value = tagged
                 return
             }
-            let tag = String(raw[raw.startIndex..<cut])
+            let tag = String(tagged[tagged.startIndex..<cut])
             self.kind = Kind(rawValue: tag) ?? .other
-            self.value = String(raw[raw.index(after: cut)...])
+            self.value = String(tagged[tagged.index(after: cut)...])
         }
     }
 
@@ -84,6 +110,9 @@ struct JobReceipt: Equatable {
     let summary: String
     let items: [Item]
     let verified: Bool
+    /// The whole wire array, not merely the displayable strings, must satisfy
+    /// the same contract as the Worker. Keep surviving entries for diagnosis.
+    let hasValidEvidence: Bool
     let recordedAt: String
 
     /// Does this receipt meet what the server demanded — verified, with
@@ -96,10 +125,12 @@ struct JobReceipt: Equatable {
     /// The third condition the guard applies — that `effect_key` matches the
     /// job's — needs the job, so it lives in `JobReceiptPolicy` where the job
     /// is in hand.
-    var isProof: Bool { verified && !items.isEmpty }
+    var isProof: Bool { verified && hasValidEvidence && !items.isEmpty }
 
     /// A photograph of the finished page was deposited and can be fetched.
-    var photographed: Bool { items.contains { $0.kind == .evidence } }
+    var photographed: Bool {
+        items.contains { $0.kind == .evidence && !$0.value.trimmingCharacters(in: Self.evidenceWhitespace).isEmpty }
+    }
 
     /// The page the claim was checked against, if the receipt names one.
     var url: String? { firstValue(.url) }
@@ -107,7 +138,7 @@ struct JobReceipt: Equatable {
 
     private func firstValue(_ kind: Item.Kind) -> String? {
         guard let hit = items.first(where: { $0.kind == kind }) else { return nil }
-        let trimmed = hit.value.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = hit.value.trimmingCharacters(in: Self.evidenceWhitespace)
         return trimmed.isEmpty ? nil : trimmed
     }
 
@@ -129,10 +160,14 @@ struct JobReceipt: Equatable {
         // (`workflow_state.js` maps every entry through `String(x).trim()`),
         // and coercing a number or an object into one here would manufacture
         // an entry the server never verified.
-        let entries = (obj["evidence"] as? [Any] ?? []).compactMap { $0 as? String }
+        let wireEvidence = obj["evidence"] as? [Any] ?? []
+        let validEvidence = !wireEvidence.isEmpty && wireEvidence.allSatisfy {
+            guard let entry = $0 as? String else { return false }
+            return !entry.trimmingCharacters(in: evidenceWhitespace).isEmpty
+        }
+        let entries = wireEvidence.compactMap { $0 as? String }
         let items = entries
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
+            .filter { !$0.trimmingCharacters(in: evidenceWhitespace).isEmpty }
             .map(Item.init(raw:))
 
         return JobReceipt(
@@ -143,7 +178,12 @@ struct JobReceipt: Equatable {
             // Anything other than a real JSON `true` is not a verification.
             // the backend hands back what was stored; a string "true" would be
             // somebody's hand-written row, and this must not vouch for it.
-            verified: obj["verified"] as? Bool ?? false,
+            // Foundation's `as? Bool` also accepts JSON numbers 1 and 1.0.
+            // CFBoolean identity distinguishes the wire type before its value.
+            verified: (obj["verified"] as? NSNumber).map {
+                CFGetTypeID($0) == CFBooleanGetTypeID() && $0.boolValue
+            } ?? false,
+            hasValidEvidence: validEvidence,
             recordedAt: obj["recorded_at"] as? String ?? "")
     }
 }

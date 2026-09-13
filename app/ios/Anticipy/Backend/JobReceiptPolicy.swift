@@ -58,8 +58,8 @@ enum JobReceiptPolicy {
         let unproven: String?
     }
 
-    /// The receipt, in the pieces a card draws. Every value is verbatim from
-    /// the row: this type carries evidence, it does not compose prose about it.
+    /// The receipt, in the pieces a card draws. Raw evidence stays verbatim;
+    /// explanatory labels describe the wire format, not independent readback.
     struct Proof: Equatable {
         /// The page the claim was checked against, if the receipt names one.
         let url: String?
@@ -69,6 +69,86 @@ enum JobReceiptPolicy {
         /// Every entry, in the order the row holds them, verbatim.
         let items: [String]
         let recordedAt: String?
+        /// The one line under the seal — WHERE or AGAINST WHAT this was
+        /// checked, in the receipt's own terms. nil when the receipt names
+        /// nothing this build can read a place off; the card then says only
+        /// that it checked. See `checkedLine`.
+        var checked: String? = nil
+        /// One plain label per usable reference that is not a page — the
+        /// connector execution, the answer's fingerprint, or a cited source.
+        /// Shown before the
+        /// raw list, so a person is never handed a hash as the whole proof.
+        var notes: [String] = []
+
+        /// Visible arrival rows, not the raw index hidden by the disclosure.
+        /// Shared with ReceiptProof so additional dialect notes cannot drift
+        /// from the ceremony's row count. The ceremony still caps its duration.
+        var notesStartIndex: Int { 1 + (photographed ? 1 : 0) }
+        var disclosureRowIndex: Int { notesStartIndex + notes.count }
+        var revealRowCount: Int { disclosureRowIndex + 1 }
+    }
+
+    /// Three hands write three receipt dialects (2026-09-12, integration map
+    /// disagreement 5): the browser cites a page (`url:`/`title:`/`shot:`/
+    /// `evidence:`), the API hand cites a connector execution reference
+    /// (`vendor-log:`/`vendor-run:`), the research hand cites the answer's
+    /// fingerprint (`text-sha256:`) and cited sources (bare URLs). The
+    /// card read one of the three; the other two rendered "Done — and I
+    /// checked it" over an opaque hash. This is not the card deciding what an
+    /// entry MEANS — each sentence is bound to the wire tag it was written
+    /// under, the same way `photographed` is bound to `evidence:` — and an
+    /// entry under no tag this build knows is still listed verbatim below.
+    static func checkedLine(_ receipt: JobReceipt) -> String? {
+        if let title = receipt.title, !title.isEmpty { return "Checked on \(title)" }
+        if let host = host(of: receipt.url) { return "Checked on \(host)" }
+        let kinds = Set(receipt.items.filter(hasUsableReference).map(\.kind))
+        if kinds.contains(.vendorLog) { return "Connector execution recorded" }
+        if kinds.contains(.vendorRun) { return "Tool/account reference recorded" }
+        if kinds.contains(.textSha256) { return "Answer fingerprint recorded" }
+        return nil
+    }
+
+    /// Structural validation only: an empty id or malformed SHA-256 must not
+    /// create a positive label. This does not verify the referenced artifact.
+    private static func hasUsableReference(_ item: JobReceipt.Item) -> Bool {
+        guard !item.value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
+        if item.kind == .textSha256 {
+            return item.value.utf8.count == 64 && item.value.utf8.allSatisfy {
+                (48...57).contains($0) || (65...70).contains($0) || (97...102).contains($0)
+            }
+        }
+        return true
+    }
+
+    static func notes(for receipt: JobReceipt) -> [String] {
+        receipt.items.compactMap { item in
+            guard hasUsableReference(item) else { return nil }
+            switch item.kind {
+            case .vendorLog:
+                return "Connector execution reference: \(item.value)"
+            case .vendorRun:
+                // Preserve the opaque reference: account identifiers can
+                // contain @, so splitting it can misattribute tool or account.
+                return "Tool/account reference: \(item.value)"
+            case .textSha256:
+                return "Answer fingerprint (SHA-256): \(item.value.prefix(12))…"
+            case .other:
+                // A citation is not a fresh phone-side fetch or a delivery receipt.
+                guard let host = host(of: item.decoded) else { return nil }
+                return "Cited source: \(host)"
+            default:
+                return nil
+            }
+        }
+    }
+
+    /// The site, not the URL. A confirmation URL is a 300-character query
+    /// string; the host is the part that answers "where did this happen".
+    static func host(of url: String?) -> String? {
+        guard let url, let parsed = URL(string: url),
+              let scheme = parsed.scheme?.lowercased(), scheme == "http" || scheme == "https",
+              let host = parsed.host?.lowercased(), !host.isEmpty else { return nil }
+        return host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
     }
 
     /// - Parameters:
@@ -121,7 +201,9 @@ enum JobReceiptPolicy {
                          title: parsed.title,
                          photographed: parsed.photographed,
                          items: parsed.items.map(\.raw),
-                         recordedAt: parsed.recordedAt.isEmpty ? nil : parsed.recordedAt),
+                         recordedAt: parsed.recordedAt.isEmpty ? nil : parsed.recordedAt,
+                         checked: checkedLine(parsed),
+                         notes: notes(for: parsed)),
             unproven: nil)
     }
 

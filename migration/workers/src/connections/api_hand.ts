@@ -98,6 +98,7 @@ import {
   toolkitSlug,
   type CatalogTool,
   type ConnectionsEnv,
+  EXECUTE_NO_ACCOUNT_TOKEN,
 } from "./provider.ts";
 
 // ---------------------------------------------------------------------------
@@ -140,6 +141,7 @@ export type ApiHandRefusal =
   | "tool_required"
   | "args_required"
   | "plan_stale"
+  | "api_writes_unavailable"
   | "effect_required"
   | "not_connected"
   | "account_ambiguous"
@@ -164,6 +166,11 @@ export interface ApiHandRefused {
    *  happened before this refusal. The execute endpoint was NOT called; that
    *  is what "refused" means. */
   catalogRead: boolean;
+  /** On `account_ambiguous` only: the owner's own labels for the connected
+   *  accounts on this toolkit, so the question put to the owner names THEIR
+   *  words. Empty labels are carried as "" — two of those cannot be told
+   *  apart by any question, and the disposition says so. */
+  aliases?: string[];
 }
 
 export interface ApiHandRan {
@@ -202,6 +209,21 @@ export interface ApiHandFailed {
    *  vendor's promise that nothing ran; everything else is unknown, and an
    *  unknown write is the router's "ask the owner" branch, never a re-run. */
   mayHaveLanded: boolean;
+  /** WHETHER THE OWNER'S CREDENTIAL IS ACTUALLY DEAD, on an `auth` failure.
+   *  A 401/403 on ONE execute used to flip the whole connection to
+   *  needs_reconnect: the catalog is the vendor's global list, so a tool the
+   *  account's granted scopes do not cover is still an allow-list entry, and
+   *  its 403 read as "the credential died" — Settings showed needs reconnect,
+   *  the weekly nudge asked for a reconnect that changed nothing, and the
+   *  brain's inventory dropped the app (reports 3 and 4, 2026-09-12). Now the
+   *  flip needs a credential FACT: the vendor's own no-account token, or the
+   *  vendor's account-status enum for THIS account mapping to needs_reconnect.
+   *  `alive` is that enum saying ACTIVE; `unknown` is a status read that
+   *  failed or found no row — and unknown does not flip (a floor). Enum and
+   *  identifier comparisons only; never the error's prose. A true expiry keeps
+   *  its own signal through the connected_account.expired webhook, so this
+   *  path may under-flip and never over-flips. */
+  credential: "dead" | "alive" | "unknown";
   ms: number;
 }
 
@@ -213,6 +235,11 @@ export interface ApiHandDeps {
   store?: ConnectionsStore;
   provider?: ComposioConnections;
   clock?: () => number;
+  /** A hosting executor can add a structural effect floor, never remove one.
+   * The production job route uses this to keep API writes unavailable until
+   * the authoritative write ledger exists. Called on both declared and
+   * catalog-tightened effects, before any execute can happen. */
+  authorizeEffect?: (effect: SideEffect) => ApiHandRefusal | null;
   /** Job callers must check job AND connection authority in one final storage
    * snapshot. Separate awaited reads can lend stale permission to a changed
    * job, or a current job to a revoked account. No effect follows an unknown. */
@@ -353,7 +380,7 @@ function pickConnection(
   rows: readonly StoredConnection[],
   toolkit: Toolkit,
   alias: AccountAlias | null | undefined,
-): { row: StoredConnection } | { reason: "not_connected" | "account_ambiguous"; detail: string } {
+): { row: StoredConnection } | { reason: "not_connected"; detail: string } | { reason: "account_ambiguous"; detail: string; aliases: string[] } {
   const onApp = rows.filter((r) => r.toolkit === toolkit);
   const connected = onApp.filter((r) => r.status === "connected");
   const wanted = alias === undefined || alias === null
@@ -380,6 +407,7 @@ function pickConnection(
   return {
     reason: "account_ambiguous",
     detail: `${wanted.length} connected accounts on this toolkit and no alias to choose by`,
+    aliases: wanted.map((r) => r.alias ?? ""),
   };
 }
 
@@ -467,6 +495,13 @@ export async function runStep(
     return refuse(who, "effect_required", "the step declares no effect (read, write or irreversible)", null, false);
   }
   const declared: SideEffect = step.effect;
+  const effectRefusal = (effect: SideEffect): ApiHandRefusal | null => {
+    try { return deps.authorizeEffect?.(effect) ?? null; }
+    catch { return "plan_stale"; }
+  };
+  const declaredRefusal = effectRefusal(declared);
+  if (declaredRefusal) return refuse(who, declaredRefusal,
+    "the executor does not authorize this effect", declared, false);
 
   // -- 1. The row, from D1 and never from the vendor. -----------------------
   const store = deps.store ?? createD1Store(env);
@@ -478,7 +513,10 @@ export async function runStep(
     return refuse(who, "store_unavailable", describe(err), declared, false);
   }
   const picked = pickConnection(rows, toolkit, step.alias);
-  if ("reason" in picked) return refuse(who, picked.reason, picked.detail, declared, false);
+  if ("reason" in picked) {
+    const refused = refuse(who, picked.reason, picked.detail, declared, false);
+    return picked.reason === "account_ambiguous" ? { ...refused, aliases: picked.aliases } : refused;
+  }
   const row = picked.row;
 
   // -- 2. The write opt-in, on the declared effect, before any vendor call. --
@@ -516,6 +554,9 @@ export async function runStep(
 
   // -- 4. The hint tightens; floor 2 again on the tightened effect. ---------
   const effect = tightenSideEffect(declared, sideEffectHint(tool.tags));
+  const tightenedRefusal = effectRefusal(effect);
+  if (tightenedRefusal) return refuse(who, tightenedRefusal,
+    "the executor does not authorize the catalog-tightened effect", effect, true);
   if (effect !== "read" && row.writes_enabled !== true) {
     return refuse(
       who,
@@ -610,6 +651,10 @@ export async function runStep(
       error = { kind: "other", status: 0, token: "", retryable: false, message: describe(err) };
     }
     console.log(`api hand: ${who} failed — ${error.kind} HTTP ${error.status}${error.token ? ` ${error.token}` : ""}`);
+    const credential = error.kind === "auth"
+      ? await credentialStatus(provider, owner, account, error.token)
+      : "unknown";
+    if (error.kind === "auth") console.log(`api hand: ${who} auth failure — credential ${credential}`);
     return {
       outcome: "failed",
       toolkit,
@@ -618,7 +663,32 @@ export async function runStep(
       effect,
       error,
       mayHaveLanded: failureMayHaveLanded(error.kind),
+      credential,
       ms,
     };
+  }
+}
+
+/** Is this account's credential dead, by the vendor's own word? The
+ *  no-account token is the vendor saying the account is gone; otherwise the
+ *  owner's account list is read once and THIS account's mapped status decides.
+ *  A read that fails or does not find the account is unknown, and unknown
+ *  never flips a row. */
+async function credentialStatus(
+  provider: Pick<ComposioConnections, "connections">,
+  owner: OwnerId,
+  account: string,
+  token: string,
+): Promise<ApiHandFailed["credential"]> {
+  if (token === EXECUTE_NO_ACCOUNT_TOKEN) return "dead";
+  try {
+    const rows = await provider.connections(owner);
+    const mine = rows.find((r) => r.connected_account_id === account);
+    if (!mine) return "unknown";
+    if (mine.status === "needs_reconnect") return "dead";
+    if (mine.status === "connected") return "alive";
+    return "unknown";
+  } catch {
+    return "unknown";
   }
 }

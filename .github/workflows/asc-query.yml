@@ -49,7 +49,7 @@ on:
         default: "Internal"
         type: string
       confirm:
-        description: "INVITE for an existing group; INVITE_EXTERNAL for private external testing; blank only reads"
+        description: "Blank only reads; ASSIGN_EXISTING links existing testers to the exact build (email blank); INVITE / INVITE_EXTERNAL enroll a tester"
         required: false
         default: ""
         type: string
@@ -104,6 +104,20 @@ jobs:
           TESTFLIGHT_FIRST: ${{ inputs.first }}
           TESTFLIGHT_LAST: ${{ inputs.last }}
         run: python3 proof/audit/testflight_external.py --confirm INVITE_EXTERNAL
+
+      # No new invitations or public-group attachment. This guarded path only
+      # fills missing individual build links for the app's existing audience.
+      # The final read-only audit still reports pending invitation acceptance.
+      - name: Assign this build to existing testers only
+        if: inputs.confirm == 'ASSIGN_EXISTING' && inputs.email == '' && github.ref == 'refs/heads/cloudflare-backend'
+        env:
+          ASC_KEY_PATH: ${{ runner.temp }}/asc/AuthKey.p8
+          TESTFLIGHT_BUNDLE: ${{ inputs.bundle }}
+          TESTFLIGHT_BUILD: ${{ inputs.build }}
+        run: |
+          python3 -m proof.audit.testflight_assign_existing \
+            --bundle "$TESTFLIGHT_BUNDLE" --build "$TESTFLIGHT_BUILD" \
+            --confirm ASSIGN_EXISTING
 
       - name: Who can install this build
         env:

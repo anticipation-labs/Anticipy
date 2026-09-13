@@ -124,6 +124,7 @@ import { FORBIDDEN_TERMS, forbiddenTermIn } from "../connections/words.ts";
 import {
   waitBudgetMs, waitForConnection, type WaitEnv,
 } from "../connections/wait.ts";
+import { recoverOAuthAttempts, type RecoveryStore } from "../connections/recovery.ts";
 /**
  * THE LADDER, IMPORTED AND NEVER RE-IMPLEMENTED.
  *
@@ -377,12 +378,12 @@ export interface Connection {
 /** The three vendor calls this page makes, and no others. `disconnect` and
  *  `session` belong to Settings and to the provider module. */
 export interface CatalogProvider {
-  toolkit(slug: string): Promise<ToolkitMeta>;
+  toolkit(slug: string, signal?: AbortSignal): Promise<ToolkitMeta>;
   authorize(
     user: OwnerId,
     toolkit: string,
     opts: { callbackUrl: string; alias?: AccountAlias | null },
-  ): Promise<{ redirectUrl: string }>;
+  ): Promise<{ redirectUrl: string; connectedAccountId?: string }>;
   /** The vendor's own list for ONE owner. The only thing that can turn the
    *  account id on a query string from a claim into a fact. */
   connections(user: OwnerId): Promise<Connection[]>;
@@ -397,6 +398,9 @@ export interface PermissionWords {
 
 export interface ConnectDeps {
   store: ConnectLinkStore;
+  /** Production supplies the durable, exact-attempt journal. Optional only for
+   * legacy in-memory contracts and callbacks minted before this rollout. */
+  recovery?: RecoveryStore;
   provider: CatalogProvider;
   words: PermissionWords;
   /**
@@ -1292,7 +1296,7 @@ export type ConnectPageGo =
 export async function connectPageGo(
   token: string,
   opts: { signedInAs: unknown; store: ConnectLinkStore; provider: Pick<CatalogProvider, "authorize">;
-          baseUrl: string; state: string | null; now: number;
+          baseUrl: string; state: string | null; now: number; recovery?: RecoveryStore;
           /**
            * WHICH APP ON THE PAGE THE FINGER LANDED ON. `null` is the one-app
            * link: no such field was posted, none goes onto the callback, and
@@ -1310,6 +1314,11 @@ export async function connectPageGo(
   if (opts.app === "bad") return { state: "expired" };
   const app = opts.app ?? null;
 
+  // A missing migration must fail BEFORE asking the vendor to create a link.
+  if (opts.recovery) {
+    try { await opts.recovery.ready(); } catch { return { state: "provider-unavailable" }; }
+  }
+
   const spent = await redeem(token, {
     signedInAs: opts.signedInAs, store: opts.store, now: opts.now, app: app ?? 0,
   });
@@ -1317,12 +1326,14 @@ export async function connectPageGo(
 
   const link = spent.link;
   let redirectUrl: unknown;
+  let connectedAccountId: unknown;
   try {
     const authorized = await opts.provider.authorize(link.user_id, link.toolkit, {
       callbackUrl: callbackUrl(token, opts.baseUrl, opts.state, app),
       alias: link.alias,
     });
     redirectUrl = authorized?.redirectUrl;
+    connectedAccountId = authorized?.connectedAccountId;
   } catch {
     // Swallowed deliberately: the vendor's error text is theirs, may name them,
     // and the person is owed one sentence, not a stack trace. The caller logs
@@ -1335,6 +1346,16 @@ export async function connectPageGo(
   // explanation.
   if (typeof redirectUrl !== "string" || redirectUrl.trim() === "") {
     return { state: "provider-unavailable" };
+  }
+  if (opts.recovery) {
+    try {
+      const target = new URL(redirectUrl);
+      if (target.protocol !== "https:" && target.protocol !== "http:") return { state: "provider-unavailable" };
+      if (typeof connectedAccountId !== "string" || !await opts.recovery.arm({ handle: link.handle,
+        owner: link.user_id, toolkit: link.toolkit, accountId: connectedAccountId, now: opts.now })) {
+        return { state: "provider-unavailable" };
+      }
+    } catch { return { state: "provider-unavailable" }; }
   }
 
   return {
@@ -1546,7 +1567,7 @@ export type ConnectPageSkip =
 
 export async function connectPageSkip(
   token: string,
-  opts: { signedInAs: unknown; store: ConnectLinkStore; now: number },
+  opts: { signedInAs: unknown; store: ConnectLinkStore; now: number; recovery?: RecoveryStore },
 ): Promise<ConnectPageSkip> {
   const found = await locate(token, opts.signedInAs, opts.now, opts.store, ttlDeadline);
   if (found.kind === "dead") return { state: "expired" };
@@ -1576,6 +1597,13 @@ export async function connectPageSkip(
     // the second pass would walk the ladder a rung further than the person did.
     if (done.has(row.toolkit)) continue;
     done.add(row.toolkit);
+    if (opts.recovery) {
+      try { await opts.recovery.cancel(row.token_handle, row.user_id); }
+      catch {
+        apps.push({ toolkit: row.toolkit, outcome: { state: "not-recorded", why: "the pending connection could not be stopped" } });
+        continue;
+      }
+    }
     apps.push({
       toolkit: row.toolkit,
       outcome: await recordSkip(
@@ -1697,7 +1725,7 @@ export async function connectPageDone(
   opts: { signedInAs: unknown; store: ConnectLinkStore;
           provider: Pick<CatalogProvider, "connections">;
           onConnected: (c: Connection) => Promise<void>;
-          successStatus?: string; now: number },
+          successStatus?: string; now: number; recovery?: RecoveryStore; commitClock?: () => number },
 ): Promise<ConnectPageDone> {
   // An unreadable index is not rounded to app 0: finishing the wrong row would
   // file one app's credential under another app's name. It collapses into the
@@ -1710,6 +1738,7 @@ export async function connectPageDone(
   if (found.kind === "dead") return { state: "expired" };
   if (found.kind === "signed-out") return { state: "sign-in-required" };
   if (found.kind === "wrong-user") return { state: "wrong-user" };
+  if (found.row.used_at === null) return { state: "not-connected" };
 
   const success = opts.successStatus ?? CALLBACK_SUCCESS;
   const accountId = typeof params?.connectedAccountId === "string"
@@ -1721,6 +1750,17 @@ export async function connectPageDone(
   // a violation.
   if (params?.status !== success || accountId === "") {
     return { state: "not-connected" };
+  }
+  let tracked = false;
+  if (opts.recovery) {
+    try {
+      const attempt = await opts.recovery.read(found.row.token_handle);
+      if (attempt) {
+        if (attempt.owner !== found.row.user_id || attempt.toolkit !== found.row.toolkit
+            || attempt.accountId !== accountId) return { state: "not-connected" };
+        tracked = true;
+      }
+    } catch { return { state: "could-not-confirm" }; }
   }
 
   // A missing provider is a WIRING bug in the Worker, not a person's problem,
@@ -1746,6 +1786,11 @@ export async function connectPageDone(
   if (!vendorVouchesFor(listed, found.row, accountId)) {
     return { state: "not-connected" };
   }
+  // The callback query is browser-editable, not the vendor's signed proof.
+  // A status-propagation delay remains unconfirmed and does not consume the
+  // attempt; the callback or durable recovery can confirm ACTIVE later.
+  const matches = (listed as Connection[]).filter(c => c?.connected_account_id === accountId);
+  if (matches.length !== 1 || matches[0]?.status !== "connected") return { state: "could-not-confirm" };
 
   const connection: Connection = {
     user_id: found.row.user_id,
@@ -1771,6 +1816,16 @@ export async function connectPageDone(
   // callback with no `app` on it is the one-app link and cannot have siblings,
   // so it pays nothing for a question that has one answer.
   const remaining = app === null ? 0 : await remainingApps(token, found.row, opts.store);
+
+  if (tracked && opts.recovery) {
+    const identity = { handle: found.row.token_handle, owner: found.row.user_id,
+      toolkit: found.row.toolkit, accountId, now: opts.commitClock?.() ?? opts.now };
+    try {
+      const recorded = await opts.recovery.activate(identity);
+      if (!recorded && !await opts.recovery.confirmed(identity)) return { state: "not-recorded" };
+      return { state: "connected", connection, recorded, remaining };
+    } catch { return { state: "not-recorded" }; }
+  }
 
   const lease = await opts.store.complete(found.row.token_handle, opts.now);
   if (!lease.won) return { state: "connected", connection, recorded: false, remaining };
@@ -2761,6 +2816,15 @@ function startWaiting(
     return;
   }
 
+  if (deps.recovery) {
+    // One best-effort read, never a sleeping five-minute request. The durable
+    // minute cron owns retry after response-end cancellation or process loss.
+    if (ctx) ctx.waitUntil(recoverOAuthAttempts(env as never, {
+      store: deps.recovery, provider: deps.provider, now: deps.now, handle,
+    }).then(() => undefined).catch(() => undefined));
+    return;
+  }
+
   if (!ctx || typeof ctx.waitUntil !== "function") {
     console.log("connect go: the connection backup did NOT start — the entry point "
       + "passed no ExecutionContext, and without waitUntil a Worker cancels background "
@@ -2823,7 +2887,7 @@ async function handleGo(
   const app = appIndexOf(field(form, "app"));
 
   const go = await connectPageGo(token, {
-    signedInAs: who, store: deps.store, provider: deps.provider, baseUrl, state, now, app,
+    signedInAs: who, store: deps.store, provider: deps.provider, baseUrl, state, now, app, recovery: deps.recovery,
   });
 
   if (go.state === "ok") {
@@ -2886,7 +2950,7 @@ async function handleSkip(
   const state = checkedState(field(await formOf(request), "state"));
 
   const skipped = await connectPageSkip(token, {
-    signedInAs: who, store: deps.store, now,
+    signedInAs: who, store: deps.store, now, recovery: deps.recovery,
   });
   if (skipped.state !== "noted") return refusalPage(skipped.state, token, state);
 
@@ -2969,7 +3033,8 @@ async function handleDone(
     app: appIndexOf(url.searchParams.get("app")),
   }, {
     signedInAs: who, store: deps.store, provider: deps.provider,
-    onConnected: deps.onConnected, successStatus: deps.successStatus, now,
+    onConnected: deps.onConnected, successStatus: deps.successStatus, now, recovery: deps.recovery,
+    commitClock: deps.now ?? Date.now,
   });
 
   switch (done.state) {

@@ -124,9 +124,12 @@
  *    fields are never replaced by stale values. Reproduced by
  *    test/connection-writes-race.test.ts before repair on 2026-09-06.
  * 5. `/skip` IS UNBUDGETED, and deliberately so for now. It is one D1 read and
- *    at most one upsert of the caller's OWN row, keyed (user_id, toolkit), and
- *    the second call in a snooze window writes nothing at all — so hammering it
- *    costs a row that already exists and reaches nobody else. What a budget
+ *    at most one upsert of the caller's OWN row, keyed (user_id, toolkit), plus
+ *    (since 2026-09-12) one UPDATE that cancels the caller's OWN armed OAuth
+ *    recovery attempts for that app — the second call in a snooze window
+ *    writes no ladder row at all, and the cancel touches nothing the first
+ *    call did not already cancel — so hammering it costs rows that already
+ *    exist and reaches nobody else. What a budget
  *    would buy here is protection from an authenticated owner spending their
  *    own quota, and what it would risk is a person's "no" being refused because
  *    their client retried; between those two, refusing a decline is the worse
@@ -166,6 +169,7 @@ import {
 // request with the caller's own status code rather than letting the minter
 // throw it into a 503.
 import { MAX_PAGE_APPS, recordSkip, type DeclineStore } from "./connect.ts";
+import { createRecoveryStore, type RecoveryStore } from "../connections/recovery.ts";
 import type {
   Connection,
   DisconnectResult,
@@ -448,6 +452,27 @@ export interface ConnectionsApiDeps {
    * somebody the catalog holds nothing. Both branches are pinned in the suite.
    */
   search?(query: string): Promise<ToolkitMeta[]>;
+  /**
+   * THE OAUTH RECOVERY FENCE, for the Skip door only.
+   *
+   * A redeemed connect link keeps a recovery attempt armed for up to fourteen
+   * days: the minute cron asks the vendor whether the account went ACTIVE and,
+   * if it did, writes the `connections` row itself. The decline TRIGGERS cancel
+   * that attempt whenever a `connect_nudges` row is inserted or updated — which
+   * is every `recordSkip` branch that writes. Two branches write nothing:
+   * `already-declined` (a second tap inside a standing snooze) and
+   * `nothing-to-decline` (a first account of the app is already connected). A
+   * Skip answered 200 through either one left the attempt armed and the next
+   * cron connected the account the person had just turned down. This port is
+   * how the door says no in those two branches too — by owner and toolkit,
+   * because the phone never held a link handle.
+   *
+   * Optional for the same reason `search` is: a narrower deps object is a
+   * legitimate caller. But `handleSkip` treats its ABSENCE as not-recorded
+   * (503), never as "nothing to cancel": a Skip that could not fence the cron
+   * has not landed. `connectionsApiDeps` always fills it.
+   */
+  recovery?: Pick<RecoveryStore, "cancelToolkit">;
   /** Injectable clock. Tests own time; production passes nothing. */
   now?(): number;
 }
@@ -501,6 +526,7 @@ export function connectionsApiDeps(env: ConnectionsApiEnv): ConnectionsApiDeps |
     // here: one constant, so the number the vendor is asked for and the number
     // the route will hand back cannot drift into two answers.
     search: (query: string) => provider.search(query),
+    recovery: createRecoveryStore(env),
   };
 }
 
@@ -1358,6 +1384,27 @@ async function handleSkip(
   // no field on the body through which a caller could decline on somebody
   // else's behalf, and `ownerId` is called rather than assumed because the
   // brand on `OwnerId` is erased before this line runs.
+  // THE FENCE GOES UP BEFORE THE LADDER IS READ, and a fence that could not go
+  // up is a skip that did not land. `recordSkip` has two branches that write no
+  // `connect_nudges` row — a second tap inside a standing snooze, and an app
+  // whose first account is already connected — and the decline triggers, which
+  // are the only other thing that cancels an armed OAuth recovery attempt, fire
+  // on nothing in either. The person tapped Skip; the minute cron must not
+  // connect the account for them thirty seconds later. An absent port is the
+  // same 503 as an unwritable store: see `ConnectionsApiDeps.recovery`.
+  if (!deps.recovery || typeof deps.recovery.cancelToolkit !== "function") {
+    console.log("me/connections/skip: nothing was written — no recovery store is wired, so an armed "
+      + "OAuth attempt for this app could not be cancelled");
+    return refuse(503, COULD_NOT_SAVE);
+  }
+  try {
+    await deps.recovery.cancelToolkit(ownerId(owner), slug);
+  } catch (err) {
+    console.log(`me/connections/skip: nothing was written — the armed OAuth attempt could not be `
+      + `cancelled (${err instanceof Error ? err.message : String(err)})`);
+    return refuse(503, COULD_NOT_SAVE);
+  }
+
   const outcome = await recordSkip(
     deps.store,
     { user_id: ownerId(owner), toolkit: slug, at: now },

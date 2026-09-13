@@ -95,10 +95,11 @@ import type {
  *    not have. Five minutes is comfortably past the normal case.
  * 2. Past it, the person is not at the screen any more. A poll that outlives
  *    the human is spending the owner's vendor quota on an empty room.
- * 3. A `waitUntil` is a request context held open. It is not a cron and it is
- *    not a queue, and a Worker request context is not a place to sleep for an
- *    hour. Whatever the platform's exact ceiling is on any given day, five
- *    minutes is well inside it and an hour plainly is not.
+ * 3. This is a LEGACY in-process helper, not production durability. An HTTP
+ *    Worker waitUntil has only 30 seconds after response end; five minutes
+ *    cannot be kept alive there. Production wiring supplies recovery.ts and
+ *    connect.ts uses its persisted exact-account attempts plus a minute cron.
+ *    This helper remains for legacy injected contracts and local tests only.
  *
  * What it does NOT cover is stated so nobody reads more into it: somebody who
  * takes longer than the budget is still covered by the callback, which has the

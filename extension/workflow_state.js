@@ -136,11 +136,16 @@ export function workflowPatch(job, nextState, options = {}) {
   }
 
   if (nextState === "cancelled") {
-    // The approval HISTORY survives cancellation. Clearing it here made the
-    // extension's own at-cap cancel a guaranteed 409 — the backend guard
-    // (rightly) forbids an executor touching approval, so the cancel
-    // retried silently every 30s forever while the job sat wedged
-    // (live, 2026-08-15: 23 identical 409s on one Earls booking).
+    // THE APPROVAL IS NOT THIS PATCH'S TO CLEAR, AND THE SERVER CLEARS IT.
+    // Clearing it here made the extension's own at-cap cancel a guaranteed
+    // 409 — the backend guard (rightly) forbids an executor touching
+    // approval, so the cancel retried silently every 30s forever while the
+    // job sat wedged (live, 2026-08-15: 23 identical 409s on one Earls
+    // booking). Since 2026-09-12 the Worker's workflow guard revokes the
+    // approval itself on every transition into cancelled (CONTRACT.md §1,
+    // lease protocol), so the row a cancel leaves behind carries no standing
+    // word from the owner whichever client cancelled it. This patch stays
+    // exactly as it was: it sends what an executor may send.
     patch.effect_uncertain = false;
   } else if (options.effectUncertain !== undefined) {
     patch.effect_uncertain = !!options.effectUncertain;

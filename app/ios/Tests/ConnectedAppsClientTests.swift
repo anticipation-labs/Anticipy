@@ -75,6 +75,7 @@ private final class Recorder: ConnectedAppsTransport {
     /// whole session.
     var answers: [String: Canned] = [:]
     var fallback: Canned?
+    var beforeReturn: (@MainActor () -> Void)?
 
     private(set) var sent: [URLRequest] = []
 
@@ -89,6 +90,7 @@ private final class Recorder: ConnectedAppsTransport {
             ?? ((try? JSONSerialization.data(withJSONObject: canned.body)) ?? Data())
         let response = HTTPURLResponse(url: request.url!, statusCode: canned.status,
                                        httpVersion: nil, headerFields: nil)!
+        beforeReturn?()
         return (data, response)
     }
 
@@ -103,10 +105,11 @@ private final class Recorder: ConnectedAppsTransport {
 @MainActor
 private final class Wallet {
     var owner: OwnerId?
+    var token = TOKEN
     init(_ owner: OwnerId?) { self.owner = owner }
     func credential() -> ConnectedAppsCredential? {
         guard let owner else { return nil }
-        return ConnectedAppsCredential(baseURL: BASE, owner: owner, authToken: TOKEN)
+        return ConnectedAppsCredential(baseURL: BASE, owner: owner, authToken: token)
     }
 }
 
@@ -656,6 +659,77 @@ private enum ConnectedAppsClientTests {
             check("and a plain one is shown",
                   blurbed.first(where: { $0.meta.slug == OTHER_TOOLKIT })?.subtitle
                   == "Keep every letter in one place.")
+        }
+
+        // Clearing a saved choice needs a complete acknowledgment, not merely
+        // HTTP success from a proxy or a body whose count belongs to one row.
+        do {
+            let wire = Recorder()
+            let wallet = Wallet(ownerA)
+            let client = ConnectedAppsClient(credential: wallet.credential, transport: wire)
+            let rows = [connection(owner: ownerA, account: "ca_one"),
+                        connection(owner: ownerA, account: "ca_two")]
+            let invalid: [[String: Any]] = [[:], ["ok": false, "updated": 2],
+                ["ok": 1, "updated": 2], ["ok": "true", "updated": 2],
+                ["ok": true], ["ok": true, "updated": 1],
+                ["ok": true, "updated": "2"], ["ok": true, "updated": 2.5],
+                ["ok": true, "updated": true], ["ok": true, "updated": 3]]
+            for (index, body) in invalid.enumerated() {
+                wire.fallback = Canned(body: body)
+                var refused = false
+                do { try await client.setWrites(rows, owner: ownerA) } catch { refused = true }
+                check("a malformed or incomplete clear acknowledgment is refused: \(index)", refused)
+            }
+            wire.fallback = Canned(raw: Data("not JSON".utf8))
+            var refused = false
+            do { try await client.setWrites(rows, owner: ownerA) } catch { refused = true }
+            check("an unreadable 2xx is not a confirmed clear", refused)
+            wire.fallback = Canned(body: ["ok": true, "updated": 2])
+            var accepted = true
+            do { try await client.setWrites(rows, owner: ownerA) } catch { accepted = false }
+            check("a complete matching clear acknowledgment is accepted", accepted)
+
+            wire.beforeReturn = { wallet.token = "replacement.synthetic.session" }
+            refused = false
+            do { try await client.setWrites(rows, owner: ownerA) } catch { refused = true }
+            check("an old save response is rejected after same-owner credential replacement", refused)
+            wire.beforeReturn = nil
+            wire.fallback = Canned(body: ["items": [connectionRow(owner: ownerA)]])
+            wire.beforeReturn = { wallet.token = "third.synthetic.session" }
+            refused = false
+            do { _ = try await client.connections(owner: ownerA) } catch { refused = true }
+            check("an old read cannot populate the replacement session either", refused)
+
+            // The model over the actual client: malformed acknowledgment must
+            // restore the prior indicator and require fresh server state.
+            wire.beforeReturn = nil
+            wire.answers["/" + ConnectedAppsClient.Route.connections] =
+                Canned(body: ["items": [connectionRow(owner: ownerA,
+                    status: "needs_reconnect", writes: true)]])
+            wire.answers["/" + ConnectedAppsClient.Route.catalog] =
+                Canned(body: ["items": [toolkitRow(TOOLKIT, "Fernwood Notes")]])
+            wire.answers["/" + ConnectedAppsClient.Route.writes] =
+                Canned(body: ["ok": true, "updated": 0])
+            let model = ConnectedAppsModel(store: client)
+            model.signIn(ownerA)
+            await model.load()
+            let outcome = await model.setWrites(false, toolkit: TOOLKIT, owner: ownerA)
+            if case .reverted = outcome {
+                check("a partial real-client acknowledgment does not clear the saved choice",
+                      model.rows(for: ownerA).first?.hasSavedWriteChoices == true)
+            } else { check("a partial real-client acknowledgment does not clear the saved choice", false) }
+            let retryWithoutRead = await model.setWrites(false, toolkit: TOOLKIT, owner: ownerA)
+            check("an uncertain clear blocks further writes until a fresh read",
+                  model.screen(for: ownerA) == .trouble(ConnectedAppsModel.Copy.trouble)
+                    && retryWithoutRead == .refused)
+            await model.load()
+            wire.answers["/" + ConnectedAppsClient.Route.writes] =
+                Canned(body: ["ok": true, "updated": 1])
+            let saved = await model.setWrites(false, toolkit: TOOLKIT, owner: ownerA)
+            check("a refreshed clear works through the real client and saves only false",
+                  saved == .saved && model.rows(for: ownerA).first?.hasSavedWriteChoices == false
+                    && ((wire.bodyOf("/" + ConnectedAppsClient.Route.writes)?["rows"] as? [[String: Any]])?
+                        .first?["writes_enabled"] as? Bool) == false)
         }
 
         exitIfFailed()

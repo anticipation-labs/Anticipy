@@ -1,10 +1,12 @@
-"""Fresh, loopback-only task-evaluation transport; hard US$5 reservation ceiling.
+"""Fresh, loopback-only task-evaluation transport; explicit dollar and call caps.
 
 No production backend is imported or contacted. Only a selected dotenv key is
 read as data. Every call reserves the entire priced model context plus bounded
 output before dispatch; unknown cost halts the run without releasing its hold.
 Restart with the same directory is refused, never a way to reset a journal.
 Model semantics and production prompts are not changed by this transport.
+CLI startup requires both approved limits; the existing US$5/100-call safety
+ceilings cannot be raised here. A smaller grant is enforced, not merely logged.
 """
 from __future__ import annotations
 
@@ -30,6 +32,15 @@ from proof.audit.model_gateway import Budget, Refused, UPSTREAM, atomic_json, pr
 MODELS = {"deepseek/deepseek-v3.2", "google/gemini-3.1-pro-preview", "anthropic/claude-sonnet-4.6"}
 MAX_RESPONSE_BYTES = 2_000_000
 MAX_REQUEST_BYTES = 256_000
+
+
+def validate_bounds(budget_usd, max_calls, lifetime):
+    if (type(budget_usd) not in (int, float) or not 0 < budget_usd <= 5
+            or not math.isfinite(budget_usd)
+            or type(max_calls) is not int or not 1 <= max_calls <= 100
+            or type(lifetime) not in (int, float) or not 0 < lifetime <= 1800
+            or not math.isfinite(lifetime)):
+        raise Refused("invalid run bounds")
 
 
 def read_key(path: Path) -> str:
@@ -104,9 +115,8 @@ async def fetch_pricing(*, transport=None, timeout=20):
 
 
 class IsolatedGateway:
-    def __init__(self, directory, key, pricing, *, max_calls=100, lifetime=1800):
-        if not 1 <= max_calls <= 100 or not 0 < lifetime <= 1800:
-            raise Refused("invalid run bounds")
+    def __init__(self, directory, key, pricing, *, budget_usd=5, max_calls=100, lifetime=1800):
+        validate_bounds(budget_usd, max_calls, lifetime)
         directory = Path(directory)
         if directory.is_symlink():
             raise Refused("private state directory required")
@@ -131,8 +141,9 @@ class IsolatedGateway:
         self.directory, self.key, self.pricing = directory, key, pricing
         self.max_calls, self.deadline = max_calls, time.monotonic() + lifetime
         self.serial = threading.Lock()
-        self.budget = Budget(directory / "spend.json", operating_limit=5)
-        atomic_json(directory / "spend.json", {"budget_usd": 5, "calls": [], "halted": False})
+        self.budget = Budget(directory / "spend.json", operating_limit=budget_usd)
+        atomic_json(directory / "spend.json", {"budget_usd": budget_usd, "max_calls": max_calls,
+                    "lifetime_seconds": lifetime, "calls": [], "halted": False})
         atomic_json(directory / "model-pricing.json", pricing)
         self.token = secrets.token_urlsafe(32)
         fd = os.open(directory / "gateway-token", os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
@@ -231,7 +242,8 @@ def serve(gateway, port):
                 return self.answer(502, {"error": "evaluation request unavailable"})
 
     with ThreadingHTTPServer(("127.0.0.1", port), Handler) as server:
-        print(json.dumps({"listening": port, "budget_usd": 5, "state": str(gateway.directory)}), flush=True)
+        print(json.dumps({"listening": port, "budget_usd": gateway.budget.operating_limit,
+                          "max_calls": gateway.max_calls, "state": str(gateway.directory)}), flush=True)
         timer = threading.Timer(max(0, gateway.deadline - time.monotonic()), server.shutdown)
         timer.daemon = True
         timer.start()
@@ -245,16 +257,23 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--state-dir", type=Path, required=True)
     parser.add_argument("--env-file", type=Path, required=True)
+    parser.add_argument("--budget-usd", type=float, required=True,
+                        help="Explicit approved dollar ceiling for this fresh run, at most 5")
+    parser.add_argument("--max-calls", type=int, required=True,
+                        help="Explicit approved total calls, including retries, at most 100")
     parser.add_argument("--port", type=int, default=8794)
     args = parser.parse_args()
     try:
         if not 1024 <= args.port <= 65535:
             raise Refused("invalid local port")
+        # Refuse an invalid grant before touching a key or the public pricing API.
+        validate_bounds(args.budget_usd, args.max_calls, 1800)
         key = read_key(args.env_file)
         pricing = asyncio.run(fetch_pricing())
         if set(pricing) != MODELS:
             raise Refused("not all evaluation models were priced")
-        serve(IsolatedGateway(args.state_dir, key, pricing), args.port)
+        serve(IsolatedGateway(args.state_dir, key, pricing, budget_usd=args.budget_usd,
+                              max_calls=args.max_calls), args.port)
     except KeyboardInterrupt:
         pass
     except Exception:

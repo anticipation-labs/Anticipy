@@ -621,8 +621,10 @@ enum ConnectionsPolicy {
 
     /// What flipping the toggle produces.
     ///
-    /// `rowsToWrite` carries ONLY the signed-in owner's connected rows on this
-    /// app, already updated. The caller writes back exactly what it is handed
+    /// Enabling targets connected rows only. Clearing targets ALL saved rows
+    /// on this app, including a choice retained across a lost connection.
+    /// `rowsToWrite` carries ONLY the signed-in owner's rows, already updated.
+    /// The caller writes back exactly what it is handed
     /// and never the list it passed in — which is what makes it impossible for
     /// a mixed list to travel through a toggle and land on somebody else's
     /// connection.
@@ -639,7 +641,8 @@ enum ConnectionsPolicy {
 
     static func writesTransition(rows: [Connection], toolkit: String, to on: Bool,
                                  for owner: OwnerId) -> WritesTransition {
-        let live = connectedRows(rows, toolkit: toolkit, for: owner)
+        let live = on ? connectedRows(rows, toolkit: toolkit, for: owner)
+            : OwnerScoped.rows(rows, for: owner).filter { $0.toolkit == toolkit }
         guard !live.isEmpty else {
             return WritesTransition(toolkit: toolkit, enabled: false, applied: false,
                                     accounts: 0, rowsToWrite: [])
@@ -924,12 +927,12 @@ enum ConnectionsPolicy {
         case .needsReconnect:
             // The ladder deliberately does not apply here: it governs "will you
             // connect an app you have not connected", and a reconnect is the
-            // repair of a thing this owner already chose. It is still optional,
-            // because the browser still does the same work.
+            // repair of a thing this owner already chose. This state is not
+            // evidence that any browser task ran, or that the app itself broke.
             return NudgeCard(
                 visible: true,
-                headline: "\(app) has stopped working.",
-                why: "The connection lapsed, so I've been doing \(app) in your browser instead.",
+                headline: "\(app) needs connecting again.",
+                why: "The connection needs renewing; reconnect it before I try to use it again.",
                 optionalLine: optionalLine(app: app),
                 primary: .reconnect,
                 secondary: .notNow,
@@ -937,11 +940,10 @@ enum ConnectionsPolicy {
         }
     }
 
-    /// THE SENTENCE EVERY ASK CARRIES. One sentence, saying it is optional,
-    /// and saying WHY it is optional — the browser does the same work either
-    /// way, which is the fact that makes the sentence true rather than polite.
+    /// Connection is optional. A browser alternative depends on the task and
+    /// a connected, available browser; catalog or connection state proves neither.
     static func optionalLine(app: String) -> String {
-        "Entirely up to you — I can do \(app) in your browser either way."
+        "Entirely up to you — some tasks may use \(app) in your browser when it is connected and available."
     }
 
     /// Why this ask exists, keyed on the MOMENT that produced it.
@@ -974,11 +976,11 @@ enum ConnectionsPolicy {
         }
     }
 
-    /// What the write opt-in says on a card. Read-only is stated positively:
-    /// "reading only" is what the person chose, not a limitation to apologise
-    /// for.
+    /// The switch records a choice, not current execution capability. The
+    /// connected-app hand currently refuses writes because its ledger is absent.
+    /// Keep the choice visible so existing opt-ins can still be turned off.
     static func writesLine(_ enabled: Bool) -> String {
-        enabled ? "I can make changes" : "Reading only"
+        enabled ? "Changes selected · unavailable right now" : "Reading only · changes unavailable"
     }
 
     // ---------------------------------------------------------------------

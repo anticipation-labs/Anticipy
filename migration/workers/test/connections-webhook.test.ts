@@ -570,6 +570,58 @@ await check("an event naming no owner at all is refused", async () => {
   assert.equal(nudgesOf(r).length, 0);
 });
 
+function v3Expiry(extra: Record<string, unknown> = {}): string {
+  return JSON.stringify({ id: "evt_synthetic", type: "composio.connected_account.expired",
+    metadata: { project_id: "pr_synthetic", org_id: "ok_synthetic" },
+    data: { id: OWNER_ACCOUNT, toolkit: { slug: APP }, status: "EXPIRED",
+      auth_config: { id: "ac_synthetic", auth_scheme: "OAUTH2" } }, ...extra });
+}
+
+await check("documented signed V3 data.id expiry derives owner only from the held account", async () => {
+  const r = await rig();
+  const response = await post(r, { body: v3Expiry() });
+  assert.equal(response.status, 200);
+  assert.equal(statusOf(r, OWNER_ACCOUNT), "needs_reconnect");
+  assert.equal(statusOf(r, OTHER_ACCOUNT), "connected");
+  assert.equal(nudgesOf(r).length, 1);
+  assert.equal(nudgesOf(r)[0].user_id, OWNER);
+});
+await check("the bare V3 spelling the allowlist accepts is parsed, not 400'd", async () => {
+  // EXPIRED_EVENT_TYPES accepts `connected_account.expired` as well as the
+  // namespaced spelling. The data.id parser named only the namespaced one, so a
+  // correctly signed payload using the bare spelling fell through to the legacy
+  // reader, found no connected_account_id key anywhere, and was answered
+  // "the event names no connected account" — a 400 on exactly the payload this
+  // work exists to accept. One literal, in the allowlist, and nowhere else.
+  const r = await rig();
+  const response = await post(r, { body: v3Expiry({ type: "connected_account.expired" }) });
+  assert.equal(response.status, 200);
+  assert.equal(statusOf(r, OWNER_ACCOUNT), "needs_reconnect");
+  assert.equal(statusOf(r, OTHER_ACCOUNT), "connected");
+  assert.equal(nudgesOf(r).length, 1);
+});
+
+for (const [name, extra] of [
+  ["wrong toolkit", { data: { id: OWNER_ACCOUNT, toolkit: { slug: APP_2 }, status: "EXPIRED" } }],
+  ["non-expired status", { data: { id: OWNER_ACCOUNT, toolkit: { slug: APP }, status: "ACTIVE" } }],
+  ["missing toolkit", { data: { id: OWNER_ACCOUNT, status: "EXPIRED" } }],
+  ["conflicting account", { metadata: { connected_account_id: OTHER_ACCOUNT, user_id: OWNER } }],
+  ["explicit wrong owner", { metadata: { user_id: OTHER } }],
+  ["malformed explicit owner", { metadata: { user_ids: [OWNER, OTHER] } }],
+] as const) await check("V3 " + name + " cannot expire an account", async () => {
+  const r = await rig();
+  const response = await post(r, { body: v3Expiry(extra) });
+  assert.ok(response.status >= 400);
+  assert.equal(statusOf(r, OWNER_ACCOUNT), "connected");
+  assert.equal(statusOf(r, OTHER_ACCOUNT), "connected");
+  assert.equal(nudgesOf(r).length, 0);
+});
+await check("unsigned V3 data.id payload never touches the database", async () => {
+  const r = await rig();
+  const response = await connectionsWebhook(new Request(URL, { method: "POST", body: v3Expiry() }), r.env, r.deps);
+  assert.equal(response.status, 403); assert.equal(r.db.log.length, 0);
+});
+
 await check("an owner id the event invents cannot move a row", async () => {
   const r = await rig();
   const res = await post(r, {

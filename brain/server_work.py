@@ -85,16 +85,21 @@ Return JSON only: {"verdict":"satisfied|incomplete|unclear|unavailable",
 
 def _judge(model, system, record, allowed):
     if model is None or not getattr(model, "live", False):
-        return {"verdict": "unavailable", "reason": "No live model is available."}
+        return {"verdict": "unavailable", "reason": "No live model is available.",
+                "judgement_received": False}
     try:
         response = model.chat(system, json.dumps(record, ensure_ascii=False), temperature=0.0)
         value = json.loads(_extract_json(response.text))
         if (not isinstance(value, dict) or value.get("verdict") not in allowed
                 or not isinstance(value.get("reason"), str) or not value["reason"].strip()):
             raise ValueError("Invalid judgement shape")
-        return {"verdict": value["verdict"], "reason": value["reason"].strip()}
+        # This is transport/schema evidence, not a model-provided meaning flag.
+        # A valid "unavailable" verdict differs from no usable judgment at all.
+        return {"verdict": value["verdict"], "reason": value["reason"].strip(),
+                "judgement_received": True}
     except Exception:
-        return {"verdict": "unavailable", "reason": "The judgement could not be obtained."}
+        return {"verdict": "unavailable", "reason": "The judgement could not be obtained.",
+                "judgement_received": False}
 
 
 def plan(model, record):
@@ -126,6 +131,11 @@ def run(goal, params, *, model, research_runner, context=None):
     if mode == "needs_access":
         return {"ok": False, "needs_user": True, "result": approach["reason"], "approach": approach}
     if mode == "unavailable":
+        if approach.get("judgement_received") is False:
+            return {"ok": False, "failure_kind": "judgement_unavailable",
+                    "result": "I couldn't get a usable response from my reasoning service. "
+                              "This task hasn't been completed. Please try again later.",
+                    "approach": approach}
         return {"ok": False, "result": "I couldn't work out how to complete this request. Please try again.",
                 "approach": approach}
     sources = []

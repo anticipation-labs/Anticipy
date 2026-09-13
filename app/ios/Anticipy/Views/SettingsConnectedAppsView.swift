@@ -68,7 +68,15 @@ struct SettingsConnectedAppsView: View {
         self.startConnect = startConnect
     }
 
-    private var owner: OwnerId? { OwnerId(session.accountID) }
+    private var owner: OwnerId? { session.isSignedIn ? OwnerId(session.accountID) : nil }
+
+    /// In-memory task identity only; never logged or persisted. Token and
+    /// backend replacement must clear this screen even for the same owner.
+    private var sessionIdentity: ConnectedAppsCredential? {
+        let backend = session.backend
+        return ConnectedAppsCredential(baseURL: backend.baseURL,
+            accountID: backend.accountID, authToken: backend.authToken)
+    }
 
     var body: some View {
         SheetChrome(title: ConnectedAppsModel.Copy.title, leading: .back) {
@@ -109,17 +117,16 @@ struct SettingsConnectedAppsView: View {
                 FootnoteText(ConnectedAppsModel.Copy.optional)
             }
         }
-        .task(id: session.accountID) {
+        .task(id: sessionIdentity) {
             // THE ACCOUNT BOUNDARY. The held question goes first, before a row
             // is drawn or a sheet is re-evaluated under the new account: the
             // model's own state is cleared by `signIn`/`signOut`, but this
             // view's copy of the question is not the model's to clear.
             confirming = nil
+            model.signOut()
             if let owner {
                 model.signIn(owner)
                 await model.load()
-            } else {
-                model.signOut()
             }
         }
         .navigationDestination(isPresented: $addingAnApp) {
@@ -163,6 +170,16 @@ struct SettingsConnectedAppsView: View {
             }
             ToggleRow(row.writesTitle, subtitle: row.writesDetail,
                       isOn: writes(for: row))
+                .disabled(row.choicesBusy)
+            if row.hasSavedWriteChoices {
+                InfoRow(ConnectedAppsModel.Copy.savedChoicesDetail, systemImage: "info.circle")
+                ActionRow(ConnectedAppsModel.Copy.clearSavedChoices,
+                          systemImage: "xmark.circle", isEnabled: !row.choicesBusy) {
+                    Haptics.engage()
+                    guard let owner else { return }
+                    Task { await model.setWrites(false, toolkit: row.card.toolkit, owner: owner) }
+                }
+            }
             DestructiveRow(row.disconnectWords, systemImage: "minus.circle") {
                 Haptics.engage()
                 guard let owner else { return }
@@ -171,6 +188,7 @@ struct SettingsConnectedAppsView: View {
                 // app, so a nil here is an answer and the alert stays shut.
                 confirming = model.pendingDisconnect
             }
+            .disabled(row.choicesBusy)
         }
     }
 

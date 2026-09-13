@@ -11,6 +11,10 @@
 # done card rendered `result` — free text the extension composed about its own
 # success. The evidence the server actually checked sat unread in the same row.
 set -eu
+# Parse before installing EXIT cleanup: macOS sh can mask a later syntax error
+# with a successful trap. Syntax errors are failures, never a green test run.
+sh -n "$0"
+case "${1:-}" in ''|--check-mutations) ;; *) echo 'unknown option'; exit 2;; esac
 here=$(cd "$(dirname "$0")" && pwd)
 app="$here/../Anticipy"
 out=$(mktemp -d)
@@ -75,9 +79,67 @@ if ! grep -q 'card.unproven' "$row"; then
     echo "A claim with no receipt then wears a receipt's clothes, silently."
     exit 2
 fi
-echo "the receipt arrives from the server, reaches the card, and is drawn"
+echo "receipt column and rendering call sites are wired (not a pixel/render proof)"
+
+# Lift actual computed methods instead of restating the view's row arithmetic.
+# Fail closed if a method disappears or its braces no longer balance. Swift
+# compilation below validates the extracted bodies; these methods have no
+# braces inside string literals. This does not typecheck the SwiftUI hierarchy.
+extract() {
+    awk -v signature="$1" -v target="$2" '
+        BEGIN { print "extension " target " {" }
+        !inside && index($0, signature) { inside = 1; found = 1 }
+        inside {
+            sub(/private /, "")
+            print
+            depth += gsub(/{/, "{"); depth -= gsub(/}/, "}")
+            if (depth == 0) { closed = 1; exit }
+        }
+        END { print "}"; if (!found || !closed) exit 2 }
+    ' "$row"
+}
+extract 'private var proofRows: Int {' DoneCardFixture > "$out/CardRows.swift"
+extract 'private func landed(_ index: Int) -> Bool {' ReceiptRevealFixture > "$out/Reveal.swift"
+
+# Scoped call-site guards: deletion/rewiring regressions, not proof that a view
+# is reachable or rendered. A simulator/device must still verify actual pixels.
+awk '/^private struct ReceiptProof: View/{inside=1} inside{print} inside && /^}/{exit}' "$row" > "$out/ReceiptProof.txt"
+for binding in 'Text(proof.checked ??' 'Array(proof.notes.enumerated())' 'proof.notesStartIndex + index' 'proof.disclosureRowIndex' 'Array(proof.items.enumerated())'; do
+    if ! grep -Fq "$binding" "$out/ReceiptProof.txt"; then
+        echo "ReceiptProof no longer wires $binding"; exit 2
+    fi
+done
+if [ "$(grep -Fc 'id: \.offset' "$out/ReceiptProof.txt")" -ne 2 ]; then
+    echo 'Receipt references must retain distinct row identities, including duplicates'; exit 2
+fi
 
 # swiftc only permits top-level code in a file literally named main.swift.
 cp "$here/JobReceiptTests.swift" "$out/main.swift"
-swiftc -O "$receipt" "$policy" "$out/main.swift" -o "$out/jobreceipttests"
+compile() {
+    swiftc -O "$1" "$2" "$app/DoneCeremonyPolicy.swift" \
+        "$out/CardRows.swift" "$out/Reveal.swift" "$out/main.swift" -o "$out/jobreceipttests"
+}
+compile "$receipt" "$policy"
 "$out/jobreceipttests"
+
+if [ "${1:-}" = --check-mutations ]; then
+    # Copies only: the user's working sources are never mutated for a probe.
+    sed 's/CFGetTypeID($0) == CFBooleanGetTypeID()/true/' "$receipt" > "$out/NumericVerified.swift"
+    compile "$out/NumericVerified.swift" "$policy"
+    if "$out/jobreceipttests" > "$out/numeric.log" 2>&1; then
+        echo 'SURVIVED: numeric JSON verification'; exit 1
+    fi
+    echo 'KILLED: numeric JSON verification'
+    sed 's/notesStartIndex + notes.count/notesStartIndex/' "$policy" > "$out/MissingNoteRows.swift"
+    compile "$receipt" "$out/MissingNoteRows.swift"
+    if "$out/jobreceipttests" > "$out/rows.log" 2>&1; then
+        echo 'SURVIVED: missing arrival note rows'; exit 1
+    fi
+    echo 'KILLED: missing arrival note rows'
+    sed 's/verified && hasValidEvidence/verified/' "$receipt" > "$out/PartialEvidence.swift"
+    compile "$out/PartialEvidence.swift" "$policy"
+    if "$out/jobreceipttests" > "$out/evidence.log" 2>&1; then
+        echo 'SURVIVED: partially malformed evidence'; exit 1
+    fi
+    echo 'KILLED: partially malformed evidence'
+fi

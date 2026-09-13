@@ -56,10 +56,14 @@ final class ConnectedAppsModel: ObservableObject {
     /// opt-in is per app. The rest is this screen's wording for it.
     struct Row: Equatable, Identifiable {
         let card: ConnectionCard
-        /// WHERE THE SWITCH SITS, ANSWERED BY THE PREDICATE THAT DECIDES THE
-        /// WRITE. Stored rather than read off `card.writesEnabled`, and that
-        /// is a fix rather than a preference — see `row(for:_:)`.
+        /// The connected accounts' opt-in, not execution availability. Keeping
+        /// it distinct from the unavailable API-write capability lets an owner
+        /// turn an existing choice off. See `row(for:_:)` for the AND fold.
         let writesEnabled: Bool
+        /// Saved choices include lapsed accounts, even when the AND floor is
+        /// OFF. This controls a false-only clear action, never a write licence.
+        let hasSavedWriteChoices: Bool
+        let choicesBusy: Bool
         let statusWords: String
         let writesWords: String
         let lastUsedWords: String
@@ -172,6 +176,12 @@ final class ConnectedAppsModel: ObservableObject {
     /// same measured reason: it already happened on this phone.
     private var loadGeneration = 0
     private var searchGeneration = 0
+    /// One settings mutation at a time. A UUID also fences a response across
+    /// sign-out followed by a NEW session for the same owner row id.
+    @Published private var mutationID: UUID?
+    /// Retain the last confirmed saved-choice indicator while a clear is in
+    /// flight. An optimistic OFF switch is not a confirmed revocation.
+    private var mutationOriginals: [Connection] = []
 
     init(store: ConnectedAppsStore, now: @escaping () -> Date = Date.init) {
         self.store = store
@@ -195,6 +205,8 @@ final class ConnectedAppsModel: ObservableObject {
     }
 
     private func forgetEverything() {
+        mutationID = nil
+        mutationOriginals = []
         loadGeneration += 1
         searchGeneration += 1
         loaded = []
@@ -216,6 +228,9 @@ final class ConnectedAppsModel: ObservableObject {
             forgetEverything()
             return
         }
+        // A refresh cannot replace optimistic state underneath a mutation.
+        // The screen's controls are busy until the current mutation finishes.
+        guard mutationID == nil else { return }
         loadGeneration += 1
         let generation = loadGeneration
         if listingOwner != signedIn {
@@ -323,8 +338,14 @@ final class ConnectedAppsModel: ObservableObject {
     private func row(for card: ConnectionCard, _ signedIn: OwnerId) -> Row {
         let mayWrite = ConnectionsPolicy.writesEnabled(rows: loaded, toolkit: card.toolkit,
                                                        for: signedIn)
+        let pendingAccounts = Set(mutationOriginals.map(\.connectedAccountID))
+        let confirmedRows = loaded.filter { !pendingAccounts.contains($0.connectedAccountID) }
+            + mutationOriginals
         return Row(card: card,
                    writesEnabled: mayWrite,
+                   hasSavedWriteChoices: OwnerScoped.rows(confirmedRows, for: signedIn)
+                       .contains { $0.toolkit == card.toolkit && $0.writesEnabled },
+                   choicesBusy: mutationID != nil,
                    statusWords: ConnectionsPolicy.statusLine(card.status),
                    writesWords: ConnectionsPolicy.writesLine(mayWrite),
                    lastUsedWords: Copy.lastUsed(card.lastUsedAt, now: now()),
@@ -347,20 +368,23 @@ final class ConnectedAppsModel: ObservableObject {
     /// moves back and the person is told, because the only thing worse than a
     /// switch that lags is a switch that lies.
     ///
-    /// Per APP, not per account: `ConnectionsPolicy.writesTransition` moves
-    /// every one of this owner's connected accounts on the app together, and
-    /// the rows it hands back are exactly what is written. That is what makes
+    /// Per APP, not per account: enabling moves connected accounts together;
+    /// clearing also reaches saved choices on accounts needing reconnection.
+    /// The rows handed back are exactly what is written. That is what makes
     /// it impossible for a mixed list to travel through a toggle and land on
     /// somebody else's connection.
     @discardableResult
     func setWrites(_ on: Bool, toolkit: String, owner viewer: OwnerId) async -> WriteOutcome {
-        guard let signedIn = owner, viewer == signedIn, listingOwner == signedIn else {
+        guard let signedIn = owner, viewer == signedIn, listingOwner == signedIn,
+              phase == .ready, mutationID == nil else {
             return .refused
         }
-        let originals = ConnectionsPolicy.connectedRows(loaded, toolkit: toolkit, for: signedIn)
         let transition = ConnectionsPolicy.writesTransition(rows: loaded, toolkit: toolkit,
                                                             to: on, for: signedIn)
         guard transition.applied else { return .refused }
+        let targetIDs = Set(transition.rowsToWrite.map(\.connectedAccountID))
+        let originals = OwnerScoped.rows(loaded, for: signedIn)
+            .filter { $0.toolkit == toolkit && targetIDs.contains($0.connectedAccountID) }
         // Already where it is being put, on every account: nothing to send.
         // A SKEWED app — one account opted in, one not — is not this case, and
         // does send, because the screen's toggle is the AND of them.
@@ -368,19 +392,35 @@ final class ConnectedAppsModel: ObservableObject {
 
         let app = card(for: toolkit, signedIn)?.name
             ?? ConnectionsPolicy.appName(nil, fallback: toolkit)
+        let operation = UUID()
+        mutationID = operation
+        mutationOriginals = originals
+        loadGeneration += 1
+        defer {
+            if mutationID == operation {
+                mutationOriginals = []
+                mutationID = nil
+            }
+        }
         notice = nil
         apply(transition.rowsToWrite, for: signedIn)
 
         do {
             try await store.setWrites(transition.rowsToWrite, owner: signedIn)
-            guard owner == signedIn else { return .refused }
+            guard mutationID == operation, owner == signedIn,
+                  listingOwner == signedIn else { return .refused }
             return .saved
         } catch {
             // The account may have changed while the write was in flight. If it
             // did, this owner's list is already gone: there is nothing to put
             // back, and nothing may be said to whoever is signed in now.
-            guard owner == signedIn, listingOwner == signedIn else { return .refused }
+            guard mutationID == operation, owner == signedIn,
+                  listingOwner == signedIn else { return .refused }
             apply(originals, for: signedIn)
+            // A lost response may follow a successful save. The old choice is
+            // a cache, not proof nothing changed. Require fresh server state
+            // before allowing another mutation instead of guessing authority.
+            phase = .trouble
             let said = Copy.writeNotSaved(app: app)
             notice = said
             return .reverted(said)
@@ -407,6 +447,7 @@ final class ConnectedAppsModel: ObservableObject {
     /// the question; `confirmDisconnect` is the only thing that acts.
     func askToDisconnect(_ toolkit: String, owner viewer: OwnerId) {
         guard let signedIn = owner, viewer == signedIn, listingOwner == signedIn,
+              phase == .ready, mutationID == nil,
               let card = card(for: toolkit, signedIn) else {
             pendingDisconnect = nil
             return
@@ -482,12 +523,17 @@ final class ConnectedAppsModel: ObservableObject {
     @discardableResult
     func confirmDisconnect(owner viewer: OwnerId) async -> DisconnectVerdict {
         guard let signedIn = owner, viewer == signedIn, listingOwner == signedIn,
+              phase == .ready, mutationID == nil,
               let pending = pendingDisconnect else {
             pendingDisconnect = nil
             return .refused
         }
         pendingDisconnect = nil
         notice = nil
+        let operation = UUID()
+        mutationID = operation
+        loadGeneration += 1
+        defer { if mutationID == operation { mutationID = nil } }
 
         // EVERY row this owner still has on the app, not only the healthy
         // ones. `connectedRows` means `status == .connected`, and a connection
@@ -510,7 +556,8 @@ final class ConnectedAppsModel: ObservableObject {
                                                 revoked: false, deleted: false,
                                                 revokeUnavailable: false))
             }
-            guard owner == signedIn, listingOwner == signedIn else { return .refused }
+            guard mutationID == operation, owner == signedIn,
+                  listingOwner == signedIn else { return .refused }
         }
 
         let combined = ConnectionsPolicy.combine(results, appName: pending.appName)
@@ -653,17 +700,16 @@ final class ConnectedAppsModel: ObservableObject {
         /// the last sentence sits on the screen until the next action, which
         /// reads as a state rather than as news.
         static let dismissNotice = "OK"
-        static let invitation = "Nothing is connected yet. Connect an app and I can work in it for you directly, and you can undo it here whenever you like."
+        static let invitation = "Nothing is connected yet. Connect an app for supported reads, and disconnect it here whenever you like."
         /// The screen's version of `ConnectionsPolicy.optionalLine(app:)`, which
-        /// needs an app's name and is for one ask. Same sentence, same reason:
-        /// the browser does the same work either way, which is what makes it
-        /// true rather than polite.
-        static let optional = "Entirely up to you — I can do any of this in your browser either way."
+        /// needs an app's name and is for one ask. Neither catalog membership
+        /// nor connection state establishes browser availability or capability.
+        static let optional = "Entirely up to you — some tasks may use your browser when it is connected and available."
 
         static let addAnApp = "Add an app"
         static let searchLabel = "App"
         static let searchPlaceholder = "Type a name"
-        static let searchPrompt = "Type the name of an app you use. Anything I can reach is in here, including the ones I have never asked you about."
+        static let searchPrompt = "Type an app name to look for a connection option. An app in this list may not support every task."
         static let searching = "Looking…"
         static let searchTrouble = "I could not search just now. Try again in a moment."
         static let alreadyConnected = "Already connected"
@@ -687,14 +733,16 @@ final class ConnectedAppsModel: ObservableObject {
             return "Last used \(PlainDuration.words(seconds)) ago"
         }
 
-        static let writesTitle = "Let Anticipy make changes"
+        static let writesTitle = "Allow changes when supported"
+        static let clearSavedChoices = "Clear saved change choices"
+        static let savedChoicesDetail = "A saved change choice remains on at least one account, even if the switch is off. Clear it without connecting again. This does not disconnect the app."
 
         static func writesDetail(app: String) -> String {
-            "Off, I only read \(app). On, you permit supported changes; task approvals still apply. Some actions may need your browser or may not be available yet."
+            "Connections to \(app) are limited to reads right now. This switch records your choice about supported changes; it does not make them available or approve a task."
         }
 
         static func writeNotSaved(app: String) -> String {
-            "That switch has gone back: I could not save the change for \(app), so nothing about it changed. Try again in a moment."
+            "I could not confirm the change for \(app). Check the saved choices again before trying another change."
         }
 
         static func disconnectAction(app: String) -> String { "Disconnect \(app)" }
@@ -720,7 +768,8 @@ final class ConnectedAppsModel: ObservableObject {
                 lastUsed(nil, now: Date()),
                 lastUsed(0.0, now: Date(timeIntervalSince1970: 3600)),
                 lastUsed(1.0, now: Date(timeIntervalSince1970: 3601)),
-                writesTitle, writesDetail(app: app), writeNotSaved(app: app),
+                writesTitle, clearSavedChoices, savedChoicesDetail,
+                writesDetail(app: app), writeNotSaved(app: app),
                 disconnectAction(app: app), disconnectQuestion(app: app),
                 disconnectDetail(app: app), disconnectConfirm, disconnectCancel,
             ]

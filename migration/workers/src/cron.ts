@@ -32,6 +32,7 @@ import { connectNudgeSweep, installNudgeWiring } from "./connections/nudge.ts";
 import { nudgeWiring, type TextCommandEnv } from "./connections/wiring.ts";
 import { sweepConnectedSignals } from "./connections/signals.ts";
 import { collectConversationSignals } from "./connections/discovery.ts";
+import { RECOVERY_CRON, recoverOAuthAttempts } from "./connections/recovery.ts";
 
 /**
  * THE CONNECT-ASK WIRING, installed once when this module loads.
@@ -84,6 +85,13 @@ export async function scheduled(
   event: ScheduledController, env: CronEnv, ctx: ExecutionContext,
 ): Promise<void> {
   switch (event.cron) {
+    case RECOVERY_CRON:
+      // Dedicated read-only vendor recovery. Never restore the retired HQ
+      // reminder schedule or run discovery/nudges as a side effect of this tick.
+      ctx.waitUntil(recoverOAuthAttempts(env).then(report => {
+        console.log("OAuth recovery", JSON.stringify(report));
+      }).catch(() => { console.log("OAuth recovery unavailable"); }));
+      return;
     // Separate from the retired HQ reminder job. Evidence collection must
     // finish before the existing contextual nudge policy reads its signals.
     case "23 * * * *":

@@ -1337,7 +1337,7 @@ CREATE TABLE IF NOT EXISTS "connect_links" (
       -- one statement, `won = (changes === 1)`. Anything that reads this
       -- row, decides in JavaScript and writes it back is the double-redeem
       -- bug with extra steps.
-  "completed_at" REAL NULL
+  "completed_at" REAL NULL,
       -- DEVIATION FROM THE CONTRACT, DECLARED: not in `ConnectLink`. It is
       -- the exactly-once gate for the vendor callback, taken as a LEASE
       -- (links.ts complete/release) rather than filed as a receipt. Without
@@ -1346,11 +1346,80 @@ CREATE TABLE IF NOT EXISTS "connect_links" (
       -- completed with no connection row anywhere, the page says "connected"
       -- forever, and Composio publishes NO success webhook, so nothing would
       -- ever mention it again.
+  "recovery_account_id" TEXT NULL,
+  "recovery_deadline" REAL NULL,
+  "recovery_next_check" REAL NULL,
+  "recovery_attempts" INTEGER NOT NULL DEFAULT 0 CHECK ("recovery_attempts" BETWEEN 0 AND 16),
+  "recovery_lease" TEXT NULL
 );
 CREATE INDEX IF NOT EXISTS "idx_connect_links_owner" ON "connect_links" ("user_id", "toolkit");
 -- "how many links does this owner have outstanding" — /settings/connected,
 -- and the per-owner mint rate limit.
 CREATE INDEX IF NOT EXISTS "idx_connect_links_expiry" ON "connect_links" ("expires_at");
+CREATE INDEX IF NOT EXISTS idx_connect_links_recovery
+  ON connect_links(recovery_next_check) WHERE recovery_account_id IS NOT NULL AND completed_at IS NULL;
+-- THESE FOUR ARE BYTE-IDENTICAL TO 2026-09-11-oauth-recovery.sql, and
+-- migration/workers/test/schema-migration-parity.test.ts is what keeps them
+-- that way. They were NOT identical on 2026-09-11: this file carried an
+-- account-only clause while the migration carried the reviewed one, so a fresh
+-- install and an upgraded database fenced different things and every Worker
+-- suite — which runs against THIS file — measured only the fresh half.
+-- A LATER EXPLICIT DISCONNECT/DECLINE WINS OVER AN IN-FLIGHT VENDOR READ.
+--
+-- `arm()` writes recovery_account_id only AFTER provider.authorize returns, so
+-- between the redeem and the arm there is a live attempt whose account id is
+-- still NULL. An account-only predicate cannot see it, and a disconnect landing
+-- in that window would be overtaken a moment later by a recovery that
+-- reconnected the very account the owner just removed. `used_at IS NOT NULL` is
+-- what says "this link was actually redeemed", and `toolkit` keeps that branch
+-- from reaching a pending connect for a DIFFERENT app of the same owner.
+--
+-- KNOWN AND ACCEPTED COST: the owner who is adding a SECOND account of the same
+-- app, and removes the first while the new one is mid-authorize, has the new
+-- attempt cancelled too. That costs one "send me a new link" tap. The other
+-- direction re-creates a connection somebody explicitly removed, so this is the
+-- side to be wrong on. Do not try to narrow it with a clock in SQL.
+--
+-- THE PURGES CLAUSE IS NOT DECORATION. These bodies UPDATE connect_links, and
+-- 2026-09-07-account-erasure-fence.sql installs a BEFORE UPDATE RAISE(ABORT) on
+-- that table for any owner holding a purges row. Without the NOT EXISTS, a
+-- DELETE on connections for such an owner aborts with ACCOUNT_ERASURE_IN_PROGRESS
+-- — measured, not theorised — which is reachable whenever accountDelete files
+-- the purge row and then returns 503 before running its delete batch. Skipping
+-- a fenced owner costs nothing: recovery.ts already refuses to arm, list or
+-- claim anything for one, so there is never a live attempt left to cancel.
+CREATE TRIGGER IF NOT EXISTS cancel_oauth_recovery_deleted_connection
+AFTER DELETE ON connections
+BEGIN
+  UPDATE connect_links SET recovery_deadline=0, recovery_lease=NULL
+  WHERE user_id=OLD.user_id AND toolkit=OLD.toolkit AND completed_at IS NULL
+    AND (recovery_account_id=OLD.connected_account_id OR (recovery_account_id IS NULL AND used_at IS NOT NULL))
+    AND NOT EXISTS (SELECT 1 FROM purges WHERE owner_ref=connect_links.user_id);
+END;
+CREATE TRIGGER IF NOT EXISTS cancel_oauth_recovery_disconnected_connection
+AFTER UPDATE OF status ON connections WHEN NEW.status='disconnected'
+BEGIN
+  UPDATE connect_links SET recovery_deadline=0, recovery_lease=NULL
+  WHERE user_id=NEW.user_id AND toolkit=NEW.toolkit AND completed_at IS NULL
+    AND (recovery_account_id=NEW.connected_account_id OR (recovery_account_id IS NULL AND used_at IS NOT NULL))
+    AND NOT EXISTS (SELECT 1 FROM purges WHERE owner_ref=connect_links.user_id);
+END;
+CREATE TRIGGER IF NOT EXISTS cancel_oauth_recovery_decline_insert
+AFTER INSERT ON connect_nudges WHEN NEW.state IN ('declined_soft','declined')
+BEGIN
+  UPDATE connect_links SET recovery_deadline=0, recovery_lease=NULL
+  WHERE user_id=NEW.user_id AND toolkit=NEW.toolkit AND completed_at IS NULL
+    AND used_at IS NOT NULL
+    AND NOT EXISTS (SELECT 1 FROM purges WHERE owner_ref=connect_links.user_id);
+END;
+CREATE TRIGGER IF NOT EXISTS cancel_oauth_recovery_decline_update
+AFTER UPDATE OF state ON connect_nudges WHEN NEW.state IN ('declined_soft','declined')
+BEGIN
+  UPDATE connect_links SET recovery_deadline=0, recovery_lease=NULL
+  WHERE user_id=NEW.user_id AND toolkit=NEW.toolkit AND completed_at IS NULL
+    AND used_at IS NOT NULL
+    AND NOT EXISTS (SELECT 1 FROM purges WHERE owner_ref=connect_links.user_id);
+END;
 -- The prune. Rows outlive their ten minutes by a lot unless something
 -- sweeps them, and a sweep that scans is a sweep that gets turned off.
 
@@ -1392,7 +1461,9 @@ CREATE TABLE IF NOT EXISTS "connect_codes" (
       -- NULL = live. The single-use gate, and the reason it is NULL and not 0:
       --   UPDATE "connect_codes" SET "used_at" = ?1
       --    WHERE "id" = ?2 AND "used_at" IS NULL
-  "created_at"   REAL NOT NULL
+  "created_at"   REAL NOT NULL,
+  "delivery_state" TEXT NOT NULL DEFAULT 'accepted'
+      CHECK ("delivery_state" IN ('pending', 'accepted', 'failed'))
 );
 CREATE INDEX IF NOT EXISTS "idx_connect_codes_link"
   ON "connect_codes" ("token_handle", "created_at");

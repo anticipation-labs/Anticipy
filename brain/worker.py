@@ -11,12 +11,14 @@ Run:  .venv/bin/python -m brain.worker
 from __future__ import annotations
 
 import contextlib
+from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import json
 import os
 from pathlib import Path
 import re
 import time
+from threading import Event as ThreadEvent
 from urllib.parse import urlparse
 from zoneinfo import ZoneInfo
 from datetime import datetime, timedelta, timezone
@@ -627,8 +629,10 @@ def seed_profile_identity(memory, _seen=None, owner_ref: str = "") -> None:
                 memory.remember_fact(fact, importance=5, source="interview")
                 seen[key] = fact
                 print(f"profile seeded from onboarding: {key}")
-    except Exception as e:
-        print(f"profile identity seed failed (harmless): {e}")
+    except Exception:
+        # A memory/provider error can contain the owner's name, address or
+        # source text. Routine service diagnostics must not copy that payload.
+        print("profile identity seed failed; will retry")
 
 
 def ingest_profile_events(memory, owner_ref: str = "") -> int:
@@ -695,9 +699,11 @@ def ingest_profile_events(memory, owner_ref: str = "") -> int:
             # flood.
             mark_processed(event.get("id", ""), "ignore")
             written += 1
-            print(f"profile fact via {source} (importance {importance}): {text[:60]}")
-    except Exception as e:
-        print(f"profile import failed (harmless): {e}")
+            print(f"profile fact processed via {source} (importance {importance})")
+    except Exception:
+        # A lost acknowledgement can follow a committed write: do not promise
+        # either success or an untouched event, and never echo exception text.
+        print("profile import interrupted; outcome unconfirmed")
     return written
 
 
@@ -782,8 +788,7 @@ def ingest_read_facts(memory, owner_ref: str = "") -> int:
                 # and not only in a log line nobody is tailing — and the mark
                 # is what stops the 2s poll replaying this event forever.
                 mark_processed(event.get("id", ""), "refused_read_fact_ceiling")
-                print(f"read fact REFUSED: job {job} is already at its ceiling "
-                      f"of {READ_FACTS_PER_JOB} facts — {text[:60]}")
+                print(f"read fact REFUSED: per-job ceiling of {READ_FACTS_PER_JOB} facts reached")
                 continue
             # PROVENANCE FROM THE EVENT, defaulting to the fenced mail tag.
             # It has to land in remember_fact, because `source` is the ONLY
@@ -822,9 +827,9 @@ def ingest_read_facts(memory, owner_ref: str = "") -> int:
             # that turns a read into a flood.
             mark_processed(event.get("id", ""), "ignore")
             written += 1
-            print(f"read fact via {source} (importance {importance}): {text[:60]}")
-    except Exception as e:
-        print(f"supervised read ingest failed (harmless): {e}")
+            print(f"read fact processed via {source} (importance {importance})")
+    except Exception:
+        print("supervised read ingest interrupted; outcome unconfirmed")
     return written
 
 
@@ -859,10 +864,9 @@ def ingest_read_vetoes(memory, owner_ref: str = "") -> int:
             # Mark before counting, same reason as everywhere else in this file.
             mark_processed(event.get("id", ""), "ignore")
             applied += 1
-            print(f"read fact vetoed ({removed} row(s) deleted, never "
-                  f"re-derive): {text[:60]}")
-    except Exception as e:
-        print(f"veto failed (harmless, the fact stays): {e}")
+            print(f"read fact veto applied ({removed} row(s) deleted)")
+    except Exception:
+        print("veto interrupted; outcome unconfirmed")
     return applied
 
 
@@ -1988,6 +1992,221 @@ def _release_api_claim(anticipy, job: dict, params: dict, workflow,
         print(f"api hand: {job['id']} release failed: {e}")
 
 
+CONNECTION_RECOVERY_SCAN_SECONDS = 5
+CONNECTION_RECOVERY_RETRY_SECONDS = 5 * 60
+CONNECTION_RECOVERY_MAX_ATTEMPTS = 3
+CONNECTION_RECOVERY_MODEL_SECONDS = 30
+CONNECTION_RECOVERY_MODEL_CALLS = 4
+
+
+class _ReadRecovery:
+    def __init__(self, base, owner):
+        self.base, self.owner = base, owner
+        self.cursor, self.scan_at, self.future = "", 0.0, None
+        self.stop = ThreadEvent()
+        self.pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="connection-read-recovery")
+
+
+def close_connection_recovery(anticipy, *, wait=False) -> None:
+    """Stop the owner's recovery thread and refuse it any further work.
+
+    Called from the worker's own shutdown and from test teardown. It is safe on
+    an owner that never scheduled anything, and safe to call twice: the stop
+    signal and the pool shutdown are both idempotent. `wait=True` blocks until
+    the thread is actually gone, which is what a fixture wants before it tears
+    down the server the thread is talking to.
+    """
+    state = getattr(anticipy, "_connection_recovery", None)
+    if state:
+        state.stop.set()
+        state.pool.shutdown(wait=wait, cancel_futures=True)
+
+
+def drain_connection_recovery(anticipy, timeout: float = 30.0) -> bool:
+    """Block until the scheduled replan finishes, then harvest its cursor.
+
+    THE OWNER LOOP MUST NOT CALL THIS. `recover_connected_read` schedules and
+    returns precisely so a slow model never stands between the owner and an
+    answer; a wait here would put it back. Shutdown calls it so a redeploy does
+    not kill a thread half-way through a reservation, and tests call it so an
+    assertion is about a finished attempt rather than an unstarted one.
+
+    False means there was nothing in flight to wait for.
+    """
+    state = getattr(anticipy, "_connection_recovery", None)
+    if state is None or state.future is None:
+        return False
+    try:
+        state.cursor = state.future.result(timeout=timeout)
+    except Exception:
+        # A replan that raised has already been swallowed inside the thread and
+        # has left its durable receipt behind; there is nothing to report here
+        # that the next scan will not read out of the row itself.
+        pass
+    state.future = None
+    return True
+
+
+def recover_connected_read(anticipy) -> None:
+    """Schedule/harvest one independent replan, never block the owner loop.
+
+    The thread receives no Memory, Conversation, or shared model. Its only
+    shared object is a shutdown signal. A new model is constructed inside it.
+    Three attempts per exact task/connection facts are reserved durably BEFORE
+    model I/O; only an unchanged resting read can take the new API plan.
+    """
+    owner = str(getattr(anticipy, "owner_ref", "") or "")
+    base = anticipy.backend_url
+    state = getattr(anticipy, "_connection_recovery", None)
+    if state and (state.owner != owner or state.base != base):
+        close_connection_recovery(anticipy)
+        if state.future is None or state.future.done():
+            anticipy._connection_recovery = None
+        return
+    if not re.fullmatch(r"[a-z0-9]{15}", owner) or not os.environ.get("ANTICIPY_SERVICE_TOKEN"):
+        return
+    if state is None:
+        state = anticipy._connection_recovery = _ReadRecovery(base, owner)
+    if state.stop.is_set():
+        return
+    if state.future is not None:
+        if not state.future.done():
+            return
+        try:
+            state.cursor = state.future.result()
+        except Exception:
+            pass
+        state.future = None
+    if time.monotonic() < state.scan_at:
+        return
+    state.scan_at = time.monotonic() + CONNECTION_RECOVERY_SCAN_SECONDS
+    state.future = state.pool.submit(_recover_one_read, base, owner, state.cursor, state.stop)
+
+
+def _recover_one_read(base, owner, cursor, stop):
+    from .anticipy_core import job_lane
+    from . import hands
+    from .llm import decision_budget
+    try:
+        connections = hands.read_connections(owner, base)
+        if stop.is_set() or not connections or not any(row.status == "connected" for row in connections):
+            return cursor
+        connection_key = tuple(sorted((row.toolkit, row.alias, row.status, row.writes_enabled)
+                                      for row in connections))
+        filt = (f'owner_ref="{owner}" && status="queued" && consequence="read_only" '
+                '&& (lane="" || lane="browser")')
+        # Keyset rotation: an unsupported first task cannot starve later work.
+        # At most two one-row list queries (the second wraps at the end).
+        for after in ([cursor, ""] if cursor else [""]):
+            response = backend.get(f"{base}/api/collections/jobs/records", params={
+                "filter": filt + (f' && id>"{after}"' if after else ""),
+                "perPage": 1, "sort": "id"}, timeout=10)
+            if not response.ok:
+                return cursor
+            listed = response.json().get("items", [])
+            if listed:
+                break
+        if not listed:
+            return ""
+        job_id = str(listed[0].get("id") or "")
+        if not re.fullmatch(r"[a-z0-9]{15}", job_id):
+            return cursor
+        cursor = job_id
+        path = f"{base}/api/collections/jobs/records/{job_id}"
+        fresh = backend.get(path, timeout=10)
+        if not fresh.ok or not fresh.headers.get("ETag"):
+            return cursor
+        row = fresh.json()
+        if (row.get("owner_ref") != owner or row.get("status") != "queued"
+                or row.get("consequence") != "read_only" or row.get("lane") not in ("", "browser")
+                or any(row.get(key) for key in ("claimed_by", "claimed_at", "lease_token", "lease_until", "approval", "receipt", "effect_uncertain"))):
+            return cursor
+        params = json.loads(row.get("params") or "{}")
+        workflow = workflow_from_params(params)
+        if (not workflow or workflow.state.value != "queued" or workflow.consequence.value != "read_only"
+                or workflow.owner_ref != owner or workflow.version != row.get("workflow_version")
+                or workflow.plan_id != row.get("workflow_id") or workflow.goal != row.get("goal")
+                or workflow.lease or workflow.receipt or workflow.approval or workflow.act
+                or params.get("source") == "browser"
+                or not isinstance(params.get("_effect"), dict) or params["_effect"].get("touches") != "read"):
+            return cursor
+        # THE SAME QUESTION, NOT THE SAME BYTES. The budget is three attempts per
+        # unchanged task and connection facts. `_hand` is this thread's own
+        # note and never counts; and `_workflow` carries BOOKKEEPING that every
+        # Worker handback rewrites (state, reason, updated_at, attempts, lease)
+        # — hashing it made each api→browser bounce a "new question" with a
+        # fresh budget, so an ambiguous task was re-planned six times and
+        # failed by the attempt cap (measured 2026-09-12). Only the workflow's
+        # IDENTITY is part of the question: which plan, which revision, which
+        # goal, which scope, which consequence.
+        workflow_identity = {key: (params.get("_workflow") or {}).get(key)
+                             for key in ("plan_id", "version", "goal", "scope_digest",
+                                         "consequence", "effect_key")}
+        fingerprint = hashlib.sha256(json.dumps([
+            {key: value for key, value in params.items() if key not in ("_hand", "_workflow")},
+            workflow_identity, connection_key,
+        ], sort_keys=True).encode()).hexdigest()
+        hand = params.get("_hand")
+        if not isinstance(hand, dict):
+            return cursor
+        previous = hand.get("_connection_recovery", {})
+        attempts = 0
+        if isinstance(previous, dict) and previous.get("fingerprint") == fingerprint:
+            attempts = previous.get("attempts")
+            retry_at = previous.get("retry_at")
+            if (type(attempts) is not int or not 1 <= attempts < CONNECTION_RECOVERY_MAX_ATTEMPTS
+                    or type(retry_at) not in (int, float) or time.time() < retry_at):
+                return cursor
+        receipt = {"fingerprint": fingerprint, "attempts": attempts + 1,
+                   "retry_at": time.time() + CONNECTION_RECOVERY_RETRY_SECONDS}
+        hand["_connection_recovery"] = receipt
+        reserved_params = json.dumps(params)
+        if stop.is_set():
+            return cursor
+        reserved = backend.patch(path, json={"params": reserved_params},
+                                 headers={"If-Match": fresh.headers["ETag"]}, timeout=10)
+        if not reserved.ok:
+            return cursor  # No reservation means no paid model call.
+        reserved_row = reserved.json()
+        if reserved_row.get("params") != reserved_params or stop.is_set():
+            return cursor
+        # Independent model/context; the main owner thread is free to answer.
+        model = hands._default_llm()
+        with decision_budget() as budget:
+            budget.deadline = min(budget.deadline, time.monotonic() + CONNECTION_RECOVERY_MODEL_SECONDS)
+            budget.calls_left = min(budget.calls_left, CONNECTION_RECOVERY_MODEL_CALLS)
+            lane = job_lane(row["goal"], params, owner_ref=owner, backend_url=base, llm=model)
+        note = params.get("_hand", {})
+        if stop.is_set() or lane != LANE_API or note.get("hand") != "api" or note.get("effect") != "read":
+            return cursor
+        note["_connection_recovery"] = receipt
+        latest = backend.get(path, timeout=10)
+        if (not latest.ok or not latest.headers.get("ETag") or latest.json() != reserved_row
+                or stop.is_set()):
+            return cursor
+        applied = backend.patch(path, json={"lane": LANE_API, "params": json.dumps(params)},
+                                headers={"If-Match": latest.headers["ETag"]}, timeout=10)
+        # THE ANSWER IS READ. Discarding it made three different outcomes look
+        # identical from outside this thread: a 403 from the reroute policy (the
+        # plan is not one the Worker will accept, and every retry will be
+        # refused the same way), a 412 from the compare-and-swap (somebody else
+        # moved the row and the next scan should simply try again), and a 5xx.
+        # The attempt is charged either way, so the difference is the only thing
+        # that tells an operator whether the budget was spent on a transient
+        # loss or on a plan that can never land.
+        if not getattr(applied, "ok", False):
+            status = getattr(applied, "status_code", "?")
+            print(f"connection recovery: {job_id} lane change refused ({status}) — "
+                  + ("the reroute policy will refuse this plan every time"
+                     if status == 403 else
+                     "the row moved under the plan; the next scan re-reads it"))
+            return cursor
+    except Exception:
+        # Never export owner words, a provider body, or exception prose here.
+        pass
+    return cursor
+
+
 def run_api_jobs(anticipy, poster=None) -> None:
     """Run the api lane: claim HERE, execute in the Worker. See the block
     comment above. `poster(url, json=..., timeout=...)` is the one seam,
@@ -1995,6 +2214,14 @@ def run_api_jobs(anticipy, poster=None) -> None:
     marker ride on the request the way they do on every other brain call."""
     global _api_hand_down_until
     try:
+        # REPLANNING IS NOT EXECUTION, AND THE BACKOFF BELONGS TO EXECUTION.
+        # `_api_hand_down_until` is the five-minute hold that stops this process
+        # hammering a /hands/api/run that just failed. Recovery neither claims
+        # nor runs anything — it decides that a task which has been waiting on a
+        # browser can now take the api lane — so leaving it behind the hold
+        # meant one door failing stopped every replan for five minutes, and a
+        # task waiting on an app the owner had just connected sat there.
+        recover_connected_read(anticipy)
         if time.time() < _api_hand_down_until:
             return
         base = anticipy.backend_url
@@ -5106,8 +5333,16 @@ def configure_message_transport(anticipy, provider):
     return arm, transport
 
 
+#: The owner this process is serving, published for the entry point below so a
+#: shutdown can reach the recovery thread. Nothing else may read it: every other
+#: caller is handed its Anticipy explicitly, and a module-level handle that
+#: anything could pick up is the "one operator's mailbox serving everybody"
+#: failure in another shape.
+ACTIVE_ANTICIPY = None
+
+
 def main() -> None:
-    global ACTIVE_OWNER_REF, ACTIVE_OWNER_ID, CLOCK_TZ
+    global ACTIVE_OWNER_REF, ACTIVE_OWNER_ID, CLOCK_TZ, ACTIVE_ANTICIPY
     legacy_owner = os.environ.get("ANTICIPY_OWNER_ID", "").strip()
     owner_ref = resolve_owner_ref(legacy_owner)
     if not owner_ref:
@@ -5164,6 +5399,7 @@ def main() -> None:
     # before the first worker duty can speak.  It also covers notify_owner()
     # calls made from inside Anticipy, not only the calls visible in this file.
     install_canonical_notification_guard(anticipy)
+    ACTIVE_ANTICIPY = anticipy
     # Resolve the account-bound route before describing it. Supervised
     # children intentionally start with an empty owner_phone so they can never
     # inherit another account's environment value; the old warning ran during
@@ -5654,4 +5890,30 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    # THE RECOVERY THREAD HAS TO BE TOLD TO STOP, AND THIS IS THE ONLY PLACE
+    # THAT CAN TELL IT.
+    #
+    # Production runs this module with `python -m brain.worker`
+    # (brain/container_entry.py:340), so this IS the process entry point.
+    # `recover_connected_read` hands a replan to a ThreadPoolExecutor, and that
+    # executor JOINS its threads during interpreter shutdown BEFORE any atexit
+    # handler runs — so a hook registered there would be too late, and a thread
+    # sitting on a ten-second read or a thirty-second model budget would hold
+    # the process open with nothing having asked it to stop.
+    #
+    # `wait=False` on purpose: setting the stop signal is what the thread
+    # checks, and blocking a redeploy for the length of a model call to watch it
+    # finish is the wrong trade. The wrapper is deliberately HERE and not around
+    # main's loop, because two suites compile that loop out of the real source
+    # by finding the `while` in `main.body` (tests/test_interactive_priority.py)
+    # and burying it inside a `try` makes them extract nothing.
+    #
+    # A SIGTERM still bypasses this: the platform kills the process outright and
+    # no Python `finally` runs. That is the container's contract, not something
+    # this line can promise around, and it is safe — the reservation is durable
+    # and the next tick reads the attempt out of the row.
+    try:
+        main()
+    finally:
+        if ACTIVE_ANTICIPY is not None:
+            close_connection_recovery(ACTIVE_ANTICIPY)

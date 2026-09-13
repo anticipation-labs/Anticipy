@@ -78,6 +78,7 @@ import { dirname, join } from "node:path";
 import { FakeD1, asD1 } from "./fake-d1.ts";
 import { issueToken } from "../src/api/auth.ts";
 import { createD1Store, forgetLiveColumns, type StoredConnection } from "../src/connections/store.ts";
+import { createRecoveryStore } from "../src/connections/recovery.ts";
 import {
   ComposioConnections, connectionsFromEnv, resetConnectionsProvider, COMPOSIO_BASE_URL,
 } from "../src/connections/provider.ts";
@@ -285,6 +286,12 @@ async function rig(opts: RigOpts = {}): Promise<Rig> {
         ];
       },
     },
+    // THE REAL RECOVERY STORE over the same database, as `connectionsApiDeps`
+    // wires it: since 2026-09-12 the Skip door cancels an armed OAuth attempt
+    // through it before the ladder is read, and answers 503 without it. The
+    // legs for that live in connections-recovery.test.ts; here it only has to
+    // be present, or every /skip check below would be measuring its absence.
+    recovery: createRecoveryStore({ DB: asD1(db) }),
     now: opts.now ?? ((): number => NOW),
     ...(opts.search
       ? {

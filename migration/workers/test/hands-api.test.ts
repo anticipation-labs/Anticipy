@@ -159,7 +159,7 @@ function seedJob(db: FakeD1, s: JobSeed = {}): string {
     s.status ?? "running", s.owner_ref ?? OWNER, s.lane ?? API_LANE, s.claimed_by ?? API_CLAIMANT,
     NOW, s.attempts ?? 1, wf ? String(wf.plan_id) : "", wf ? Number(wf.version) : 0, wf ? String(wf.state) : "",
     wf ? String(wf.consequence) : "", wf ? String(wf.lineage_key) : "", wf ? String(wf.effect_key) : "",
-    wf ? String(wf.scope_digest) : "", wf ? LEASE : "", wf ? NOW : "",
+    wf ? String(wf.scope_digest) : "", wf ? LEASE : "", wf ? String((wf.lease as Record<string, unknown>)?.expires_at ?? "") : "",
   );
   return id;
 }
@@ -218,11 +218,17 @@ const failed = (kind: "auth" | "rate" | "schema" | "other", over: Record<string,
   outcome: "failed", toolkit: APP as never, tool: READ_TOOL, account: ACCOUNT, effect: "read",
   error: { kind, status: kind === "auth" ? 401 : kind === "rate" ? 429 : kind === "schema" ? 400 : 502,
            token: kind === "auth" ? "Unauthorized" : "", retryable: kind === "rate", message: "scripted" },
-  mayHaveLanded: kind === "other", ms: 12, ...over,
+  mayHaveLanded: kind === "other",
+  // The hand's own reading of the vendor's account status after an auth
+  // failure. "dead" is what the legs below written before 2026-09-12 assumed
+  // every auth failure meant; the two legs after them are the other answers.
+  credential: kind === "auth" ? "dead" : "unknown",
+  ms: 12, ...over,
 } as ApiHandOutcome);
 
 async function run(r: Rig, deps: HandsApiDeps, body: unknown = { job: JOB, owner: OWNER }, token: string | null = TOKEN) {
-  const { value, lines } = await quiet(() => handsApiRun(post(body, token), r.env, deps));
+  const { value, lines } = await quiet(() => handsApiRun(post(body, token), r.env,
+    { now: () => new Date(NOW), ...deps }));
   const text = await value.text();
   let parsed: any = null;
   try { parsed = JSON.parse(text); } catch { parsed = null; }
@@ -637,11 +643,95 @@ await check("a huge vendor reply is bounded in result", () => {
 
 const HANDBACK_REASONS: ApiHandRefusal[] = [
   "not_connected", "writes_not_enabled", "tool_unknown", "tool_required", "args_required",
-  "effect_required", "toolkit_required", "account_ambiguous", "catalog_unavailable",
+  "effect_required", "toolkit_required", "catalog_unavailable",
   "store_unavailable", "unconfigured",
 ];
 
-await check("every refusal but two hands the job to the browser lane, claim cleared, plan queued", async () => {
+await check("an explicitly selected API account is never replaced by a browser fallback", async () => {
+  for (const reason of [...HANDBACK_REASONS, "plan_stale"] as ApiHandRefusal[]) {
+    const r = rig();
+    seedJob(r.db, { note: note({ alias: "work" }) });
+    const out = await run(r, scripted(refused(reason)));
+    assert.equal(out.status, 200, out.text);
+    assert.equal(out.body.status, "needs_user", reason);
+    const row = readJob(r.db);
+    assert.equal(row.lane, API_LANE, reason);
+    assert.equal(row.p._hand.alias, "work", reason);
+    assert.equal(row.p._hand.hand, "api", reason);
+    assert.equal(row.receipt, "", reason);
+    assert.equal(row.lease_token, "", reason);
+    assert.equal(row.effect_uncertain, 0, reason);
+    assertConsistent(row);
+  }
+});
+
+await check("a selected-account failure keeps its identity and distinguishes dead credentials from denied scopes", async () => {
+  for (const credential of ["dead", "alive", "unknown"] as const) {
+    const r = rig();
+    await r.store.putConnection(connection({ alias: "work" }));
+    seedJob(r.db, { note: note({ alias: "work" }) });
+    const out = await run(r, scripted(failed("auth", { credential })));
+    const row = readJob(r.db);
+    assert.equal(out.status, 200, out.text);
+    assert.equal(row.status, "needs_user", credential);
+    assert.equal(row.lane, API_LANE, credential);
+    assert.equal(row.p._hand.alias, "work", credential);
+    assert.equal(row.receipt, "", credential);
+    const accounts = await r.store.connectionsForOwner(OWNER);
+    assert.equal(accounts[0]!.status, credential === "dead" ? "needs_reconnect" : "connected", credential);
+    assert.equal(out.body.connection, credential === "dead" ? "marked" : undefined, credential);
+    assertConsistent(row);
+  }
+});
+
+await check("other selected-account read failures cannot substitute the browser session", async () => {
+  for (const kind of ["rate", "schema", "other"] as const) {
+    const r = rig();
+    seedJob(r.db, { note: note({ alias: "work" }) });
+    const out = await run(r, scripted(failed(kind)));
+    const row = readJob(r.db);
+    assert.equal(out.status, 200, out.text);
+    assert.equal(row.status, "needs_user", kind);
+    assert.equal(row.lane, API_LANE, kind);
+    assert.equal(row.p._hand.alias, "work", kind);
+    assert.equal(row.receipt, "", kind);
+    assert.equal(row.effect_uncertain, 0, kind);
+    assertConsistent(row);
+  }
+});
+
+await check("account_ambiguous parks the job for the owner on the api lane, naming their own labels — never the browser", async () => {
+  // Two accounts and no word from the owner is a question for the owner. The
+  // browser lane runs in whatever account Chrome is signed into, and with
+  // Chrome closed the row bounced api->browser->api until the attempt cap
+  // failed it, with the owner never asked (measured 2026-09-12).
+  const r = rig();
+  seedJob(r.db);
+  const out = await run(r, scripted({ ...refused("account_ambiguous"), aliases: ["work", "personal"] } as ApiHandOutcome));
+  assert.equal(out.status, 200, out.text);
+  assert.equal(out.body.status, "needs_user");
+  assert.equal(out.body.lane, API_LANE);
+  const row = readJob(r.db);
+  assert.equal(row.status, "needs_user");
+  assert.equal(row.lane, API_LANE, "the row must stay on the api lane, out of the browser's poll");
+  assert.equal(row.workflow_state, "needs_user");
+  assert.equal(row.p._workflow.state, "needs_user");
+  assert.equal(row.lease_token, "", "a parked row holds no lease");
+  assert.ok(row.result.includes("work") && row.result.includes("personal") && /Which account/.test(row.result), row.result);
+  assert.equal(row.p._hand.outcome.reason, "account_ambiguous");
+  assertConsistent(row);
+  // Two accounts the owner never labelled: no question can tell them apart,
+  // and the row says so instead of guessing.
+  const r2 = rig();
+  seedJob(r2.db);
+  await run(r2, scripted({ ...refused("account_ambiguous"), aliases: ["", ""] } as ApiHandOutcome));
+  const row2 = readJob(r2.db);
+  assert.equal(row2.status, "needs_user");
+  assert.equal(row2.lane, API_LANE);
+  assert.ok(/not labelled/.test(row2.result) && /Settings/.test(row2.result), row2.result);
+});
+
+await check("every refusal but three hands the job to the browser lane, claim cleared, plan queued", async () => {
   for (const reason of HANDBACK_REASONS) {
     const r = rig();
     seedJob(r.db);
@@ -753,6 +843,32 @@ function connection(over: Partial<StoredConnection> = {}): StoredConnection {
            status: "connected", writes_enabled: true, last_used_at: null, ...over };
 }
 
+await check("an auth failure with the vendor saying ACTIVE leaves the connection connected and names the refused tool", async () => {
+  // The catalog is the vendor's global list, so a tool the grant's scopes do
+  // not cover is still an allow-list entry; its 403 used to flip the whole
+  // connection to needs_reconnect, arm the weekly reconnect nudge and drop the
+  // app from the brain's inventory (reports 3 and 4, 2026-09-12). The hand
+  // now reads the vendor's account status after the refusal; ACTIVE is alive.
+  for (const credential of ["alive", "unknown"] as const) {
+    const r = rig();
+    await r.store.putConnection(connection());
+    seedJob(r.db);
+    const out = await run(r, scripted(failed("auth", { credential })));
+    assert.equal(out.status, 200, out.text);
+    assert.equal(out.body.status, "queued", credential);
+    assert.equal(out.body.lane, BROWSER_LANE, credential);
+    assert.equal(out.body.connection, undefined, `${credential}: the connection must not be marked`);
+    const rows = await r.store.connectionsForOwner(OWNER);
+    assert.equal(rows[0]!.status, "connected", `${credential}: the row was flipped`);
+    assert.equal(await r.store.readNudge(OWNER, APP as never), null, `${credential}: a reconnect nudge was armed`);
+    const row = readJob(r.db);
+    assert.equal(row.p._hand.outcome.credential, credential);
+    assert.ok(/still connected/.test(row.result) && row.result.includes(READ_TOOL), row.result);
+    assert.ok(!/reconnect/.test(row.result), row.result);
+    assertConsistent(row);
+  }
+});
+
 await check("an auth failure marks the connection needs_reconnect — the webhook's own write — and hands the job back", async () => {
   const r = rig();
   await r.store.putConnection(connection());
@@ -830,12 +946,12 @@ await check("pre-workflow rows cannot execute API arguments without a revision b
     seedJob(r.db, { workflow: null, note: note({ effect: outcome.outcome === "failed" ? "write" : "read" }) });
     const script = scripted(outcome);
     const out = await run(r, script);
-    assert.equal(out.status, 200, out.text);
+    assert.equal(out.status, 409, out.text);
     const row = readJob(r.db);
-    assert.equal(row.status, "queued");
-    assert.equal(row.lane, BROWSER_LANE);
+    assert.equal(row.status, "running");
+    assert.equal(row.lane, API_LANE);
     assert.equal(script.seen.length, 0);
-    assert.equal(row.p._hand.outcome.reason, "plan_stale");
+    assert.equal(row.p._hand.outcome, undefined, "no valid lease means no executor-written outcome");
     assert.equal(row.workflow_state, "");
     assert.equal(row.receipt, "");
     assert.equal(row.p._workflow, undefined, "a plan was invented for a row that had none");
@@ -933,10 +1049,10 @@ await check("THE JOIN, WITH THE REAL HAND: a connected row and a listed read too
   assertConsistent(row);
 });
 
-await check("a correction during the catalog await blocks the pending vendor write", async () => {
+await check("a correction during the catalog await blocks the pending vendor read", async () => {
   const r = rig();
   await r.store.putConnection(connection({ writes_enabled: true }));
-  seedJob(r.db, { note: note({ effect: "write" }) });
+  seedJob(r.db);
   const v = vendor(CATALOG);
   let revisedParams = "";
   const provider = new ComposioConnections({ apiKey: KEY, fetchImpl: (async (input, init) => {
@@ -990,11 +1106,11 @@ for (const change of ["cancel", "revision"] as const) {
   });
 }
 
-for (const change of ["writes_off", "expired", "deleted", "alias_changed", "ambiguous", "owner_changed"] as const) {
+for (const change of ["expired", "deleted", "alias_changed", "ambiguous", "owner_changed"] as const) {
   await check(`final joint authority sees ${change} after the connection snapshot`, async () => {
     const r = rig();
     await r.store.putConnection(connection());
-    seedJob(r.db, {note:note({effect: change === "writes_off" ? "write" : "read"})});
+    seedJob(r.db);
     const v = vendor(CATALOG);
     const provider = new ComposioConnections({apiKey: KEY, fetchImpl: v.impl});
     const read = r.store.connectionsForOwner;
@@ -1002,7 +1118,6 @@ for (const change of ["writes_off", "expired", "deleted", "alias_changed", "ambi
     r.store.connectionsForOwner = async owner => {
       const rows = await read(owner);
       if (++reads === 2) {
-        if (change === "writes_off") r.db.db.prepare("UPDATE connections SET writes_enabled=0").run();
         if (change === "expired") r.db.db.prepare("UPDATE connections SET status='needs_reconnect'").run();
         if (change === "deleted") r.db.db.prepare("DELETE FROM connections").run();
         if (change === "alias_changed") r.db.db.prepare("UPDATE connections SET alias='work'").run();
@@ -1023,7 +1138,7 @@ for (const change of ["writes_off", "expired", "deleted", "alias_changed", "ambi
 await check("a replaced lease during the catalog await blocks execution", async () => {
   const r = rig();
   await r.store.putConnection(connection({ writes_enabled: true }));
-  seedJob(r.db, { note: note({ effect: "write" }) });
+  seedJob(r.db);
   const v = vendor(CATALOG);
   const provider = new ComposioConnections({ apiKey: KEY, fetchImpl: (async (input, init) => {
     r.db.db.prepare("UPDATE jobs SET lease_token=? WHERE id=?").run("newer-api-lease", JOB);
@@ -1038,7 +1153,7 @@ await check("a replaced lease during the catalog await blocks execution", async 
 await check("an unreadable final job authority check blocks the vendor effect", async () => {
   const r = rig();
   await r.store.putConnection(connection({ writes_enabled: true }));
-  seedJob(r.db, { note: note({ effect: "write" }) });
+  seedJob(r.db);
   r.db.failOn = sql => sql.includes("SELECT 1 AS current");
   const v = vendor(CATALOG);
   const provider = new ComposioConnections({ apiKey: KEY, fetchImpl: v.impl });
@@ -1062,7 +1177,166 @@ await check("THE JOIN, WITH THE REAL HAND: a tool the note never named is refuse
 });
 
 // ===========================================================================
-// 7. THE SOURCE LEGS.
+// 7. REGRESSIONS: THE EXECUTE DOOR IS NOT A SECOND AUTHORITY POLICY.
+// ===========================================================================
+
+for (const effect of ["write", "irreversible"] as const) {
+  await check(`the absent API write ledger parks a declared ${effect}, even with approval`, async () => {
+    const r = rig();
+    await r.store.putConnection(connection());
+    const approval = { plan_id: "wf-api-0001", plan_version: 1, scope_digest: "scope-digest-1",
+      owner_words: "fixture approval", approved_at: NOW };
+    seedJob(r.db, { note: note({ effect }), workflow: plan({ approval }) });
+    const v = vendor(CATALOG);
+    const out = await run(r, { store: r.store, provider: new ComposioConnections({ apiKey: KEY, fetchImpl: v.impl }) });
+    assert.equal(out.body.reason, "api_writes_unavailable", out.text);
+    assert.equal(out.body.status, "needs_user");
+    assert.equal(out.body.lane, API_LANE, "a disabled API write must not silently become browser work");
+    assert.equal(v.calls.length, 0, "the unavailable write reached the provider");
+    assert.equal(readJob(r.db).receipt, "");
+    assert.equal(readJob(r.db).effect_uncertain, 0, "nothing was sent");
+  });
+}
+
+for (const tag of ["createHint", "updateHint", "destructiveHint"]) {
+  await check(`a fresh catalog ${tag} cannot upgrade a read-only workflow into an API write`, async () => {
+    const r = rig();
+    await r.store.putConnection(connection());
+    seedJob(r.db);
+    const v = vendor([{ ...CATALOG[0], tags: [tag] }]);
+    const out = await run(r, { store: r.store, provider: new ComposioConnections({ apiKey: KEY, fetchImpl: v.impl }) });
+    assert.equal(out.body.reason, "api_writes_unavailable", out.text);
+    assert.equal(out.body.status, "needs_user");
+    assert.equal(out.body.lane, API_LANE);
+    assert.deepEqual(v.calls.map(c => c.method), ["GET"], "a tightened write escaped the brain's floor");
+    assert.equal(readJob(r.db).p._workflow.approval, null);
+    assert.equal(readJob(r.db).receipt, "");
+  });
+}
+
+for (const deadline of ["", "not-a-date", NOW, "2026-09-06T19:59:59Z"]) {
+  await check(`an absent, malformed or expired lease never dispatches (${deadline || "empty"})`, async () => {
+    const r = rig();
+    seedJob(r.db);
+    r.db.db.prepare("UPDATE jobs SET lease_until=? WHERE id=?").run(deadline, JOB);
+    const script = scripted(ran());
+    const before = readJob(r.db);
+    const out = await run(r, script);
+    assert.equal(out.status, 409, out.text);
+    assert.equal(script.seen.length, 0);
+    assert.equal(readJob(r.db).params, before.params, "an expired caller must leave recovery to the claim owner");
+    assert.equal(readJob(r.db).receipt, "");
+  });
+}
+
+await check("a future deadline without the claimed lease token cannot execute", async () => {
+  const r = rig();
+  seedJob(r.db);
+  r.db.db.prepare("UPDATE jobs SET lease_token='' WHERE id=?").run(JOB);
+  const script = scripted(ran());
+  const out = await run(r, script);
+  assert.equal(out.status, 409, out.text);
+  assert.equal(script.seen.length, 0);
+  assert.equal(readJob(r.db).status, "running");
+  assert.equal(readJob(r.db).receipt, "");
+});
+
+await check("lease expiry during catalog fetch prevents the vendor dispatch", async () => {
+  const r = rig();
+  await r.store.putConnection(connection());
+  seedJob(r.db);
+  let now = new Date(NOW);
+  const v = vendor(CATALOG);
+  const provider = new ComposioConnections({ apiKey: KEY, fetchImpl: (async (url, init) => {
+    const response = await v.impl(url, init);
+    now = new Date("2026-09-06T20:10:00Z");
+    return response;
+  }) as typeof fetch });
+  const out = await run(r, { provider, store: r.store, now: () => now });
+  assert.equal(out.status, 409, out.text);
+  assert.deepEqual(v.calls.map(c => c.method), ["GET"]);
+  assert.equal(readJob(r.db).status, "running");
+  assert.equal(readJob(r.db).receipt, "");
+});
+
+await check("a lease revoked in the final D1 snapshot prevents dispatch", async () => {
+  const r = rig();
+  await r.store.putConnection(connection());
+  seedJob(r.db);
+  const original = r.db.prepare.bind(r.db);
+  r.db.prepare = sql => {
+    if (sql.includes("SELECT 1 AS current")) r.db.db.prepare("UPDATE jobs SET lease_until=? WHERE id=?").run(NOW, JOB);
+    return original(sql);
+  };
+  const v = vendor(CATALOG);
+  const out = await run(r, { store: r.store, provider: new ComposioConnections({ apiKey: KEY, fetchImpl: v.impl }) });
+  assert.equal(out.status, 409, out.text);
+  assert.deepEqual(v.calls.map(c => c.method), ["GET"]);
+  assert.equal(readJob(r.db).status, "running");
+});
+
+await check("expiry at the settle statement cannot write a receipt or release a commitment", async () => {
+  const r = rig();
+  seedJob(r.db);
+  r.db.db.prepare("UPDATE jobs SET commitment_key=? WHERE id=?").run("fixture-commitment", JOB);
+  const original = r.db.prepare.bind(r.db);
+  r.db.prepare = sql => {
+    if (sql.startsWith('UPDATE "jobs" SET')) r.db.db.prepare("UPDATE jobs SET lease_until=? WHERE id=?").run(NOW, JOB);
+    return original(sql);
+  };
+  const out = await run(r, scripted(ran({ effect: "write" })));
+  assert.equal(out.status, 409, out.text);
+  assert.equal(readJob(r.db).status, "running");
+  assert.equal(readJob(r.db).receipt, "");
+  assert.equal(r.db.rows<{commitment_key: string}>("SELECT commitment_key FROM jobs WHERE id=?", JOB)[0]!.commitment_key, "fixture-commitment");
+});
+
+await check("owner cancellation during execution survives a late successful outcome", async () => {
+  const r = rig();
+  seedJob(r.db);
+  let cancelledParams = "";
+  const hand: NonNullable<HandsApiDeps["hand"]> = async () => {
+    const current = readJob(r.db).p;
+    cancelledParams = JSON.stringify({ ...current, _workflow: { ...current._workflow,
+      state: "cancelled", approval: null, lease: null, receipt: null } });
+    r.db.db.prepare("UPDATE jobs SET status='cancelled',workflow_state='cancelled',params=?,approval='',lease_token='',lease_until='',commitment_key='' WHERE id=?")
+      .run(cancelledParams, JOB);
+    // Settlement still has to refuse if an old/faulty executor reports a
+    // write. Current production dispatch cannot reach writes at all.
+    return ran({ effect: "write" });
+  };
+  const out = await run(r, { hand });
+  assert.equal(out.status, 409, out.text);
+  assert.equal(readJob(r.db).status, "cancelled");
+  assert.equal(readJob(r.db).params, cancelledParams);
+  assert.equal(readJob(r.db).receipt, "");
+});
+
+for (const [state, outcome, attempts] of [
+  ["done", ran({effect: "write"}), 1],
+  ["failed", refused("tool_unknown"), MAX_ATTEMPTS],
+  ["queued", ran(), 1],
+  ["needs_user", refused("account_ambiguous"), 1],
+] as const) {
+  await check(`the API ${state} settlement obeys the shared active-commitment invariant`, async () => {
+    const r = rig();
+    seedJob(r.db, { attempts });
+    r.db.db.prepare("UPDATE jobs SET commitment_key=? WHERE id=?").run("fixture-commitment", JOB);
+    const out = await run(r, scripted(outcome));
+    assert.equal(out.status, 200, out.text);
+    assert.equal(readJob(r.db).status, state);
+    const terminal = ["done", "failed"].includes(state);
+    assert.equal(r.db.rows<{commitment_key: string}>("SELECT commitment_key FROM jobs WHERE id=?", JOB)[0]!.commitment_key,
+      terminal ? "" : "fixture-commitment");
+    const remint = () => r.db.db.prepare("INSERT INTO jobs (id,goal,owner_ref,status,commitment_key) VALUES (?,?,?,'queued',?)")
+      .run("jobapi000000002", "fixture retry", OWNER, "fixture-commitment");
+    if (terminal) assert.doesNotThrow(remint);
+    else assert.throws(remint, /UNIQUE constraint failed: jobs.commitment_key/);
+  });
+}
+
+// ===========================================================================
+// 8. THE SOURCE LEGS.
 // ===========================================================================
 
 /** The same list the hand's suite keeps. A word list in a TEST is where law 1 puts one. */
@@ -1114,7 +1388,11 @@ await check("the route reads no prose: its only string comparisons are enums and
   const code = ROUTE_SOURCE.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
   const literals = [...code.matchAll(/[!=]==\s*"([^"]+)"/g)].map((m) => m[1]!);
   const allowed = new Set(["ran", "refused", "failed", "confirmation_required", "owner_required", "auth",
-                           "plan_stale", "read", "api", "running", "succeeded", "queued", "POST", "string", "object"]);
+                           "plan_stale", "read", "api", "running", "succeeded", "queued", "POST", "string", "object",
+                           // ApiHandFailed.credential — the vendor's account-status enum, mapped; never prose.
+                           "dead",
+                           // ApiHandRefusal — a refusal reason, already in the closed set above.
+                           "account_ambiguous", "api_writes_unavailable"]);
   const stray = literals.filter((l) => !allowed.has(l));
   assert.deepEqual(stray, [], `unexpected string comparisons: ${stray.join(", ")}`);
 });

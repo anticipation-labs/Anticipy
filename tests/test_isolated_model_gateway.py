@@ -5,6 +5,7 @@ import http.client
 import json
 import os
 import socket
+import sys
 import threading
 
 import httpx
@@ -150,9 +151,10 @@ def test_private_key_reader_does_not_source_env(tmp_path):
 
 
 @contextmanager
-def actual_loopback_server(tmp_path, monkeypatch, *, lifetime=30):
+def actual_loopback_server(tmp_path, monkeypatch, *, lifetime=30, provider_cost=0.001,
+                           **gateway_options):
     """Real HTTP handler/socket; intercept construction only to learn port 0."""
-    instance = gateway(tmp_path, lifetime=lifetime)
+    instance = gateway(tmp_path, lifetime=lifetime, **gateway_options)
     actual_server_class = gate.ThreadingHTTPServer
     servers, errors, provider_calls = [], [], []
     ready = threading.Event()
@@ -168,7 +170,7 @@ def actual_loopback_server(tmp_path, monkeypatch, *, lifetime=30):
         state = json.loads((tmp_path / "spend.json").read_text())
         assert state["calls"][-1]["state"] == "reserved"
         provider_calls.append(payload)
-        return {"id": "http-fixture", "choices": [], "usage": {"cost": 0.001}}
+        return {"id": "http-fixture", "choices": [], "usage": {"cost": provider_cost}}
 
     def run():
         try:
@@ -267,3 +269,131 @@ def test_actual_http_run_deadline_closes_listener(tmp_path, monkeypatch):
             probe.settimeout(0.5)
             assert probe.connect_ex(("127.0.0.1", port)) != 0
         assert provider_calls == []
+
+
+def test_smaller_authorized_budget_is_used_and_cannot_restart_larger(tmp_path):
+    instance = gateway(tmp_path, budget_usd=2, max_calls=20)
+    state = json.loads((tmp_path / "spend.json").read_text())
+    assert state["budget_usd"] == instance.budget.operating_limit == 2
+    assert state["max_calls"] == instance.max_calls == 20
+    assert state["lifetime_seconds"] == 1800
+    before = (tmp_path / "spend.json").read_bytes()
+    with pytest.raises(FileExistsError):
+        gateway(tmp_path, budget_usd=5, max_calls=100)
+    assert (tmp_path / "spend.json").read_bytes() == before
+
+
+def test_full_context_reservation_over_selected_cap_stays_refused(tmp_path, monkeypatch):
+    pricing = {"fixture/model": {"context_length": 1_000_000,
+                               "pricing": {"prompt": "0.000003", "completion": "0.000015"}}}
+    instance = gate.IsolatedGateway(tmp_path, "fixture-key", pricing, budget_usd=2, max_calls=20)
+    calls = []
+    async def provider(*args, **kwargs):
+        calls.append(True)
+    monkeypatch.setattr(gate, "post_model", provider)
+    before = (tmp_path / "spend.json").read_bytes()
+    with pytest.raises(gate.Refused, match="spending limit"):
+        instance.handle(PAYLOAD)
+    assert calls == [] and (tmp_path / "spend.json").read_bytes() == before
+
+
+def test_journal_dollar_edit_cannot_raise_process_operating_cap(tmp_path, monkeypatch):
+    pricing = {"fixture/model": {"context_length": 1_000_000,
+                               "pricing": {"prompt": "0.000003", "completion": "0.000015"}}}
+    instance = gate.IsolatedGateway(tmp_path, "fixture-key", pricing, budget_usd=2, max_calls=20)
+    with instance.budget.locked() as state:
+        state["budget_usd"] = 5
+        gate.atomic_json(instance.budget.path, state)
+    calls = []
+    async def provider(*args, **kwargs):
+        calls.append(True)
+    monkeypatch.setattr(gate, "post_model", provider)
+    with pytest.raises(gate.Refused, match="spending limit"):
+        instance.handle(PAYLOAD)
+    assert calls == [] and json.loads(instance.budget.path.read_text())["calls"] == []
+
+
+@pytest.mark.parametrize("budget", [0, -1, 5.01, float("nan"), float("inf"),
+                                   float("-inf"), True, "2", None])
+def test_invalid_dollar_caps_fail_before_creating_state(tmp_path, budget):
+    with pytest.raises(gate.Refused, match="bounds"):
+        gateway(tmp_path, budget_usd=budget)
+    assert not (tmp_path / "run-created").exists()
+    assert not (tmp_path / "spend.json").exists()
+
+
+@pytest.mark.parametrize("calls", [0, -1, 101, 1.5, float("nan"), float("inf"), True, "20", None])
+def test_invalid_call_caps_fail_before_creating_state(tmp_path, calls):
+    with pytest.raises(gate.Refused, match="bounds"):
+        gateway(tmp_path, max_calls=calls)
+    assert not (tmp_path / "run-created").exists()
+
+
+@pytest.mark.parametrize("lifetime", [0, -1, 1801, float("nan"), float("inf"), True, "30", None])
+def test_invalid_lifetime_fails_before_creating_state(tmp_path, lifetime):
+    with pytest.raises(gate.Refused, match="bounds"):
+        gateway(tmp_path, lifetime=lifetime)
+    assert not (tmp_path / "run-created").exists()
+
+
+def test_actual_http_honors_twenty_calls_and_reports_two_dollar_cap(tmp_path, monkeypatch, capsys):
+    with actual_loopback_server(tmp_path, monkeypatch, budget_usd=2, max_calls=20) as (instance, server, _, calls):
+        port = server.server_address[1]
+        body, auth = json.dumps(PAYLOAD).encode(), "Bearer " + instance.token
+        for _ in range(20):
+            assert http_post(port, body, auth=auth)[0] == 200
+        before = (tmp_path / "spend.json").read_bytes()
+        status, response = http_post(port, body, auth=auth)
+        assert status == 402 and "call limit" in response["error"]
+        assert len(calls) == 20
+        assert (tmp_path / "spend.json").read_bytes() == before
+        report = json.loads(capsys.readouterr().out)
+        assert report["budget_usd"] == 2 and report["max_calls"] == 20
+
+
+def test_actual_http_honors_smaller_dollar_limit_before_dispatch(tmp_path, monkeypatch):
+    with actual_loopback_server(tmp_path, monkeypatch, budget_usd=0.01,
+                               max_calls=20, provider_cost=0.009) as (instance, server, _, calls):
+        port = server.server_address[1]
+        body, auth = json.dumps(PAYLOAD).encode(), "Bearer " + instance.token
+        assert http_post(port, body, auth=auth)[0] == 200
+        before = (tmp_path / "spend.json").read_bytes()
+        status, response = http_post(port, body, auth=auth)
+        assert status == 402 and "spending limit" in response["error"]
+        assert len(calls) == 1
+        assert (tmp_path / "spend.json").read_bytes() == before
+
+
+def test_cli_passes_explicit_caps_into_real_gateway(tmp_path, monkeypatch):
+    reads, served = [], []
+    monkeypatch.setattr(gate, "read_key", lambda path: reads.append(path) or "fixture-key")
+    async def pricing():
+        return PRICING
+    monkeypatch.setattr(gate, "fetch_pricing", pricing)
+    monkeypatch.setattr(gate, "MODELS", set(PRICING))
+    monkeypatch.setattr(gate, "serve", lambda instance, port: served.append((instance, port)))
+    monkeypatch.setattr(sys, "argv", ["gateway", "--state-dir", str(tmp_path), "--env-file", "/fixture.env",
+                                    "--budget-usd", "2", "--max-calls", "20", "--port", "18794"])
+    gate.main()
+    assert len(reads) == len(served) == 1
+    instance, port = served[0]
+    assert instance.budget.operating_limit == 2 and instance.max_calls == 20 and port == 18794
+    assert json.loads((tmp_path / "spend.json").read_text())["max_calls"] == 20
+
+
+@pytest.mark.parametrize("caps", [[], ["--budget-usd", "2"], ["--max-calls", "20"],
+                                  ["--budget-usd", "nan", "--max-calls", "20"],
+                                  ["--budget-usd", "2", "--max-calls", "1.5"],
+                                  ["--budget-usd", "5.01", "--max-calls", "20"],
+                                  ["--budget-usd", "2", "--max-calls", "0"]])
+def test_cli_invalid_or_missing_caps_do_not_read_key_or_fetch_pricing(tmp_path, monkeypatch, caps):
+    calls = []
+    monkeypatch.setattr(gate, "read_key", lambda *a: calls.append("key"))
+    async def pricing():
+        calls.append("pricing")
+    monkeypatch.setattr(gate, "fetch_pricing", pricing)
+    monkeypatch.setattr(sys, "argv", ["gateway", "--state-dir", str(tmp_path), "--env-file", "/fixture.env", *caps])
+    with pytest.raises(SystemExit) as failure:
+        gate.main()
+    assert failure.value.code == 2 and calls == []
+    assert not (tmp_path / "run-created").exists()

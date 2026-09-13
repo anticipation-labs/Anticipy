@@ -471,6 +471,10 @@ export interface ExpiredEvent {
   type: string;
   accountId: string;
   owner: string;
+  /** Only the signed canonical V3 data.id/EXPIRED/toolkit envelope may derive
+   * its omitted owner from our existing account binding. Legacy omissions fail. */
+  ownerFromAccount?: true;
+  toolkit?: string;
 }
 
 const ACCOUNT_KEYS = ["connected_account_id", "connectedAccountId"] as const;
@@ -524,7 +528,29 @@ function pick(payload: Record<string, unknown>, keys: readonly string[]): string
 export function readEvent(payload: unknown): ExpiredEvent {
   const root = asRecord(payload) ?? {};
   const type = typeof root.type === "string" ? root.type.trim() : "";
-  return { type, accountId: pick(root, ACCOUNT_KEYS), owner: pick(root, OWNER_KEYS) };
+  const legacyAccount = pick(root, ACCOUNT_KEYS);
+  const owner = pick(root, OWNER_KEYS);
+  const data = asRecord(root.data);
+  // THE ALLOWLIST DECIDES THE SPELLING, NOT A LITERAL REPEATED HERE.
+  // EXPIRED_EVENT_TYPES accepts the bare `connected_account.expired` as well as
+  // the namespaced one; this branch used to name only the namespaced spelling,
+  // so a signed V3 payload using the bare one fell through to the legacy return,
+  // found no `connected_account_id` key anywhere, and was answered 400 "the
+  // event names no connected account" — the exact payload this change set was
+  // written to start accepting.
+  if (isExpiredEvent(type) && data && Object.hasOwn(data, "id")) {
+    const accountId = typeof data.id === "string" ? data.id : "";
+    const toolkit = asRecord(data.toolkit)?.slug;
+    const valid = /^[A-Za-z0-9_-]{1,256}$/.test(accountId)
+      && typeof toolkit === "string" && /^[a-z0-9_-]{1,128}$/.test(toolkit)
+      && data.status === "EXPIRED" && (!legacyAccount || legacyAccount === accountId);
+    if (!valid) return { type, accountId: "", owner };
+    const places = [root, asRecord(root.metadata), data].filter(Boolean) as Record<string, unknown>[];
+    const ownerFieldPresent = places.some(place => OWNER_KEYS.some(key => Object.hasOwn(place, key)));
+    return { type, accountId, owner, toolkit: toolkit as string,
+      ...(!ownerFieldPresent ? { ownerFromAccount: true as const } : {}) };
+  }
+  return { type, accountId: legacyAccount, owner };
 }
 
 /** Is this the one event we subscribe to? A string compare against a frozen
@@ -567,7 +593,7 @@ export type MarkOutcome =
  */
 export async function markNeedsReconnect(
   store: WebhookConnectionStore,
-  event: { accountId: string; owner: string },
+  event: { accountId: string; owner: string; ownerFromAccount?: true; toolkit?: string },
 ): Promise<MarkOutcome> {
   // WHO HOLDS THIS ACCOUNT — asked of the table's own primary key, before the
   // event's claim about an owner is used for anything.
@@ -579,12 +605,14 @@ export async function markNeedsReconnect(
   // wrong person. Constant-time because it is the same class of compare as the
   // one in routes/connect.ts `vendorVouchesFor`, and consistency here is
   // cheaper than deciding case by case which ids are worth protecting.
-  if (!constantTimeEqual(holder, event.owner)) return { state: "wrong-owner", holder };
+  if (event.ownerFromAccount !== true && !constantTimeEqual(holder, event.owner)) return { state: "wrong-owner", holder };
 
   const row = await store.readConnection(holder, event.accountId);
   // A row that vanished between the two reads is somebody disconnecting while
   // this ran. Nothing to mark, and nothing wrong.
   if (row === null) return { state: "gone" };
+  if (row.user_id !== holder || row.connected_account_id !== event.accountId
+      || (event.toolkit !== undefined && row.toolkit !== event.toolkit)) return { state: "wrong-owner", holder };
 
   // A CONNECTION THE OWNER ALREADY REMOVED IS NOT A PROBLEM. Flipping a
   // `disconnected` row to `needs_reconnect` would ask somebody to reconnect an

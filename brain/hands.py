@@ -337,15 +337,36 @@ class HandContext:
     # Routing precedes new_plan at mint (version 1). A caller replanning an
     # existing workflow must carry its actual revision, never reset it to 1.
     workflow_version: int = 1
+    # A reply to an account-choice question cannot silently pick the last
+    # remaining account after another disconnects while the owner answers.
+    account_choice_required: bool = False
 
-    def connected(self, toolkit: str) -> Optional[ConnectedApp]:
+    def usable(self, toolkit: str) -> tuple:
+        """Every connected row for this app, in the owner's own order."""
         want = (toolkit or "").strip().lower()
         if not want or not self.connections:
+            return ()
+        return tuple(row for row in self.connections
+                     if row.toolkit.lower() == want and row.usable)
+
+    def connected(self, toolkit: str, alias: Optional[str] = None) -> Optional[ConnectedApp]:
+        """THE ONE ROW this step may run against, or None.
+
+        Until 2026-09-12 this returned the FIRST usable row for the app, so an
+        owner with a work and a personal account on one app had the api hand
+        licensed against whichever row came back first; the Worker (rightly)
+        refused the ambiguity, the row bounced to the browser, and the owner
+        was never asked. Now: one usable row is the row; an alias the model
+        named is matched BY IDENTITY against the owner's own rows; two or more
+        rows and no named alias is None — nothing is chosen for him."""
+        rows = self.usable(toolkit)
+        if not rows:
             return None
-        for row in self.connections:
-            if row.toolkit.lower() == want and row.usable:
-                return row
-        return None
+        if alias:
+            want = alias.strip().lower()
+            named = [row for row in rows if row.alias.strip().lower() == want]
+            return named[0] if len(named) == 1 else None
+        return rows[0] if len(rows) == 1 else None
 
 
 @dataclass(frozen=True)
@@ -364,6 +385,12 @@ class HandVerdict:
     tool_verdict: str = ""
     tool_asked: int = 0
     plan_input: Optional[dict] = None
+    # WHICH ACCOUNT, when the owner has more than one on the app: the alias
+    # of the owner's own row, chosen by the model from the list and matched
+    # by identity, or "" when there was one row or nobody could say. The
+    # Worker's stepFromRow reads it as the step's alias and refuses to guess.
+    alias: str = ""
+    account_asked: int = 0
 
     @property
     def decided(self) -> bool:
@@ -371,12 +398,14 @@ class HandVerdict:
 
     def as_note(self) -> dict:
         """What rides on the row as params["_hand"]. The Worker's
-        stepFromRow reads app, tool, args and effect off exactly these keys."""
+        stepFromRow reads app, tool, args, effect and alias off exactly
+        these keys."""
         return {"hand": self.hand, "reason": self.reason, "app": self.app,
                 "effect": self.effect, "asked": self.asked,
                 "tool": self.tool, "args": self.args,
                 "tool_verdict": self.tool_verdict,
-                "tool_asked": self.tool_asked, "plan_input": self.plan_input}
+                "tool_asked": self.tool_asked, "plan_input": self.plan_input,
+                "alias": self.alias, "account_asked": self.account_asked}
 
 
 @dataclass(frozen=True)
@@ -560,22 +589,26 @@ def _floors(hand: str, app: str, effect: str, reason: str,
         return HandVerdict(HAND_BROWSER, f"{reason} — floor: the connected "
                            "apps could not be read, so nothing licenses the "
                            "api hand", app, effect, asked)
-    row = ctx.connected(app)
-    if row is None:
+    rows = ctx.usable(app)
+    if not rows:
         return HandVerdict(HAND_BROWSER, f"{reason} — floor: {app or 'no app'} "
                            "is not a connected app of this owner", app,
                            effect, asked)
+    # With more than one account the floors read EVERY row: a write is
+    # licensed only when changes are on for all of them, so a first-row
+    # flag can never license a write against the account that has it off.
+    toolkit = rows[0].toolkit
     if effect != EFFECT_READ:
-        if not row.writes_enabled:
+        if not all(row.writes_enabled for row in rows):
             return HandVerdict(HAND_BROWSER, f"{reason} — floor: writes are "
-                               f"off for {row.toolkit}", row.toolkit, effect,
+                               f"off for {toolkit}", toolkit, effect,
                                asked)
         if ctx.rung < API_WRITE_MIN_RUNG:
             return HandVerdict(HAND_BROWSER, f"{reason} — floor: rung "
                                f"{ctx.rung} is below {API_WRITE_MIN_RUNG}, "
                                "the first rung that may write over the api "
-                               "hand", row.toolkit, effect, asked)
-    return HandVerdict(HAND_API, reason, row.toolkit, effect, asked)
+                               "hand", toolkit, effect, asked)
+    return HandVerdict(HAND_API, reason, toolkit, effect, asked)
 
 
 def _default_llm():
@@ -636,6 +669,10 @@ def choose_hand(goal: str, context: Optional[HandContext] = None,
                 user += "\nThe research selection cannot perform the declared effect. Reconsider the hand."
                 continue
             verdict = _floors(hand, app, effect, reason, ctx, asked)
+            # WHICH ACCOUNT, only when the owner has more than one on the
+            # app the floors just licensed — ONE question on its own, never
+            # a fifth key in the hand reply (Law 1: a field among many loses).
+            verdict = choose_account(verdict, goal, ctx, llm)
             # THE FOURTH QUESTION, only for a hand the floors licensed, and
             # asked exactly once here (the mutation literal).
             verdict = plan_api_step(verdict, goal, ctx, llm)
@@ -648,6 +685,74 @@ def choose_hand(goal: str, context: Optional[HandContext] = None,
               f"(attempt {attempt + 1}) -> {raw!r}")
     return HandVerdict(HAND_UNANSWERED, "unreadable reply, twice",
                        asked=asked)
+
+
+ACCOUNT_SYSTEM = """An assistant is about to do ONE step of work for its owner
+through an app with an unresolved account choice — for example a work
+account and a personal one. The list is current: an account previously offered
+may have disconnected. One remaining account does not make it the account the
+owner selected. You decide WHICH of the currently connected accounts the owner meant
+for this step, from what was actually said. The accounts are listed by the
+labels the owner gave them. Choose a label only when the owner's words or the
+step itself make it clear (a work matter, a personal matter, a named account);
+when nothing said settles it, answer null and the owner will be asked. Never
+guess. Never invent a label that is not in the list.
+
+Reply ONLY with one compact JSON object, nothing before or after it:
+{"account": "one label exactly as listed, or null",
+ "reason": "one short sentence"}"""
+
+
+def choose_account(verdict: HandVerdict, goal: str, ctx: HandContext,
+                   llm=None) -> HandVerdict:
+    """Which of the owner's accounts on the chosen app this step runs
+    against. Four states: a label in the list (matched BY IDENTITY, the way
+    _find_tool matches slugs), no label named, an unreadable reply, and no
+    model — every state but the first leaves `alias` empty, and an empty
+    alias with two rows is the Worker's cue to ask the owner rather than the
+    browser's cue to run. A verdict for another hand passes through. One row
+    skips the question only when no earlier account-choice question remains
+    unresolved; a disconnect is not an answer to that question."""
+    if verdict.hand != HAND_API:
+        return verdict
+    rows = ctx.usable(verdict.app)
+    if len(rows) <= 1 and not ctx.account_choice_required:
+        return verdict
+    labels = [row.alias for row in rows if row.alias.strip()]
+    # Two rows and no labels to tell them apart: nothing a model could say
+    # would resolve it. The owner labels them in Settings; the Worker says so.
+    if len(set(label.lower() for label in labels)) < len(rows):
+        return replace(verdict, alias="", account_asked=0)
+    if llm is None:
+        llm = _default_llm()
+    if not llm or not getattr(llm, "live", False):
+        return replace(verdict, alias="", account_asked=0)
+    user = (f"STEP: {goal.strip()}\n"
+            f"HEARD: {ctx.source.strip() if ctx.source else '(nothing recorded)'}\n"
+            f"APP: {verdict.app}\n"
+            "ACCOUNTS (the owner's own labels):\n"
+            + "\n".join(f"  - {label}" for label in labels)
+            + ctx.source_context)
+    try:
+        res = llm.chat(ACCOUNT_SYSTEM, user, temperature=0.0)
+    except Exception:
+        print("hands: account choice unavailable; the owner will be asked")
+        return replace(verdict, alias="", account_asked=1)
+    try:
+        raw = json.loads(_extract_json(getattr(res, "text", "")))
+    except Exception:
+        raw = None
+    named = raw.get("account") if isinstance(raw, dict) else None
+    if not isinstance(named, str) or not named.strip():
+        return replace(verdict, alias="", account_asked=1)
+    # BY IDENTITY against the owner's rows. A label the model typed that is
+    # not one of theirs is no answer, never the first row.
+    match = [label for label in labels if label.strip().lower() == named.strip().lower()]
+    if len(match) != 1:
+        print("hands: account choice not in the current inventory; the owner will be asked")
+        return replace(verdict, alias="", account_asked=1)
+    print("hands: account choice resolved against the current inventory")
+    return replace(verdict, alias=match[0], account_asked=1)
 
 
 def lane_for(verdict: HandVerdict) -> str:
@@ -1051,8 +1156,11 @@ def plan_api_step(verdict: HandVerdict, goal: str, ctx: HandContext,
                        **note)
     floored = _floors(HAND_API, app, tv.effect, verdict.reason, ctx,
                       verdict.asked)
+    # The re-floor builds a fresh verdict; the account the owner's rows
+    # settled on rides through it untouched.
     return replace(floored, effect=tv.effect,
                    reason=f"{floored.reason}; tool {tv.tool} ({tv.reason})",
+                   alias=verdict.alias, account_asked=verdict.account_asked,
                    **note)
 
 

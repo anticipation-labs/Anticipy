@@ -316,7 +316,9 @@ final class ConnectSession: ObservableObject {
             // the deep link — the half of the door anyone can knock on.
             handedOver()
             opener.openAuthSession(url: url, callbackScheme: scheme) { [weak self] back in
-                self?.receive(back, signedInOwner: signedInOwner)
+                guard let self, let current = self.attempt,
+                      current.sameAttempt(as: started) else { return }
+                self.receive(back, signedInOwner: signedInOwner)
             }
             return .openedInSignInSession
         case .systemBrowser(let url):
@@ -592,19 +594,26 @@ final class SystemConnectOpener: NSObject, ConnectOpener,
     /// `ASWebAuthenticationSession` nobody retains is deallocated and the
     /// sheet closes itself the instant `start()` returns.
     private var live: ASWebAuthenticationSession?
+    private var liveID: UUID?
 
     var authSessionAvailable: Bool { anchor != nil }
 
     func openAuthSession(url: URL,
                          callbackScheme: String,
                          whenDone: @escaping @MainActor (ConnectCallback) -> Void) {
+        let openingID = UUID()
+        liveID = openingID
         let session = ASWebAuthenticationSession(url: url,
-                                                 callbackURLScheme: callbackScheme) { back, error in
+                                                 callbackURLScheme: callbackScheme) { [weak self] back, error in
             // Documented to arrive on the main thread; hopped explicitly
             // anyway, because a published property written off the main actor
             // is a crash in a release build and not a warning in this one.
             Task { @MainActor [weak self] in
-                self?.live = nil
+                // A replaced or completed sheet may answer late. It owns
+                // neither the current retained session nor its completion.
+                guard let self, self.liveID == openingID else { return }
+                self.liveID = nil
+                self.live = nil
                 if let back {
                     whenDone(.returned(back))
                 } else if let error {
@@ -623,7 +632,8 @@ final class SystemConnectOpener: NSObject, ConnectOpener,
         // them in one tap.
         session.prefersEphemeralWebBrowserSession = false
         live = session
-        if !session.start() {
+        if !session.start(), liveID == openingID {
+            liveID = nil
             live = nil
             whenDone(.failed("auth_session_would_not_start"))
         }

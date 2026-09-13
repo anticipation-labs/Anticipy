@@ -80,7 +80,9 @@ awk '/^enum AccountDeletionPolicy \{/,/^\}/' "$session" > "$out/account_deletion
 awk '/^enum ActionWritePolicy \{/,/^\}/' "$session" > "$out/action_write.swift"
 awk '/^enum OwnerProfileCanonical \{/,/^\}/' "$backend" > "$out/profile_canonical.swift"
 awk '/^enum AgentUnpairPolicy \{/,/^\}/' "$backend" > "$out/agent_unpair.swift"
-if ! grep -q 'struct Values' "$out/owner_mirror.swift" \
+awk '/^enum AgentOnlinePolicy \{/,/^\}/' "$backend" > "$out/agent_online.swift"
+if ! grep -q 'static func online' "$out/agent_online.swift" \
+   || ! grep -q 'struct Values' "$out/owner_mirror.swift" \
    || ! grep -q 'afterDeviceForget' "$out/pending_retention.swift" \
    || ! grep -q 'static func bounded' "$out/pending_retention.swift" \
    || ! grep -q 'static func outcome' "$out/account_deletion.swift" \
@@ -98,6 +100,7 @@ fi
     cat "$out/action_write.swift"
     cat "$out/profile_canonical.swift"
     cat "$out/agent_unpair.swift"
+    cat "$out/agent_online.swift"
     sed '1{/^import Foundation$/d;}' "$here/OwnerMirrorTests.swift"
 } > "$out/main.swift"
 

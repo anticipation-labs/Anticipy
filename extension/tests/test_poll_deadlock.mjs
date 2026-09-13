@@ -45,10 +45,18 @@ assert.ok(/active\.startedAt/.test(beat) &&
 assert.ok(/startedAt: Date\.now\(\)/.test(source),
   "every claimed run records when it started");
 
-// The ceiling has to be longer than a healthy run and shorter than patience:
-// certification's slowest healthy case was ~90s.
-const ceiling = Number(source.match(/POLL_CYCLE_CEILING_MS = (\d+) \* 60 \* 1000/)[1]);
+// ONE OWNER OF THE CEILING. background.js kept 12 minutes of its own while
+// agent_loop.js declared a 16.3-minute worst case and said background.js
+// imported it; a run inside its budget lost its lease at 12:00 and was
+// re-claimed by the same worker. The number is the loop's, bound here by name,
+// and it still has to sit between a slow real run and human patience.
+assert.ok(/const POLL_CYCLE_CEILING_MS = RUN_WALL_CEILING_MS;/.test(source),
+  "background.js must bind its poll ceiling to the loop's own RUN_WALL_CEILING_MS");
+assert.ok(/RUN_WALL_CEILING_MS,/.test(source.match(/import \{[\s\S]*?\} from "\.\/agent_loop\.js";/)[0]),
+  "the ceiling must be imported from agent_loop.js, not redeclared");
+const { RUN_WALL_CEILING_MS } = await import("../agent_loop.js");
+const ceiling = RUN_WALL_CEILING_MS / 60000;
 assert.ok(ceiling >= 5 && ceiling <= 20,
-  `poll ceiling ${ceiling}min must sit between a slow real run and human patience`);
+  `poll ceiling ${ceiling.toFixed(2)}min must sit between a slow real run and human patience`);
 
 console.log("test_poll_deadlock: all passed");

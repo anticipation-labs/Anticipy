@@ -210,5 +210,128 @@ check("an uncertain effect warns about the duplicate booking",
 check("a certain one promises nothing was lost",
       JobReceiptPolicy.safetyLine(effectUncertain: false).contains("lost"))
 
+// ----------------------------------------- the three production wire dialects
+for evidence in ["[\"vendor-log:good\",null]", "[\"vendor-log:good\",1]",
+                 "[\"vendor-log:good\",{}]", "[\"vendor-log:good\",\"\"]",
+                 "[\"vendor-log:good\",\"  \"]", "null", "{}", "\"vendor-log:good\""] {
+    let raw = "{\"verified\":true,\"evidence\":\(evidence)}"
+    check("malformed evidence preserves the wire verification flag: \(evidence)",
+          JobReceipt.parse(raw)?.verified == true)
+    check("a partially malformed array cannot certify a receipt: \(evidence)",
+          JobReceipt.parse(raw)?.isProof == false)
+    check("a partially malformed array cannot create a proof card: \(evidence)",
+          JobReceiptPolicy.doneCard(goal: "Read", result: "Result", receipt: raw).proof == nil)
+}
+// JSONSerialization bridges NSNumber(1) to Bool; it is not JSON `true`.
+for flag in ["1", "1.0", "0", "null", "\"true\"", "\"false\"", "{}", "[]"] {
+    let raw = "{\"verified\":\(flag),\"evidence\":[\"vendor-log:run-123\"]}"
+    check("verified \(flag) cannot certify a receipt",
+          JobReceipt.parse(raw)?.isProof == false)
+    check("verified \(flag) cannot give a card a proof block",
+          JobReceiptPolicy.doneCard(goal: "Read a test record", result: "A result",
+                                    receipt: raw).proof == nil)
+}
+
+func receiptJSON(_ entries: [String], verified: Bool = true) -> String {
+    let obj: [String: Any] = ["effect_key": "test:read", "verified": verified,
+                              "evidence": entries, "summary": "Synthetic result"]
+    return String(data: try! JSONSerialization.data(withJSONObject: obj), encoding: .utf8)!
+}
+
+// Pin the wire's blank set explicitly; JS trim and Foundation disagree on NEL,
+// zero-width space and BOM. Neither side should certify what the other drops.
+let wireBlankScalars: [UInt32] = Array(0x9...0xd) + [0x20, 0x85, 0xa0, 0x1680]
+    + Array(0x2000...0x200b) + [0x2028, 0x2029, 0x202f, 0x205f, 0x3000, 0xfeff]
+for scalar in wireBlankScalars {
+    let blank = String(UnicodeScalar(scalar)!)
+    check("wire-only blank U+\(String(scalar, radix: 16)) is not evidence",
+          JobReceipt.parse(receiptJSON([blank]))?.isProof == false)
+    check("mixed blank U+\(String(scalar, radix: 16)) invalidates the whole array",
+          JobReceipt.parse(receiptJSON(["vendor-log:good", blank]))?.isProof == false)
+}
+let paddedReference = "\u{0085}\u{200B}\u{FEFF}vendor-log:good\u{FEFF}\u{0085}"
+check("wire padding cannot hide a usable connector reference",
+      JobReceipt.parse(receiptJSON([paddedReference]))?.items.first?.kind == .vendorLog)
+check("even padded raw evidence remains byte-for-byte available for inspection",
+      JobReceiptPolicy.doneCard(goal: "Read", result: "Result", receipt: receiptJSON([paddedReference]))
+        .proof?.items.first.map { Data($0.utf8) } == Data(paddedReference.utf8))
+let paddedSource = "\u{0085}\u{200B}\u{FEFF}https://www.source.fixture.invalid/page\u{FEFF}\u{0085}"
+let paddedSourceCard = JobReceiptPolicy.doneCard(goal: "Research", result: "Answer",
+                                               receipt: receiptJSON([paddedSource]))
+check("padded bare URLs still produce a cited-source label",
+      paddedSourceCard.proof?.notes == ["Cited source: source.fixture.invalid"])
+check("a cited-source label never normalizes the stored raw URL",
+      paddedSourceCard.proof?.items.first.map { Data($0.utf8) } == Data(paddedSource.utf8))
+
+let connectorEntries = ["vendor-log:log-123", "vendor-run:READ_RECORD@name@example.test"]
+let connector = JobReceiptPolicy.doneCard(goal: "Read a test record", result: "Original result",
+    receipt: receiptJSON(connectorEntries), effectKey: "test:read")
+check("API dialect keeps the engine's original result", connector.lead == "Original result")
+check("API dialect explains execution without inventing vendor log readback",
+      connector.proof?.checked == "Connector execution recorded")
+check("connector references stay opaque, including multiple @ characters",
+      connector.proof?.notes == ["Connector execution reference: log-123",
+                                "Tool/account reference: READ_RECORD@name@example.test"])
+check("API raw evidence is preserved in order", connector.proof?.items == connectorEntries)
+check("an API receipt cannot certify a different effect",
+      !JobReceiptPolicy.doneCard(goal: "Read", result: "Result", receipt: receiptJSON(connectorEntries),
+                                effectKey: "other:effect").hasReceipt)
+
+let digest = String(repeating: "a1", count: 32)
+let researchEntries = ["text-sha256:\(digest)", "https://www.example.test/path?q=a:b",
+                       "future-format:keep:this", "https://www.example.test/path?q=a:b"]
+let research = JobReceiptPolicy.doneCard(goal: "Research", result: "Original answer",
+                                        receipt: receiptJSON(researchEntries))
+check("research fingerprint does not claim successful delivery",
+      research.proof?.checked == "Answer fingerprint recorded")
+check("research notes label sources without claiming phone-side readback",
+      research.proof?.notes == ["Answer fingerprint (SHA-256): a1a1a1a1a1a1…",
+                                "Cited source: example.test", "Cited source: example.test"])
+check("unknown and duplicate raw research entries survive unchanged",
+      research.proof?.items == researchEntries)
+check("browser title keeps precedence", proven.proof?.checked == "Checked on Reservation confirmed | OpenTable")
+check("HTTP host is normalized, not the whole private query",
+      JobReceiptPolicy.host(of: "HTTPS://WWW.Example.test/a?private=example") == "example.test")
+for invalidURL in ["javascript:alert(1)", "file:///tmp/example", "data:text/plain,hi", "not-a-url"] {
+    check("non-web source is not given a source label: \(invalidURL)",
+          JobReceiptPolicy.host(of: invalidURL) == nil)
+}
+
+for entry in ["vendor-log:", "vendor-run:   ", "text-sha256:", "text-sha256:not-a-digest"] {
+    let r = JobReceipt.parse(receiptJSON([entry]))!
+    check("unusable reference cannot generate a positive heading: \(entry)",
+          JobReceiptPolicy.checkedLine(r) == nil)
+    check("unusable reference cannot generate an explanatory note: \(entry)",
+          JobReceiptPolicy.notes(for: r).isEmpty)
+    check("unusable reference remains available for inspection: \(entry)",
+          r.items.first?.raw == entry)
+}
+check("empty deposited-photo reference is not a photograph",
+      JobReceipt.parse(receiptJSON(["evidence:   "]))?.photographed == false)
+
+// The runner extracts these methods from the actual SwiftUI view. Only their
+// surrounding stored properties are fixtures; the row arithmetic is not a copy.
+struct DoneCardFixture { let doneCard: JobReceiptPolicy.Card? }
+struct ReceiptRevealFixture { let revealed: Int? }
+check("a missing proof has no arrival rows", DoneCardFixture(doneCard: claimOnly).proofRows == 0)
+check("browser seal/photo/disclosure has three rows", DoneCardFixture(doneCard: proven).proofRows == 3)
+check("API notes participate in the actual card's row count", DoneCardFixture(doneCard: connector).proofRows == 4)
+check("API notes start after the seal", connector.proof?.notesStartIndex == 1)
+check("API disclosure follows both notes", connector.proof?.disclosureRowIndex == 3)
+check("research sources count, including repeated references", DoneCardFixture(doneCard: research).proofRows == 5)
+let many = JobReceiptPolicy.doneCard(goal: "Research", result: "Answer",
+    receipt: receiptJSON(["evidence:photo"] + (0..<24).map { "vendor-log:log-\($0)" }))
+check("large receipts retain every visible row", DoneCardFixture(doneCard: many).proofRows == 27)
+check("photo shifts note indices once", many.proof?.notesStartIndex == 2)
+let manyPlan = DoneCeremonyPolicy.plan(revealSteps: DoneCardFixture(doneCard: many).proofRows)
+check("many notes do not extend the ceremony budget", manyPlan.total <= DoneCeremonyPolicy.maximumDelay)
+check("the ceremony's hard cap is preserved", manyPlan.revealSteps == DoneCeremonyPolicy.evidenceHardCap)
+for index in 0..<27 {
+    check("final reveal shows large receipt row \(index)", ReceiptRevealFixture(revealed: nil).landed(index))
+    check("in-progress reveal counts row \(index) once",
+          ReceiptRevealFixture(revealed: index + 1).landed(index)
+            && !ReceiptRevealFixture(revealed: index).landed(index))
+}
+
 print(failures == 0 ? "all receipt checks passed" : "\(failures) FAILED")
 exit(failures == 0 ? 0 : 1)

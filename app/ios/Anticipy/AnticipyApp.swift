@@ -702,7 +702,7 @@ final class AnticipySession: ObservableObject {
     /// tests/test_extension_version_pin.py now reads extension/manifest.json,
     /// this literal, and the mirror in Tests/StaleExtensionTests.swift, and
     /// goes red when any of the three disagree. Bump all three together.
-    static let expectedExtensionVersion = "0.18.1"
+    static let expectedExtensionVersion = "0.18.2"
 
     /// The extension reports itself as "Chrome/128.0.0.0 ext/0.8.2" in the
     /// agent record's browser field. Returns what Chrome is running when it
@@ -1593,7 +1593,7 @@ final class AnticipySession: ObservableObject {
             if let seen = agent.last_seen, let date = Self.parsePBDate(seen) {
                 let secs = max(0, Int(Date().timeIntervalSince(date)))
                 agentLastSeenSeconds = secs
-                agentOnline = secs < 30
+                agentOnline = AgentOnlinePolicy.online(lastSeenSecondsAgo: secs)
             } else {
                 agentLastSeenSeconds = nil
                 agentOnline = false
