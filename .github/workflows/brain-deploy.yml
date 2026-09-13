@@ -6,15 +6,14 @@ name: Backend deployment (API or brain)
 # Docker daemon is needed on any laptop — this is why the migration goes through
 # CI, not a local machine.
 #
-# ORDER (runbook §10.6): first deploy runs with max_instances=1 and
-# ANTICIPY_MAX_OWNER_WORKERS=1 so ONE non-founder owner is exercised before the
-# fleet. Raise the caps in a later, deliberate run once the single owner is
-# proven healthy. Run brain-state-to-r2.yml FIRST — the container pulls each
-# owner's memory.db from R2 on boot and aborts loudly if it is missing.
+# This is an existing-fleet upgrade, not the original first-owner cutover.
+# The metadata preflight requires preserving the live/configured capacity and
+# checks every eligible owner, not only the allowlist. It observes quiescence;
+# it cannot lock out work arriving after the check. Never clear jobs to pass it.
 #
 # REQUIRED REPO SECRETS:
 #   CLOUDFLARE_API_TOKEN   - Workers + Containers + R2 + D1 edit
-#   CLOUDFLARE_ACCOUNT_ID  - 114587b715e702461766369b01d42fc7
+#   CLOUDFLARE_ACCOUNT_ID  - the existing production account
 # Plus the 15 brain secrets (§5.2) must already be set on the anticipy-brain
 # Worker via `wrangler secret put` (this workflow does NOT print or handle them).
 
@@ -32,7 +31,7 @@ on:
         required: true
         default: ''
       cap:
-        description: 'ANTICIPY_MAX_OWNER_WORKERS / max_instances (start at 1)'
+        description: 'Existing fleet capacity to preserve; preflight rejects changes'
         required: true
         default: '1'
 
@@ -65,33 +64,10 @@ jobs:
           npm test
           npm run typecheck
 
-      - name: Pre-flight — every owner this deploy will serve has state in R2 (the container aborts without it)
+      - name: Pre-flight — complete eligible fleet, current snapshot metadata and no active effects
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: |
-          set -euo pipefail
-          # Audit F46 (2026-09-05): this step used to `wc -l` a single object
-          # that does not exist and passed on 0. The container refuses to boot
-          # for an owner whose memory.db is not in R2 (brain/container_entry.py),
-          # so the check is per owner: everyone the allowlist names must have
-          # owners/<id>/memory.db, or this deploy is refused here, not in a
-          # crash loop. Discovery-served owners are checked when the cap allows any.
-          allow=$(grep -oE '"ANTICIPY_SERVE_OWNERS": *"[^"]*"' migration/config/wrangler.brain.jsonc | sed -E 's/.*: *"([^"]*)"/\1/' | tr ',' ' ')
-          cap="$DEPLOY_CAP"
-          missing=0; checked=0
-          for ref in $allow; do
-            ref=$(echo "$ref" | tr -d ' '); [ -n "$ref" ] || continue
-            checked=$((checked+1))
-            if wrangler r2 object get "anticipy-owner-state/owners/$ref/memory.db" --remote --pipe >/dev/null 2>&1; then
-              echo "owner $ref: memory.db present in R2"
-            else
-              echo "owner $ref: NO memory.db in R2 — the container would abort at boot"; missing=$((missing+1))
-            fi
-          done
-          echo "allowlist owners checked: $checked, missing: $missing, cap: $cap"
-          if [ "$missing" -gt 0 ]; then echo "REFUSING: run brain-state-to-r2.yml for the missing owner(s) first"; exit 1; fi
-          if [ "$cap" != "0" ]; then echo "cap $cap > 0: discovery-served owners are NOT pre-checked here; research/2026-09-05-brain-of-record.md says the allowlist, not the cap, chooses who moves"; fi
+          ANTICIPY_INTERNAL_KEY: ${{ secrets.ANTICIPY_INTERNAL_KEY }}
+        run: python3 -m proof.audit.brain_deploy_preflight
       - name: Deploy brain (remote container build — no local Docker)
         run: |
           set -euo pipefail
@@ -100,8 +76,10 @@ jobs:
           echo "Deploying anticipy-brain with discovery cap = $cap"
           runtime_source=$(python3 -c 'from brain.runtime_status import source_hash; print(source_hash())')
           # wrangler builds the image from brain/Dockerfile remotely and deploys
-          # OwnerBrain + BrainSupervisor. --containers-rollout gradual is the safe
-          # default; the first run should be cap=1.
+          # OwnerBrain + BrainSupervisor. The existing strategy is immediate:
+          # this may restart active processes, so do not describe it as gradual.
+          # The preceding metadata gate preserves capacity and refuses observed
+          # active effects; it is not an atomic lock against newly arriving work.
           wrangler deploy \
             --config migration/config/wrangler.brain.jsonc \
             --keep-vars \
