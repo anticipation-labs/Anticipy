@@ -283,7 +283,9 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     for statement in to_run:
-        run_args = [args.database, "--command", statement]
+        # A leading SQL -- comment is data, not another Wrangler option.
+        # Bind the value in one argv element and preserve the SQL verbatim.
+        run_args = [args.database, f"--command={statement}"]
         if not args.local:
             run_args.append("--remote")
         _wrangler(run_args, config=args.config)
