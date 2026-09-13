@@ -12,17 +12,24 @@ context; regexes, word lists, and thresholds must not decide what people mean.
 
 ## Start here
 
+- [Release and remaining-work board, 2026-09-13](docs/EOD-READINESS-2026-09-13.md):
+  what shipped, what the evidence proves, owners, and the unfinished acceptance gates.
+- [Firmware collaboration handoff](docs/FIRMWARE-COLLABORATION.md): the current
+  radio/phone boundary, missing decoder and hardware proof, and safe contribution flow.
+- [Workspace reconciliation, 2026-09-13](docs/WORKSPACE-SYNC-2026-09-13.md):
+  released versus superseded changes and deliberately unpublished local material.
 - [Tejas Mac development guide](docs/LOCAL-DEVELOPMENT-TEJAS.md): this checkout,
   private env handling, offline checks, actual tool limits and deliberate release.
-- [Current customer-journey readiness](research/2026-09-08-customer-readiness.md):
+- [Historical customer-journey readiness, 2026-09-08](research/2026-09-08-customer-readiness.md):
   replacement guide, source-path inventories, repairs and live verification gaps.
 - [Earlier Mac development guide](docs/LOCAL-DEVELOPMENT-MAC.md): Omar's
   machine and historical setup; do not assume its Xcode or paths exist here.
 - [Setup baseline, 2026-09-06](research/2026-09-06-mac-development-setup.md):
   measured checks and remaining limits.
-- [Current audit and delivery status](research/audit-2026-09-06/PLAN.md):
+- [Historical audit and delivery status, 2026-09-06](research/audit-2026-09-06/PLAN.md):
   deployed repairs, real-model tests, provider checks and unfinished reset work.
-- [Product brief](docs/BRIEF.html): product behavior, screens, and evidence.
+- [Product brief](docs/BRIEF.html): behavioral goals and historical implementation
+  notes; use the dated release board for current delivery claims.
 - [iOS release handoff](docs/HANDOFF-SHIP-IOS.md): CI release process. Read the
   actual workflow too; historical instructions can lag the code.
 
