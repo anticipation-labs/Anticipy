@@ -2,75 +2,92 @@
 
 Native SwiftUI app. Two ways in, one pipe out.
 
-- PRIMARY: the phone's own microphone. `Audio/PhoneListener.swift` feeds Apple's
-  speech recognizer (on-device where supported) and emits one line per utterance.
-  The switch that starts it is `listenCard` in `Views/ContentView.swift:475`.
-- MUTE: the BLE pendant. `BLE/PendantManager.swift` still receives Opus frames
-  (protocol verified on real hardware) and **nothing consumes them** —
-  `startPendantTranscription` leaves `onOpusFrame` nil, so they are dropped at
-  the source. `Audio/TranscriberClient.swift` used to stream them to a speech
-  vendor's websocket; it is deleted. design/LOCAL-FIRST.md rule 1: "RAW AUDIO
-  NEVER LEAVES A DEVICE. Not to Deepgram, not to anyone."
-  Closing it cost nothing that worked: production events with `source="pendant"`
-  is ZERO, ever, against 229 from the phone microphone.
-  What would make the pendant speak again is `Audio/LocalTranscriber.swift` —
-  43 lines, zero call sites, wants `AVAudioPCMBuffer` while the pendant emits
-  Opus `Data`, and there is no Opus decoder in the target. That decoder is the
-  work; it is not started.
+- PRIMARY: the phone's own microphone. `Anticipy/Audio/PhoneListener.swift`
+  feeds Apple's speech recognizer (on-device where supported) and emits one
+  line per utterance; the switch that starts it is the listen card in
+  `Anticipy/Views/ContentView.swift`.
+- HELD: the BLE pendant. `Anticipy/BLE/PendantManager.swift` receives Opus
+  frames over the encrypted link and `Anticipy/BLE/OpusFrameAssembler.swift`
+  reassembles fragments, but the app deliberately leaves `onOpusFrame` unset
+  in `startPendantTranscription` (`Anticipy/AnticipyApp.swift`), so frames
+  are dropped at the source. `Anticipy/Audio/LocalTranscriber.swift` is the
+  intended on-device path; it accepts PCM, and there is no Opus decoder in
+  the target. That decoder, and the capture bridge around it, is the open
+  work. Raw audio never leaves the device (`design/LOCAL-FIRST.md`), and no
+  cloud decoder substitutes for the missing local one. The whole boundary,
+  the packet contract, and the division of work are in
+  [docs/FIRMWARE-COLLABORATION.md](../../docs/FIRMWARE-COLLABORATION.md).
 
-Both paths land in the same place: `AnticipySession.heard(_:from:)` in
-`AnticipyApp.swift:258`, which pushes an `events` row of kind `transcript` carrying
-`source` = `phone_mic`, `pendant`, or `typed` (`AnticipyApp.swift:249-255`, pushed at
-`:273-275`). Triage happens on the SERVER, in `brain/worker.py`. The phone decides
-nothing about a line beyond who probably said it; it shows the feed and the confirm
-cards, and the Chrome extension is what actually acts.
+Both paths land in the same place: `AnticipySession.heard(...)` in
+`Anticipy/AnticipyApp.swift`, which pushes an `events` row of kind
+`transcript` carrying `source` = `phone_mic`, `pendant`, or `typed`. Triage
+happens on the SERVER (`brain/worker.py`). The phone decides nothing about a
+line beyond who probably said it; it shows the feed and the confirm cards,
+and the hands do the work.
+
+## Backend
+
+The app talks to the Cloudflare API Worker at `https://api.anticipy.ai`
+(`migration/workers/`, with D1 behind it) through
+`Anticipy/Backend/AnticipyBackend.swift`: account auth, `events`, `jobs`,
+browser pairing, connected apps. The wire shapes are the records API and
+product routes described in `migration/spec/CONTRACT.md`. The earlier
+PocketBase backend is gone; nothing in the app depends on it.
 
 ## Files
-- `Anticipy/AnticipyApp.swift` — app entry + `AnticipySession` (both capture paths, polling, feed)
-- `Anticipy/Audio/PhoneListener.swift` — phone mic → Apple speech recognizer; the primary input
-- `Anticipy/BLE/PendantManager.swift` — CoreBluetooth link (background capable)
-- `Anticipy/Audio/LocalTranscriber.swift` — the INTENDED on-device pendant path; not wired (see above)
-- `Anticipy/Backend/AnticipyBackend.swift` — pairing/events/jobs (PocketBase)
-- `Anticipy/Views/ContentView.swift` — Listen switch, transcript, confirm-card UI
 
-There is no `Anticipy/Brain/`. It held `BrainClient.swift` — a phone-side
-OpenRouter triage client with its own copy of the system prompt, hardcoded to
-`deepseek/deepseek-v3.2` — which had zero call sites and still compiled into
-every binary, so it sat in the dSYMs of builds b18 through b30 looking live.
-Deleted 2026-08-24. Triage is server-side and always was by then: `brain/worker.py`
-owns it. Do not re-create a second copy of the prompt contract here.
+- `Anticipy/AnticipyApp.swift` — app entry and `AnticipySession` (both capture paths, polling, the feed).
+- `Anticipy/Audio/` — the phone microphone path, capture policies, cursor and flush law, journal and tally.
+- `Anticipy/BLE/` — the pendant link, frame assembler, radio and battery policies.
+- `Anticipy/Backend/` — the API client, job receipts, the device (calendar) hand, connections, the connect handoff.
+- `Anticipy/Views/` — the listen switch, transcript, dashboard, confirm cards, settings.
+- `Widget/`, `UITests/`, `Tests/`, `Tools/`, `scripts/` — the lock-screen activity, UI tests, the `swiftc` logic suites, cue synthesis, App Store Connect helpers.
 
-## Build (on the Mac)
-1. `cd app/ios && ./build_on_mac.sh`
-   It checks for `xcodebuild`, installs `xcodegen` via Homebrew if missing, runs
-   `xcodegen generate` to produce `Anticipy.xcodeproj` from `project.yml`, then builds for
-   the iOS Simulator. That build needs no signing and no team, which is what makes it a
-   usable compile proof on any Mac.
-2. Do NOT hand-edit the project or the Info.plist, and do not drag files into a new Xcode
-   project — both are generated. `project.yml` sets `GENERATE_INFOPLIST_FILE: NO` and
-   declares the plist under `targets.Anticipy.info`, so the BLE/mic/speech usage strings
-   and the `bluetooth-central` + `audio` background modes live there (`project.yml:69-78`).
-   Anything you edit by hand is erased by the next `xcodegen generate`.
-3. A DEVICE build needs a team; the simulator build does not. `project.yml:14` sets
-   `DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"`, so either export your Team ID before
-   generating or open `Anticipy.xcodeproj` and pick the team under Signing & Capabilities.
-4. Exercise the pendant on a real iPhone: the simulator has no Bluetooth. The phone-mic
-   path is the one that needs no hardware at all.
+There is no phone-side triage client and no second copy of the prompt
+contract; triage is server-side and stays there.
 
-## TestFlight
-1. Product → Archive → Distribute App → App Store Connect → Upload.
-2. appstoreconnect.apple.com → TestFlight → add yourself as internal tester.
-3. Install TestFlight on the phone, accept the invite.
+## Build (on a Mac with Xcode)
+
+1. `cd app/ios && ./build_on_mac.sh` — checks for `xcodebuild`, installs
+   `xcodegen` if missing, runs `xcodegen generate` from `project.yml`, and
+   builds for the iOS Simulator. No signing and no team needed.
+2. `project.yml` is the source of the project and of the Info.plist
+   (`GENERATE_INFOPLIST_FILE: NO`; the BLE, microphone and speech usage
+   strings and the background modes are declared there). Do not hand-edit
+   the plist; regeneration erases it.
+3. A DEVICE build needs a team (`DEVELOPMENT_TEAM` is read from the
+   environment or picked in Xcode under Signing & Capabilities). The
+   simulator build does not.
+4. Exercise the pendant on a real iPhone; the simulator has no Bluetooth.
+
+**The build number.** `CURRENT_PROJECT_VERSION` lives in `project.yml` and in
+the committed `Anticipy.xcodeproj/project.pbxproj` (four occurrences) and
+moves in the same commit as any source change; the last leg of the test
+runner enforces it. Read the current number from `project.yml`.
+
+## Tests
+
+```sh
+sh app/ios/Tests/run_all.sh
+```
+
+Every suite compiles the real pure-Foundation sources with `swiftc`; no
+simulator. On a Mac with only the Command Line Tools, select an installed SDK
+with `SDKROOT` ([docs/TESTING.md](../../docs/TESTING.md)).
+
+## Shipping
+
+iOS ships from CI, never from a laptop; see
+[docs/HANDOFF-SHIP-IOS.md](../../docs/HANDOFF-SHIP-IOS.md) and
+[docs/RELEASE.md](../../docs/RELEASE.md).
 
 ## Keys
-- Speech vendor: **there is no lane and no credential.** The app used to POST
-  `transcription/token` for a short-lived JWT and open a vendor websocket with it.
-  Both halves are gone: the client method and `TranscriberClient` are deleted, and
-  the server route answers 410 GONE with its reason
-  (`backend/pb_hooks/transcription_token.pb.js`). It is kept refusing rather than
-  deleted because a 404 reads as "wrong URL" and gets retried, while a refusal that
-  names its reason gets obeyed.
-  Enforced by `overnight/no_vendor_ears.py` and `Tests/run_local_ears_tests.sh`.
-- OpenRouter: no key in the app at all. Every model call happens in the backend worker.
-- So there is nothing left for the phone to keep in its Keychain. A vendor key appearing
-  in this app is a bug, not a configuration step.
+
+- Speech vendor: there is no lane and no credential. The vendor websocket
+  client was deleted, and the Worker's `POST /transcription/token` keeps
+  refusing with its reason rather than answering 404, because a refusal that
+  names its reason gets obeyed while a 404 gets retried. Enforced by
+  `overnight/no_vendor_ears.py` and `Tests/run_local_ears_tests.sh`.
+- Model provider: no key in the app. Every model call happens server-side.
+- So there is nothing for the phone to keep in its Keychain; a vendor key
+  appearing in this app is a bug, not a configuration step.

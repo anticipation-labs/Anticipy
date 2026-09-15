@@ -1,3 +1,6 @@
+> **Status, 2026-09-14:** the cutover this document plans has completed; production requests to `api.anticipy.ai` are served by this Worker and D1 (see `../CUTOVER-STATE.md`, note of 2026-09-07).
+> Read it as the API Worker reference; the PocketBase measurements below are the historical baseline it was ported from.
+
 # Replacing PocketBase with Workers + D1 + R2 + Durable Objects
 
 Companion artifacts in this directory, referenced and not repeated:

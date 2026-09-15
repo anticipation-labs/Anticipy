@@ -1,54 +1,75 @@
 # Anticipy
 
-The proactive assistant: an iPhone captures speech, a server brain interprets it
-with context and memory, and approved work reaches browser, API, or device hands.
+Anticipy is a proactive assistant. A phone, a pendant, or a Mac meeting
+recorder captures speech; a per-owner server brain interprets it with context
+and memory; approved work reaches the owner's own browser, connected apps, or
+device "hands"; and every outcome comes back to the phone as a receipt.
 
-**Work on `cloudflare-backend`.** It is the source of record for the iOS app and
-Cloudflare API Worker. `main` is a different lineage and has no iOS app.
+**Work on `cloudflare-backend`.** It is the source of record. `main` is an
+older, unrelated lineage and is never pushed to; pull requests target
+`cloudflare-backend`. Read [HARNESS-LAWS.md](HARNESS-LAWS.md) before changing
+anything: meaning belongs to a model with context, never to a regex, word
+list, or threshold.
 
-Read [HARNESS-LAWS.md](HARNESS-LAWS.md), [CLAUDE.md](CLAUDE.md), and
-[AGENTS.md](AGENTS.md) before changing anything. Meaning belongs to a model with
-context; regexes, word lists, and thresholds must not decide what people mean.
+## Components
 
-## Start here
+| Component | Path | What it is |
+| --- | --- | --- |
+| iPhone app | `app/ios/` | SwiftUI: listening and on-device transcription, pendant BLE (`app/ios/Anticipy/BLE/`), replies, connected apps |
+| Mac app | `app/macos/` | Meeting recorder; unsigned build in CI, signed release through `mac-release.yml` |
+| Chrome extension | `extension/` | MV3 "hands" in the owner's own logged-in Chrome; packaged into three ZIP aliases under `migration/workers/public/` |
+| API Worker | `migration/workers/` | Cloudflare Worker (TypeScript) with D1, R2 and a Durable Object; the production API |
+| D1 schema and migrations | `migration/d1/` | `schema.sql` plus dated additive migrations |
+| Brain Worker + Python brain | `migration/workers/brain/`, `brain/` | Containers fleet, one container per owner, running the Python brain image |
+| Pendant firmware | `firmware/` | Zephyr candidate for the XIAO nRF52840 Sense; host-checked here, not built or flashed |
+| Gates and proofs | `overnight/`, `proof/` | Scoreboards and live or loopback proofs with green / red / UNPROVEN semantics |
+| Python tests | `tests/` | pytest suite over the brain, the gates and a local D1 |
+| Contracts | `migration/spec/CONTRACT.md`, `migration/workers/ARCHITECTURE.md` | Behavioural oracle and the Worker reference |
 
-- [Release and remaining-work board, 2026-09-13](docs/EOD-READINESS-2026-09-13.md):
-  what shipped, what the evidence proves, owners, and the unfinished acceptance gates.
-- [Firmware collaboration handoff](docs/FIRMWARE-COLLABORATION.md): the current
-  radio/phone boundary, missing decoder and hardware proof, and safe contribution flow.
-- [Workspace reconciliation, 2026-09-13](docs/WORKSPACE-SYNC-2026-09-13.md):
-  released versus superseded changes and deliberately unpublished local material.
-- [Tejas Mac development guide](docs/LOCAL-DEVELOPMENT-TEJAS.md): this checkout,
-  private env handling, offline checks, actual tool limits and deliberate release.
-- [Historical customer-journey readiness, 2026-09-08](research/2026-09-08-customer-readiness.md):
-  replacement guide, source-path inventories, repairs and live verification gaps.
-- [Earlier Mac development guide](docs/LOCAL-DEVELOPMENT-MAC.md): Omar's
-  machine and historical setup; do not assume its Xcode or paths exist here.
-- [Setup baseline, 2026-09-06](research/2026-09-06-mac-development-setup.md):
-  measured checks and remaining limits.
-- [Historical audit and delivery status, 2026-09-06](research/audit-2026-09-06/PLAN.md):
-  deployed repairs, real-model tests, provider checks and unfinished reset work.
-- [Product brief](docs/BRIEF.html): behavioral goals and historical implementation
-  notes; use the dated release board for current delivery claims.
-- [iOS release handoff](docs/HANDOFF-SHIP-IOS.md): CI release process. Read the
-  actual workflow too; historical instructions can lag the code.
+## Data flow
 
-Before editing code:
-
-```sh
-git status --short --branch
-sh app/ios/Tests/run_all.sh
+```text
+pendant ─BLE─► iPhone ─┐
+Mac recorder ──────────┼─► events (D1) ─► brain (one process per owner) ─► jobs ─► hands ─► receipt ─► iPhone
+typed / text reply ────┘                   memory.db held in R2             browser · API · device
 ```
 
-The iOS app is in `app/ios/`; the Cloudflare API Worker is in
-`migration/workers/`; the Python brain is in `brain/`; browser execution is in
-`extension/`. The production API is `https://api.anticipy.ai`.
-The PocketBase hooks and their startup instructions are gone; the migration runbooks are historical
-references. Worker static assets are tracked in `migration/workers/public/`;
-the old `backend/pb_public/` directory and asset-staging command are gone.
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) explains each hop and the
+contracts the runtimes share.
 
-iOS source changes and their build-number increase belong in the same commit.
-Edit both `app/ios/project.yml` and
-`app/ios/Anticipy.xcodeproj/project.pbxproj` by hand. Build locally for the
-simulator; ship through CI. Stage named paths and commit with explicit paths so
-another agent's work cannot be included accidentally.
+## Run every suite
+
+```sh
+PYTHON_DOTENV_DISABLED=1 python -m pytest -q
+(cd migration/workers && npm test && npx tsc --noEmit)
+npm test --prefix migration/workers/brain && npm run typecheck --prefix migration/workers/brain
+node extension/tests/run_all.mjs
+sh app/ios/Tests/run_all.sh
+sh app/macos/Tests/run_all.sh
+sh firmware/source/tests/run_firmware_tests.sh
+python3 proof/audit/check_extension_package.py
+```
+
+[docs/TESTING.md](docs/TESTING.md) says what each suite proves, what it does
+not, how to run them offline, and how the installed-extension proof rig works.
+
+## Read next
+
+- [Current status](docs/EOD-READINESS-2026-09-13.md): release evidence and the
+  remaining-work board.
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): runtimes, shared contracts,
+  and the evidence ladder.
+- [docs/RELEASE.md](docs/RELEASE.md): the ordered release runbook and
+  rollback notes.
+- [CONTRIBUTING.md](CONTRIBUTING.md): branch model, path-limited commits, the
+  iOS build-number rule, and the review expectation.
+- [SECURITY.md](SECURITY.md): how to report a vulnerability and where the
+  private-data boundary sits.
+- [HARNESS-LAWS.md](HARNESS-LAWS.md): the six laws that outrank everything
+  else in this tree.
+- [docs/README.md](docs/README.md): index of every document under `docs/`.
+
+## License
+
+MIT; see [LICENSE](LICENSE). Third-party code vendored in this tree is listed
+in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
