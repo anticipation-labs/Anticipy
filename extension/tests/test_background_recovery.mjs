@@ -23,6 +23,13 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const source = readFileSync(join(HERE, "../background.js"), "utf8");
 
 const harness = installChrome();
+const messageHandlers = [];
+chrome.runtime.onMessage.addListener = (handler) => messageHandlers.push(handler);
+const message = (type) => new Promise((resolve, reject) => {
+  if (!messageHandlers.some((handler) => handler({ type }, {}, resolve) === true)) {
+    reject(new Error(`no asynchronous handler for ${type}`));
+  }
+});
 // MV3 session storage: emptied when the BROWSER session ends, kept across
 // service-worker restarts. chrome_mock only models storage.local, so the one
 // surface these tests turn on lives here.
@@ -102,10 +109,10 @@ await new Promise((r) => setTimeout(r, 10));
   assert.ok(replacement);
   assert.equal(harness.storageData.recordId, "replacement-record");
   assert.equal(harness.storageData.pairCode, "246810");
-  assert.equal(harness.storageData.ownerRef, undefined,
+  assert.equal(harness.storageData.ownerRef, "",
     "a fresh unpaired credential must not inherit the retired identity's owner scope");
-  assert.equal(harness.storageData.paired, undefined);
-  assert.equal(harness.storageData.ownerProfile, undefined);
+  assert.equal(harness.storageData.paired, false);
+  assert.equal(harness.storageData.ownerProfile, null);
   console.log("PASS 1b: a retired credential recovers as an honestly unpaired install");
 }
 
@@ -185,8 +192,9 @@ console.log("PASS 3: the session stamp is persisted with the tab id and kept out
 
 // ---- 5. The popup mirror is repaired from the row, not left frozen --------
 {
+  Object.assign(harness.storageData, { ownerRef: "fixture-mirror-owner", paired: true });
   const finished = {
-    id: "j2", workflow_id: "w2", workflow_state: "succeeded", status: "done",
+    id: "j2", owner_ref: "fixture-mirror-owner", workflow_id: "w2", workflow_state: "succeeded", status: "done",
     result: "Booked Earls for 4 at 7pm.",
     params: JSON.stringify({ _workflow: { plan_id: "w2", state: "succeeded" } }),
   };
@@ -195,7 +203,7 @@ console.log("PASS 3: the session stamp is persisted with the tab id and kept out
     : { ok: false, status: 0, json: async () => ({}), text: async () => "" };
 
   // What quitting Chrome mid-booking leaves behind.
-  harness.storageData.currentJob = { id: "j2", status: "running", doing: "book Earls for 4", result: "" };
+  harness.storageData.currentJob = { id: "j2", ownerRef: "fixture-mirror-owner", status: "running", doing: "book Earls for 4", result: "" };
   await reconcileCurrentJob();
   assert.equal(harness.storageData.currentJob.status, "done",
     "a job that finished yesterday must not still read 'Working on this'");
@@ -205,12 +213,12 @@ console.log("PASS 3: the session stamp is persisted with the tab id and kept out
 
   // A row that is gone is 'called off', and a read that merely fails must not
   // invent a status: a network blip is not news about the job.
-  harness.storageData.currentJob = { id: "j3", status: "running", doing: "email Priya" };
+  harness.storageData.currentJob = { id: "j3", ownerRef: "fixture-mirror-owner", status: "running", doing: "email Priya" };
   globalThis.fetch = async () => ({ ok: false, status: 404, json: async () => ({}), text: async () => "" });
   await reconcileCurrentJob();
   assert.equal(harness.storageData.currentJob.status, "removed");
 
-  harness.storageData.currentJob = { id: "j4", status: "running", doing: "email Priya" };
+  harness.storageData.currentJob = { id: "j4", ownerRef: "fixture-mirror-owner", status: "running", doing: "email Priya" };
   globalThis.fetch = async () => ({ ok: false, status: 503, json: async () => ({}), text: async () => "" });
   await reconcileCurrentJob();
   assert.equal(harness.storageData.currentJob.status, "running",
@@ -246,8 +254,112 @@ console.log("PASS 6: boot and the refused-control paths both reconcile the mirro
   await withJobWrite("j5", () => Promise.reject(new Error("409"))).catch(() => {});
   assert.equal(await withJobWrite("j5", () => write("journal-3")), "journal-3",
     "a 409 on one write cannot silence the lease renewal that follows it");
-  console.log("PASS 7: per-job writes are serialized and survive a refusal");
+console.log("PASS 7: per-job writes are serialized and survive a refusal");
 }
+
+// ---- 8. Every pairing entrypoint agrees on one credential-bearing identity.
+// Exercise the installed listener, not a source-shaped imitation of its body.
+let pairingFailures = 0;
+async function pairingCase(name, run) {
+  try { await run(); console.log(`PASS pairing: ${name}`); }
+  catch (error) { pairingFailures++; console.error(`FAIL pairing: ${name}: ${error.message}`); }
+}
+function resetPairing(values = {}) {
+  for (const key of Object.keys(harness.storageData)) delete harness.storageData[key];
+  Object.assign(harness.storageData, values);
+}
+const linkedIdentity = () => ({
+  agentId: "fixture-old-agent", agentToken: "fixture-old-token", recordId: "fixture-old-record",
+  agentCredentialInstalled: true, owner: "fixture-owner", ownerRef: "fixture-owner-ref", paired: true,
+  ownerProfile: { first_name: "Fixture" }, openrouterKey: "backend-proxy",
+  agentModel: "fixture-model", visionModel: "fixture-vision", serviceToken: "",
+  keyFetchedAt: Date.now(), pairCode: "975310",
+});
+function registrationServer({ fail = false } = {}) {
+  const calls = [];
+  globalThis.fetch = async (url, options = {}) => {
+    calls.push({ path: new URL(String(url)).pathname, options });
+    if (String(url).endsWith("/agent/upgrade-credential")) {
+      return { ok: false, status: 403, json: async () => ({ error: "upgrade not authorized" }) };
+    }
+    if (String(url).endsWith("/agent/register")) {
+      if (fail) throw new Error("synthetic offline network");
+      return { ok: true, status: 200, json: async () => ({
+        id: "fixture-new-record", agent_token: "fixture-new-token", pair_code: "135790",
+      }) };
+    }
+    return { ok: false, status: 503, json: async () => ({}), text: async () => "" };
+  };
+  return calls;
+}
+await pairingCase("legacy credential-less records recover without service-only upgrade authority", async () => {
+  const legacy = linkedIdentity(); delete legacy.agentToken; delete legacy.agentCredentialInstalled;
+  resetPairing(legacy);
+  const calls = registrationServer();
+  const state = await message("anticipy-setup-state");
+  assert.equal(state.linked, false, "old owner mirrors cannot prove a new credential is paired");
+  assert.equal(state.code, "135790", "legacy recovery must expose a usable new pairing code");
+  assert.equal(calls.filter(c => c.path === "/agent/register").length, 1);
+  assert.equal(calls.filter(c => c.path === "/agent/upgrade-credential").length, 0,
+    "the browser must never request service-only upgrade authority");
+});
+await pairingCase("manual new-code clears linkage/profile atomically and preserves work history", async () => {
+  const old = linkedIdentity();
+  resetPairing({ ...old, currentJob: { id: "fixture-job", status: "needs_user" },
+    handBacks: { "42": { at: 1, jobId: "fixture-job" } } });
+  const retained = structuredClone({ currentJob: harness.storageData.currentJob, handBacks: harness.storageData.handBacks });
+  registrationServer();
+  const set = chrome.storage.local.set, remove = chrome.storage.local.remove;
+  const snapshots = [];
+  chrome.storage.local.set = async values => { await set(values); snapshots.push(structuredClone(harness.storageData)); };
+  chrome.storage.local.remove = async keys => { await remove(keys); snapshots.push(structuredClone(harness.storageData)); };
+  try { assert.equal((await message("anticipy-newcode")).ok, true); }
+  finally { chrome.storage.local.set = set; chrome.storage.local.remove = remove; }
+  assert.ok(snapshots.length > 0);
+  for (const snapshot of snapshots) {
+    if (snapshot.agentId !== old.agentId) {
+      assert.ok(!snapshot.ownerRef && !snapshot.paired && !snapshot.ownerProfile,
+        "replacement identity cannot coexist with prior owner authority/profile, even between storage calls");
+    }
+  }
+  const state = await message("anticipy-setup-state");
+  assert.equal(state.linked, false);
+  assert.equal(state.code, "135790");
+  assert.deepEqual({ currentJob: harness.storageData.currentJob, handBacks: harness.storageData.handBacks }, retained);
+});
+await pairingCase("a valid credential is preserved even without an obsolete installed marker", async () => {
+  const valid = linkedIdentity(); delete valid.agentCredentialInstalled;
+  resetPairing(valid); const calls = registrationServer();
+  assert.equal((await message("anticipy-setup-state")).linked, true);
+  assert.equal(harness.storageData.agentId, valid.agentId);
+  assert.equal(harness.storageData.agentToken, valid.agentToken);
+  assert.equal(calls.length, 0, "a real per-agent credential does not need the old service upgrade");
+});
+await pairingCase("a valid paired identity survives an ordinary outage", async () => {
+  const valid = linkedIdentity(); resetPairing(valid); const calls = registrationServer({ fail: true });
+  assert.equal((await message("anticipy-setup-state")).linked, true);
+  harness.fireAlarm("anticipy-heartbeat");
+  await new Promise(resolve => setTimeout(resolve, 20));
+  assert.equal(harness.storageData.agentId, valid.agentId);
+  assert.equal(harness.storageData.ownerRef, valid.ownerRef);
+  assert.deepEqual(harness.storageData.ownerProfile, valid.ownerProfile);
+  assert.equal(calls.filter(c => c.path === "/agent/register").length, 0);
+});
+await pairingCase("failed fresh registration is not a successful setup receipt", async () => {
+  resetPairing(); registrationServer({ fail: true });
+  const state = await message("anticipy-setup-state");
+  assert.equal(state.ok, false);
+  assert.equal(state.linked, false);
+  assert.equal(state.code, "");
+});
+await pairingCase("manual re-pair remains unlinked when registration is offline", async () => {
+  resetPairing({ ...linkedIdentity(), currentJob: { id: "fixture-job", status: "done" } });
+  registrationServer({ fail: true });
+  assert.equal((await message("anticipy-newcode")).ok, false);
+  assert.ok(!harness.storageData.ownerRef && !harness.storageData.paired && !harness.storageData.ownerProfile);
+  assert.equal(harness.storageData.currentJob.id, "fixture-job");
+});
+if (pairingFailures) process.exitCode = 1;
 
 assert.ok(/active\.job = await withJobWrite\(id, \(\) => \{/.test(source),
   "the heartbeat's patch must be built inside the chain, not before it");
@@ -259,5 +371,5 @@ assert.ok(/const next = await withJobWrite\(id, \(\) => write\(id,\n\s+\{ trace,
   "the trace/journal write must share the chain, or there is nothing to serialize against");
 console.log("PASS 8: both writers on a live job go through the same chain");
 
-console.log("test_background_recovery: all passed");
-process.exit(0);
+console.log(`test_background_recovery: ${pairingFailures ? `${pairingFailures} pairing failures` : "all passed"}`);
+process.exit(pairingFailures ? 1 : 0);

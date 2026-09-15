@@ -106,6 +106,12 @@ export function workflowPatch(job, nextState, options = {}) {
     patch.lease_until = "";
     patch.claimed_by = "";
     patch.claimed_at = null;
+    // Only the owner's explicit resume of a parked task grants a fresh
+    // attempt budget. Automatic requeue/redispatch preserves spent attempts.
+    if (from === "needs_user" && nextState === "queued" && options.attempt === 0) {
+      next.attempts = 0;
+      patch.attempts = 0;
+    }
   }
 
   if (nextState === "succeeded") {

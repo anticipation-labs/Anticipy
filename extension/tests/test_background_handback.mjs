@@ -8,6 +8,10 @@ import assert from "node:assert/strict";
 import { installChrome } from "./chrome_mock.mjs";
 
 const harness = installChrome();
+Object.assign(harness.storageData, {
+  agentId: "fixture-agent", agentToken: "fixture-token", recordId: "fixture-record",
+  ownerRef: "fixture-owner", paired: true,
+});
 // Backend unreachable: the worker's import-time poll() must cope, as it does
 // when Chrome starts offline.
 globalThis.fetch = async () => ({ ok: false, status: 0, json: async () => ({}), text: async () => "" });

@@ -62,7 +62,7 @@ assert.ok(/"needs_user"/.test(retryable),
 // it instantly, without running, and reported "I tried this 3 times".
 const bgSrc = readFileSync(
   join(dirname(fileURLToPath(import.meta.url)), "../background.js"), "utf8");
-const retry = bgSrc.match(/async function retryJob[\s\S]{0,900}/)[0];
+const retry = bgSrc.match(/async function retryJob[\s\S]*?\n\}/)[0];
 assert.ok(/attempt: 0/.test(retry),
   "an explicitly requested retry must restore the attempt budget");
 

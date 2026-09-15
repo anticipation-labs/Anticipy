@@ -43,9 +43,7 @@ function hint(text, holdMs = 0) {
 // could only ever be empty — and a browser holding the server's master
 // credential is worth deleting on principle. The per-agent pair is what
 // actually authenticates.
-async function agentHeaders() {
-  const { agentId, agentToken } =
-    await chrome.storage.local.get(["agentId", "agentToken"]);
+function agentHeaders({ agentId, agentToken }) {
   const h = {};
   if (agentId) h["X-Anticipy-Agent-ID"] = agentId;
   if (agentToken) h["X-Anticipy-Agent-Token"] = agentToken;
@@ -77,19 +75,26 @@ async function probe() {
 // storage mirror off the row itself; a second mapping in the popup is how you
 // end up with two surfaces confidently disagreeing.
 let liveStep = "";
-async function loadLiveStep(id) {
+let refreshEpoch = 0;
+async function loadLiveStep(s, epoch) {
   try {
+    const base = await backendBase();
     const r = await fetch(
-      `${await backendBase()}/api/collections/jobs/records/${encodeURIComponent(id)}`,
-      { headers: await agentHeaders() });
+      `${base}/api/collections/jobs/records/${encodeURIComponent(s.job.id)}`,
+      { headers: agentHeaders(s) });
     // A refusal is an answer: the backend is reachable, the read was denied.
     reachable = true;
-    if (!r.ok) { liveStep = ""; return; }
-    liveStep = String(parseJobParams(await r.json())._doing || "").trim();
+    if (!r.ok) return "";
+    const row = await r.json();
+    // The epoch is NOT the test: a read that outlived the 4 s tick is still
+    // true when the job it read is the job on screen. refresh() rechecks the
+    // displayed identity and job before painting it (review 2026-09-14).
+    if (row?.id !== s.job.id || row?.owner_ref !== s.ownerRef) return "";
+    return String(parseJobParams(row)._doing || "").trim();
   } catch (e) {
     // Network-level failure. probe() owns the reachable verdict — a CORS or
     // abort failure here is not proof the backend is down.
-    liveStep = "";
+    return "";
   }
 }
 
@@ -142,32 +147,57 @@ let handBackTab = null;
 let pending = null;
 let shownStatus = "";
 
+const IDENTITY_FIELDS = ["ownerRef", "agentId", "agentToken", "recordId", "backendUrl"];
+const identityString = value => typeof value === "string" && value.trim() ? value : "";
+const sameIdentity = (a, b) => !!a && !!b && a.linked === b.linked &&
+  IDENTITY_FIELDS.every(key => a[key] === b[key]);
+const sameJobView = (a, b) => sameIdentity(a, b) &&
+  a.job?.id === b.job?.id && a.job?.status === b.job?.status;
+
 async function snapshot() {
   const s = await chrome.storage.local.get(
-    ["pairCode", "recordId", "paired", "ownerRef", "currentJob", "handBacks"]);
+    ["pairCode", "recordId", "paired", "ownerRef", "agentId", "agentToken",
+      "backendUrl", "currentJob", "handBacks"]);
+  const identity = Object.fromEntries(IDENTITY_FIELDS.map(key => [key, identityString(s[key])]));
+  // A paired flag alone does not identify an owner, and a legacy record with
+  // no credential cannot authenticate. Recovery must not make its old task
+  // text visible while a new phone is being paired.
+  const linked = !!identity.ownerRef && !!identity.agentId &&
+    !!identity.agentToken && !!identity.recordId;
+  // A record paired before Anticipy kept owner ids: the phone claimed it, so
+  // its code is spent, and nothing can run under it. The only way out is a
+  // fresh identity, which this surface must OFFER rather than hide behind a
+  // dead code (review 2026-09-14).
+  const pairedWithoutOwner = !!s.paired && !identity.ownerRef && !!identity.recordId && !!identity.agentToken;
   const ids = Object.keys(s.handBacks || {})
+    .filter(id => linked && s.handBacks[id]?.ownerRef === identity.ownerRef)
     .sort((a, b) => (s.handBacks[a].at || 0) - (s.handBacks[b].at || 0));
-  handBackTab = ids.length ? ids[ids.length - 1] : null;
-  const linked = !!s.paired || !!s.ownerRef;
   return {
-    code: s.pairCode || "",
-    // Either flag is proof the phone claimed this browser: the heartbeat
-    // writes both from the same record. ownerRef is the one that actually
-    // gates work (claimJob returns null without it), so an install carrying an
-    // ownerRef and a stale paired:false is linked, whatever the older flag
-    // says.
+    ...identity,
+    handBackTab: ids.length ? ids[ids.length - 1] : null,
+    code: pairedWithoutOwner ? "" : (s.pairCode || ""),
+    pairedWithoutOwner,
     linked,
     // Being linked IS proof of registration, and saying otherwise let the two
     // lines on this surface contradict each other: an install whose recordId
     // and pairCode had been cleared (a re-pair, or the newcode path) showed
     // "Linked" in the masthead over the words "Introducing this browser…".
     registered: !!s.pairCode || !!s.recordId || linked,
-    job: s.currentJob && s.currentJob.status ? s.currentJob : null,
+    // Unknown legacy ownership is not evidence of this person's task. Keep
+    // the stored record for recovery; never relabel or delete it here.
+    job: linked && s.currentJob?.ownerRef === identity.ownerRef && s.currentJob.status
+      ? s.currentJob : null,
   };
+}
+
+function clearTaskSurface() {
+  for (const id of ["jobdoing", "joberrand", "jobresult", "jobheadtext"]) say(id, "");
+  for (const id of ["jobbox", "openhb", "stop", "again", "bars", "why"]) show(id, false);
 }
 
 function render(s) {
   const job = s.job;
+  handBackTab = s.handBackTab;
   const status = job ? job.status : "";
   const busy = STOPPABLE.has(status) || status === "awaiting_confirm";
 
@@ -185,6 +215,8 @@ function render(s) {
     state = reachable === false
       ? "I can't reach Anticipy from this browser, so this browser hasn't been given its code yet. I'll keep trying."
       : "Introducing this browser to Anticipy…";
+  } else if (s.pairedWithoutOwner) {
+    state = "This browser was paired before Anticipy kept owner ids. Press New code, then pair it again from your iPhone.";
   } else if (!s.linked) {
     state = "This browser isn't linked to your iPhone yet.";
   } else if (busy) {
@@ -209,7 +241,7 @@ function render(s) {
   // code (the 409-orphan path background.js describes). A fresh install has no
   // record either and resolves itself within a poll; offering a reset there
   // would just invite people to churn identities while she was mid-handshake.
-  show("getcode", !s.linked && !s.code && s.registered && reachable !== false);
+  show("getcode", !s.linked && !s.code && s.registered && (reachable !== false || s.pairedWithoutOwner));
   hint(s.code
     ? "Click the code to copy it."
     : reachable === false
@@ -226,7 +258,8 @@ function render(s) {
     // back, so Stop read as a button that had done nothing while the stop was
     // in fact already on its way. The latch clears itself the moment the
     // status actually moves, or after ten seconds if the worker never answers.
-    if (pending && (pending.status !== status || Date.now() - pending.at > 10000)) pending = null;
+    if (pending && (pending.status !== status || pending.id !== job.id ||
+        pending.ownerRef !== s.ownerRef || Date.now() - pending.at > 10000)) pending = null;
     shownStatus = status;
     say("jobheadtext", HEADS[status] || "Last task");
     show("bars", status === "running" && !pending);
@@ -259,6 +292,11 @@ function render(s) {
     show("openhb", !!handBackTab);
     el("openhb").classList.toggle(
       "filled", status === "needs_user" || status === "awaiting_confirm");
+  } else {
+    pending = null;
+    shownStatus = "";
+    liveStep = "";
+    clearTaskSurface();
   }
 
   // --- reachability. The sentence above already says it is unreachable; this
@@ -282,16 +320,36 @@ function render(s) {
 let lastSnap = null;
 
 async function refresh() {
-  const s = await snapshot();
+  const epoch = ++refreshEpoch;
+  let s;
+  try { s = await snapshot(); }
+  catch {
+    if (epoch === refreshEpoch) {
+      lastSnap = null; pending = null; liveStep = ""; handBackTab = null;
+      clearTaskSurface();
+    }
+    return;
+  }
+  if (epoch !== refreshEpoch) return;
+  if (!sameJobView(lastSnap, s)) { liveStep = ""; pending = null; }
   lastSnap = s;
   // Paint from storage FIRST: it is already local and already true, and the
   // popup has one job in its first frame, which is to not be empty. The
   // network only ever refines what is already on screen.
   render(s);
   const id = s.job && s.job.id && STOPPABLE.has(s.job.status) ? s.job.id : "";
-  if (id) await loadLiveStep(id);
-  else liveStep = "";
-  render(s);
+  if (!id) return;
+  const step = await loadLiveStep(s, epoch);
+  let current;
+  try { current = await snapshot(); } catch { return; }
+  // A storage event may not yet have reached the popup. Recheck the captured
+  // identity and job before allowing the delayed network read to repaint — that
+  // recheck, not the epoch, is what keeps another owner's text off the screen.
+  if (!sameJobView(s, current)) { if (epoch === refreshEpoch) return refresh(); return; }
+  if (!step) return;
+  liveStep = step;
+  lastSnap = current;
+  render(current);
 }
 
 // -------------------------------------------------------------- her buttons
@@ -309,26 +367,39 @@ el("paircode").addEventListener("click", async () => {
 // Stop and start-again both go through the worker, which writes the job row
 // the same way every other status change does. The running loop checks that
 // row as it works, so it stops within a few seconds.
-async function tell(type) {
-  const { currentJob } = await chrome.storage.local.get(["currentJob"]);
-  if (!currentJob || !currentJob.id) return;
-  try { await chrome.runtime.sendMessage({ type, id: currentJob.id }); } catch (e) { /* worker asleep */ }
-  refresh();
+async function tell(type, displayed) {
+  try {
+    const current = await snapshot();
+    if (!displayed?.job?.id || !sameJobView(displayed, current) || !current.linked) return false;
+    const response = await chrome.runtime.sendMessage({ type, id: displayed.job.id, ownerRef: displayed.ownerRef });
+    return response?.ok === true;
+  } catch (e) { return false; /* worker asleep or storage unavailable */ }
 }
 // Latch the acknowledgement rather than writing it into the line: the next
 // repaint would otherwise overwrite it with the state the worker has not
 // answered yet.
-const press = (text, type) => {
-  pending = { text, status: shownStatus, at: Date.now() };
-  if (lastSnap) render(lastSnap);
-  tell(type);
+const press = async (text, type) => {
+  const displayed = lastSnap;
+  const allowed = type === "anticipy-stop" ? STOPPABLE : RETRYABLE;
+  if (!displayed?.linked || !displayed.job?.id || !allowed.has(displayed.job.status)) return;
+  pending = { text, status: shownStatus, id: displayed.job.id, ownerRef: displayed.ownerRef, at: Date.now() };
+  render(displayed);
+  if (!await tell(type, displayed)) pending = null;
+  await refresh();
 };
 el("stop").addEventListener("click", () => press("Stopping…", "anticipy-stop"));
 el("again").addEventListener("click", () => press("Starting it again…", "anticipy-again"));
 el("openhb").addEventListener("click", async () => {
-  if (!handBackTab) return;
-  try { await chrome.runtime.sendMessage({ type: "anticipy-open-handback", tabId: handBackTab }); } catch (e) { /* worker asleep */ }
-  window.close();
+  const displayed = lastSnap;
+  const tabId = displayed?.handBackTab;
+  if (!tabId || !displayed?.linked) return;
+  try {
+    const current = await snapshot();
+    if (!sameIdentity(displayed, current) || current.handBackTab !== tabId) return;
+    const response = await chrome.runtime.sendMessage({ type: "anticipy-open-handback", tabId, ownerRef: displayed.ownerRef });
+    if (response?.ok === true) window.close();
+    else await refresh();
+  } catch (e) { /* worker asleep or storage unavailable */ }
 });
 // A registered install with no pair code used to be a dead end: the only
 // recovery is a fresh identity, and the button for it lived on the setup page
@@ -344,8 +415,12 @@ el("getcode").addEventListener("click", async () => {
 // Keep the panel honest while the popup is open — a job can finish mid-look.
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== "local") return;
-  if (changes.currentJob || changes.paired || changes.ownerRef ||
-      changes.pairCode || changes.recordId || changes.handBacks) refresh();
+  if (IDENTITY_FIELDS.some(key => changes[key]) || changes.paired) {
+    lastSnap = null; pending = null; liveStep = ""; handBackTab = null;
+    clearTaskSurface();
+  }
+  if (changes.currentJob || changes.paired || changes.pairCode || changes.handBacks ||
+      IDENTITY_FIELDS.some(key => changes[key])) refresh();
 });
 
 // Opening the popup is a wake signal worth spending: reading storage does NOT

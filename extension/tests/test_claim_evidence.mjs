@@ -99,11 +99,8 @@ const good = (id, extra = {}) => ({
   reset({ ownerRef: "", paired: true });
   assert.equal(await claimJob(), null, "no owner id means no work, always");
   const m = mirror();
-  assert.equal(m.status, "needs_user", "the popup has to be able to show it");
-  assert.ok(!m.id, "a diagnosis must carry no job id, or the popup offers Stop on nothing");
-  assert.match(`${m.doing} ${m.result}`, /pair|link/i,
-    "it must name the actual problem: this browser needs pairing again");
-  console.log("PASS 1: linked-with-no-owner-id says so instead of refusing everything in silence");
+  assert.deepEqual(m, {}, "unknown ownership must not create a task/history mirror");
+  console.log("PASS 1: paired bit without owner identity cannot claim work or attribute history");
 }
 
 // An install that was never paired already says so on its own face (the popup
