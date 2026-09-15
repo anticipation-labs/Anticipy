@@ -24,11 +24,15 @@ reachable.
 
 - A branded Chrome, version 137 or newer, installed on the machine (no
   Chrome for Testing download is needed).
-- A Playwright runtime: `ANTICIPY_PLAYWRIGHT_MODULE` set to the path of a
-  `playwright/index.mjs`.
-- A Python interpreter with the repository's dependencies: `ANTICIPY_PYTHON`
-  set to it. If unset, `run.mjs` falls back to a machine-specific path, so
-  set the variable.
+- A Playwright runtime. This repository does not vendor one, so `chrome.mjs`
+  looks at `ANTICIPY_PLAYWRIGHT_MODULE` first and then at
+  `node_modules/playwright/index.mjs` under the repository root; with neither,
+  it refuses and says so. Nothing is guessed from a home directory.
+- A Python interpreter. `run.mjs` uses `ANTICIPY_PYTHON`, then a `.venv` at
+  the repository root, then whatever `python3` resolves to. The stand-in phone
+  and the Worker controller are standard-library only, so any Python 3.11 or
+  newer will do; set the variable if the repository's own virtualenv is
+  somewhere else.
 - `npm ci --prefix migration/workers` done, so `wrangler` is available under
   `migration/workers/node_modules` (that is where `local_worker.py` invokes
   it from).
@@ -93,8 +97,12 @@ scenario reuses one (`restart` does, deliberately).
 | `phone-repair` | Owner B released the browser from the app; owner A re-claimed the SAME code without pressing New code; B's profile, key and task text did not reach A; a task ran for A on the same credential. |
 | `phone-release-legacy` | The same release in the older shape (`paired:false` with `owner_ref` left on the row): the extension still wipes profile and key and reads "Not linked"; A re-pairs with the same code; a task runs. |
 
-Two rows appear only on a condition: `restart:extId` if the extension id
-changed across the relaunch, and `error` if a scenario threw.
+**Eight of these ten rows carry a verdict.** `launch` and `launch:targets`
+record what the browser looked like and have no pass/fail field, so they
+cannot go red and must not be counted as passes: a run that is entirely green
+is "8/8 verdict rows", not "10/10". Two further rows appear only on a
+condition: `restart:extId` if the extension id changed across the relaunch,
+and `error` if a scenario threw.
 
 ## Where results land
 
