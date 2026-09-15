@@ -11,6 +11,8 @@ if ! grep -q 'OpusFrameAssembler' "$app/BLE/PendantManager.swift"; then
     exit 2
 fi
 
+sh "$here/run_opus_transport_tests.sh"
+
 swiftc -O \
     "$app/BLE/OpusFrameAssembler.swift" \
     "$here/OpusFrameAssemblerStress.swift" \

@@ -702,7 +702,7 @@ final class AnticipySession: ObservableObject {
     /// tests/test_extension_version_pin.py now reads extension/manifest.json,
     /// this literal, and the mirror in Tests/StaleExtensionTests.swift, and
     /// goes red when any of the three disagree. Bump all three together.
-    static let expectedExtensionVersion = "0.18.2"
+    static let expectedExtensionVersion = "0.18.3"
 
     /// The extension reports itself as "Chrome/128.0.0.0 ext/0.8.2" in the
     /// agent record's browser field. Returns what Chrome is running when it
@@ -2225,20 +2225,18 @@ final class AnticipySession: ObservableObject {
     /// Until that decoder exists the pendant is a battery with a microphone
     /// nobody reads, and the app says so on both screens that mention it
     /// rather than showing a Listening label over silence. The gap law is
-    /// live regardless: `onGap` reports airtime the radio lost, and the feed
-    /// carries the mark.
+    /// live regardless: `onGap` reports transport interruptions with unknown
+    /// duration, and the feed carries that uncertainty explicitly.
     func startPendantTranscription(_ pendant: PendantManager) async {
         // Not a guard on `isSignedIn` or the pendant's state: there is nothing
         // to start under any condition, and a version of this that returned
         // early on some paths would leave `onOpusFrame` set on the others.
         pendant.onOpusFrame = nil
         // The gap law starts HERE, even though the frames themselves are
-        // dropped at the source: the assembler still measures the airtime
-        // the radio lost, and the feed still says so. A pendant that lost a
-        // minute is shown as having lost a minute — never as a silence the
-        // transcript politely glosses over.
-        pendant.onGap = { [weak self] seconds in
-            self?.recordPendantGap(seconds)
+        // dropped at the source. Sequence gaps count BLE fragments, not
+        // milliseconds; the feed must not invent a duration for them.
+        pendant.onGap = { [weak self] gap in
+            self?.recordPendantGap(gap)
         }
         pendantCapturing = false
     }
@@ -2254,26 +2252,13 @@ final class AnticipySession: ObservableObject {
     /// is formatted by GapMarker so the wording is one decision, tested,
     /// not three strings typed in three places.
     ///
-    /// The journal IS written here now, and the follow-up this comment used to
-    /// declare is what closed it: `ListenEvent.airtimeLost` rather than a
-    /// reused `sessionStopped`, because journaling a hole as a stopped session
-    /// is how a journal starts hiding the stops that were real. That is one
-    /// case, one describe line, one parse case and one tally fold — and it is
-    /// the difference between a loss the owner can read tomorrow and a loss
-    /// that died with the process. The feed marker is per-session UI; the
-    /// journal is the durable half, and `ListenTally` folds a day of these into
-    /// the two numbers that separate a failing radio from a quiet room.
-    ///
-    /// ROUNDED, NOT TRUNCATED, and floored at one. The assembler's gap is a
-    /// whole number of 10 ms packets, so this conversion is normally exact; the
-    /// floor exists so that a gap small enough to round to zero is still
-    /// recorded as a gap. `airtimeGaps` is a count of holes, and a hole
-    /// reported as zero milliseconds is still a hole — dropping it entirely
-    /// would let a continuously-stuttering link report nothing at all.
-    private func recordPendantGap(_ seconds: TimeInterval) {
-        let marker = GapMarker.text(seconds)
-        let milliseconds = max(1, Int((seconds * 1000).rounded()))
-        ListenJournal.shared.record(.airtimeLost(milliseconds: milliseconds))
+    /// Counts are durable diagnostics; neither missing sequence slots nor
+    /// rejected buffered frames prove a duration. Legacy airtimeLost journal
+    /// entries remain readable, but this transport never creates new ones.
+    private func recordPendantGap(_ gap: OpusTransportGap) {
+        let marker = GapMarker.unknownDuration
+        ListenJournal.shared.record(.transportGap(missingNotifications: gap.missingNotifications,
+                                                  discardedFrames: gap.discardedFrames))
         DispatchQueue.main.async { [weak self] in
             self?.sessionLines.append(SessionLine(text: marker))
         }

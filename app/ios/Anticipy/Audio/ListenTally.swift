@@ -160,13 +160,8 @@ struct ListenTally: Equatable {
     /// never guessed at.
     var linesDeliveredByEar: [String: Int] = [:]
 
-    /// AIRTIME THE PENDANT'S RADIO LOST, summed over the day, in milliseconds.
-    ///
-    /// The one number that separates "the room was quiet" from "the link was
-    /// dropping packets and the transcript has holes in it". Both produce a
-    /// short transcript; only one of them is a defect, and until this existed
-    /// the assembler measured the difference and then threw it away when the
-    /// process ended.
+    /// Preserved historical millisecond estimates, not a conversion of modern
+    /// transport diagnostics. BLE fragments do not establish audio duration.
     var airtimeLostMilliseconds = 0
     /// HOW MANY SEPARATE HOLES made up that total, which the total alone
     /// cannot say. Thirty seconds lost in one dropout is a radio that went out
@@ -174,6 +169,17 @@ struct ListenTally: Equatable {
     /// a link failing continuously in place. They want different fixes, and a
     /// single sum reads identically for both.
     var airtimeGaps = 0
+    /// Unknown-duration events stay separate from historical timed estimates.
+    var transportGaps = 0
+    /// Nil means malformed or unrepresentable diagnostics, never zero loss.
+    var missingNotifications: Int? = 0
+    var transportDiscardedFrames: Int? = 0
+
+    private static func transportTotal(_ total: Int?, adding count: Int) -> Int? {
+        guard let total, count >= 0 else { return nil }
+        let (sum, overflow) = total.addingReportingOverflow(count)
+        return overflow ? nil : sum
+    }
 
     /// LINES HEARD AND THEN LOST, because the unsent queue filled up and the
     /// oldest had to go. The most expensive number on this card: unlike a
@@ -367,6 +373,10 @@ struct ListenTally: Equatable {
             case .airtimeLost(let milliseconds):
                 tally.airtimeLostMilliseconds += milliseconds
                 tally.airtimeGaps += 1
+            case .transportGap(let missing, let discarded):
+                tally.transportGaps += 1
+                tally.missingNotifications = transportTotal(tally.missingNotifications, adding: missing)
+                tally.transportDiscardedFrames = transportTotal(tally.transportDiscardedFrames, adding: discarded)
 
             // Also not evidence that anybody spoke, and for a sharper reason
             // than the gap above: these words WERE heard. What they are
@@ -448,6 +458,7 @@ struct ListenTally: Equatable {
         // a flush and not a stop, so it belongs beside them rather than
         // anywhere that would reorder hearing or session boundaries.
         case .airtimeLost(let milliseconds): return "3c\(milliseconds)"
+        case .transportGap(let missing, let discarded): return "3e\(missing):\(discarded)"
         case .speechDropped(let count): return "3d\(count)"
         case .posted(let ok, let detail): return "4\(ok) \(detail.text)"
         case .sessionStopped(let cause): return "5\(cause.rawValue)"

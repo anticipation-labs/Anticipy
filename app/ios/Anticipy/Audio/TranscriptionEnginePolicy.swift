@@ -42,15 +42,9 @@ enum ListenEnginePolicy {
 enum GapMarker {
 
     static let prefix = "[unavailable "
-
-    static func text(_ seconds: TimeInterval) -> String {
-        let total = Int(seconds.rounded())
-        guard total > 0 else { return prefix + "under 1s]" }
-        let h = total / 3600
-        let m = (total % 3600) / 60
-        let s = total % 60
-        if h > 0 { return prefix + "\(h)h \(m)m \(s)s]" }
-        if m > 0 { return prefix + "\(m)m \(s)s]" }
-        return prefix + "\(s)s]"
-    }
+    /// The only marker the transport can honestly write: BLE fragment counts
+    /// do not establish a duration (2026-09-13), so the timed `text(_:)`
+    /// formatter that once lived here was removed on 2026-09-14 with its last
+    /// caller. Bring it back only with a wall-clock gap measured on purpose.
+    static let unknownDuration = "[unavailable — audio interrupted; duration unknown]"
 }
