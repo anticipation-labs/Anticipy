@@ -6,6 +6,9 @@ or deleted to make this index.
 
 ## Current
 
+- [../CHANGELOG.md](../CHANGELOG.md): what each release deployed and what it did
+  not prove.
+
 | File | One line |
 | --- | --- |
 | [EOD-READINESS-2026-09-13.md](EOD-READINESS-2026-09-13.md) | The current board: what is released, what the evidence proves, owners, and the unfinished acceptance gates. |
@@ -35,6 +38,11 @@ or deleted to make this index.
 | [engineer-handoff-2026-09-07/](engineer-handoff-2026-09-07/README.md) | The engineer field brief and its 500-scenario catalogue (`brief.md`, `scenarios.json/.txt`, the result-sheet CSV, `build_brief.py`, `validation.json`); proposed and unexecuted. |
 
 ## Historical
+
+- [../research/archive-root-2026-09-15/](../research/archive-root-2026-09-15/): dated
+  hand-off, audit, backlog and testing-pass notes from July to September 2026
+  that used to sit in the repository root. Kept with their history; nothing in
+  them is current.
 
 Dated snapshots kept as records. Do not read them for current status.
 

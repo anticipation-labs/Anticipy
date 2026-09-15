@@ -57,6 +57,8 @@ not, how to run them offline, and how the installed-extension proof rig works.
 
 - [Current status](docs/EOD-READINESS-2026-09-13.md): release evidence and the
   remaining-work board.
+- [CHANGELOG.md](CHANGELOG.md): what each release deployed, and what it did
+  not prove.
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): runtimes, shared contracts,
   and the evidence ladder.
 - [docs/RELEASE.md](docs/RELEASE.md): the ordered release runbook and

@@ -26,6 +26,16 @@ Totals: 354 files; 540 path hits, 431 e-mail hits, 177 phone-like hits.
 
 ## Remove from the public branch (follow-up PR)
 
+**Status 2026-09-15:** done. The eight `*.jsonl` harness dumps and
+`HANDOFF-TRANSCRIPT.md` were removed from `cloudflare-backend`, and the dated
+session notes that sat in the repository root (`AUDIT-2026-07-21.md`,
+`BACKLOG.md`, `CLAUDE-INTAKE-PROMPT.md`, `CLAUDE-ONBOARDING.md`,
+`HANDOFF-2026-08-08.md`, `HANDOFF.md`, `ORCHESTRATOR-HANDOFF.md`,
+`PROOF_REPORT.md`, both `TESTING-PASS-2026-08-21*.md`, `WHAT-CHANGED-2026-08-02.md`,
+`WHAT-I-FOUND-2026-08-11.md`) now live under `research/archive-root-2026-09-15/`
+with their history. The counts in the table below still refer to those files
+under their new paths; the redaction of their contents remains to do.
+
 These are harness dumps and a raw session transcript at the repository root.
 They carry no product source and should be removed from the public branch in
 a separate, path-limited PR (moving them out of the tree is a git operation
