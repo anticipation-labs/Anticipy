@@ -41,8 +41,9 @@ check(P.Copy.offerSecondary == "I have a pendant",
 check(!P.Copy.offerBody.lowercased().contains("without it")
         && !P.Copy.offerBody.lowercased().contains("miss out"),
       "the offer never says the product is lesser without the hardware")
-check(P.Copy.offerBody.lowercased().contains("nothing is missing"),
-      "it says the opposite, plainly")
+check(P.Copy.offerBody.contains("can't listen through it yet")
+        && P.Copy.offerBody.contains("iPhone's microphone"),
+      "the offer discloses the unavailable pendant audio and names the working microphone")
 check(!P.Copy.offerFootnote.isEmpty,
       "and it says the door stays open in Settings")
 
@@ -122,6 +123,9 @@ check(!P.doneLine(deviceName: nil).isEmpty && !P.doneLine(deviceName: "").isEmpt
       "and says something true when there is not")
 check(!P.doneLine(deviceName: nil).contains("Optional"),
       "and never leaks a Swift optional onto a screen")
+check([nil, "", "Pendant 7A"].allSatisfy {
+    P.doneLine(deviceName: $0).contains("Use this iPhone to listen")
+}, "pairing never promises that pendant audio now works")
 
 // Patience: long enough not to give up in front of somebody still fetching the
 // pendant from the next room.

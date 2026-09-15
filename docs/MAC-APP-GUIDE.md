@@ -38,6 +38,10 @@ transcriber may still revise.
 Type notes on the right at any time. They are saved as you type, into the same
 folder as the recording, and are there when the meeting becomes a record.
 
+If a save fails, the notes say Not saved yet. Keep Anticipy open and use Retry
+saving. Unsaved edits stay available while the app is open, even if you select
+another meeting.
+
 ## After a meeting
 
 Every recording appears in the sidebar under the day it happened, with its
@@ -53,6 +57,9 @@ is ever deleted outright.
 macOS asks for the Microphone and for Speech Recognition during first run. The
 first recording also asks for System Audio Recording, which is how the other
 side of a call is heard; there is no way to ask for that one sooner.
+
+Choose Set up later to open your library before granting recording permissions.
+Recording still needs those permissions.
 
 If a switch is off, the app says so in as many words and can only send you to
 System Settings, under Privacy & Security. It cannot ask again on its own.

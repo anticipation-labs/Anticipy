@@ -99,6 +99,26 @@ struct LibraryView: View {
             ToolbarItem(placement: .primaryAction) { RecordControl() }
         }
         .background(MacTheme.bg)
+        .safeAreaInset(edge: .bottom) {
+            if !store.pendingSidecars.isEmpty {
+                HStack {
+                    Text("Some meeting edits haven't saved. Keep Anticipy open and retry.")
+                        .foregroundStyle(MacTheme.caution)
+                    Spacer()
+                    Button("Retry saving") { store.retryPendingSaves() }
+                }
+                .padding(MacTheme.Space.base)
+                .background(MacTheme.bg)
+            }
+        }
+        .alert("Meeting wasn't moved", isPresented: Binding(
+            get: { store.trashError != nil },
+            set: { if !$0 { store.trashError = nil } }
+        )) {
+            Button("OK") { store.trashError = nil }
+        } message: {
+            Text(store.trashError ?? "")
+        }
         .onChange(of: listener.state) { _, state in
             if state == .starting { selection = .live }
             if state == .idle || state == .denied { selectNewestIfLive() }
@@ -120,8 +140,7 @@ struct LibraryView: View {
         ) {
             Button("Move to Trash", role: .destructive) {
                 if let record = confirmTrash {
-                    if selection == .record(record.id) { selection = nil }
-                    store.trash(record)
+                    if store.trash(record), selection == .record(record.id) { selection = nil }
                 }
                 confirmTrash = nil
             }
@@ -476,13 +495,15 @@ struct MeetingDetailView: View {
                 TranscriptPane(startedAt: record.startedAt, lines: record.transcript,
                                liveOwner: "", liveSystem: "")
                     .frame(minWidth: 360)
-                NotesPane(text: $notes)
+                NotesPane(text: $notes,
+                          savePending: store.hasPendingSave(in: record.directoryURL))
                     .frame(minWidth: 260, idealWidth: 340)
             }
         }
         .onAppear {
-            title = record.ownerTitle ?? ""
-            notes = record.notes
+            let edits = store.sidecar(in: record.directoryURL)
+            title = edits.title ?? ""
+            notes = edits.notes
         }
         .onChange(of: title) { _, new in save(title: new, notes: notes) }
         .onChange(of: notes) { _, new in save(title: title, notes: new) }
@@ -558,7 +579,8 @@ struct LiveMeetingView: View {
                                liveOwner: listener.liveOwnerText,
                                liveSystem: listener.liveSystemText)
                     .frame(minWidth: 360)
-                NotesPane(text: $notes)
+                NotesPane(text: $notes,
+                          savePending: notesFolder.map { store.hasPendingSave(in: $0) } ?? true)
                     .frame(minWidth: 260, idealWidth: 340)
             }
         }
@@ -688,15 +710,16 @@ struct TranscriptLineView: View {
 /// The owner's notes, plain text, saved as they are typed.
 struct NotesPane: View {
     @Binding var text: String
+    let savePending: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: MacTheme.Space.tight) {
             HStack {
                 SectionLabel(text: "Your notes")
                 Spacer()
-                Text("Saved on this Mac")
+                Text(savePending ? "Not saved yet" : "Saved on this Mac")
                     .font(.system(size: 11))
-                    .foregroundStyle(MacTheme.muted)
+                    .foregroundStyle(savePending ? MacTheme.caution : MacTheme.muted)
             }
             ZStack(alignment: .topLeading) {
                 if text.isEmpty {

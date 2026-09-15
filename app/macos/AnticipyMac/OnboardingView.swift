@@ -245,6 +245,8 @@ struct OnboardingView: View {
                 }
                 .buttonStyle(.ghost)
                 Spacer()
+                Button("Set up later") { hasOnboarded = true }
+                    .buttonStyle(.ghost)
                 Button("Continue") { advance() }
                     .buttonStyle(.primary)
                     .disabled(!permissions.canRecord)

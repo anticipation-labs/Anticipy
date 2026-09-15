@@ -21,6 +21,7 @@ sh "$HERE/run_transcript_wire_tests.sh"
 sh "$HERE/run_backend_delivery_tests.sh"
 # The library reads what the recorder wrote: titles, clocks, days, Markdown.
 sh "$HERE/run_meeting_library_tests.sh"
+sh "$HERE/run_meeting_store_tests.sh"
 # Which screen opens, and what a permission row may say.
 sh "$HERE/run_onboarding_route_tests.sh"
 # The whole app type-checks; no view names a colour; the guide has one text.
