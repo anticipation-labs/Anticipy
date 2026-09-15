@@ -67,8 +67,11 @@ workflow records the failure that ordering prevents.
 ## 5. Live verification (never the workflow exit code alone)
 
 ```sh
-curl -sI https://api.anticipy.ai/api/health | grep -i x-anticipy-revision
+curl -s -D- -o /dev/null https://api.anticipy.ai/api/health | grep -i x-anticipy-revision
 ```
+
+Use a GET. `/api/health` is registered for GET only, so `curl -I` (a HEAD)
+answers 404 and reads exactly like an outage on the deploy you just ran.
 
 The header carries the deploy tag, which is the commit SHA the job deployed
 (`migration/workers/src/index.ts` sets it from the Worker's version
