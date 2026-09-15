@@ -55,8 +55,11 @@ not, how to run them offline, and how the installed-extension proof rig works.
 
 ## Read next
 
-- [Current status](docs/EOD-READINESS-2026-09-13.md): release evidence and the
-  remaining-work board.
+- [Independent audit, September 15](research/2026-09-15-independent-app-audit.md):
+  freshly reproduced checks, corrections to earlier claims, local build 178
+  repairs and remaining live acceptance gaps.
+- [September 13 readiness board](docs/EOD-READINESS-2026-09-13.md): the earlier
+  release evidence and remaining-work board; read with the audit corrections.
 - [CHANGELOG.md](CHANGELOG.md): what each release deployed, and what it did
   not prove.
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): runtimes, shared contracts,

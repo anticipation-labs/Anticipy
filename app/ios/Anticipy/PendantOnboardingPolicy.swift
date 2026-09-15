@@ -128,12 +128,12 @@ enum PendantOnboardingPolicy {
     // MARK: - The copy that must not drift
 
     enum Copy {
-        /// The offer. One sentence about what the hardware is FOR, never about
-        /// what the app lacks without it.
-        static let offerTitle = "Better ears, when you want them"
+        /// Pairing is available; pendant transcription is not. Keep this
+        /// aligned with AnticipySession.startPendantTranscription.
+        static let offerTitle = "Your pendant"
         static let offerBody =
-            "The pendant hears the room the way this phone does, without the phone "
-            + "being out. Most people start without one, and nothing is missing if you do."
+            "You can pair a pendant now, but this version can't listen through it yet. "
+            + "Use this iPhone's microphone to record."
         /// PRIMARY, and it is the one without hardware.
         static let offerPrimary = "Continue without one"
         /// Quiet, secondary, and never styled as the main road.
@@ -162,7 +162,7 @@ enum PendantOnboardingPolicy {
         static let whyBluetoothPoints = [
             "It is only ever used to reach your pendant. Nothing else is looked for and nothing is broadcast.",
             "Your location is not read. iOS mentions location on this prompt because a Bluetooth scan can in principle infer it; this app asks for none and stores none.",
-            "The pendant sends audio to this phone and nowhere else. What leaves the phone is the same text the phone's own microphone would produce.",
+            "This version does not transcribe pendant audio. Use this iPhone's microphone to listen.",
             "Turning Bluetooth off later stops the pendant and changes nothing else.",
         ]
 
@@ -176,9 +176,9 @@ enum PendantOnboardingPolicy {
     /// congratulating somebody.
     static func doneLine(deviceName: String?) -> String {
         guard let name = deviceName, !name.isEmpty else {
-            return "It will listen when you ask it to, and stay quiet otherwise."
+            return "Pairing is complete. Use this iPhone to listen; pendant audio isn't supported yet."
         }
-        return "\(name) will listen when you ask it to, and stay quiet otherwise."
+        return "\(name) is paired. Use this iPhone to listen; pendant audio isn't supported yet."
     }
 
     // MARK: - What may be said about a device

@@ -22,6 +22,7 @@ enum MacGuide {
         Section(title: "During a meeting", body: [
             "The window shows the clock, one sentence about the state of both wires, and the transcript as it settles. Lines from your microphone are marked You; lines from the call are marked Others. A line in grey italics is a phrase the transcriber may still revise.",
             "Type notes on the right at any time. They are saved as you type, into the same folder as the recording, and are there when the meeting becomes a record.",
+            "If a save fails, the notes say Not saved yet. Keep Anticipy open and use Retry saving. Unsaved edits stay available while the app is open, even if you select another meeting.",
         ]),
         Section(title: "After a meeting", body: [
             "Every recording appears in the sidebar under the day it happened, with its length. Click one to read the transcript and your notes. Click the title to rename it.",
@@ -29,6 +30,7 @@ enum MacGuide {
         ]),
         Section(title: "Permissions", body: [
             "macOS asks for the Microphone and for Speech Recognition during first run. The first recording also asks for System Audio Recording, which is how the other side of a call is heard; there is no way to ask for that one sooner.",
+            "Choose Set up later to open your library before granting recording permissions. Recording still needs those permissions.",
             "If a switch is off, the app says so in as many words and can only send you to System Settings, under Privacy & Security. It cannot ask again on its own.",
         ]),
         Section(title: "Privacy", body: [

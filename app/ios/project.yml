@@ -876,7 +876,9 @@ settings:
     # 177: Fence browser re-pairing across task/UI callbacks and report
     #      pendant transport loss without fabricated duration. Local Opus
     #      decoding remains unavailable; held cursor experiments excluded.
-    CURRENT_PROJECT_VERSION: "177"
+    # 178: Local audit candidate: recover failed Mac note saves and Trash,
+    #      and allow the library to open before granting recording permissions.
+    CURRENT_PROJECT_VERSION: "178"
     DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: NO
@@ -936,7 +938,7 @@ targets:
         # literal from a Mac one, and two products answering "which build
         # are you holding" with different numbers is the exact disease this
         # gate exists to prevent.
-        CURRENT_PROJECT_VERSION: "177"
+        CURRENT_PROJECT_VERSION: "178"
         DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_ENTITLEMENTS: ../macos/AnticipyMac/AnticipyMac.entitlements

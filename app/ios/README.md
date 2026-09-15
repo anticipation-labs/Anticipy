@@ -89,5 +89,8 @@ iOS ships from CI, never from a laptop; see
   names its reason gets obeyed while a 404 gets retried. Enforced by
   `overnight/no_vendor_ears.py` and `Tests/run_local_ears_tests.sh`.
 - Model provider: no key in the app. Every model call happens server-side.
-- So there is nothing for the phone to keep in its Keychain; a vendor key
-  appearing in this app is a bug, not a configuration step.
+- Vendor credentials do not belong in the phone. The account session token is
+  a separate credential: `AnticipySession` currently stores `authToken` in
+  `AppStorage` (UserDefaults), not Keychain. Migrating it to Keychain requires
+  explicit handling of existing sessions, sign-out, account changes and tests;
+  absence of a vendor key does not establish secure session-token storage.

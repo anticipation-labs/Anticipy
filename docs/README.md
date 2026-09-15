@@ -11,7 +11,8 @@ or deleted to make this index.
 
 | File | One line |
 | --- | --- |
-| [EOD-READINESS-2026-09-13.md](EOD-READINESS-2026-09-13.md) | The current board: what is released, what the evidence proves, owners, and the unfinished acceptance gates. |
+| [../research/2026-09-15-independent-app-audit.md](../research/2026-09-15-independent-app-audit.md) | Fresh source, native-app, Chrome and public-artifact checks; corrections to earlier claims and local candidate repairs. |
+| [EOD-READINESS-2026-09-13.md](EOD-READINESS-2026-09-13.md) | The September 13 board and acceptance gates; read with the September 15 audit corrections. |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Runtimes, the shared contracts (owner identity, `events`, `jobs`, pairing, hands, connections), and the evidence ladder. |
 | [TESTING.md](TESTING.md) | Every suite command, what each proves and does not, the offline prefix, three-state semantics, the proof rigs. |
 | [RELEASE.md](RELEASE.md) | The ordered release runbook, live verification, rollback, and the iOS build-number rule. |
