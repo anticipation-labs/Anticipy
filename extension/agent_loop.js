@@ -6610,6 +6610,15 @@ export async function runAgentGoal(goal, opts) {
   // turns this internal target into Chrome's configured provider before the
   // first page map, so about:blank is never handed to the agent.
   const { apiKey, model = "anthropic/claude-sonnet-4.6", maxSteps = DEFAULT_MAX_STEPS, budgetMs = RUN_BUDGET_MS, startUrl: suppliedStartUrl = "", stillLive = null, visionModel = "anthropic/claude-sonnet-4.6", authorized = false, readOnly = false, scope = "", ownerProfile = null, planning = true, facts = "", memory = "", onTrace = null, onBeforeExternalEffect = null, resumeTabId = null, initialEvidenceJournal = [], initialEffectIntent = null, offerRef = "" } = opts;
+  // Pairing/cancellation can change while startup awaits a planner or a
+  // recalled procedure. The first loop-step gate is too late: it used to
+  // open a private task's tab before discovering this run had been retired.
+  const stoppedDuringStartup = async () => {
+    if (!stillLive) return false;
+    try { return !(await stillLive()); } catch (_) { return false; }
+  };
+  const startupStopped = () => ({ status: "cancelled", result: "This browser no longer holds this task. Nothing more was opened." });
+  if (await stoppedDuringStartup()) return startupStopped();
   const startUrl = suppliedStartUrl
     || searchTarget(sanitizedResearchTerms(goal));
   // `let`, not `const`: a code fetched from the owner's own inbox with his
@@ -6767,6 +6776,7 @@ export async function runAgentGoal(goal, opts) {
   // before a single replayed step touches the owner's accounts.
   const recipeRecall = resumeTab ? null
     : await recallConfirmedRecipe(goal, chrome.storage.local, recallJudge(apiKey, model));
+  if (await stoppedDuringStartup()) return startupStopped();
   const recipe = recipeRecall ? recipeRecall.recipe : null;
   if (recipeRecall && recipeRecall.verdict !== "unasked") console.log(`agent: recipe ${recipeRecall.verdict} — ${recipeRecall.why}`);
   let replayCursor = recipe ? 0 : null;
@@ -6784,6 +6794,7 @@ export async function runAgentGoal(goal, opts) {
   const plan = (planning && !opts.startUrl && !resumeTab)
     ? await planRun(apiKey, model, goal, ownerProfile, scope, memory)
     : null;
+  if (await stoppedDuringStartup()) return startupStopped();
 
   // LOOK IT UP BEFORE DOING IT.
   //
@@ -6823,6 +6834,7 @@ export async function runAgentGoal(goal, opts) {
   // (HANDS 1 spec §5.2, §8.3.)
   const procedureJudge = recallJudge(apiKey, model);
   let procedureRecall = await recallConfirmedProcedure(goal, chrome.storage.local, procedureJudge);
+  if (await stoppedDuringStartup()) return startupStopped();
   let procedure = procedureRecall.procedure;
   if (procedureRecall.verdict !== "unasked") console.log(`agent: procedure ${procedureRecall.verdict} — ${procedureRecall.why}`);
   // AND THE SERVER MAY ALREADY HAVE LOOKED IT UP.
@@ -6861,6 +6873,7 @@ export async function runAgentGoal(goal, opts) {
     // research_gate, wired at anticipy_core.py:3427). Until that is wired,
     // this stays as the browser's own fallback; it decides only whether to
     // SPEND, never what is recalled, and it can no longer lose knowledge.
+    if (await stoppedDuringStartup()) return startupStopped();
     procedure = await learnProcedure(plan.learn, { deps: learnDeps(apiKey, model) });
     if (procedure) await rememberProcedure(shape, procedure, chrome.storage.local);
   }
@@ -6897,11 +6910,13 @@ export async function runAgentGoal(goal, opts) {
   try {
     const { agentTabs = [] } = await chrome.storage.local.get(["agentTabs"]);
     for (const id of agentTabs) {
+      if (await stoppedDuringStartup()) return startupStopped();
       if (resumeTab && id === resumeTab.id) continue;
       try { await chrome.tabs.remove(id); } catch (e) { /* gone */ }
     }
     await chrome.storage.local.set({ agentTabs: [] });
   } catch (e) { /* best effort */ }
+  if (await stoppedDuringStartup()) return startupStopped();
   let tab = resumeTab || await createBackgroundTab(firstUrl);
   let agentGroupId = -1;
   userCancelledTabs.delete(tab.id);

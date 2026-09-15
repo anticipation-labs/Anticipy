@@ -146,4 +146,28 @@ function job(state = "queued") {
   console.log("PASS: terminal work cannot be resurrected by the browser");
 }
 
+{
+  const paused = job("needs_user");
+  const params = parseJobParams(paused);
+  params._workflow.attempts = 3;
+  paused.attempts = 3; paused.params = JSON.stringify(params);
+  const resumed = workflowPatch(paused, "queued", { attempt: 0 });
+  assert.equal(resumed.attempts, 0);
+  assert.equal(parseJobParams(resumed)._workflow.attempts, 0,
+    "explicit owner resume resets both durable representations");
+  for (const options of [{}, { attempt: null }, { attempt: "0" }, { attempt: 1 }]) {
+    const automatic = workflowPatch(paused, "queued", options);
+    assert.ok(!Object.hasOwn(automatic, "attempts"));
+    assert.equal(parseJobParams(automatic)._workflow.attempts, 3,
+      "only explicit numeric zero grants a new budget on owner resume");
+  }
+  for (const state of ["queued", "running"]) {
+    const ordinary = job(state);
+    const patch = workflowPatch(ordinary, "queued", { attempt: 0 });
+    assert.ok(!Object.hasOwn(patch, "attempts"));
+    assert.equal(parseJobParams(patch)._workflow.attempts, ordinary.attempts,
+      "automatic requeue/redispatch cannot reset attempt history");
+  }
+  console.log("PASS: only an explicit paused-owner resume resets the attempt budget");
+}
 console.log("test_workflow_state: all passed");

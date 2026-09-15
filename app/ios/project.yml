@@ -873,7 +873,10 @@ settings:
     # 176: Repair connector handoff and saved-consent lifecycle, report all
     #      verified receipt dialects, and align browser freshness evidence.
     #      Held experimental audio cursor changes remain excluded.
-    CURRENT_PROJECT_VERSION: "176"
+    # 177: Fence browser re-pairing across task/UI callbacks and report
+    #      pendant transport loss without fabricated duration. Local Opus
+    #      decoding remains unavailable; held cursor experiments excluded.
+    CURRENT_PROJECT_VERSION: "177"
     DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: NO
@@ -933,7 +936,7 @@ targets:
         # literal from a Mac one, and two products answering "which build
         # are you holding" with different numbers is the exact disease this
         # gate exists to prevent.
-        CURRENT_PROJECT_VERSION: "176"
+        CURRENT_PROJECT_VERSION: "177"
         DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_ENTITLEMENTS: ../macos/AnticipyMac/AnticipyMac.entitlements

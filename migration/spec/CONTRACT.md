@@ -1982,6 +1982,53 @@ ignored, and Twilio's MMS-without-Body is dropped at §6.12 for the same reason.
 write half of `TestSmsInbound`, run against a real workerd by
 `migration/workers/scripts/sms_contract_local.sh` (`npm run test:sms-wire`).
 
+### 6.12b `GET/POST /c/{token}/code`, `POST /c/{token}/verify` — the one-tap phone code, unauthenticated
+
+**Worker-only.** PocketBase never had these routes. They exist because a
+connect link opened from a text has no signed-in session, and the signed-in
+connect legs (`src/routes/connect.ts`) rightly answer 401 without one.
+`migration/workers/src/routes/connect_auth.ts`; the suite is
+`test/connect-auth.test.ts`. The rule of the file: `POST /code` answers ONE
+page for every token that is dead, spent, forged, malformed, somebody else's,
+or whose owner has no phone — byte-identical to the page a live token gets on
+a successful send — so the endpoint is not an oracle for an intercepted link.
+Since 2026-09-14 a LIVE link whose send was REFUSED draws a second page that
+says so; the split sits after the phone lookup, so the anonymous set is
+unchanged. Constants: `MIN_GAP_MS` 60 s, `MAX_CODES_PER_LINK` 3,
+`MAX_CODES_PER_OWNER` 5 per `OWNER_WINDOW_MS` (1 h), `CODE_TTL_MS` 10 min,
+`MAX_ATTEMPTS` 5.
+
+| # | condition (`POST /c/{token}/code`) | response | `connect_codes` |
+|---|---|---|---|
+| 1 | cross-site POST (`Sec-Fetch-Site: cross-site`, or an `Origin` naming another site) | `403` plain page | no row |
+| 2 | no link, handle mismatch, non-owner row, expired, spent (`used_at` set), or the owner has no phone | `200` enter-code page (`SENT_HEADING`), byte-identical to row 8 once the caller's token is normalised out | no row |
+| 3 | inside `MIN_GAP_MS` since the link's newest code | `200` not-sent page (`NOT_SENT_HEADING`, `NOT_SENT_LINE`); the verify form and the ask-again link stay | no row |
+| 4 | `MAX_CODES_PER_LINK` reached for this link | `200` not-sent page | no row |
+| 5 | `MAX_CODES_PER_OWNER` reached for the owner inside `OWNER_WINDOW_MS`, across links | `200` not-sent page | no row |
+| 6 | reservation lost to a concurrent ask | `200` not-sent page | no row |
+| 7 | provider did not accept the text | `200` not-sent page | one row `delivery_state='failed'`; it keeps its rate-limit reservation |
+| 8 | sent and accepted by the provider | `200` enter-code page (`SENT_HEADING`); `state` carried verbatim into the form | one row `delivery_state='accepted'`, `used_at` NULL, `expires_at = now + CODE_TTL_MS` |
+| 9 | the send path THREW (catalog, D1, a missing delivery column) | `200` enter-code page — whether a text left is unknown, so the page that never claimed one | as far as it got; logged `connect code: send path failed` |
+| 10 | the text was accepted but `activate()` lost its race | `200` enter-code page (`SENT_HEADING`) — a text DID leave | the row stays `delivery_state='pending'` with `used_at` set, so it is not redeemable; the person meets `NOPE_LINE` on `/verify` and asks again |
+
+Row 2 is equalised on the FIRST ask only. Rows 3-7 sit below the phone
+lookup, so only a live link whose owner is textable can draw the not-sent
+page: two asks inside `MIN_GAP_MS` answer (sent, not-sent) for a textable
+owner and (sent, sent) otherwise. That pair is the one condition this endpoint
+does not equalise; `connect_auth.ts`'s header prices it against the timing
+tell the first ask already carries, and explains why moving the phone lookup
+below `reserve()` would make it worse rather than better.
+
+`POST /c/{token}/verify` is ONE refusal (`400`, `NOPE_LINE`, the same page)
+for a wrong, expired, spent, other-link or absent code — `MAX_ATTEMPTS`
+guesses per code counted with a compare-and-set — and a `303` to the link's
+own page with a Path-scoped, HMAC-bound session cookie on the right one.
+A wrong code re-renders the page the caller was already on: the not-sent
+page carries `sent=0` on its form and `/verify` reads it back, so a person
+told "No new code was sent" who then mistypes a digit is not answered with
+"enter the code from Anticipy's latest text". The flag is caller-supplied and
+selects only between two pages that caller has already been shown.
+
 ### 6.13 `POST /transcription/token` — account token, permanently refusing
 
 `transcription_token.pb.js:42-59`.

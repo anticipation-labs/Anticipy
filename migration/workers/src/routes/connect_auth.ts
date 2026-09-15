@@ -2,7 +2,8 @@
  * src/routes/connect_auth.ts — THE ONE-TAP PHONE CODE for a texted connect link.
  *
  *   GET  /c/{token}/code    the offer: "Anticipy will text you a code."
- *   POST /c/{token}/code    send it. ALWAYS the same answer, for every token.
+ *   POST /c/{token}/code    send it. One answer for every token; only a LIVE
+ *                           link whose send was refused is told so (below).
  *   POST /c/{token}/verify  { code } → a session scoped to THIS TOKEN ONLY.
  *
  * WHY THIS FILE EXISTS AT ALL. routes/connect.ts requires a signed-in session on
@@ -35,9 +36,11 @@
  * on unexplained codes, which is the behaviour every account-takeover call
  * relies on (password_reset.ts, audit F39).
  *
- * AND IT IS NOT AN ORACLE. `POST /c/{token}/code` answers one thing — one
- * status, one body — whether the token is live, expired, already spent, forged,
- * malformed or somebody else's, and whether or not the owner has a phone. That
+ * AND IT IS NOT AN ORACLE — ON THE FIRST ASK. `POST /c/{token}/code` answers
+ * one thing — one status, one body — whether the token is live, expired,
+ * already spent, forged, malformed or somebody else's, and whether or not the
+ * owner has a phone. A REPEAT ask is narrower; the 2026-09-14 note below
+ * prices the one condition the refused-send page does not equalise. That
  * is the same rule connect.ts enforces on its own three legs, and it has to
  * hold here too or this endpoint becomes the string-sorter that file closed:
  * present a token, read the answer, learn whether the text you intercepted is
@@ -56,6 +59,31 @@
  * rate limits below cap the whole exercise at three texts per link and five per
  * owner per hour. It is a real tell, it is smaller than the tell connect.ts
  * closed, and it is the price of the feature existing at all.
+ *
+ * ONE MORE TELL, ADDED ON PURPOSE (2026-09-14). A refused send -- inside the
+ * minimum gap, past a ceiling, a lost reservation, or a provider that would
+ * not take the text -- draws NOT_SENT_HEADING instead of the sent page. Until
+ * then the owner was told "enter the code from Anticipy's latest text" over a
+ * text that never left, and nothing anywhere said so. The split sits AFTER the
+ * phone lookup, so a dead, spent, forged or phoneless token still gets the
+ * sent page byte for byte (the suite's ORACLE leg pins it). One page for every
+ * refusal, not one per cause: each cause would be one more bit.
+ *
+ * WHAT THAT COSTS, EXACTLY, because it is not nothing. The refusal legs sit
+ * BELOW the phone lookup, so only a live link whose owner is textable can
+ * reach the not-sent page. Ask twice inside the minute gap and the PAIR of
+ * answers separates "live and textable" from every other condition: (sent,
+ * not-sent) against (sent, sent). The first ask already leaked that to a
+ * stopwatch -- it is the one that makes two upstream calls and sends a text --
+ * so this promotes an existing timing tell to a sentence rather than opening a
+ * new channel; the prober must already hold an intercepted live link to reach
+ * it, and the three-per-link and five-per-owner ceilings bound the whole
+ * exercise. Weighed against telling an owner to "enter the code from
+ * Anticipy's latest text" when no text was sent, the sentence wins. Do NOT
+ * close it by moving the phone lookup below `reserve()`: that would make the
+ * FIRST ask separate a live phoneless link from a dead one, which is a
+ * strictly stronger one-request oracle, and it would write rate-limit rows for
+ * an owner who can never receive a text.
  *
  * HARNESS-LAWS LAW 1. Nothing here decides what a person MEANT. What is
  * pattern-matched is structure and transport only: the shape of a token, the
@@ -223,13 +251,32 @@ const ASK_LINE =
   "Anticipy will text a 6-digit code to the phone number on your account, so it knows "
   + "it's you before it sets anything up.";
 const ASK_BUTTON = "Text me a code";
-const SENT_HEADING = "Enter your Anticipy code";
+export const SENT_HEADING = "Enter your Anticipy code";
 /** Note what this does NOT say: not "we sent one", which would be a yes/no
  *  about the token. It is the same sentence for every token there is. */
-const SENT_LINE =
+export const SENT_LINE =
   "Enter the 6-digit code from Anticipy’s latest text. This checks it’s you before "
   + "you choose the account to connect. The code expires after 10 minutes.";
 const SENT_BUTTON = "Continue";
+/** THE ONE PAGE FOR A REFUSED SEND (2026-09-14). A live link's holder who asks
+ *  inside the minimum gap, past a ceiling, or while the provider refuses used
+ *  to get SENT_HEADING — "enter the code from the latest text" — while no text
+ *  went out, and nothing anywhere said so. This page says so. It is ONE page
+ *  for every refusal, not one per cause: each distinction would be another
+ *  oracle bit, and the person's next action is the same for all of them. It
+ *  is never shown for a token that is dead, spent, forged or phoneless —
+ *  those stay byte-identical to a sent page (the header of this file). */
+/** What mintAndSend did, as a program state the page is chosen from. "silent"
+ *  is every anti-enumeration exit (no link, wrong handle, not an owner row,
+ *  dead, spent, no phone): the sent page, byte-identical. "refused" is a LIVE
+ *  link's ask the ceilings, the gap, a lost reservation or the provider turned
+ *  down: the not-sent page. "sent" is a text that left. */
+export type SendOutcome = "sent" | "refused" | "silent";
+export const NOT_SENT_HEADING = "No new code was sent";
+export const NOT_SENT_LINE =
+  "Anticipy did not send a text just now. If you already have a code from an earlier "
+  + "Anticipy text, enter it below. Otherwise wait a minute and ask again, or start "
+  + "over from the app.";
 const NOPE_LINE = "That code isn't right, or it has expired. Ask for a new one.";
 const OPTIONAL_LINE =
   "This is optional — Anticipy works fine without it, and you can stop here.";
@@ -944,12 +991,16 @@ ${state ? `  <input type="hidden" name="state" value="${esc(state)}">\n` : ""}  
  * else changes is `wrong`, and `wrong` is about the CODE the caller just typed,
  * never about the token.
  */
-function enterCodePage(token: string, wrong: boolean, state: string | null): Response {
-  return page(wrong ? 400 : 200, SENT_HEADING, `<body>
-<h1>${esc(SENT_HEADING)}</h1>
-${wrong ? `<p class="wrong">${esc(NOPE_LINE)}</p>\n` : ""}<p>${esc(SENT_LINE)}</p>
+function enterCodePage(token: string, wrong: boolean, state: string | null,
+                       sent = true): Response {
+  // `sent` is mintAndSend's typed outcome, never a reading of any text.
+  const heading = sent ? SENT_HEADING : NOT_SENT_HEADING;
+  const line = sent ? SENT_LINE : NOT_SENT_LINE;
+  return page(wrong ? 400 : 200, heading, `<body>
+<h1>${esc(heading)}</h1>
+${wrong ? `<p class="wrong">${esc(NOPE_LINE)}</p>\n` : ""}<p>${esc(line)}</p>
 <form method="post" action="/c/${esc(token)}/verify">
-${state ? `  <input type="hidden" name="state" value="${esc(state)}">\n` : ""}  <label for="anticipy-code">6-digit code</label>
+${state ? `  <input type="hidden" name="state" value="${esc(state)}">\n` : ""}${sent ? "" : `  <input type="hidden" name="sent" value="0">\n`}  <label for="anticipy-code">6-digit code</label>
   <input id="anticipy-code" type="text" name="code" inputmode="numeric" autocomplete="one-time-code"
          maxlength="6" minlength="6" pattern="[0-9]{6}" placeholder="000000" required>
   <button type="submit">${esc(SENT_BUTTON)}</button>
@@ -1127,8 +1178,12 @@ async function handleSend(
   // it, the page below has to carry it on, and a send that fails must not also
   // lose the state — the two failures would then be one silent one.
   const state = checkedState(field(await formOf(request), "state"));
+  // A THROWN send path is uncertain -- the reservation may be written and the
+  // text may have left before the throw -- so it keeps the sent page, which
+  // never claimed "we sent one". Only a typed refusal draws the other page.
+  let outcome: SendOutcome = "silent";
   try {
-    await mintAndSend(env, deps, token, now);
+    outcome = await mintAndSend(env, deps, token, now);
   } catch (err) {
     // Swallowed on purpose, and logged where an operator sees it. A thrown
     // catalog, a missing `connect_codes` column or a refused D1 must not be
@@ -1148,36 +1203,38 @@ async function handleSend(
         + "this database, and NO phone code can be sent until it is");
     }
   }
-  return enterCodePage(token, false, state);
+  return enterCodePage(token, false, state, outcome !== "refused");
 }
 
 async function mintAndSend(
   env: ConnectAuthEnv, deps: ConnectAuthDeps, token: string, now: number,
-): Promise<void> {
+): Promise<SendOutcome> {
   const handle = await tokenHandle(token);
   const row: StoredLink | null = await deps.links.read(handle);
-  if (!row) return;
+  if (!row) return "silent";
   // The row a store hands back is whatever its query matched. Same reason
   // connect.ts checks it: a COLLATE NOCASE column, a stray LIKE or a cache
   // returning a near neighbour all produce a row for a link nobody asked about,
   // and this one decides whose phone rings.
-  if (!constantTimeEqual(handle, row.token_handle)) return;
-  if (!isOwnerRowId(row.user_id)) return;
+  if (!constantTimeEqual(handle, row.token_handle)) return "silent";
+  if (!isOwnerRowId(row.user_id)) return "silent";
   // A DEAD LINK GETS NO CODE. Not because the code would be useless — because a
   // link that expired an hour ago must not still be able to text somebody.
-  if (now >= row.expires_at) return;
+  if (now >= row.expires_at) return "silent";
   // A SPENT LINK GETS NO NEW CODE either. Everything before the tap is over,
   // and the only leg left (`/done`) belongs to the browser that already holds
   // the session it was given.
-  if (row.used_at !== null) return;
+  if (row.used_at !== null) return "silent";
 
   const phone = await phoneFor(env.DB, row.user_id);
-  if (!phone) return;
+  if (!phone) return "silent";
 
   const w = await deps.codes.window(handle, row.user_id, now - OWNER_WINDOW_MS);
-  if (w.newestForLink !== null && now - w.newestForLink < MIN_GAP_MS) return;
-  if (w.forLink >= MAX_CODES_PER_LINK) return;
-  if (w.forOwner >= MAX_CODES_PER_OWNER) return;
+  // From here the link is LIVE and its owner has a phone: a refusal below is
+  // told to the person (NOT_SENT_HEADING). The anonymous exits above are not.
+  if (w.newestForLink !== null && now - w.newestForLink < MIN_GAP_MS) return "refused";
+  if (w.forLink >= MAX_CODES_PER_LINK) return "refused";
+  if (w.forOwner >= MAX_CODES_PER_OWNER) return "refused";
 
   const code = sixDigits();
   const id = deps.newId ? deps.newId() : newId();
@@ -1187,7 +1244,7 @@ async function mintAndSend(
   if (!(await deps.codes.reserve({
     id, token_handle: handle, user_id: row.user_id, code_hash: await sha256Hex(code),
     expires_at: now + CODE_TTL_MS, attempts: 0, used_at: now, created_at: now,
-  }))) return;
+  }))) return "refused";
   // Only the winning reservation asks for display metadata. Production bounds
   // this optional lookup to one second and aborts the actual upstream request.
   let app: string | null = null;
@@ -1198,10 +1255,13 @@ async function mintAndSend(
     await deps.codes.fail(id);
     // Provider error prose may echo the phone or code. Only typed status here.
     console.log(`connect code: ${fingerprint(handle)} not accepted (${sent.provider}/${sent.status})`);
-    return;
+    return "refused";
   }
   const accepted = await deps.codes.activate(id, deps.now ? deps.now() : Date.now());
   console.log(`connect code: ${fingerprint(handle)} accepted; code ${accepted ? "ready" : "unavailable"}`);
+  // A text left even if activation failed: the person then meets NOPE_LINE on
+  // /verify and asks again, which is the truthful next step, not "not sent".
+  return "sent";
 }
 
 /**
@@ -1241,8 +1301,14 @@ async function handleCheck(
     cookie = null;
   }
   // A wrong code comes back to the same box WITH the state still in it: one
-  // typo must not cost the person the attempt their phone is waiting on.
-  if (!cookie) return enterCodePage(token, true, state);
+  // typo must not cost the person the attempt their phone is waiting on. And
+  // it comes back to the SAME PAGE: somebody who was just told "No new code
+  // was sent" and then mistyped a digit must not be answered with "enter the
+  // code from Anticipy's latest text", which is the exact sentence the
+  // not-sent page exists to stop telling. The flag rides on the form of the
+  // page that rendered it; it is caller-supplied, and it only ever chooses
+  // between two pages this caller has already been shown.
+  if (!cookie) return enterCodePage(token, true, state, field(form, "sent") !== "0");
 
   // 303 back to the page itself, CARRYING THE ATTEMPT ID. The browser
   // re-requests /c/{token}?state=… with the new cookie, connect.ts draws the

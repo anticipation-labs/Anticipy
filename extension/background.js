@@ -29,7 +29,7 @@ import {
 // imported module alone can leave Chrome running a cached worker graph for an
 // unpacked extension; changing this entry file forces a fresh registration,
 // and the same marker is written into every job trace as runtime proof.
-const ENGINE_BUILD = "0.18.2";
+const ENGINE_BUILD = "0.18.3";
 
 const BACKEND_LLM = "backend-proxy";
 // Job traffic authenticates as THIS ONE AGENT and nothing more. An earlier
@@ -147,32 +147,120 @@ async function installHostedSetupBridge(tabId, url) {
 // claims the code and writes `owner`; from then on this agent only takes
 // that owner's jobs and reports a heartbeat the app turns into "last seen Ns".
 
+let identityGeneration = 0;
+let identityWrites = Promise.resolve();
+const nonemptyIdentity = value => typeof value === "string" && value.trim().length > 0;
+
+// Identity and its owner mirrors are one storage mutation. A retired identity
+// must never lend its paired bit/profile to the new unpaired credential. Keep
+// currentJob/handBacks: pairing recovery is not deletion of the owner's work.
+function unpairedIdentity(agentId) {
+  return { agentId, agentToken: "", recordId: "", pairCode: "", agentCredentialInstalled: false,
+    owner: "", ownerRef: "", paired: false, ownerProfile: null,
+    openrouterKey: "", agentModel: "", visionModel: "", serviceToken: "", keyFetchedAt: 0 };
+}
+
+function writeIdentity(generation, values) {
+  const next = identityWrites.then(async () => {
+    if (generation !== identityGeneration) return false;
+    await chrome.storage.local.set(values);
+    return generation === identityGeneration;
+  });
+  identityWrites = next.catch(() => {});
+  return next;
+}
+
+const ownerScope = (ownerRef, generation = identityGeneration) => ({ ownerRef, generation });
+// Run `fn` behind every identity write already queued, and queue it in turn.
+function onIdentityQueue(fn) {
+  const next = identityWrites.then(fn);
+  identityWrites = next.catch(() => {});
+  return next;
+}
+// THE SCOPE IS READ BEHIND THE QUEUE. freshIdentity() bumps the generation
+// synchronously and queues its unpaired write; a reader that sampled the new
+// generation and then read storage in that window saw the RETIRED owner under
+// the NEW generation, and every fence downstream accepted it (review
+// 2026-09-14, finding "readers sample identityGeneration outside the queue").
+async function currentOwnerScope() {
+  await identityWrites.catch(() => {});
+  const generation = identityGeneration;
+  const { ownerRef } = await chrome.storage.local.get(["ownerRef"]);
+  return ownerScope(ownerRef, generation);
+}
+async function scopeIsCurrent(scope) {
+  if (!scope || !nonemptyIdentity(scope.ownerRef) || scope.generation !== identityGeneration) return false;
+  const { ownerRef } = await chrome.storage.local.get(["ownerRef"]);
+  return scope.generation === identityGeneration && ownerRef === scope.ownerRef;
+}
+// Serialize derived owner state with identity replacement. Writers carry the
+// owner captured before their asynchronous work; they never adopt whoever
+// happens to be paired when a delayed response finally arrives.
+function writeOwnerState(scope, build) {
+  const next = identityWrites.then(async () => {
+    if (!scope || !nonemptyIdentity(scope.ownerRef) || scope.generation !== identityGeneration) return false;
+    const state = await chrome.storage.local.get(["ownerRef", "currentJob", "handBacks"]);
+    if (scope.generation !== identityGeneration || state.ownerRef !== scope.ownerRef) return false;
+    const values = build(state);
+    if (!values) return false;
+    await chrome.storage.local.set(values);
+    return scope.generation === identityGeneration;
+  });
+  identityWrites = next.catch(() => {});
+  return next;
+}
+
+function presentOwnerNotification(scope, id, notification) {
+  // Chrome can present an already-submitted notification after its Promise
+  // settles elsewhere. Identity retirement waits on this same queue, then
+  // clears the prior notifications before exposing a replacement pair code.
+  const next = identityWrites.then(async () => {
+    if (!(await scopeIsCurrent(scope))) return false;
+    await chrome.notifications.create(id, notification);
+    return true;
+  });
+  identityWrites = next.catch(() => {});
+  return next;
+}
+
+async function freshIdentity(agentId = crypto.randomUUID()) {
+  const generation = ++identityGeneration;
+  if (!(await writeIdentity(generation, unpairedIdentity(agentId)))) return null;
+  // Stored receipts stay in place, but notifications from the retired owner
+  // must not remain visible after the link has been dropped.
+  const { handBacks = {} } = await chrome.storage.local.get(["handBacks"]);
+  for (const key of Object.keys(handBacks)) {
+    // false means already absent; a thrown API error means removal is
+    // unconfirmed, so leave registration unavailable until a safe retry.
+    await chrome.notifications.clear(`${HANDBACK_NOTIF}${key}`);
+  }
+  await refreshBadge();
+  return generation === identityGeneration ? { generation, agentId } : null;
+}
+
 async function ensureRegisteredOnce() {
-  let { agentId, agentToken, recordId, agentCredentialInstalled } =
+  let generation = identityGeneration;
+  let { agentId, agentToken, recordId } =
     await chrome.storage.local.get(
-      ["agentId", "agentToken", "recordId", "agentCredentialInstalled"]);
-  agentId = agentId || crypto.randomUUID();
-  await chrome.storage.local.set({ agentId });
+      ["agentId", "agentToken", "recordId"]);
+  if (generation !== identityGeneration) return null;
+  if (nonemptyIdentity(recordId) && nonemptyIdentity(agentId) && nonemptyIdentity(agentToken)) {
+    // The credential, not an obsolete local installation marker, is the
+    // authority. A transient failed heartbeat never rotates this identity.
+    return { agentId, agentToken, recordId, generation };
+  }
   if (recordId) {
-    if (agentCredentialInstalled && agentToken) return { agentId, agentToken, recordId };
-    // Existing installs predate per-agent credentials, and this endpoint is
-    // how they were meant to get one. It is authorized by the SERVER's master
-    // token (migration/workers/src/routes/agent.ts), which this browser no
-    // longer holds — see writeHeaders above. So this call has been answered
-    // 403 since that release, and a 403 returns null exactly like any other
-    // failed registration. It stays because the alternative, re-registering a
-    // fresh identity, would drop the owner pairing this row may already carry.
-    // An install stuck here needs a reinstall, not another retry.
-    const r = await fetch(`${await backendBase()}/agent/upgrade-credential`, {
-      method: "POST", headers: await writeHeaders(),
-      body: JSON.stringify({ record_id: recordId, agent_id: agentId }),
-    });
-    if (!r.ok) return null;
-    const upgraded = await r.json();
-    agentToken = upgraded.agent_token || "";
-    if (!agentToken) return null;
-    await chrome.storage.local.set({ agentToken, agentCredentialInstalled: true });
-    return { agentId, agentToken, recordId };
+    // This shape cannot authenticate. The service-only upgrade endpoint is
+    // deliberately unavailable to browsers; requesting it loops forever.
+    // Recover only as a NEW UNPAIRED install, requiring the phone to claim it.
+    const replacement = await freshIdentity();
+    if (!replacement) return null;
+    ({ agentId, generation } = replacement);
+  } else {
+    agentId = nonemptyIdentity(agentId) ? agentId : crypto.randomUUID();
+    const replacement = await freshIdentity(agentId);
+    if (!replacement) return null;
+    generation = replacement.generation;
   }
   const post = async (id) => fetch(`${await backendBase()}/agent/register`, {
     method: "POST",
@@ -199,19 +287,21 @@ async function ensureRegisteredOnce() {
   // fresh identity is the way out: the orphaned row was never paired to anyone.
   if (r.status === 409) {
     console.warn("Anticipy: this browser's id was already registered without a local record — registering a fresh one");
-    agentId = crypto.randomUUID();
-    await chrome.storage.local.set({ agentId });
+    if (generation !== identityGeneration) return null;
+    const replacement = await freshIdentity();
+    if (!replacement) return null;
+    ({ agentId, generation } = replacement);
     r = await post(agentId);
   }
   if (!r.ok) return null;
   const rec = await r.json();
   agentToken = rec.agent_token || "";
   const pairCode = rec.pair_code || "";
-  if (!agentToken || !pairCode) return null;
-  await chrome.storage.local.set({
+  if (!nonemptyIdentity(rec.id) || !nonemptyIdentity(agentToken) || !nonemptyIdentity(pairCode)) return null;
+  if (!(await writeIdentity(generation, {
     agentId, agentToken, recordId: rec.id, pairCode, agentCredentialInstalled: true,
-  });
-  return { agentId, agentToken, recordId: rec.id };
+  }))) return null;
+  return { agentId, agentToken, recordId: rec.id, generation };
 }
 
 // First install wakes this worker through more than one path: onInstalled and
@@ -238,15 +328,14 @@ export async function ensureRegistered() {
 // it is linked while every scoped read is forbidden.
 //
 // This is intentionally exported for the offline recovery harness.  It is
-// called only after three matching server verdicts, never for a generic 403,
-// a timeout, or an infrastructure failure.
+// called automatically only after three matching server verdicts, or by the
+// owner's explicit New code action; never for a generic 403 or an outage.
 export async function recoverRejectedAgentCredential() {
-  await chrome.storage.local.remove([
-    "recordId", "pairCode", "agentId", "agentToken",
-    "agentCredentialInstalled", "owner", "ownerRef", "paired",
-    "openrouterKey", "agentModel", "visionModel", "serviceToken",
-    "ownerProfile", "keyFetchedAt",
-  ]);
+  const previous = registrationInFlight;
+  if (!(await freshIdentity())) return null;
+  // A registration reply already in flight belongs to the retired generation.
+  // Wait for its fenced settlement before requesting the replacement code.
+  if (previous) await previous.catch(() => null);
   return ensureRegistered();
 }
 
@@ -263,6 +352,7 @@ async function explicitlyUnrecognizedCredential(response) {
 // Jobs this worker is actively running — their claims get refreshed on every
 // heartbeat so the stale-requeue sweep never eats a live job.
 const activeJobs = new Map();
+const claimedOwnerScopes = new WeakMap();
 
 // Two writers touch one job at once: the heartbeat alarm renews the lease while
 // the run's own trace writer saves the evidence journal, and BOTH re-serialize
@@ -288,8 +378,10 @@ export function withJobWrite(id, build) {
 // Consumers never paste API keys: once paired, the agent fetches its key from
 // the backend. A manually saved key (popup) still wins, so dev overrides work.
 async function ensureLLMKey(force = false) {
+  const generation = identityGeneration;
   const { openrouterKey, agentModel, serviceToken, keyFetchedAt, agentId } =
     await chrome.storage.local.get(["openrouterKey", "agentModel", "serviceToken", "keyFetchedAt", "agentId"]);
+  if (generation !== identityGeneration) return null;
   // Refresh when ANY piece is missing or the bundle is stale — not just the
   // key. `serviceToken !== undefined` is not about sending that token any more
   // (writeHeaders no longer does); it is the marker that says this install has
@@ -307,10 +399,10 @@ async function ensureLLMKey(force = false) {
     // A refresh that fails must never LOSE a key we already hold — a stale
     // bundle plus one backend hiccup would otherwise fail every job with
     // "no LLM key" while a perfectly good key sits in storage.
-    if (!r.ok) return complete ? openrouterKey : null;
+    if (!r.ok) return generation === identityGeneration && complete ? openrouterKey : null;
     const { llm_proxy, model, vision_model, service_token, owner, owner_ref } = await r.json();
     if (llm_proxy) {
-      await chrome.storage.local.set({
+      if (!(await writeIdentity(generation, {
         // An opaque routing marker, not a vendor credential. This overwrites
         // and removes any long-lived key cached by an older build.
         openrouterKey: BACKEND_LLM,
@@ -323,11 +415,11 @@ async function ensureLLMKey(force = false) {
         ownerProfile: owner || null,
         ownerRef: owner_ref || "",
         keyFetchedAt: Date.now(),
-      });
+      }))) return null;
       return BACKEND_LLM;
     }
   } catch (_) { /* backend unreachable; keep whatever we already had */ }
-  return complete ? openrouterKey : null;
+  return generation === identityGeneration && complete ? openrouterKey : null;
 }
 
 async function heartbeat() {
@@ -373,6 +465,7 @@ async function heartbeat() {
 // alive. Null when the row could not be written; the storage mirror of
 // owner/pairing is refreshed from what the row answered.
 async function stampLastSeen(reg) {
+  if (reg.generation !== identityGeneration) return null;
   const r = await fetch(`${await backendBase()}/api/collections/agents/records/${reg.recordId}`, {
     method: "PATCH",
     headers: await writeHeaders(),
@@ -387,11 +480,39 @@ async function stampLastSeen(reg) {
   });
   if (!r.ok) return null;
   const rec = await r.json();
-  await chrome.storage.local.set({
+  // An UNPAIRED row has no owner whatever its owner_ref column still holds: an
+  // older app, or a release made while signed out, clears `paired` without
+  // clearing `owner_ref` (AnticipyBackend.swift:703-704 clears it only with an
+  // account id). Keying on owner_ref alone kept the released owner's profile,
+  // key, notifications and badge — and the popup's "Linked" — on the browser
+  // (real-Chrome pass 3, 2026-09-14, "phone-repair").
+  const nextOwner = rec.paired ? String(rec.owner_ref || "") : "";
+  const { ownerRef: heldOwner } = await chrome.storage.local.get(["ownerRef"]);
+  if (reg.generation !== identityGeneration) return null;
+  if (nextOwner !== String(heldOwner || "")) {
+    // THE PHONE CHANGED WHO THIS BROWSER BELONGS TO — released from the app, or
+    // claimed by another owner with the code this install still holds. No New
+    // code was pressed, so until 2026-09-14 nothing here noticed: the previous
+    // owner's profile, model key, hand-back notifications and badge count all
+    // survived into the next owner's pairing, and a delayed heartbeat or key
+    // reply could even roll the owner back (review findings, phone-driven
+    // owner change). The credential stays — it is this browser's — but the
+    // generation moves so every in-flight writer of the old owner is fenced,
+    // and everything the old owner was shown is taken down.
+    const generation = ++identityGeneration;
+    if (!(await writeIdentity(generation, {
+      owner: rec.owner || "", ownerRef: nextOwner, paired: !!rec.paired,
+      ownerProfile: null, openrouterKey: "", agentModel: "", visionModel: "", serviceToken: "", keyFetchedAt: 0,
+    }))) return null;
+    await retireOwnerPresentation();
+    if (rec.paired && nextOwner) ensureLLMKey(true);
+    return rec;
+  }
+  if (!(await writeIdentity(reg.generation, {
     owner: rec.owner || "",
-    ownerRef: rec.owner_ref || "",
+    ownerRef: nextOwner,
     paired: !!rec.paired,
-  });
+  }))) return null;
   // The moment pairing lands, pull the LLM key so the first job never
   // fails on a missing key.
   if (rec.paired) ensureLLMKey();
@@ -473,19 +594,17 @@ async function requeueStaleJobs() {
 // line, and it deliberately carries NO job id: an id is what the popup's
 // Stop/Again buttons key off, and what reconcileCurrentJob needs before it
 // will touch the mirror at all.
-async function noteBlocked(status, doing, why) {
+async function noteBlocked(status, doing, why, scope) {
   if (activeJobs.size) return;
-  await setCurrentJob({ id: "", status, doing, result: why, blocked: true });
+  await setCurrentJob({ id: "", status, doing, result: why, blocked: true }, scope, true);
 }
 
 // A diagnosis that outlives its problem is one more lie on the surface, and
 // this one would otherwise sit there until the next job ran.
-async function clearBlocked() {
+async function clearBlocked(scope) {
   try {
-    const { currentJob } = await chrome.storage.local.get(["currentJob"]);
-    if (currentJob && currentJob.blocked && !currentJob.id) {
-      await chrome.storage.local.set({ currentJob: {} });
-    }
+    await writeOwnerState(scope, ({ currentJob }) => currentJob?.ownerRef === scope.ownerRef
+      && currentJob.blocked && !currentJob.id ? { currentJob: {} } : null);
   } catch (e) { /* best effort */ }
 }
 
@@ -508,7 +627,7 @@ const RESAY_MS = 10 * 60 * 1000;
 // A job with no canonical plan cannot be run here: workflow_state is the only
 // thing that authorises a step and there is nothing to read. Two shapes, two
 // honest endings.
-async function explainNoPlan(job) {
+async function explainNoPlan(job, scope) {
   if (Date.now() - (explained.get(job.id) || 0) < RESAY_MS) return;
   explained.set(job.id, Date.now());
   console.warn(`Anticipy: refusing job ${job.id} without canonical workflow metadata`);
@@ -534,7 +653,8 @@ async function explainNoPlan(job) {
   // `result` — that is the guard working as designed. The popup is the only
   // place left to say it, so say it there.
   await noteBlocked("needs_user", `I can't run one of the jobs in your queue (${job.id})`,
-    `${line} Everything else still runs; that one needs to be called off from the app.`);
+    `${line} Everything else still runs; that one needs to be called off from the app.`,
+    ownerScope(job.owner_ref, scope.generation));
 }
 
 // A refused read is not "no work". One is a blip; several in a row is a queue
@@ -545,25 +665,18 @@ let credentialRefusals = 0;
 // Exported for the offline test harness: every refusal below has to be
 // provable, and poll() is not something a test can steer.
 export async function claimJob() {
+  const generation = identityGeneration;
   // Owner-scoped: a paired agent takes its owner's jobs; an unpaired agent
   // takes nothing at all.
-  const { ownerRef, agentId, paired } = await chrome.storage.local.get(
-    ["ownerRef", "agentId", "paired"]);
+  const { ownerRef, agentId } = await chrome.storage.local.get(["ownerRef", "agentId"]);
+  const scope = ownerScope(ownerRef, generation);
+  if (generation !== identityGeneration) return null;
   // An UNPAIRED agent must not claim anything: it cannot fetch a key, so it
   // would claim the job and then fail it forever — a second Chrome profile
   // silently killing the owner's work.
   if (!ownerRef) {
-    // An install that was never paired already says so on its own face: the
-    // popup shows "Not linked" and a pair code, which is the whole story, and
-    // a second line about it would just be noise. The dangerous shape is the
-    // OTHER one — paired:true with no owner_ref, which the popup reads as
-    // linked and watching for work while this function refuses everything
-    // forever. That is a pairing made before owner_ref existed; /agent/key
-    // answers it 409 and nothing else ever mentions it.
-    if (paired) {
-      await noteBlocked("needs_user", "this browser is linked, but the link has no owner id",
-        "Nothing can run until it is paired again: open Anticipy on your phone, forget this browser, then enter the code from the setup page.");
-    }
+    // A paired bit alone is not an owner. Setup and the popup show unlinked;
+    // do not invent an ownerless task mirror to explain a pairing problem.
     return null;
   }
   // Same lanes as the sweep, from the same definition — see BROWSER_LANE.
@@ -579,6 +692,7 @@ export async function claimJob() {
     { headers: await writeHeaders() }
   );
   let r = await poll();
+  if (!(await scopeIsCurrent(scope))) return null;
   // A REFUSED read is not "no work". This returned null on any !ok, so once the
   // stored token went stale the browser arm went permanently, silently deaf:
   // the 10-second heartbeat kept working — PATCHing last_seen needs no token —
@@ -588,7 +702,9 @@ export async function claimJob() {
   if (r.status === 401 || r.status === 403) {
     console.warn("Anticipy: job poll refused - refreshing my key and retrying");
     await ensureLLMKey(true);
+    if (!(await scopeIsCurrent(scope))) return null;
     r = await poll();
+    if (!(await scopeIsCurrent(scope))) return null;
     if (!r.ok) {
       if (await explicitlyUnrecognizedCredential(r)) {
         credentialRefusals += 1;
@@ -602,7 +718,7 @@ export async function claimJob() {
         await noteBlocked("needs_user", "This browser needs to be linked again",
           replacement
             ? "Its old private browser credential was retired by Anticipy. Open Setup, then enter the new pairing code in the iPhone app."
-            : "Its old private browser credential was retired and a replacement could not be created. Open the extension Setup page and press New code.");
+            : "Its old private browser credential was retired and a replacement could not be created. Open the extension Setup page and press New code.", scope);
         return null;
       }
       console.warn("Anticipy: still refused after refresh -", r.status,
@@ -611,7 +727,7 @@ export async function claimJob() {
       // not one the backend will accept, and the heartbeat keeps saying
       // "Chrome ready" the entire time.
       await noteBlocked("needs_user", "I can't read your queue from this browser",
-        `Anticipy refused this browser's credential (${r.status}). Reload the extension from the setup page; if that doesn't clear it, pair this browser again.`);
+        `Anticipy refused this browser's credential (${r.status}). Reload the extension from the setup page; if that doesn't clear it, pair this browser again.`, scope);
       return null;
     }
   }
@@ -620,17 +736,18 @@ export async function claimJob() {
     pollFailures += 1;
     if (pollFailures >= 3) {
       await noteBlocked("needs_user", "I can't reach your queue right now",
-        `Anticipy hasn't answered this browser for ${pollFailures} tries (last: ${r.status}). If you're online, check the backend address under Setup & advanced.`);
+        `Anticipy hasn't answered this browser for ${pollFailures} tries (last: ${r.status}). If you're online, check the backend address under Setup & advanced.`, scope);
     }
     return null;
   }
   pollFailures = 0;
-  await clearBlocked();
+  await clearBlocked(scope);
   const items = (await r.json()).items || [];
   const me = agentId || "unknown";
   for (const job of items) {
+    if (!(await scopeIsCurrent(scope))) return null;
     if (activeJobs.has(job.id)) continue;
-    if (!isWorkflowJob(job)) { await explainNoPlan(job); continue; }
+    if (!isWorkflowJob(job)) { await explainNoPlan(job, scope); continue; }
     // Nothing executes while Chrome is shut, so a job can sit for days.
     // Opening the laptop on Monday should NOT silently fire Friday's errand —
     // the world has moved on. Hand it back and let the owner say whether it
@@ -708,18 +825,20 @@ export async function claimJob() {
       continue;
     }
     if (fresh.claimed_by !== me || fresh.status !== "running" || fresh.lease_token !== leaseToken) continue;
+    if (!(await scopeIsCurrent(scope))) return null;
     // Publish only a claim this browser owns. A guard refusal or another
     // browser winning the lease must not replace the last result with a
     // "picking this up" card for work this browser will never start. This is
     // still before the model call and tab creation in runJob.
     await setCurrentJob({ id: fresh.id, status: "queued",
                           doing: jobLine(fresh, parseJobParams(fresh)),
-                          result: QUEUED_SOON, blocked: false });
+                          result: QUEUED_SOON, blocked: false }, ownerScope(fresh.owner_ref, generation), true);
+    claimedOwnerScopes.set(fresh, ownerScope(fresh.owner_ref, generation));
     return fresh;
   }
   // Nothing here was runnable. Before going quiet, answer the question the
   // owner is actually asking when they open the popup.
-  if (!items.length) await noteResearchWaiting(ownerRef);
+  if (!items.length) await noteResearchWaiting(ownerRef, scope);
   return null;
 }
 
@@ -729,7 +848,7 @@ export async function claimJob() {
 // hides that lane from browsers on purpose, because read-only work runs in the
 // worker — so a stalled brain worker presents to the owner as a dead Chrome.
 // One extra read, and only when this browser has nothing of its own to do.
-async function noteResearchWaiting(ownerRef) {
+async function noteResearchWaiting(ownerRef, scope) {
   try {
     // Naming `lane` is what keeps research_lane.pb.js from rewriting this
     // filter (it only appends its exclusion to a queued poll that does not
@@ -741,7 +860,7 @@ async function noteResearchWaiting(ownerRef) {
       { headers: await writeHeaders() });
     if (!r.ok) return;
     const job = ((await r.json()).items || [])[0];
-    if (!job) { await clearBlocked(); return; }
+    if (!job) { await clearBlocked(scope); return; }
     const mins = Math.round((Date.now() - Date.parse(job.updated || job.created || "")) / 60000);
     // The worker normally takes one of these within seconds, so anything
     // under a couple of minutes is not yet a symptom worth a line on screen.
@@ -751,7 +870,8 @@ async function noteResearchWaiting(ownerRef) {
     // which is exactly what this browser is NOT going to do.
     await noteBlocked("waiting",
       `Waiting on Anticipy's own side, not on this browser: ${jobLine(job, parseJobParams(job))}`,
-      `That one is a look-it-up job, so it runs on Anticipy's server rather than in your browser — and it has been waiting ${mins} minutes. Nothing here is broken.`);
+      `That one is a look-it-up job, so it runs on Anticipy's server rather than in your browser — and it has been waiting ${mins} minutes. Nothing here is broken.`,
+      ownerScope(job.owner_ref, scope.generation));
   } catch (e) { /* a diagnosis must never break the poll */ }
 }
 
@@ -759,11 +879,17 @@ async function noteResearchWaiting(ownerRef) {
 // this is a small local mirror so the machine the work is happening on can
 // say what it is doing without a round trip. Best-effort by design — the
 // mirror must never be able to break a run.
-async function setCurrentJob(patch) {
+async function setCurrentJob(patch, scope, replace = false) {
   try {
-    const { currentJob = {} } = await chrome.storage.local.get(["currentJob"]);
-    await chrome.storage.local.set({ currentJob: { ...currentJob, ...patch, at: Date.now() } });
+    return await writeOwnerState(scope, ({ currentJob = {} }) => {
+      const sameOwner = currentJob.ownerRef === scope.ownerRef;
+      if (!replace && (!sameOwner || patch.id !== currentJob.id)) return null;
+      const previous = sameOwner && (!Object.hasOwn(patch, "id") || patch.id === currentJob.id)
+        ? currentJob : {};
+      return { currentJob: { ...previous, ...patch, ownerRef: scope.ownerRef, at: Date.now() } };
+    });
   } catch (e) { /* best effort */ }
+  return false;
 }
 
 // ---------------------------------------------- never-foreground hand-back
@@ -774,26 +900,68 @@ async function setCurrentJob(patch) {
 // Exported for the offline test harness.
 const HANDBACK_NOTIF = "anticipy-handback-";
 
-async function refreshBadge() {
+// Everything the previous owner was SHOWN comes down when the owner changes:
+// every hand-back notification (the records themselves stay, owner-tagged and
+// hidden from anyone else), then the badge is recounted for the new owner.
+async function retireOwnerPresentation() {
   try {
     const { handBacks = {} } = await chrome.storage.local.get(["handBacks"]);
-    const n = Object.keys(handBacks).length;
+    for (const key of Object.keys(handBacks)) {
+      try { await chrome.notifications.clear(`${HANDBACK_NOTIF}${key}`); } catch (e) { /* gone */ }
+    }
+  } catch (e) { /* best effort */ }
+  await refreshBadge();
+}
+
+// A record written before hand-backs carried an owner tag (0.18.2 and older)
+// belongs to the owner this install held: an install had exactly one owner
+// then. Adopted once, at boot, only while an owner is held — an untagged
+// record on an unpaired install stays hidden (see openHandBack).
+// WHY THERE IS NO LEGACY HAND-BACK ADOPTION HERE (2026-09-14).
+//
+// 0.18.2 wrote hand-back records with no owner tag, and the obvious kindness on
+// upgrade is to stamp them with the owner this install currently holds: before
+// 0.18.3 an install had one owner, so an untagged record must be theirs.
+//
+// That premise is false, and this very file is the proof. 0.18.2's heartbeat
+// rewrote `ownerRef` IN PLACE when the phone reassigned the browser (see
+// stampLastSeen below) and cleared neither `handBacks` nor the owner's key and
+// profile -- which is the defect this release exists to fix. So an install that
+// changed hands under 0.18.2 carries owner A's untagged record while holding
+// owner B's identity, and adoption would hand A's parked page, and its URL, to
+// B on B's first boot: exactly the cross-owner leak, arriving through the
+// convenience meant to smooth the upgrade.
+//
+// Untagged records are therefore left untagged and stay invisible: refreshBadge
+// counts only records whose ownerRef matches, the popup snapshot does the same,
+// and tabs.onRemoved disposes of them when the tab closes. The cost is that a
+// single-owner install upgrading from 0.18.2 loses one pending notification.
+// That is the right side of the trade, and it is the whole of the cost.
+
+async function refreshBadge() {
+  try {
+    const { handBacks = {}, ownerRef } = await chrome.storage.local.get(["handBacks", "ownerRef"]);
+    const n = nonemptyIdentity(ownerRef)
+      ? Object.values(handBacks).filter(item => item.ownerRef === ownerRef).length : 0;
     await chrome.action.setBadgeBackgroundColor({ color: "#c8a97e" });
     await chrome.action.setBadgeText({ text: n ? String(n) : "" });
   } catch (e) { /* best effort */ }
 }
 
-export async function surfaceHandBack(tabId, detail, kind) {
+export async function surfaceHandBack(tabId, detail, kind, capturedScope = null) {
+  const scope = capturedScope || await currentOwnerScope();
   try {
     let url = "";
     try { url = (await chrome.tabs.get(tabId)).url || ""; } catch (e) { /* gone already */ }
-    const { handBacks = {} } = await chrome.storage.local.get(["handBacks"]);
-    handBacks[String(tabId)] = { url, detail: String(detail || ""), kind: kind || "needs_user", at: Date.now() };
-    await chrome.storage.local.set({ handBacks });
+    if (!(await writeOwnerState(scope, ({ handBacks = {} }) => ({ handBacks: {
+      ...handBacks, [String(tabId)]: { url, detail: String(detail || ""), kind: kind || "needs_user",
+        ownerRef: scope.ownerRef, at: Date.now() },
+    } })))) return;
     await refreshBadge();
+    if (!(await scopeIsCurrent(scope))) return;
     let site = "the page";
     try { site = new URL(url).hostname.replace(/^www\./, "") || site; } catch (e) { /* no url yet */ }
-    await chrome.notifications.create(`${HANDBACK_NOTIF}${tabId}`, {
+    await presentOwnerNotification(scope, `${HANDBACK_NOTIF}${tabId}`, {
       type: "basic",
       iconUrl: chrome.runtime.getURL("icons/icon128.png"),
       title: "Anticipy",
@@ -804,19 +972,25 @@ export async function surfaceHandBack(tabId, detail, kind) {
       priority: 2,
       requireInteraction: true,
     });
+    if (!(await scopeIsCurrent(scope))) await chrome.notifications.clear(`${HANDBACK_NOTIF}${tabId}`);
   } catch (e) {
     // A hand-back that can't notify still shows in the popup (badge/handBacks
     // may have landed) — never let the surface break the job result.
   }
 }
 
-export async function openHandBack(tabId) {
+export async function openHandBack(tabId, expectedOwnerRef = null) {
+  const scope = await currentOwnerScope();
   const key = String(tabId);
   const { handBacks = {} } = await chrome.storage.local.get(["handBacks"]);
   const hb = handBacks[key];
+  if (!hb || hb.ownerRef !== scope.ownerRef || (expectedOwnerRef !== null && expectedOwnerRef !== scope.ownerRef)
+      || !(await scopeIsCurrent(scope))) return false;
   try {
     const t = await chrome.tabs.get(Number(key));
+    if (!(await scopeIsCurrent(scope))) return false;
     try { await chrome.tabs.ungroup(t.id); } catch (e) { /* not grouped */ }
+    if (!(await scopeIsCurrent(scope))) return false;
     // FOCUS-OK(owner-click): the owner clicked the notification or the popup
     // button — the one gesture that may bring a working tab forward.
     await chrome.tabs.update(t.id, { active: true });
@@ -824,17 +998,21 @@ export async function openHandBack(tabId) {
   } catch (e) {
     // The tab is gone (swept, or Chrome restarted) — a click that opens
     // nothing reads as a broken promise, so reopen the page instead.
-    if (hb && hb.url) {
+    if (hb && hb.url && await scopeIsCurrent(scope)) {
       // FOCUS-OK(owner-click): same owner gesture, fresh tab.
       try { await chrome.tabs.create({ url: hb.url, active: true }); } catch (e2) { /* give up quietly */ }
     }
   }
   if (hb) {
-    delete handBacks[key];
-    await chrome.storage.local.set({ handBacks });
+    await writeOwnerState(scope, ({ handBacks: current = {} }) => {
+      if (current[key]?.ownerRef !== scope.ownerRef || current[key]?.at !== hb.at) return null;
+      const kept = { ...current }; delete kept[key];
+      return { handBacks: kept };
+    });
   }
   await refreshBadge();
   try { await chrome.notifications.clear(`${HANDBACK_NOTIF}${key}`); } catch (e) { /* gone */ }
+  return true;
 }
 
 chrome.notifications.onClicked.addListener((id) => {
@@ -843,13 +1021,23 @@ chrome.notifications.onClicked.addListener((id) => {
 
 // A hand-back tab the owner closes by hand is answered — drop its badge.
 chrome.tabs.onRemoved.addListener(async (tabId) => {
+  // Whoever owned it: the entry is keyed by a tab that no longer exists, so
+  // removing it can show nothing to anyone — and leaving it (as an unpaired
+  // install did until 2026-09-14) resurfaced a ghost hand-back with a stale
+  // badge the moment the phone paired again. On the identity queue, so it
+  // cannot interleave with an owner write.
+  const key = String(tabId);
   try {
-    const { handBacks = {} } = await chrome.storage.local.get(["handBacks"]);
-    if (!handBacks[String(tabId)]) return;
-    delete handBacks[String(tabId)];
-    await chrome.storage.local.set({ handBacks });
+    const removed = await onIdentityQueue(async () => {
+      const { handBacks = {} } = await chrome.storage.local.get(["handBacks"]);
+      if (!handBacks[key]) return false;
+      const kept = { ...handBacks }; delete kept[key];
+      await chrome.storage.local.set({ handBacks: kept });
+      return true;
+    });
+    if (!removed) return;
     await refreshBadge();
-    try { await chrome.notifications.clear(`${HANDBACK_NOTIF}${tabId}`); } catch (e) { /* gone */ }
+    try { await chrome.notifications.clear(`${HANDBACK_NOTIF}${key}`); } catch (e) { /* gone */ }
   } catch (e) { /* best effort */ }
 });
 
@@ -895,12 +1083,29 @@ async function updateJob(id, fields, leaseToken = "") {
 /// Is this job still ours to run? The owner can cancel from the app or by
 /// text while the loop is mid-flight; without this the run continued and
 /// then RESURRECTED the cancelled job as done/failed.
+// A REFUSED LIVENESS READ IS NOT REVOCATION UNTIL THE SERVER SAYS SO. The
+// guard fails closed: a D1 hiccup inside recordOwner() answers a perfectly
+// valid claimant 403 "agent is not allowed to access that record"
+// (policy/guard.ts), and until 2026-09-14 one such read ended a live errand
+// and told the owner "you called this off" (review finding). The poll's own
+// rule (claimJob) acts only on an EXPLICIT "agent credential is not
+// recognized" verdict; the liveness read now does the same, and a streak of
+// bare refusals still ends the run — bounded, so a dead credential cannot
+// keep a tab alive.
+let livenessRefusals = 0;
+const LIVENESS_REFUSAL_STOP = 3;
 async function jobStillLive(id, leaseToken = "") {
   try {
     const r = await fetch(`${await backendBase()}/api/collections/jobs/records/${id}`,
       { headers: await writeHeaders() });
     if (r.status === 404) return false;
+    if (r.status === 401 || r.status === 403) {
+      if (await explicitlyUnrecognizedCredential(r)) return false;
+      livenessRefusals += 1;
+      return livenessRefusals < LIVENESS_REFUSAL_STOP;
+    }
     if (!r.ok) return true;   // transient: don't abandon real work
+    livenessRefusals = 0;
     const j = await r.json();
     if (isWorkflowJob(j)) {
       return j.workflow_state === "running" && j.lease_token === leaseToken;
@@ -985,9 +1190,12 @@ const MIRROR_FOR_STATE = Object.freeze({
 // restarted browser comes up with derived state wrong; the mirror comes up
 // STALE rather than blank, which is worse, and had no equivalent repair.
 export async function reconcileCurrentJob() {
+  const generation = identityGeneration;
   try {
     const { currentJob } = await chrome.storage.local.get(["currentJob"]);
     if (!currentJob || !currentJob.id) return;
+    const scope = ownerScope(currentJob.ownerRef, generation);
+    if (!(await scopeIsCurrent(scope))) return;
     if (activeJobs.has(currentJob.id)) return; // this worker is running it now
     let row;
     try {
@@ -995,9 +1203,10 @@ export async function reconcileCurrentJob() {
     } catch (e) {
       // Deleted server-side: say so. Any other read failure is transient and
       // must not be turned into an invented status.
-      if (String(e).includes("job gone")) await setCurrentJob({ status: "removed", result: "" });
+      if (String(e).includes("job gone")) await setCurrentJob({ id: currentJob.id, status: "removed", result: "" }, scope);
       return;
     }
+    if (row.owner_ref !== scope.ownerRef) return;
     const state = isWorkflowJob(row)
       ? String(row.workflow_state || "") : String(row.status || "");
     const status = MIRROR_FOR_STATE[state];
@@ -1007,8 +1216,8 @@ export async function reconcileCurrentJob() {
     // "Picking this up" is indistinguishable from a stall for the half minute
     // before the next alarm fires. Say what the wait is.
     const result = String(row.result || "").trim();
-    await setCurrentJob({ status, blocked: false,
-                          result: result || (status === "queued" ? QUEUED_SOON : "") });
+    await setCurrentJob({ id: currentJob.id, status, blocked: false,
+                          result: result || (status === "queued" ? QUEUED_SOON : "") }, scope);
   } catch (e) { /* best effort — the mirror must never break a run */ }
 }
 
@@ -1031,6 +1240,7 @@ export async function reconcileCurrentJob() {
 //     "front window" in the promise is the phone's: `SupervisedReadView` is
 //     what has to be on screen, and the lease below is what proves it was.
 async function claimSupervisedRead(ownerRef, agentId) {
+  const scope = ownerScope(ownerRef);
   const filter = encodeURIComponent(supervisedReadFilter(ownerRef));
   let rows;
   try {
@@ -1058,6 +1268,8 @@ async function claimSupervisedRead(ownerRef, agentId) {
         status: "running", claimed_by: agentId, claimed_at: new Date().toISOString(),
       });
       if (fresh.claimed_by !== agentId || fresh.status !== "running") continue;
+      if (!(await scopeIsCurrent(scope))) return null;
+      claimedOwnerScopes.set(fresh, ownerScope(fresh.owner_ref, scope.generation));
       return fresh;
     } catch (e) {
       console.warn(`Anticipy: could not claim supervised read ${job.id}: ${String(e).slice(0, 160)}`);
@@ -1070,7 +1282,7 @@ async function claimSupervisedRead(ownerRef, agentId) {
 // What a supervised read is allowed to do with Chrome. Deliberately a NARROWER
 // set than `sideTripDeps` (in `agent_loop.js`), which may click one link: a
 // read may not click at all, so no clicking dep is passed and none exists.
-function supervisedReadDeps(job, { apiKey, model, ownerRef, agentId }) {
+function supervisedReadDeps(job, { apiKey, model, ownerRef, agentId, scope }) {
   // Pages settle before they are read. Same constant idea as the side trip's
   // STEP_SETTLE_MS: a mailbox that has not finished rendering reads as empty.
   const settle = () => new Promise((r) => setTimeout(r, 1200));
@@ -1120,8 +1332,13 @@ function supervisedReadDeps(job, { apiKey, model, ownerRef, agentId }) {
     // THE AGENT MAY OPEN SOMEBODY'S MAIL").
     // A row that has been deleted throws, and the module reads a throw as
     // "nobody is watching" — fail closed.
-    leaseUntil: async () => (await fetchJob(job.id)).watching_until,
+    leaseUntil: async () => {
+      if (!(await scopeIsCurrent(scope))) return "";
+      const row = await fetchJob(job.id);
+      return await scopeIsCurrent(scope) && row.owner_ref === scope.ownerRef ? row.watching_until : "";
+    },
     askModel: async (system, user) => {
+      if (!(await scopeIsCurrent(scope))) throw new Error("browser pairing changed");
       const r = await modelFetch(apiKey, {
         model, temperature: 0, max_tokens: 1024,
         response_format: { type: "json_object" },
@@ -1130,7 +1347,10 @@ function supervisedReadDeps(job, { apiKey, model, ownerRef, agentId }) {
       if (!r.ok) throw new Error(`read model call failed: ${r.status}`);
       return (await r.json())?.choices?.[0]?.message?.content || "";
     },
-    emit: (event) => pushReadEvent(job, ownerRef, agentId, event),
+    emit: async (event) => {
+      if (!(await scopeIsCurrent(scope))) throw new Error("browser pairing changed");
+      return pushReadEvent(job, ownerRef, agentId, event);
+    },
     // The trace, never the page. `supervised_read.js` is careful to hand this
     // only conclusions and refusals; keep it that way.
     note: (line) => console.log(`Anticipy: ${line}`),
@@ -1178,7 +1398,7 @@ async function pushReadEvent(job, ownerRef, agentId, event) {
   if (!r.ok) throw new Error(`narration refused (${r.status})`);
 }
 
-async function runSupervisedReadJob(job, params) {
+async function runSupervisedReadJob(job, params, scope) {
   const source = String(params.source || "");
   const { ownerRef, agentId, agentModel } = await chrome.storage.local.get(
     ["ownerRef", "agentId", "agentModel"]);
@@ -1190,14 +1410,15 @@ async function runSupervisedReadJob(job, params) {
   if (job.consequence !== "read_only") {
     const result = "That read didn't arrive marked read-only, so I left it alone.";
     await updateJob(job.id, { status: "failed", result });
-    await setCurrentJob({ status: "failed", result });
+    await setCurrentJob({ id: job.id, status: "failed", result }, scope);
     return;
   }
   const openrouterKey = await ensureLLMKey(true);
+  if (!(await scopeIsCurrent(scope))) return;
   if (!openrouterKey) {
     const result = "I couldn't start: this browser isn't paired to your phone yet.";
     await updateJob(job.id, { status: "failed", result });
-    await setCurrentJob({ status: "failed", result });
+    await setCurrentJob({ id: job.id, status: "failed", result }, scope);
     return;
   }
   // A ROW MUST NEVER BE LEFT `running`. The stale sweep above filters on
@@ -1219,7 +1440,7 @@ async function runSupervisedReadJob(job, params) {
       // the vocabulary lives.
       startUrl: typeof params.start_url === "string" ? params.start_url : "",
       deps: supervisedReadDeps(job, {
-        apiKey: openrouterKey, model: agentModel || undefined, ownerRef, agentId,
+        apiKey: openrouterKey, model: agentModel || undefined, ownerRef, agentId, scope,
       }),
       budget: { steps: READ_MAX_STEPS },
     });
@@ -1262,20 +1483,29 @@ async function runSupervisedReadJob(job, params) {
   // the whole failure this write exists to prevent. A terminal row's stale
   // claimed_by bothers nobody.
   await updateJob(job.id, { status, result, trace: trace.slice(-8000) });
-  await setCurrentJob({ status, result });
+  await setCurrentJob({ id: job.id, status, result }, scope);
 }
 
 async function runJob(job) {
+  const scope = claimedOwnerScopes.get(job);
+  if (!(await scopeIsCurrent(scope))) return;
   const params = parseJobParams(job);
+  // THE THREE-REFUSAL GRACE IS PER RUN, NOT PER BROWSER. livenessRefusals is a
+  // module global that only a SUCCESSFUL liveness read clears, so a run whose
+  // last probe was a bare 403 left the budget spent: the next errand was then
+  // cancelled on its very first probe and the owner was told the browser had
+  // been unpaired -- the exact "a blip is not revocation" failure the guard
+  // below was written to stop. Each claimed job gets its own three.
+  livenessRefusals = 0;
   activeJobs.set(job.id, { job, leaseToken: job.lease_token || "",
                            startedAt: Date.now() });
   await setCurrentJob({ id: job.id, status: "running", doing: jobLine(job, params),
-                        result: "", blocked: false });
+                        result: "", blocked: false }, scope, true);
   try {
-    await runJobInner(job, params);
+    await runJobInner(job, params, scope);
   } catch (e) {
     if (String(e).includes("job gone")) {
-      await setCurrentJob({ status: "removed", result: "" });
+      await setCurrentJob({ id: job.id, status: "removed", result: "" }, scope);
       console.warn(`Anticipy: job ${job.id} was deleted — stopping.`);
     } else {
       throw e;
@@ -1608,14 +1838,16 @@ export async function recoverUncertainEffect(job, tabId = null, deps = {}) {
   }
 }
 
-async function runJobInner(job, params) {
+async function runJobInner(job, params, scope) {
+  const generation = scope.generation;
+  if (!(await scopeIsCurrent(scope))) return;
   // THE FIRST BRANCH, ABOVE EVERYTHING. A supervised read may never fall
   // through into the executor below: the rewrite three lines down turns any
   // job into `agent_goal`, which is the full click-and-type loop, and running
   // a read through it would put a model with a keyboard inside somebody's
   // mailbox. The lane is claimed by its own poll, so nothing should arrive
   // here by another route — this is the wall that makes "should" irrelevant.
-  if (job.lane === "supervised_read") return runSupervisedReadJob(job, params);
+  if (job.lane === "supervised_read") return runSupervisedReadJob(job, params, scope);
 
 
   // Canonical plans all use the same adaptive browser executor: a production
@@ -1624,7 +1856,7 @@ async function runJobInner(job, params) {
   if (isWorkflowJob(job) && job.goal !== "agent_goal") {
     const task = params.task || (params.source
       ? `${job.goal} (context: heard "${params.source}")` : job.goal);
-    return runJobInner({ ...job, goal: "agent_goal" }, { ...params, task });
+    return runJobInner({ ...job, goal: "agent_goal" }, { ...params, task }, scope);
   }
 
   if (job.goal === "agent_goal") {
@@ -1633,13 +1865,14 @@ async function runJobInner(job, params) {
     // Model selection is server-controlled and can change during a recovery.
     // Refresh once per job; a failed refresh preserves the last good bundle.
     const openrouterKey = await ensureLLMKey(true);
+    if (generation !== identityGeneration) return;
     if (!openrouterKey) {
       const result = "no LLM key: not paired yet, or the backend has none configured";
       const patch = isWorkflowJob(job)
         ? { ...workflowPatch(job, "failed", { reason: result }), result }
         : { status: "failed", result };
       await updateJob(job.id, patch, job.lease_token);
-      await setCurrentJob({ status: "failed", result: "I couldn't start: this browser isn't paired to your phone yet." });
+      await setCurrentJob({ id: job.id, status: "failed", result: "I couldn't start: this browser isn't paired to your phone yet." }, scope);
       return;
     }
     try {
@@ -1654,12 +1887,17 @@ async function runJobInner(job, params) {
           { headers: await writeHeaders() });
         if (pr.ok) {
           const fresh = (await pr.json()).owner;
-          if (fresh) { ownerProfile = fresh; await chrome.storage.local.set({ ownerProfile: fresh }); }
+          if (fresh) {
+            if (!(await writeIdentity(generation, { ownerProfile: fresh }))) return;
+            ownerProfile = fresh;
+          }
         }
       } catch (_) { /* keep what we had */ }
+      if (generation !== identityGeneration) return;
       // A resumed job goes back to its own parked tab — session, filled form
       // and all — but only while that id still means the tab we parked.
       const resumeTabId = await resumableTabId(params);
+      if (!(await scopeIsCurrent(scope))) return;
       // The two row writers share `job` and `params` through these three
       // closures; see rowWriters for why that sharing is load-bearing.
       const writers = rowWriters({
@@ -1685,7 +1923,8 @@ async function runJobInner(job, params) {
         offerRef: typeof params._offer_ref === "string" ? params._offer_ref : "",
         startUrl: params.start_url || undefined,
         resumeTabId,
-        stillLive: () => jobStillLive(job.id, job.lease_token),
+        stillLive: async () => generation === identityGeneration
+          && await jobStillLive(job.id, job.lease_token) && generation === identityGeneration,
         ...(agentModel ? { model: agentModel } : {}),
         ...(visionModel ? { visionModel } : {}),
         ownerProfile,
@@ -1789,12 +2028,12 @@ async function runJobInner(job, params) {
         if (!stoppedByOwner) {
           console.warn(`Anticipy: job ${job.id} lost its claim mid-run — the row went back to the queue, stopping here`);
         }
-        await setCurrentJob({
+        await setCurrentJob({ id: job.id,
           status: "stopped",
           result: stoppedByOwner
             ? (out.result || "you called this off — I stopped where I was.")
             : "I lost my hold on this one — my connection dropped or another window picked it up. I stopped where I was and handed it back.",
-        });
+        }, scope);
         return;
       }
       // needs_user (login wall, CAPTCHA, refused site) is NOT the same state
@@ -1816,7 +2055,7 @@ async function runJobInner(job, params) {
       // the owner's click is what focuses it (openHandBack). Surfaced before
       // the job write so a deleted job row can't strand a hidden tab.
       if (canonicalState === "needs_user" && out.tabId != null) {
-        await surfaceHandBack(out.tabId, result, "needs_user");
+        await surfaceHandBack(out.tabId, result, "needs_user", scope);
       }
       const parkedSession = canonicalState === "needs_user" && out.tabId != null
         ? await browserSessionId() : "";
@@ -1871,11 +2110,11 @@ async function runJobInner(job, params) {
       // The job row keeps needs_user (the phone offers Try again on it), but
       // in Chrome the honest word for "you cancelled the debugging bar" is
       // stopped, not "I need you".
-      await setCurrentJob({
+      await setCurrentJob({ id: job.id,
         status: out.stoppedInChrome ? "stopped"
           : canonicalState === "needs_user" ? "needs_user" : status,
         result,
-      });
+      }, scope);
     } catch (e) {
       if (String(e).includes("job gone")) throw e;
       const uncertain = isWorkflowJob(job) && !!job.effect_uncertain;
@@ -1891,7 +2130,7 @@ async function runJobInner(job, params) {
           : { status: "failed", result: String(e) };
       const result = patch.result;
       await updateJob(job.id, patch, job.lease_token);
-      await setCurrentJob({ status: uncertain ? "needs_user" : "failed", result });
+      await setCurrentJob({ id: job.id, status: uncertain ? "needs_user" : "failed", result }, scope);
     }
     return;
   }
@@ -1910,7 +2149,7 @@ async function runJobInner(job, params) {
   // happened to collide with a template name the brain still emits
   // (brain/llm.py:202 still produces draft_and_send_document).
   const task = params.source ? `${job.goal} (context: heard "${params.source}")` : job.goal;
-  return runJobInner({ ...job, goal: "agent_goal" }, { ...params, task });
+  return runJobInner({ ...job, goal: "agent_goal" }, { ...params, task }, scope);
 }
 
 // Only one poll cycle at a time. There is no push channel: grep extension/ for
@@ -2021,8 +2260,9 @@ export async function ensureWakeAlarms() {
   }
 }
 
-async function stopJob(id) {
+async function stopJob(id, scope) {
   const job = await fetchJob(id);
+  if (job.owner_ref !== scope.ownerRef || !(await scopeIsCurrent(scope))) throw new Error("browser pairing changed");
   const active = activeJobs.get(id);
   const fields = isWorkflowJob(job)
     ? { ...workflowPatch(job, "cancelled", { reason: "you stopped this from Chrome" }),
@@ -2031,8 +2271,9 @@ async function stopJob(id) {
   return updateJob(id, fields, active?.leaseToken || job.lease_token || "");
 }
 
-async function retryJob(id) {
+async function retryJob(id, scope) {
   const job = await fetchJob(id);
+  if (job.owner_ref !== scope.ownerRef || !(await scopeIsCurrent(scope))) throw new Error("browser pairing changed");
   if (!isWorkflowJob(job)) {
     return updateJob(id, { status: "queued", claimed_by: "", claimed_at: null });
   }
@@ -2063,11 +2304,16 @@ chrome.runtime.onMessage.addListener((msg, _sender, respond) => {
   // linked bit; the private per-agent credential never enters page JavaScript.
   if (msg.type === "anticipy-setup-state") {
     ensureRegistered()
-      .then(() => chrome.storage.local.get(["pairCode", "paired", "ownerRef"]))
+      .then(async (reg) => {
+        if (!reg) throw new Error("browser registration unavailable");
+        const s = await chrome.storage.local.get(["pairCode", "paired", "ownerRef"]);
+        if (reg.generation !== identityGeneration) throw new Error("browser pairing changed");
+        return s;
+      })
       .then((s) => respond({
         ok: true,
         code: s.pairCode || "",
-        linked: !!s.paired || !!s.ownerRef,
+        linked: nonemptyIdentity(s.ownerRef),
       }))
       .catch(() => respond({ ok: false, code: "", linked: false }));
     return true;
@@ -2095,20 +2341,33 @@ chrome.runtime.onMessage.addListener((msg, _sender, respond) => {
     await reconcileCurrentJob();
     respond({ ok: false, error: String(e).slice(0, 200) });
   };
+  const controlScope = ownerScope(msg.ownerRef);
   if (msg.type === "anticipy-stop" && msg.id) {
-    stopJob(msg.id)
-      .then(() => setCurrentJob({ status: "stopped", result: "You stopped this. Nothing more was done." }))
-      .then(() => respond({ ok: true }))
+    scopeIsCurrent(controlScope).then((current) => {
+      if (!current) throw new Error("browser pairing changed");
+      return stopJob(msg.id, controlScope);
+    })
+      .then(async () => {
+        await setCurrentJob({ id: msg.id, status: "stopped", result: "You stopped this. Nothing more was done." }, controlScope);
+        return scopeIsCurrent(controlScope);
+      })
+      .then((ok) => respond({ ok: !!ok }))
       .catch(refused("stop"));
     return true;
   }
   if (msg.type === "anticipy-again" && msg.id) {
-    retryJob(msg.id)
+    scopeIsCurrent(controlScope).then((current) => {
+      if (!current) throw new Error("browser pairing changed");
+      return retryJob(msg.id, controlScope);
+    })
       // Not a blank line: the owner has just pressed a button and the next
       // alarm may be 30 seconds away, so the panel must say that rather than
       // sit there looking like the press did nothing.
-      .then(() => setCurrentJob({ status: "queued", result: QUEUED_SOON, blocked: false }))
-      .then(() => respond({ ok: true }))
+      .then(async () => {
+        await setCurrentJob({ id: msg.id, status: "queued", result: QUEUED_SOON, blocked: false }, controlScope);
+        return scopeIsCurrent(controlScope);
+      })
+      .then((ok) => respond({ ok: !!ok }))
       .catch(refused("retry"));
     return true;
   }
@@ -2116,14 +2375,15 @@ chrome.runtime.onMessage.addListener((msg, _sender, respond) => {
   // popup relays the owner's click here — the same owner-gesture path the
   // notification click takes.
   if (msg.type === "anticipy-open-handback" && msg.tabId != null) {
-    openHandBack(msg.tabId).finally(() => respond({ ok: true }));
+    if (!nonemptyIdentity(msg.ownerRef)) { respond({ ok: false }); return true; }
+    openHandBack(msg.tabId, msg.ownerRef).then(ok => respond({ ok: !!ok }))
+      .catch(() => respond({ ok: false }));
     return true;
   }
   // A pair code that can never be replaced is a dead end. Drop this install's
   // identity and run the same registration POST first install runs.
   if (msg.type === "anticipy-newcode") {
-    chrome.storage.local.remove(["recordId", "pairCode", "agentId", "agentToken", "agentCredentialInstalled"])
-      .then(() => ensureRegistered())
+    recoverRejectedAgentCredential()
       .then((reg) => respond({ ok: !!reg }))
       .catch(() => respond({ ok: false }));
     return true;

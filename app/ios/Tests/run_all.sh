@@ -7,7 +7,8 @@ set -eu
 HERE=$(cd "$(dirname "$0")" && pwd)
 
 sh "$HERE/run_cursor_tests.sh"
-# The gap law and the engine seam — the gap measured, drained, marked; the
+sh "$HERE/run_opus_transport_tests.sh"
+# The gap law and the engine seam — unknown-duration gaps drained and marked; the
 # recognizer swappable under a cursor that never learns which engine spoke.
 sh "$HERE/run_gap_engine_tests.sh"
 sh "$HERE/run_heard_tests.sh"

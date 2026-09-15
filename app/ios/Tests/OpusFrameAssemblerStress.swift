@@ -61,7 +61,6 @@ struct OpusFrameAssemblerStress {
             }
             index &+= 1
         }
-        if stress.finish() != nil { emitted += 1 }
         let elapsed = Date().timeIntervalSince(started)
 
         require(emitted > 2_499_000, "clean frames survive a ten-million-packet stream")

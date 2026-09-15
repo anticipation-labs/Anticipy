@@ -10,8 +10,8 @@
 # THE DEFECT THIS SUITE GUARDS, stated once: a recognizer handed silent audio
 # across a BLE gap will INVENT a sentence to fill it, and a transcript that
 # carries an invention is worse than one that carries a hole. The law: a gap
-# is measured (OpusFrameAssembler counts the packets that never arrived), the
-# app marks it (GapMarker.text), and no engine is ever fed the silence.
+# is observed (missing BLE notifications do not measure duration), the app
+# marks that duration is unknown, and no engine is ever fed fabricated silence.
 set -e
 here=$(cd "$(dirname "$0")" && pwd)
 app="$here/../Anticipy"
@@ -72,7 +72,7 @@ if ! grep -q 'analyzerDisabledForSession = true' "$listener"; then
 fi
 
 # 5. GAPS TRAVEL: assembler -> manager -> session, and NEVER as a transcript.
-if ! grep -q 'takeGapSeconds' "$manager"; then
+if ! grep -q 'takeGap()' "$manager"; then
     echo "PendantManager never drains the assembler's gap accounting."
     exit 2
 fi
@@ -80,7 +80,7 @@ if ! grep -q 'var onGap' "$manager"; then
     echo "PendantManager has no gap callback for the session to hear."
     exit 2
 fi
-if ! grep -q 'GapMarker.text(seconds)' "$session"; then
+if ! grep -q 'GapMarker.unknownDuration' "$session"; then
     echo "The session does not format gaps through GapMarker."
     echo "Freehand strings in three places is three wordings of one fact."
     exit 2
@@ -107,6 +107,39 @@ cp "$here/GapEngineTests.swift" "$out/main.swift"
 swiftc -O \
     "$assembler" \
     "$policy" \
+    "$app/Audio/ListenJournal.swift" \
+    "$app/Audio/ListenSessionFacts.swift" \
+    "$app/Audio/ListenTally.swift" \
     "$out/main.swift" \
     -o "$out/gaptests"
 "$out/gaptests"
+
+# Compile the real manager notification handler and session start/stop/gap
+# methods with storage/UI framework doubles. This is not a copied consumer:
+# changes to the production bodies are exercised on every normal iOS gate.
+python3 - "$manager" "$session" "$here/PendantGapPresentationTests.swift" "$out/Presentation.swift" <<'PY'
+from pathlib import Path
+import sys
+manager, session, fixture, output = map(Path, sys.argv[1:])
+def method(source, signature):
+    text = source.read_text()
+    needle = '    ' + signature
+    found = text.count(needle)
+    if found != 1:
+        raise SystemExit(f'Expected exactly one production method, found {found} in '
+                         f'{source.name}: {signature}')
+    start = text.index(needle)
+    end = text.index('\n    }', start) + len('\n    }')
+    return text[start:end]
+body = fixture.read_text()
+body = body.replace('    /* MANAGER_SOURCE */', method(manager,
+    'func peripheral(_ p: CBPeripheral, didUpdateValueFor c: CBCharacteristic, error: Error?)'))
+session_methods = [method(session, signature) for signature in [
+    'func startPendantTranscription(_ pendant: PendantManager) async',
+    'func stopPendantTranscription(_ pendant: PendantManager)',
+    'private func recordPendantGap(_ gap: OpusTransportGap)']]
+body = body.replace('    /* SESSION_SOURCE */', '\n'.join(session_methods))
+output.write_text(body)
+PY
+swiftc -O "$assembler" "$policy" "$out/Presentation.swift" -o "$out/presentation"
+"$out/presentation"

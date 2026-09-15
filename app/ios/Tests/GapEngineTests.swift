@@ -15,61 +15,107 @@ func check(_ name: String, _ condition: Bool, _ why: String = "") {
 
 // ---------------------------------------------------------------- assembler
 
-// Continuous packets are airtime, not gaps.
+// Sequence numbers count BLE notifications, not Opus frames or milliseconds.
 var asm = OpusFrameAssembler()
 for i: UInt16 in 0..<6 { _ = asm.accept(Data([UInt8(i & 0xFF), UInt8(i >> 8), 0, 0xAA])) }
-check("continuous stream measures no gap", asm.gapSeconds == 0,
-      "a clean stream invented \(asm.gapSeconds)s of gap")
+check("continuous stream reports no gap", asm.takeGap() == nil)
 
-// A packet-index jump is measured airtime: indices 3 -> 8 means packets
-// 4,5,6,7 never arrived — four packets, 40 ms.
+// Four absent notifications are known; their duration and frame count are not.
 asm = OpusFrameAssembler()
 for i: UInt16 in [0, 1, 2, 3] { _ = asm.accept(Data([UInt8(i & 0xFF), UInt8(i >> 8), 0, 0xAA])) }
 _ = asm.accept(Data([UInt8(8), 0, 0, 0xAA]))
-check("a 4-packet jump measures 0.040s", abs(asm.gapSeconds - 0.040) < 0.0001,
-      "measured \(asm.gapSeconds)")
+let drained = asm.takeGap()
+check("four absent notifications are counted without inventing duration",
+      drained == OpusTransportGap(missingNotifications: 4, discardedFrames: 1))
+check("drain clears the transport ledger", asm.takeGap() == nil)
 
-// Draining clears; a gap reported twice is a lie told once and repeated.
-let drained = asm.takeGapSeconds()
-check("drain hands the gap over", abs(drained - 0.040) < 0.0001)
-check("drain clears the ledger", asm.gapSeconds == 0)
+for next: UInt16 in [9, 14, 17] { _ = asm.accept(Data([UInt8(next & 0xFF), UInt8(next >> 8), 0, 0xAA])) }
+check("notification and discarded-frame counts accumulate until drained",
+      asm.takeGap() == OpusTransportGap(missingNotifications: 6, discardedFrames: 2))
 
-// Gaps accumulate until someone drains them. From index 8: 8->9 is
-// continuous, 9->14 skips 10,11,12,13 — four packets, another 40 ms.
-for next: UInt16 in [9, 14] { _ = asm.accept(Data([UInt8(next & 0xFF), UInt8(next >> 8), 0, 0xAA])) }
-check("gaps accumulate across events", abs(asm.gapSeconds - 0.040) < 0.0001,
-      "measured \(asm.gapSeconds), wanted the four packets the 9-to-14 jump skipped")
-
-// The 16-bit counter wraps, and the distance ACROSS the wrap is the truth:
-// 65534 -> 65535 is continuous; 65535 -> 1 skips packet 0 and 65535... no —
-// it skips 0 only if 65535 arrived. delta = 1 - 65535 + 65536 = 2: one
-// missing packet, 10 ms.
 asm = OpusFrameAssembler()
 _ = asm.accept(Data([UInt8(65534 & 0xFF), UInt8(65534 >> 8), 0, 0xAA]))
 _ = asm.accept(Data([UInt8(65535 & 0xFF), UInt8(65535 >> 8), 0, 0xAA]))
 _ = asm.accept(Data([0, 0, 0, 0xAA]))
-check("the wrap boundary is continuous", asm.gapSeconds == 0,
-      "a wrap counted as a gap is a gap that did not happen")
+check("the wrap boundary is continuous", asm.takeGap() == nil)
 _ = asm.accept(Data([2, 0, 0, 0xAA]))
-check("one missing packet across the wrap is 0.010s", abs(asm.gapSeconds - 0.010) < 0.0001,
-      "measured \(asm.gapSeconds)")
+check("one missing notification across wrap has unknown duration",
+      asm.takeGap() == OpusTransportGap(missingNotifications: 1, discardedFrames: 1))
 
-// A frame killed by a bad counter is a dropped FRAME, not measured airtime —
-// the packet index did not jump, so no seconds are claimed.
 asm = OpusFrameAssembler()
 _ = asm.accept(Data([0, 0, 0, 0xAA]))      // counter 0: frame starts
 _ = asm.accept(Data([1, 0, 5, 0xAA]))      // counter 5, expected 1: frame dies
-check("a bad counter drops the frame, invents no gap",
-      asm.droppedFrames == 1 && asm.gapSeconds == 0,
-      "dropped \(asm.droppedFrames), gap \(asm.gapSeconds)")
+check("bad counter reports discarded frame, not fabricated missing packets",
+      asm.takeGap() == OpusTransportGap(missingNotifications: 0, discardedFrames: 1))
+
+// A frame can span multiple notifications at small ATT MTU. Losing two
+// fragments says nothing about whether one or several codec frames vanished.
+asm = OpusFrameAssembler()
+_ = asm.accept(Data([0, 0, 0, 0xAA]))
+_ = asm.accept(Data([1, 0, 1, 0xBB]))
+_ = asm.accept(Data([4, 0, 4, 0xCC]))
+check("fragmented-frame loss reports transport counts only",
+      asm.takeGap() == OpusTransportGap(missingNotifications: 2, discardedFrames: 1))
+_ = asm.accept(Data([5, 0, 0, 0xDD]))
+asm.discardCurrentFrame()
+check("disconnect clears diagnostics rather than attributing them to a new session",
+      asm.takeGap() == nil)
+_ = asm.accept(Data([200, 0, 0, 0xEE]))
+check("reconnect has no inferred downtime or missing count", asm.takeGap() == nil)
 
 // ----------------------------------------------------------------- markers
 
-check("sub-second says so", GapMarker.text(0.4) == "[unavailable under 1s]")
-check("seconds", GapMarker.text(45) == "[unavailable 45s]")
-check("minutes and seconds", GapMarker.text(272) == "[unavailable 4m 32s]")
-check("hours", GapMarker.text(3661) == "[unavailable 1h 1m 1s]")
-check("nothing negative is ever a time", GapMarker.text(-3) == "[unavailable under 1s]")
+check("the marker prefix is the one the feed reads",
+      GapMarker.unknownDuration.hasPrefix(GapMarker.prefix))
+check("unknown transport duration is explicit",
+      GapMarker.unknownDuration == "[unavailable — audio interrupted; duration unknown]")
+
+// Actual production journal and tally, not a parallel model of those types.
+let when = Date(timeIntervalSince1970: 1_756_000_000)
+let journalURL = FileManager.default.temporaryDirectory.appendingPathComponent("gap-journal-\(UUID().uuidString).log")
+let journal = ListenJournal(limit: 20, fileURL: journalURL)
+defer { journal.clear() }
+let event = ListenEvent.transportGap(missingNotifications: 4, discardedFrames: 1)
+journal.record(event, at: when)
+check("transport counts survive the durable journal format",
+      journal.entries.first.flatMap(ListenJournal.parse)?.1 == event)
+check("journal says duration unknown and never milliseconds",
+      journal.entries.first?.contains("duration unknown") == true
+          && journal.entries.first?.contains(" ms ") == false)
+for bad in ["transportGap  -1 missing notifications, 1 discarded frames, duration unknown",
+            "transportGap  1 missing notifications, -1 discarded frames, duration unknown",
+            "transportGap  0 missing notifications, 0 discarded frames, duration unknown",
+            "transportGap  nope missing notifications, 1 discarded frames, duration unknown",
+            "transportGap  1 missing notifications, 1 discarded frames, duration 10ms",
+            "transportGap  1 missing notifications, 1 discarded frames, duration unknown extra"] {
+    check("malformed transport journal entry refuses: \(bad)",
+          ListenJournal.parse("2025-08-24T08:00:00.000Z  " + bad) == nil)
+}
+let day = ListenTally.of([
+    (when, .sessionStarted),
+    (when.addingTimeInterval(10), .airtimeLost(milliseconds: 20)),
+    (when.addingTimeInterval(20), event),
+    (when.addingTimeInterval(30), .transportGap(missingNotifications: 0, discardedFrames: 1)),
+], now: when.addingTimeInterval(60))
+check("legacy airtime totals remain separate and unchanged",
+      day.airtimeLostMilliseconds == 20 && day.airtimeGaps == 1)
+check("new gaps count missing notifications and discarded frames separately",
+      day.transportGaps == 2 && day.missingNotifications == 4 && day.transportDiscardedFrames == 2)
+check("transport gaps cannot imply heard speech, a stop or shorter silence",
+      day.wordsFlushed == 0 && day.longestSilenceSeconds == 60 && day.sessions == 1)
+let overflowing = ListenTally.of([
+    (when, .transportGap(missingNotifications: Int.max, discardedFrames: Int.max)),
+    (when.addingTimeInterval(1), .transportGap(missingNotifications: 1, discardedFrames: 1)),
+])
+check("overflow is an unavailable count, never a crash or wrapped exact total",
+      overflowing.missingNotifications == nil && overflowing.transportDiscardedFrames == nil
+          && overflowing.transportGaps == 2)
+let invalidCounts = ListenTally.of([
+    (when, .transportGap(missingNotifications: -1, discardedFrames: -1)),
+    (when.addingTimeInterval(1), .transportGap(missingNotifications: 2, discardedFrames: 2)),
+])
+check("invalid counts cannot subtract loss or recover a fictitious aggregate",
+      invalidCounts.missingNotifications == nil && invalidCounts.transportDiscardedFrames == nil)
 
 // ------------------------------------------------------------------ policy
 

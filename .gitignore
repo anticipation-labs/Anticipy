@@ -15,6 +15,13 @@ venv/
 .env.*
 *.env
 .dev.vars*
+
+# A local operational record that names a provider budget and a key expiry.
+# It is deliberately NOT published (docs/WORKSPACE-SYNC-2026-09-13.md), and
+# until 2026-09-14 nothing but memory stopped `git add -A` from committing it
+# to a PUBLIC repository. Same class as the two incidents above: the control
+# belongs here, not in somebody's habits.
+research/*-key-verification.md
 !.env.example
 
 # Editor / OS noise

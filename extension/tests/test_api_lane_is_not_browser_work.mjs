@@ -96,7 +96,7 @@ await new Promise((r) => setTimeout(r, 20));
 
 const BASE = "http://127.0.0.1:8090";
 Object.assign(harness.storageData, {
-  backendUrl: BASE, agentId: "agent-1", agentToken: "t".repeat(64), ownerRef: OWNER, paired: true,
+  backendUrl: BASE, agentId: "agent-1", recordId: "fixture-record", agentToken: "t".repeat(64), ownerRef: OWNER, paired: true,
 });
 
 const reply = (body, status = 200) => ({
@@ -106,6 +106,9 @@ const reply = (body, status = 200) => ({
 const polls = [];  // every jobs-list filter this worker sent, decoded, in order
 globalThis.fetch = async (url, opts = {}) => {
   const u = new URL(String(url));
+  if (u.pathname === "/api/collections/agents/records/fixture-record") {
+    return reply({ paired: true, owner_ref: OWNER });
+  }
   if (u.pathname === "/api/collections/jobs/records" && (opts.method || "GET") === "GET") {
     polls.push(u.searchParams.get("filter") || "");
     return reply({ items: [] });

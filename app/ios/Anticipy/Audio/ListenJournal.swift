@@ -96,32 +96,14 @@ enum ListenEvent: Equatable {
     /// and the round trip through `describe`/`parse` is a check rather than a
     /// hope. Every case above now follows it.
     case batteryRead(percent: Int, onPower: Bool)
-    /// AIRTIME THE RADIO LOST, in whole milliseconds.
-    ///
-    /// The pendant's packet index is the only loss-detection mechanism in the
-    /// whole link: a client that sees the counter jump knows audio vanished and
-    /// has no way to ask for it again. `OpusFrameAssembler` already does that
-    /// arithmetic and hands the total to `recordPendantGap`, which put a marker
-    /// on the feed and nowhere else — so a pendant that lost a minute lost it
-    /// in memory, and the loss died with the process. Nothing off the phone,
-    /// and nothing after a relaunch, could see it.
-    ///
-    /// MILLISECONDS AS AN `Int`, not seconds as a `Double`, and that is not
-    /// fussiness. `describe`/`parse` is a round trip through text, and a
-    /// `Double` goes through it lossily and locale-sensitively — a decimal
-    /// comma reads back as a different number or as nothing. The wire is
-    /// integral anyway: one packet is 160 samples at 16 kHz, exactly 10 ms, so
-    /// every gap this can ever carry is a whole number of packets times ten.
-    /// The exact unit is available for free, so the lossy one is a choice
-    /// nobody has to make.
-    ///
-    /// NOT a `sessionStopped`, and the distinction is the reason this case
-    /// exists rather than reusing one. A hole in the audio is not the end of a
-    /// session, and journaling it as one would inflate the stop counts the
-    /// tally uses to tell "the owner turned it off" from "a call took the
-    /// microphone and nothing came back" — hiding the stops that were real
-    /// behind holes that were not.
+    /// Historical millisecond entries remain readable, without rewriting the
+    /// owner's journal. Old pendant code treated every BLE notification as a
+    /// fixed-duration frame; fragmentation makes that estimate unreliable.
+    /// New pendant diagnostics use transportGap instead and claim no duration.
     case airtimeLost(milliseconds: Int)
+    /// Unavailable sequence slots and locally rejected buffered frames are
+    /// distinct counts, neither a time estimate nor evidence of heard speech.
+    case transportGap(missingNotifications: Int, discardedFrames: Int)
     /// LINES THE PHONE GAVE UP ON, because the unsent queue was full.
     ///
     /// Distinct from `posted(ok: false, …)`, which is a line that FAILED to
@@ -497,6 +479,17 @@ final class ListenJournal {
             guard let ms = body.split(separator: " ").dropFirst().first
                     .flatMap({ Int($0) }), ms >= 0 else { return nil }
             return (when, .airtimeLost(milliseconds: ms))
+        case "transportGap":
+            let fields = body.split(separator: " ")
+            guard fields.count == 9,
+                  let missing = Int(fields[1]), missing >= 0,
+                  let discarded = Int(fields[4]), discarded >= 0,
+                  missing > 0 || discarded > 0,
+                  fields[2] == "missing", fields[3] == "notifications,",
+                  fields[5] == "discarded", fields[6] == "frames,",
+                  fields[7] == "duration", fields[8] == "unknown"
+            else { return nil }
+            return (when, .transportGap(missingNotifications: missing, discardedFrames: discarded))
         case "speechDropped":
             // Refused below one for the same reason `airtimeLost` refuses a
             // negative: this event only ever means "words were lost", and a
@@ -629,6 +622,8 @@ final class ListenJournal {
             return "batteryRead  \(percent) percent, on power: \(onPower ? "yes" : "no")"
         case .airtimeLost(let milliseconds):
             return "airtimeLost  \(milliseconds) ms never arrived from the pendant"
+        case .transportGap(let missing, let discarded):
+            return "transportGap  \(missing) missing notifications, \(discarded) discarded frames, duration unknown"
         case .speechDropped(let count):
             return "speechDropped  \(count) unsent lines dropped, the queue was full"
         case .posted(let ok, let detail):
