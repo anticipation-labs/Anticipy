@@ -12,7 +12,7 @@ const cases = ["registration", "heartbeat", "key", "key-failure", "job-profile",
   "control-owner", "control-race", "owned-retry", "paired-without-owner", "same-owner-mirror",
   "notification-settlement", "notification-clear-refusal", "auth-explicit", "guard-403-hiccup",
   "refusal-streak", "transient-503", "transient-network", "phone-repair", "phone-release",
-  "phone-release-legacy", "legacy-handback-adopted", "closed-tab-unpaired", "scope-reads-queue"];
+  "phone-release-legacy", "legacy-handback-hidden", "closed-tab-unpaired", "scope-reads-queue"];
 const selected = process.argv[2];
 if (!selected) {
   let failures = 0;
@@ -30,7 +30,7 @@ assert.ok(cases.includes(selected), "only named offline cases may run");
 const rig = installRig();
 // A record written by 0.18.2 (no owner tag) has to exist BEFORE the worker boots.
 let legacyTab = null;
-if (selected === "legacy-handback-adopted") {
+if (selected === "legacy-handback-hidden") {
   legacyTab = rig.harness.addTab({ url: "https://fixture.invalid/private-form" });
   rig.harness.storageData.handBacks = { [legacyTab.id]: { url: legacyTab.url, detail: "legacy detail", kind: "needs_user", at: 1 } };
 }
@@ -400,15 +400,20 @@ if (selected === "phone-repair" || selected === "phone-release" || selected === 
     assert.equal((await setup()).linked, false);
   }
 }
-if (selected === "legacy-handback-adopted") {
-  // Before 0.18.3 an install had exactly one owner, so a record it wrote with
-  // no owner tag belongs to the owner it held at boot. Adopted once, at boot.
+if (selected === "legacy-handback-hidden") {
+  // An UNTAGGED 0.18.2 record must never be adopted by whoever holds the
+  // install now. 0.18.2 rewrote ownerRef in place on a phone-driven owner
+  // change and kept handBacks, so "this install had one owner" is false, and
+  // adopting would hand owner A's parked page and its URL to owner B on B's
+  // first boot -- the cross-owner leak arriving through a convenience.
   await flush(120);
-  assert.equal(rig.harness.storageData.handBacks[legacyTab.id]?.ownerRef, old.ownerRef,
-    "a record written before owner tags belongs to the owner the install held");
-  assert.equal(rig.harness.badge.text, "1");
-  assert.equal(await background.openHandBack(legacyTab.id), true);
-  assert.ok(rig.harness.focusGrants.length >= 1, "the owner's own parked page opens on the owner's click");
+  assert.equal("ownerRef" in (rig.harness.storageData.handBacks[legacyTab.id] || {}), false,
+    "an untagged record was stamped with the current owner");
+  assert.equal(rig.harness.badge.text, "",
+    "an untagged record was counted for an owner who may not be the one who made it");
+  assert.equal(await background.openHandBack(legacyTab.id), false,
+    "an untagged record was openable by the current owner");
+  assert.equal(rig.harness.focusGrants.length, 0, "an unowned parked page was focused");
 }
 if (selected === "closed-tab-unpaired") {
   const tab = rig.harness.addTab({ url: "https://fixture.invalid/private-form" });

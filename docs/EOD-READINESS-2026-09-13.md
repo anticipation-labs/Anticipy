@@ -153,7 +153,17 @@ commit, red-first:
   "enter the code from Anticipy's latest text" — the page carries its own state;
 - `_flip_reply` had a **sixth** silent refusal, the conditional write's own;
 - the proof rig carried a machine's home directory, a loopback guard that two
-  subcommands walked past, and a process sweep matching a path substring.
+  subcommands walked past, and a process sweep matching a path substring;
+- and `adoptLegacyHandBacks` stamped an untagged pre-0.18.3 hand-back with
+  whoever holds the install NOW. Its premise — "before 0.18.3 an install had one
+  owner" — is contradicted by the very defect this release fixes: the released
+  0.18.2 rewrote `ownerRef` in place on a phone-driven owner change and cleared
+  neither `handBacks` nor the owner's key and profile. An install that changed
+  hands under 0.18.2 would therefore have handed owner A's parked page, and its
+  URL, to owner B on B's first boot after the upgrade. The adoption is gone;
+  untagged records stay invisible, which the badge, the popup snapshot and the
+  closed-tab sweep already assumed. One pending notification is lost on upgrade
+  for a single-owner install, and that is the whole of the cost.
 
 **Reverted rather than shipped:** the BLE assembler re-sync. It fixes a real
 stall and it introduced a way for two replayed packets to re-origin the stream
@@ -164,13 +174,12 @@ backward. Release day is the wrong day to trade a dormant defect for a live one.
 | Open defect | Where | Why not here |
 | --- | --- | --- |
 | Two asks on one live link separate "the owner is textable" from every other condition, because the refusal legs sit below the phone lookup | `migration/workers/src/routes/connect_auth.ts` | The obvious repair makes the FIRST ask separate a live phoneless link from a dead one — a strictly stronger one-request oracle — and writes rate-limit rows for an owner who can never be texted. A mutant in the suite shows it breaking the oracle leg. The tell is now priced in the file header and in CONTRACT 6.12b, and a new test pins the behaviour actually claimed. |
-| `adoptLegacyHandBacks` stamps untagged pre-0.18.3 hand-backs with the CURRENT owner, and 0.18.2 rewrote `ownerRef` in place on an owner change | `extension/background.js` | A possible cross-owner leak of a hand-back record. Untagged records are already excluded from the badge and the popup snapshot. Needs an owner decision: drop the convenience, or tag at the first 0.18.3 write and treat older records as ownerless. |
 | A pendant reboot can convert the re-origin distance into up to 32,767 "missing notifications"; a counter-corrupt stream can write a journal line and a feed marker per notification | `app/ios/Anticipy/BLE/` | Same root cause as the reverted re-sync: the wire format has no session epoch. Pendant capture is not live. |
 | Two call sites build an owner scope from the unqueued default generation instead of `currentOwnerScope()` | `extension/background.js` | Narrow race, no observed failure; listed so it is not rediscovered as new. |
 | A `created` stamp ahead of this host's clock is treated as unreadable — correct, but the try-backstop already covers that path, so no test can tell the guard from its absence | `brain/worker.py` | Kept for intent; its mutant survives, and that is recorded rather than hidden. |
 
-Mutation evidence for what did ship: 29 mutants run across the four areas, 27
-killed. The two survivors are the clock-skew guard above and nothing else.
+Mutation evidence for what did ship: 30 mutants run across the four areas, 29
+killed. The one survivor is the clock-skew guard above.
 
 Order of operations for the release (each gated by the previous one's evidence):
 PR checks green → owner merges → **owner dispatches api** (`brain-deploy.yml`,

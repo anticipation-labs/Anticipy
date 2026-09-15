@@ -917,25 +917,26 @@ async function retireOwnerPresentation() {
 // belongs to the owner this install held: an install had exactly one owner
 // then. Adopted once, at boot, only while an owner is held — an untagged
 // record on an unpaired install stays hidden (see openHandBack).
-async function adoptLegacyHandBacks() {
-  try {
-    const { handBacks = {}, ownerRef } = await chrome.storage.local.get(["handBacks", "ownerRef"]);
-    if (!nonemptyIdentity(ownerRef)) return;
-    let changed = false;
-    const adopted = {};
-    for (const [key, hb] of Object.entries(handBacks)) {
-      if (hb && typeof hb === "object" && !("ownerRef" in hb)) { adopted[key] = { ...hb, ownerRef }; changed = true; }
-      else adopted[key] = hb;
-    }
-    if (!changed) return;
-    await onIdentityQueue(async () => {
-      const { ownerRef: still } = await chrome.storage.local.get(["ownerRef"]);
-      if (still !== ownerRef) return;
-      await chrome.storage.local.set({ handBacks: adopted });
-    });
-    await refreshBadge();
-  } catch (e) { /* best effort */ }
-}
+// WHY THERE IS NO LEGACY HAND-BACK ADOPTION HERE (2026-09-14).
+//
+// 0.18.2 wrote hand-back records with no owner tag, and the obvious kindness on
+// upgrade is to stamp them with the owner this install currently holds: before
+// 0.18.3 an install had one owner, so an untagged record must be theirs.
+//
+// That premise is false, and this very file is the proof. 0.18.2's heartbeat
+// rewrote `ownerRef` IN PLACE when the phone reassigned the browser (see
+// stampLastSeen below) and cleared neither `handBacks` nor the owner's key and
+// profile -- which is the defect this release exists to fix. So an install that
+// changed hands under 0.18.2 carries owner A's untagged record while holding
+// owner B's identity, and adoption would hand A's parked page, and its URL, to
+// B on B's first boot: exactly the cross-owner leak, arriving through the
+// convenience meant to smooth the upgrade.
+//
+// Untagged records are therefore left untagged and stay invisible: refreshBadge
+// counts only records whose ownerRef matches, the popup snapshot does the same,
+// and tabs.onRemoved disposes of them when the tab closes. The cost is that a
+// single-owner install upgrading from 0.18.2 loses one pending notification.
+// That is the right side of the trade, and it is the whole of the cost.
 
 async function refreshBadge() {
   try {
@@ -2440,6 +2441,5 @@ chrome.alarms.onAlarm.addListener((a) => {
 // blank, so it gets read back off the row here too.
 ensureWakeAlarms().catch(() => {});
 poll();
-adoptLegacyHandBacks();
 refreshBadge();
 reconcileCurrentJob();
