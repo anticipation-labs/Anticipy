@@ -2120,37 +2120,73 @@ No model access or insufficient context is unavailable, never answered."""
         verdict stays parked; an account question is never browser permission.
         The read and conditional write also fence cancellation during a model
         call, including older callers without an app/SMS presentation object.
+
+        Every refusal names itself (2026-09-14): one token on stdout, which is
+        a program state and never owner words, job fields, verdict text or an
+        exception message. Until then all SIX refusal sites returned the same
+        `failed:` silently, so a parked API reply could not be attributed from
+        the live log at all. The sixth is the conditional write's own: `_flip`
+        answers `failed:` when the If-Match PATCH loses its race, and an absent
+        token there would read in the log exactly like a replan that worked. The ordered, lazy clause lists keep the original
+        `or` chains' short-circuit exactly; only the first failing clause speaks.
         """
         if job.get("lane") != "api":
             return self._flip(job["id"], fields, verb)
         failed = f"failed:{job['id']}"
+
+        def refuse(reason: str) -> str:
+            print(f"api reply replan refused: job={job.get('id')} reason={reason}")
+            return failed
+
+        def first_refusal(checks) -> Optional[str]:
+            for predicate, reason in checks:
+                if predicate():
+                    return reason
+            return None
+
         try:
             from dataclasses import replace
             from . import hands
 
             owner = str(getattr(self.anticipy, "owner_ref", "") or "")
-            if (not owner or job.get("owner_ref") != owner or not owner_text.strip()
-                    or job.get("status") not in ("awaiting_confirm", "needs_user")
-                    or fields.get("status") != "queued"):
-                return failed
+            reason = first_refusal((
+                (lambda: not owner, "owner_missing"),
+                (lambda: job.get("owner_ref") != owner, "owner_mismatch"),
+                (lambda: not owner_text.strip(), "answer_empty"),
+                (lambda: job.get("status") not in ("awaiting_confirm", "needs_user"),
+                 "status_not_parked"),
+                (lambda: fields.get("status") != "queued", "fields_not_queued"),
+            ))
+            if reason:
+                return refuse(reason)
             fresh = backend.get(
                 f"{self.anticipy.backend_url}/api/collections/jobs/records/{job['id']}", timeout=10)
             etag = fresh.headers.get("ETag")
-            if (not fresh.ok or fresh.json() != job or not isinstance(etag, str)
-                    or not re.fullmatch(r'"[a-f0-9]{64}"', etag)):
-                return failed
+            reason = first_refusal((
+                (lambda: not fresh.ok, "reread_failed"),
+                (lambda: fresh.json() != job, "reread_changed"),
+                (lambda: not isinstance(etag, str), "etag_missing"),
+                (lambda: not re.fullmatch(r'"[a-f0-9]{64}"', etag), "etag_malformed"),
+            ))
+            if reason:
+                return refuse(reason)
             params = json.loads(fields.get("params") or "{}")
             previous = json.loads(job.get("params") or "{}")
             old_note = previous.get("_hand", {})
             workflow = workflow_from_params(params)
-            if (not isinstance(old_note, dict) or old_note.get("hand") != hands.HAND_API
-                    or old_note.get("effect") != hands.EFFECT_READ
-                    or not workflow or workflow.owner_ref != owner
-                    or workflow.plan_id != job.get("workflow_id")
-                    or workflow.goal != job.get("goal")
-                    or workflow.state.value != "queued"
-                    or workflow.consequence.value != "read_only"):
-                return failed
+            reason = first_refusal((
+                (lambda: not isinstance(old_note, dict), "note_not_dict"),
+                (lambda: old_note.get("hand") != hands.HAND_API, "note_not_api_hand"),
+                (lambda: old_note.get("effect") != hands.EFFECT_READ, "note_not_read"),
+                (lambda: not workflow, "workflow_missing"),
+                (lambda: workflow.owner_ref != owner, "workflow_owner_mismatch"),
+                (lambda: workflow.plan_id != job.get("workflow_id"), "workflow_plan_mismatch"),
+                (lambda: workflow.goal != job.get("goal"), "workflow_goal_mismatch"),
+                (lambda: workflow.state.value != "queued", "workflow_not_queued"),
+                (lambda: workflow.consequence.value != "read_only", "workflow_not_read_only"),
+            ))
+            if reason:
+                return refuse(reason)
             context = hands.gather_context(params, owner_ref=owner,
                                             backend_url=self.anticipy.backend_url)
             outcome = old_note.get("outcome")
@@ -2168,20 +2204,32 @@ No model access or insufficient context is unavailable, never answered."""
                 + "\nTASK REPLY CONTEXT (quoted records; only owner_answer is the current reply):\n"
                 + json.dumps(reply_context, ensure_ascii=False))
             verdict = hands.choose_hand(workflow.goal, context, llm=self._judgment_model())
-            if (verdict.hand != hands.HAND_API or verdict.effect != hands.EFFECT_READ
-                    or verdict.app != old_note.get("app") or not verdict.tool
-                    or not isinstance(verdict.args, dict)
-                    or (requires_choice and not verdict.alias)
-                    or context.connected(verdict.app, verdict.alias) is None
-                    or getattr(self.anticipy, "owner_ref", "") != owner):
-                return failed
+            reason = first_refusal((
+                (lambda: verdict.hand != hands.HAND_API, "verdict_not_api_hand"),
+                (lambda: verdict.effect != hands.EFFECT_READ, "verdict_not_read"),
+                (lambda: verdict.app != old_note.get("app"), "verdict_app_changed"),
+                (lambda: not verdict.tool, "verdict_no_tool"),
+                (lambda: not isinstance(verdict.args, dict), "verdict_args_invalid"),
+                (lambda: requires_choice and not verdict.alias, "alias_required"),
+                (lambda: context.connected(verdict.app, verdict.alias) is None,
+                 "account_not_connected"),
+                (lambda: getattr(self.anticipy, "owner_ref", "") != owner, "owner_changed"),
+            ))
+            if reason:
+                return refuse(reason)
             params["_hand"] = dict(verdict.as_note(), lane=hands.LANE_API)
-            return self._flip(job["id"], {**fields, "params": json.dumps(params)}, verb,
-                              expected_headers={"If-Match": etag})
-        except Exception:
+            written = self._flip(job["id"], {**fields, "params": json.dumps(params)}, verb,
+                                 expected_headers={"If-Match": etag})
+            # `_flip` already logs its own PATCH failure, but it answers the
+            # same `failed:<id>` this function uses for every refusal, so
+            # without a token here the one refusal that happens AFTER a model
+            # call is the only one the log cannot name.
+            return written if written.startswith(f"{verb}:") else refuse("write_refused")
+        except Exception as error:
             # Provider/model exceptions can contain owner words or credentials.
             # A failed replan changes no row and must never look like progress.
-            return failed
+            # The exception's TYPE is a program state; its message is not.
+            return refuse(f"exception:{type(error).__name__}")
 
     def _flip(self, job_id: str, fields: dict, verb: str,
               expected_headers: Optional[dict] = None) -> str:

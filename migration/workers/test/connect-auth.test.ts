@@ -26,6 +26,12 @@
  *   never-existed, and one whose owner has no phone — must produce ONE
  *   response, byte for byte once the caller's own token is normalised out.
  *
+ *   THE REFUSED SEND (2026-09-14). A live link's holder asking inside the gap,
+ *   past a ceiling, or while the provider refuses gets the not-sent page,
+ *   never "enter the code from the latest text" over a text that never left.
+ *   The oracle still holds: the split sits after the phone lookup, so the five
+ *   tokens above stay one page, and that page is the SENT page.
+ *
  *   THE CEILING. Five guesses, counted with a compare-and-set, and the sixth
  *   refused even when it is right.
  *
@@ -72,7 +78,8 @@ import {
 } from "../src/routes/connect.ts";
 import {
   CODE_SESSION_GRACE_MS, CODE_TTL_MS, CONNECT_CODES_DDL, MAX_ATTEMPTS,
-  MAX_CODES_PER_LINK, MAX_CODES_PER_OWNER, MIN_GAP_MS, SESSION_COOKIE_PREFIX,
+  MAX_CODES_PER_LINK, MAX_CODES_PER_OWNER, MIN_GAP_MS, NOT_SENT_HEADING, NOT_SENT_LINE,
+  SENT_HEADING, SESSION_COOKIE_PREFIX,
   connectAuthRoute, connectAuthWiringInstalled, connectCodeText, connectCodesTableReady,
   connectSession, createD1ConnectCodeStore, createMemoryConnectCodeStore,
   parseConnectAuthPath,
@@ -297,6 +304,10 @@ async function bodyOf(res: Response, where: string): Promise<string> {
 
 /** The same page for two different tokens differs only by the token, which the
  *  caller supplied. Normalise it out and the two must be byte-identical. */
+/** The wrong-code sentence as it survives escaping — the apostrophe in
+ *  connect_auth.ts's NOPE_LINE leaves `esc()` as an entity, so match the tail. */
+const NOPE_LINE_TEXT = "or it has expired. Ask for a new one.";
+
 const normalise = (html: string, token: string): string =>
   html.split(token).join("{TOKEN}");
 
@@ -465,6 +476,10 @@ await check("POST /code answers one thing for five different tokens", async () =
   for (const s of seen.slice(1)) {
     assert.equal(s, seen[0], "two tokens produced two pages — that is the oracle");
   }
+  // And the one page is the SENT page: a dead, spent, forged or phoneless token
+  // must never draw the not-sent page, or the page itself becomes the oracle.
+  assert.ok(occurrences(seen[0] as string, SENT_HEADING) >= 1, "the shared page lost the sent heading");
+  assert.equal(occurrences(seen[0] as string, NOT_SENT_HEADING), 0, "the shared page is the not-sent page");
 });
 
 await check("an explicit empty profile phone is canonical: no text, same answer", async () => {
@@ -486,7 +501,7 @@ await check("CONTROL: a profile phone is used when it is there", async () => {
   assert.equal((SENT[0] as SentText).to, "+15557778888");
 });
 
-await check("a provider that refuses leaves NO live code and the same answer", async () => {
+await check("a provider that refuses leaves NO live code and keeps its reservation", async () => {
   const r = await rig();
   sendFails = true;
   const res = await connectAuthRoute(postReq(`/c/${r.token}/code`), r.env, r.deps);
@@ -609,6 +624,131 @@ await check("the per-owner ceiling holds ACROSS links — a second stolen link s
     assert.equal(sent, MAX_CODES_PER_OWNER,
       "the owner ceiling let " + sent + " texts through");
   });
+
+// ===========================================================================
+// THE REFUSED SEND SAYS SO (2026-09-14)
+// ===========================================================================
+//
+// A live link's holder who asked inside the minimum gap, past a ceiling, or
+// while the provider refused was shown SENT_HEADING — "enter the code from
+// Anticipy's latest text" — while no text went out and no row was written.
+// One not-sent page for every refusal (each distinction would be one more
+// oracle bit, and the person's next move is the same for all of them); never
+// for a dead, spent, forged or phoneless token — THE ORACLE above pins that.
+// What this widens: a person who already holds a LIVE link and already saw
+// the sent page now learns "not sent this time" as a sentence rather than off
+// a stopwatch. The header of connect_auth.ts prices that tell.
+
+async function askAndRead(r: Rig, token = r.token): Promise<{ html: string; texts: number }> {
+  const before = SENT.length;
+  const res = await connectAuthRoute(postReq(`/c/${token}/code`), r.env, r.deps);
+  assert.ok(res, "the route answered null for its own path");
+  assert.equal((res as Response).status, 200, "a refused send is not an error status");
+  const html = await bodyOf(res as Response, "POST /code (refusal legs)");
+  return { html, texts: SENT.length - before };
+}
+
+function expectNotSent(html: string, token: string, what: string): void {
+  assert.equal(occurrences(html, SENT_HEADING), 0, what + ": the sent heading was shown for a refused send");
+  assert.ok(occurrences(html, NOT_SENT_HEADING) >= 1, what + ": the not-sent heading is missing");
+  assert.ok(occurrences(html, NOT_SENT_LINE) >= 1, what + ": the not-sent line is missing");
+  assert.ok(occurrences(html, `/c/${token}/verify`) >= 1, what + ": the code box must survive a refused send");
+  assert.ok(occurrences(html, `/c/${token}/code`) >= 1, what + ": the ask-again link must survive");
+}
+
+await check("CONTROL: the first ask on a live link draws the SENT page and never the not-sent one", async () => {
+  const r = await rig();
+  const { html, texts } = await askAndRead(r);
+  assert.equal(texts, 1);
+  assert.ok(occurrences(html, SENT_HEADING) >= 1);
+  assert.equal(occurrences(html, NOT_SENT_HEADING), 0, "a sent code was reported as not sent");
+  assert.equal(occurrences(html, NOT_SENT_LINE), 0);
+});
+
+await check("inside the minimum gap: no text, no new row, the not-sent page", async () => {
+  const r = await rig();
+  assert.ok(await askForCode(r));
+  r.clock.now = NOW + MIN_GAP_MS - 1;
+  const { html, texts } = await askAndRead(r);
+  assert.equal(texts, 0);
+  expectNotSent(html, r.token, "gap");
+  assert.equal(r.db.rows(`SELECT id FROM connect_codes`).length, 1, "a refused send wrote a row");
+});
+
+await check("past the per-link ceiling: no text, no new row, the not-sent page", async () => {
+  const r = await rig();
+  for (let i = 0; i < MAX_CODES_PER_LINK; i++) {
+    r.clock.now = NOW + i * MIN_GAP_MS;
+    assert.ok(await askForCode(r), "ask " + i);
+  }
+  r.clock.now = NOW + MAX_CODES_PER_LINK * MIN_GAP_MS;
+  const { html, texts } = await askAndRead(r);
+  assert.equal(texts, 0);
+  expectNotSent(html, r.token, "per-link ceiling");
+  assert.equal(r.db.rows(`SELECT id FROM connect_codes`).length, MAX_CODES_PER_LINK,
+    "a refused send wrote a row");
+});
+
+await check("past the per-owner ceiling on a FRESH link: the not-sent page", async () => {
+  const r = await rig();
+  const tokens = [r.token];
+  for (let i = 0; i < MAX_CODES_PER_OWNER; i++) tokens.push((await r.another()).token);
+  for (let i = 0; i < MAX_CODES_PER_OWNER; i++) {
+    r.clock.now = NOW + i * MIN_GAP_MS;
+    assert.ok(await askForCode(r, tokens[i] as string), "ask " + i);
+  }
+  r.clock.now = NOW + MAX_CODES_PER_OWNER * MIN_GAP_MS;
+  const last = tokens[MAX_CODES_PER_OWNER] as string;
+  const { html, texts } = await askAndRead(r, last);
+  assert.equal(texts, 0);
+  expectNotSent(html, last, "per-owner ceiling");
+});
+
+await check("a phoneless owner's SECOND ask is byte-identical to a sent page — the pair is the residual", async () => {
+  // The refusal legs sit below the phone lookup, so a live link whose owner
+  // cannot be texted never reaches the not-sent page. That is deliberate (the
+  // alternative is a stronger one-request oracle -- see the file header), and
+  // it is the one condition two asks separate. Pin the behaviour that IS
+  // claimed, so nobody "fixes" it into the worse shape by accident.
+  const phoneless = await rig({ phone: "" });
+  const first = await askAndRead(phoneless);
+  phoneless.clock.now = NOW + 1000;
+  const second = await askAndRead(phoneless);
+  assert.equal(first.texts + second.texts, 0, "a phoneless owner was texted");
+  assert.equal(occurrences(second.html, NOT_SENT_HEADING), 0,
+    "a phoneless live link drew the not-sent page: the first ask now leaks liveness");
+  assert.equal(normalise(second.html, phoneless.token), normalise(first.html, phoneless.token),
+    "two asks on a phoneless link must answer the same page");
+  assert.equal(phoneless.db.rows(`SELECT id FROM connect_codes`).length, 0);
+});
+
+await check("a mistyped digit on the not-sent page does not restore the sent sentence", async () => {
+  const r = await rig();
+  assert.ok(await askForCode(r));
+  r.clock.now = NOW + MIN_GAP_MS - 1;
+  const refused = await askAndRead(r);
+  expectNotSent(refused.html, r.token, "gap (before the typo)");
+  // The person types a wrong code into the box the not-sent page rendered.
+  const res = await connectAuthRoute(
+    postReq(`/c/${r.token}/verify`, { form: { code: "000000", sent: "0" } }), r.env, r.deps);
+  assert.ok(res);
+  assert.equal((res as Response).status, 400);
+  const html = await bodyOf(res as Response, "POST /verify after a refused send");
+  assert.equal(occurrences(html, SENT_HEADING), 0,
+    "a wrong code after a refused send re-told the person a text had been sent");
+  assert.ok(occurrences(html, NOT_SENT_HEADING) >= 1);
+  assert.ok(occurrences(html, NOPE_LINE_TEXT) >= 1, "the wrong-code sentence must still be shown");
+});
+
+await check("a provider that refuses: the not-sent page, and the failed row stays", async () => {
+  const r = await rig();
+  sendFails = true;
+  let html = "";
+  try { ({ html } = await askAndRead(r)); } finally { sendFails = false; }
+  expectNotSent(html, r.token, "provider refused");
+  assert.equal(r.db.rows(`SELECT id FROM connect_codes WHERE delivery_state = 'failed'`).length, 1);
+  assert.equal(r.db.rows(`SELECT id FROM connect_codes WHERE used_at IS NULL`).length, 0);
+});
 
 await check("the ceiling is FIVE, not merely whatever the constant says", () => {
   // MAX_ATTEMPTS is the only thing standing between a six-digit code and

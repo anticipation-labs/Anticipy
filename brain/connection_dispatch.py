@@ -25,6 +25,9 @@ class ConnectionDispatch:
                 try:
                     result = future.result()
                 except Exception:
+                    # The request function catches its own transport errors;
+                    # a throw here is a defect in the thread itself, and the
+                    # honest answer is "no verdict yet", never "unreachable".
                     result = "pending"
                 self._completed[finished_key] = result
                 # Eviction loses only a read cache. The API's event id and
@@ -35,7 +38,12 @@ class ConnectionDispatch:
                 return self._completed.pop(key)
             if self._active is None:
                 self._active = (key, self._executor.submit(request))
-            return "pending"
+            # Our own transport thread still holds (or is queued for) this
+            # request. That is a state of THIS process, not the API's verdict:
+            # "pending" is reserved for the API saying another holder's lease
+            # is live, so the caller can bound one without ever parking the
+            # other (2026-09-14, the silent recycle).
+            return "in_flight"
 
     def close(self):
         self._executor.shutdown(wait=True, cancel_futures=True)

@@ -5,7 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 from brain.connection_dispatch import ConnectionDispatch
 
 
-def test_slow_http_returns_pending_and_never_queues_parallel_requests():
+def test_slow_http_returns_in_flight_and_never_queues_parallel_requests():
     entered, release = threading.Event(), threading.Event()
     calls = []
     dispatcher = ConnectionDispatch()
@@ -15,15 +15,15 @@ def test_slow_http_returns_pending_and_never_queues_parallel_requests():
         assert release.wait(2)
         return 'ignore'
     try:
-        assert dispatcher.poll(('backend', 'owner', 'first'), slow_request) == 'pending'
+        assert dispatcher.poll(('backend', 'owner', 'first'), slow_request) == 'in_flight'
         assert entered.wait(1)
         # These all return before the first HTTP request is allowed to finish.
         with ThreadPoolExecutor(max_workers=4) as callers:
             pending = list(callers.map(lambda i: dispatcher.poll(
                 ('backend', 'owner', f'other-{i}'), lambda: calls.append('unexpected')), range(20)))
-        assert pending == ['pending'] * 20
+        assert pending == ['in_flight'] * 20
         assert calls == ['first']
-        assert dispatcher.poll(('backend', 'owner', 'first'), slow_request) == 'pending'
+        assert dispatcher.poll(('backend', 'owner', 'first'), slow_request) == 'in_flight'
         release.set()
         dispatcher._active[1].result(timeout=1)
         assert dispatcher.poll(('backend', 'owner', 'first'), slow_request) == 'ignore'
@@ -41,7 +41,7 @@ def test_completed_reply_keeps_backend_owner_and_event_identity():
         owner_b = ('backend', 'owner-b', 'same-event')
         dispatcher.poll(owner_a, lambda: 'ask')
         dispatcher._active[1].result(timeout=1)
-        assert dispatcher.poll(owner_b, lambda: release.wait(1) and 'ignore') == 'pending'
+        assert dispatcher.poll(owner_b, lambda: release.wait(1) and 'ignore') == 'in_flight'
         assert dispatcher.poll(owner_a, lambda: 'WRONG') == 'ask'
         release.set()
         dispatcher._active[1].result(timeout=1)
@@ -63,6 +63,8 @@ def test_failed_request_is_pending_and_can_be_reconciled_without_a_poisoned_futu
             future.result(timeout=1)
         except TimeoutError:
             pass
+        # A throw inside the thread itself is 'no verdict yet', never a
+        # route verdict; the request function owns transport errors.
         assert dispatcher.poll(key, failed) == 'pending'
         dispatcher.poll(key, lambda: 'ignore')
         dispatcher._active[1].result(timeout=1)
@@ -77,7 +79,7 @@ def test_orphaned_completed_results_cannot_grow_memory_without_bound():
         # The parent may stop polling an event after ingress marks it handled.
         # Each next input harvests the previous completion without consuming it.
         for i in range(20):
-            assert dispatcher.poll(('backend', 'owner', str(i)), lambda: 'ignore') == 'pending'
+            assert dispatcher.poll(('backend', 'owner', str(i)), lambda: 'ignore') == 'in_flight'
             dispatcher._active[1].result(timeout=1)
         assert len(dispatcher._completed) == 4
         assert ('backend', 'owner', '0') not in dispatcher._completed

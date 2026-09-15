@@ -25,6 +25,11 @@ CATEGORIES = frozenset({
     'provider_response_invalid_json', 'provider_response_invalid_shape',
     'provider_response_missing_handle', 'provider_response_rejected',
     'provider_response_error', 'unexpected_error',
+    # 2026-09-14: the connection-command pre-empt in worker.handle_inbound
+    # recycled a reply forever on a 202 (another holder's lease) or a 503
+    # (route unreachable). Each is now bounded and named here so the parked
+    # or released row leaves a countable trace instead of silence.
+    'connection_command_pending', 'connection_command_unreachable',
 })
 MODEL_ROLES = frozenset({'strong', 'main', 'none'})
 

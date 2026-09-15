@@ -30,6 +30,7 @@ from . import backend
 from . import research
 from . import server_work
 from .connection_dispatch import ConnectionDispatch
+from .reply_diagnostics import record_reply_diagnostic
 
 from .anticipy_core import (DEDUPED, DEVICE_CALENDAR_LANE, RESEARCH_LANE, Anticipy,
                             goal_tokens, is_device_lane, needs_no_browser, memory_notes)
@@ -4310,6 +4311,22 @@ def fetch_unprocessed(kind: str = "transcript", owner_ref: str = "") -> list[dic
 
 
 REPLY_RECOVERY_AFTER_SECONDS = 600  # Transport lease, never sentence meaning.
+# How long an owner's reply may keep recycling on the connection-command
+# pre-empt before the brain stops re-posting it every poll. "pending" means
+# the API said another holder's lease on this event is live; "unreachable"
+# means the route answered outside 2xx/404 or the request raised. Until
+# 2026-09-14 both recycled forever with no log line and no answer. The bound
+# is measured from the row's own `created`, so a restart cannot reset it, and
+# it is two API leases long -- migration/workers/src/connections/dispatch.ts
+# LEASE_MS = 300_000 -- so a live lease is never double-answered
+# (tests/test_connection_command_dispatch.py pins the product). Same
+# magnitude as REPLY_RECOVERY_AFTER_SECONDS on purpose: both are transport
+# leases, never a reading of the sentence.
+CONNECTION_COMMAND_PARK_AFTER_SECONDS = 600
+# Recycle counts per event id: for the log line, and as the only bound when a
+# row's `created` cannot be read (2 s poll x 300 is the same ten minutes).
+CONNECTION_COMMAND_RECYCLE_BACKSTOP = 300
+_CONNECTION_RECYCLES: dict[str, int] = {}
 
 
 def fetch_direct_inputs(owner_ref: str) -> list[dict]:
@@ -4563,8 +4580,14 @@ def _request_connection_command(event_id: str, owner_ref: str, base: str | None 
         # executor exists on this endpoint in an older release.
         if response.status_code == 404:
             return "not_for_us"
-        if response.status_code != 200:
+        if response.status_code == 202:
+            # Another holder's lease on this event is live (dispatch.ts). The
+            # answer may still arrive on a later poll; only its age bounds it.
             return "pending"
+        if response.status_code != 200:
+            # Status class only: no body, no owner text, no reading of why.
+            print(f"connection command unreachable: http {response.status_code}")
+            return "unreachable"
         result = response.json()
         if result.get("status") != "completed":
             return "pending"
@@ -4575,8 +4598,62 @@ def _request_connection_command(event_id: str, owner_ref: str, base: str | None 
             return "pending"
         return "ask" if outcome.get("question") else "ignore"
     except Exception as error:
-        print(f"connection command awaiting reconciliation: {type(error).__name__}")
-        return "pending"
+        print(f"connection command unreachable: {type(error).__name__}")
+        return "unreachable"
+
+
+def _connection_verdict(ev: dict, connection: str, lane: str) -> str:
+    """recycle | park | settled, from transport state and row age only.
+
+    in_flight -- our own transport thread holds (or is queued for) the request
+    -- always recycles: no verdict has been given yet. pending and unreachable
+    recycle until BOTH the row is CONNECTION_COMMAND_PARK_AFTER_SECONDS old by
+    its own `created` AND this process has actually watched the stall for more
+    than one poll. The second half matters: without it a row that was already
+    older than the bound when the brain first reached it (a restart, a backlog,
+    a late pickup) would park on its FIRST verdict, against a lease that is
+    fresh and about to answer.
+
+    PARK IS THE ONLY TERMINAL VERDICT, for pending AND for unreachable. An
+    earlier draft released an unreachable row to ordinary reasoning on the
+    argument that no lease of ours ever existed -- but "unreachable" covers a
+    read timeout on a POST the API received, and the API answers 503 in states
+    that are reached AFTER the plan has run. Handing that sentence to reasoning
+    is exactly the double answer the API's execution fence exists to prevent.
+    So both park, the owner gets the factual recovery notice either way, and
+    the diagnostic category is what tells the two apart afterwards. Nothing
+    here reads the owner's words.
+    """
+    event_id = str(ev.get("id") or "")
+    if connection not in ("in_flight", "pending", "unreachable"):
+        _CONNECTION_RECYCLES.pop(event_id, None)
+        return "settled"
+    if connection == "in_flight":
+        return "recycle"
+    if len(_CONNECTION_RECYCLES) > 1000:
+        _CONNECTION_RECYCLES.clear()
+    tries = _CONNECTION_RECYCLES.get(event_id, 0) + 1
+    _CONNECTION_RECYCLES[event_id] = tries
+    created = _ts(ev.get("created"))
+    # A stamp AHEAD of this host's clock is not a young row, it is an unusable
+    # stamp -- and clamping it to 0 would keep the row below the bound for as
+    # long as the skew lasts, which is the silence this bound exists to end.
+    # Same threshold the rest of this file already uses for implausible times.
+    if created is not None and created - time.time() > CLOCK_SKEW_MAX_S:
+        created = None
+    age = None if created is None else max(0.0, time.time() - created)
+    watched = tries >= 2
+    aged = ((age is not None and age >= CONNECTION_COMMAND_PARK_AFTER_SECONDS and watched)
+            or tries >= CONNECTION_COMMAND_RECYCLE_BACKSTOP)
+    shown_age = "?" if age is None else f"{int(age)}s"
+    if not aged:
+        print(f"{lane}: connection command {connection} -- recycling "
+              f"(try {tries}, age {shown_age})")
+        return "recycle"
+    _CONNECTION_RECYCLES.pop(event_id, None)
+    print(f"{lane}: connection command {connection} after {shown_age} "
+          f"({tries} tries) -- parking for recovery")
+    return "park"
 
 
 def recover_inbound_reply(ev: dict, convo, anticipy) -> str:
@@ -4679,10 +4756,32 @@ def handle_inbound(ev: dict, convo, anticipy) -> str:
 
     connection = connection_command(ev, anticipy.owner_ref)
     if connection != "not_for_us":
-        # Reset only our processing claim, retaining the original event id.
-        # The connection service owns the external-effect retry fence.
-        mark_processed(ev["id"], "" if connection == "pending" else connection)
-        return "unclaimed" if connection == "pending" else connection
+        verdict = _connection_verdict(ev, connection, lane)
+        if verdict == "recycle":
+            # Reset only our processing claim, retaining the original event
+            # id. The connection service owns the external-effect retry fence.
+            mark_processed(ev["id"], "")
+            return "unclaimed"
+        if verdict == "park":
+            # Ten minutes of "another holder's lease is live", or of a route
+            # that will not answer, is no longer a wait; it is a stall the
+            # owner must hear about. The row goes to the same recovery path a
+            # crashed reply takes: factual notice, then `error`. Reasoning
+            # never runs on it -- the other holder's answer may still land, or
+            # the plan may already have executed behind an unreachable reply,
+            # and one question gets one answer. The category is the only place
+            # the two causes are told apart, and this row reaches no other
+            # classifier, so it cannot take a slot one would need.
+            record_reply_diagnostic(PB, anticipy.owner_ref, ev, {
+                "stage": "reply_classification",
+                "category": ("connection_command_pending" if connection == "pending"
+                             else "connection_command_unreachable")})
+            if not mark_processed(ev["id"], "reply_error_pending"):
+                mark_processed(ev["id"], "")
+                return "unclaimed"
+            return "reply_error_pending"
+        mark_processed(ev["id"], connection)
+        return connection
 
     durable_reply = callable(getattr(convo, "reply_delivery", None))
     if durable_reply and not mark_processed(ev["id"], "reply_processing"):
